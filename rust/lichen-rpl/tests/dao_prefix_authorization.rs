@@ -164,12 +164,12 @@ fn dao_prefix_authorization_allow_deny_matrix() {
 
                 if allowed {
                     assert_eq!(outcome, Ok(DaoProcessOutcome::Applied), "{name}");
-                    assert!(manager.routing_table().lookup(origin).is_some(), "{name}");
+                    assert!(manager.routing_table().lookup(Ipv6Addr::from(origin)).is_some(), "{name}");
                     assert_eq!(manager.origin_high_water().len(), 1, "{name}");
                 } else {
                     assert_eq!(outcome, Err(DaoProcessError::RouteRejected), "{name}");
-                    assert!(manager.routing_table().lookup(origin).is_none(), "{name}");
-                    assert!(manager.routing_table().lookup(foreign).is_none(), "{name}");
+                    assert!(manager.routing_table().lookup(Ipv6Addr::from(origin)).is_none(), "{name}");
+                    assert!(manager.routing_table().lookup(Ipv6Addr::from(foreign)).is_none(), "{name}");
                     assert!(manager.origin_high_water().is_empty(), "{name}");
                 }
             }
@@ -677,7 +677,7 @@ fn delegated_slash64_dao_installs_end_to_end() {
     assert!(h
         .manager
         .routing_table()
-        .lookup(&delegated_prefix.octets())
+        .lookup(delegated_prefix)
         .is_none());
     assert!(h
         .manager
@@ -706,7 +706,7 @@ fn delegated_slash64_dao_installs_end_to_end() {
     assert!(h
         .manager
         .routing_table()
-        .lookup(&delegated_prefix.octets())
+        .lookup(delegated_prefix)
         .is_some());
     assert!(h
         .manager

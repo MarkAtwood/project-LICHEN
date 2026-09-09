@@ -817,6 +817,7 @@ mod tests {
     use crate::port_dispatch::{AppProtocol, UdpDispatchError};
     #[allow(unused_imports)]
     use std::format;
+    use core::net::Ipv6Addr;
 
     fn node(iid: u8) -> Node {
         Node::new(NodeId([0x02, 0, 0, 0, 0, 0, 0, iid]))
@@ -1171,7 +1172,7 @@ mod tests {
         let body_offset = IPV6_HEADER_LEN + hdr_field::BODY_OFFSET;
         let forwarded_dao = &forwarded_ipv6[body_offset..forwarded_n];
         assert_eq!(forwarded_dao, leaf_dao);
-        assert!(parent.router.lookup_route(&leaf_addr).is_none());
+        assert!(parent.router.lookup_route(Ipv6Addr::from(leaf_addr)).is_none());
 
         assert_eq!(
             root.handle_frame_rpl(
@@ -1182,7 +1183,7 @@ mod tests {
             ),
             (0, RplEvent::DaoReceived)
         );
-        assert!(root.router.lookup_route(&leaf_addr).is_none());
+        assert!(root.router.lookup_route(Ipv6Addr::from(leaf_addr)).is_none());
 
         let mut tampered = forwarded_dao.to_vec();
         tampered[3] ^= 1;
@@ -1199,7 +1200,7 @@ mod tests {
             ),
             DaoHandlingOutcome::BadSignature
         );
-        assert!(root.router.lookup_route(&leaf_addr).is_none());
+        assert!(root.router.lookup_route(Ipv6Addr::from(leaf_addr)).is_none());
         assert_eq!(
             root.handle_dao(
                 forwarded_dao,
@@ -1214,8 +1215,8 @@ mod tests {
             DaoHandlingOutcome::Applied
         );
         assert_eq!(
-            root.router.lookup_route(&leaf_addr),
-            Some([parent_addr, leaf_addr].as_slice())
+            root.router.lookup_route(Ipv6Addr::from(leaf_addr)),
+            Some([Ipv6Addr::from(parent_addr), Ipv6Addr::from(leaf_addr)].as_slice())
         );
         assert_eq!(
             root.handle_dao(
@@ -1231,8 +1232,8 @@ mod tests {
             DaoHandlingOutcome::Duplicate
         );
         assert_eq!(
-            root.router.lookup_route(&leaf_addr),
-            Some([parent_addr, leaf_addr].as_slice())
+            root.router.lookup_route(Ipv6Addr::from(leaf_addr)),
+            Some([Ipv6Addr::from(parent_addr), Ipv6Addr::from(leaf_addr)].as_slice())
         );
     }
 
@@ -1472,13 +1473,13 @@ mod tests {
             DaoHandlingOutcome::Applied
         );
         assert_eq!(
-            root.router.lookup_route(&leaf_addr),
-            Some([parent_addr, leaf_addr].as_slice())
+            root.router.lookup_route(Ipv6Addr::from(leaf_addr)),
+            Some([Ipv6Addr::from(parent_addr), Ipv6Addr::from(leaf_addr)].as_slice())
         );
         // The delegated /64 propagated multi-hop and is installed at the root.
         assert_eq!(
-            root.router.lookup_route(&delegated_prefix),
-            Some([parent_addr, delegated_prefix].as_slice())
+            root.router.lookup_route(Ipv6Addr::from(delegated_prefix)),
+            Some([Ipv6Addr::from(parent_addr), Ipv6Addr::from(delegated_prefix)].as_slice())
         );
     }
 
@@ -1548,7 +1549,7 @@ mod tests {
             ),
             DaoHandlingOutcome::Applied
         );
-        let route = root.router.lookup_route(&origin).unwrap().to_vec();
+        let route = root.router.lookup_route(Ipv6Addr::from(origin)).unwrap().to_vec();
 
         let mut changed_lifetime = first_unsigned;
         let lifetime_index = changed_lifetime.len() - 17;
@@ -1567,7 +1568,7 @@ mod tests {
             ),
             DaoHandlingOutcome::RouteRejected
         );
-        assert_eq!(root.router.lookup_route(&origin), Some(route.as_slice()));
+        assert_eq!(root.router.lookup_route(Ipv6Addr::from(origin)), Some(route.as_slice()));
     }
 
     #[cfg(feature = "std")]
@@ -1602,7 +1603,7 @@ mod tests {
             ),
             (0, RplEvent::DaoReceived)
         );
-        assert!(root.router.lookup_route_at(&first_addr, 2_999).is_none());
+        assert!(root.router.lookup_route_at(Ipv6Addr::from(first_addr), 2_999).is_none());
         assert_eq!(
             root.handle_frame_rpl(
                 &first_packet,
@@ -1612,8 +1613,8 @@ mod tests {
             ),
             (0, RplEvent::DaoReceived)
         );
-        assert!(root.router.lookup_route(&first_addr).is_none());
-        assert!(root.router.lookup_route_at(&first_addr, 3_000).is_none());
+        assert!(root.router.lookup_route(Ipv6Addr::from(first_addr)).is_none());
+        assert!(root.router.lookup_route_at(Ipv6Addr::from(first_addr), 3_000).is_none());
     }
 
     #[cfg(feature = "std")]

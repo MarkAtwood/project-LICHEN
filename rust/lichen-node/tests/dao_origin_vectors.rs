@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: The contributors to the LICHEN project
 
+use core::net::Ipv6Addr;
 use lichen_core::addr::NodeId;
 use lichen_core::announce::{write_announce_signed_data, Announce, AnnounceBuilder};
 use lichen_hal::storage::mem::MemStorage;
@@ -193,11 +194,11 @@ fn fixed_dao_origin_vectors_match_rpl_node_handler() {
         let victim = array::<16>("fd424c494348454e0011223344556677");
         let routes_before = (
             node.router()
-                .lookup_route(&source)
-                .map(<[[u8; 16]]>::to_vec),
+                .lookup_route(Ipv6Addr::from(source))
+                .map(<[Ipv6Addr]>::to_vec),
             node.router()
-                .lookup_route(&victim)
-                .map(<[[u8; 16]]>::to_vec),
+                .lookup_route(Ipv6Addr::from(victim))
+                .map(<[Ipv6Addr]>::to_vec),
         );
         let storage_before = storage_snapshot(&storage);
         let processor = if reason == "unknown_key" {
@@ -225,11 +226,11 @@ fn fixed_dao_origin_vectors_match_rpl_node_handler() {
                 routes_before,
                 (
                     node.router()
-                        .lookup_route(&source)
-                        .map(<[[u8; 16]]>::to_vec),
+                        .lookup_route(Ipv6Addr::from(source))
+                        .map(<[Ipv6Addr]>::to_vec),
                     node.router()
-                        .lookup_route(&victim)
-                        .map(<[[u8; 16]]>::to_vec),
+                        .lookup_route(Ipv6Addr::from(victim))
+                        .map(<[Ipv6Addr]>::to_vec),
                 ),
                 "{name}: route mutation"
             );
@@ -293,7 +294,7 @@ fn unavailable_replay_storage_leaves_dao_state_unchanged() {
         ),
         DaoHandlingOutcome::Persistence
     );
-    assert_eq!(node.router().lookup_route(&source), None);
+    assert_eq!(node.router().lookup_route(Ipv6Addr::from(source)), None);
     assert_eq!(storage_snapshot(&storage), storage_before);
 
     assert_eq!(

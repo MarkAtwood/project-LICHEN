@@ -227,11 +227,11 @@ fn canonical_route_state_vectors_match_production_manager() {
             max_deadline_seconds: u64::MAX,
         };
         let mut relation_manager =
-            DaoManager::diagnostic_root(Ipv6Addr::from(dodag_id), rpl_instance_id, dodag_id.into());
+            DaoManager::diagnostic_root(dodag_id, rpl_instance_id, dodag_id);
         relation_manager
             .process_route_state_diagnostic(
                 &route_dao(1, current, target, parent),
-                sequence_authority.into(),
+                sequence_authority,
                 timing,
                 limits,
             )
@@ -239,7 +239,7 @@ fn canonical_route_state_vectors_match_production_manager() {
 
         let result = relation_manager.process_route_state_diagnostic(
             &route_dao(2, incoming, target, parent),
-            sequence_authority.into(),
+            sequence_authority,
             timing,
             limits,
         );
@@ -250,7 +250,7 @@ fn canonical_route_state_vectors_match_production_manager() {
             expected => panic!("{name}: unknown sequence relation {expected}"),
         }
         let state = relation_manager
-            .route_state_diagnostic(sequence_authority.into(), lifetime_unit_seconds);
+            .route_state_diagnostic(sequence_authority, lifetime_unit_seconds);
         assert_eq!(state.len(), 1, "{name}");
         assert_eq!(
             state[0].path_sequence,
@@ -264,9 +264,9 @@ fn canonical_route_state_vectors_match_production_manager() {
     }
 
     let mut tx_manager = DaoManager::new(
-        Ipv6Addr::from(sequence_authority),
+        sequence_authority,
         rpl_instance_id,
-        dodag_id.into(),
+        dodag_id,
     );
     let mut last_logical_lifetime = None;
     for transition in document["tx_sequence_transitions"].as_array().unwrap() {
@@ -276,14 +276,14 @@ fn canonical_route_state_vectors_match_production_manager() {
         let (wire, encoded_lifetime) = if advance_path_sequence {
             last_logical_lifetime = Some(path_lifetime);
             (
-                tx_manager.build_dao_with_lifetime(dodag_id.into(), path_lifetime),
+                tx_manager.build_dao_with_lifetime(dodag_id, path_lifetime),
                 path_lifetime,
             )
         } else {
             let exact_lifetime = last_logical_lifetime.unwrap();
             (
                 tx_manager
-                    .build_dao_copy_with_lifetime(dodag_id.into(), exact_lifetime)
+                    .build_dao_copy_with_lifetime(dodag_id, exact_lifetime)
                     .unwrap(),
                 exact_lifetime,
             )
@@ -336,13 +336,13 @@ fn canonical_route_state_vectors_match_production_manager() {
     }
 
     let mut manager =
-        DaoManager::diagnostic_root(Ipv6Addr::from(dodag_id), rpl_instance_id, dodag_id.into());
+        DaoManager::diagnostic_root(dodag_id, rpl_instance_id, dodag_id);
 
     for vector in document["vectors"].as_array().unwrap() {
         let name = vector["name"].as_str().unwrap();
         assert_eq!(
             snapshot(
-                manager.route_state_diagnostic(sequence_authority.into(), lifetime_unit_seconds)
+                manager.route_state_diagnostic(sequence_authority, lifetime_unit_seconds)
             ),
             vector["before"],
             "{name}: before snapshot"
@@ -354,7 +354,7 @@ fn canonical_route_state_vectors_match_production_manager() {
             let dao = hex_bytes(vector["dao_hex"].as_str().unwrap());
             match manager.process_route_state_diagnostic(
                 &dao,
-                sequence_authority.into(),
+                sequence_authority,
                 DaoProcessTiming {
                     now_seconds,
                     lifetime_unit_seconds,
@@ -384,7 +384,7 @@ fn canonical_route_state_vectors_match_production_manager() {
         );
         assert_eq!(
             snapshot(
-                manager.route_state_diagnostic(sequence_authority.into(), lifetime_unit_seconds)
+                manager.route_state_diagnostic(sequence_authority, lifetime_unit_seconds)
             ),
             vector["expected"]["state"],
             "{name}: expected snapshot"
