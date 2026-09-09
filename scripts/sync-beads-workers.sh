@@ -423,7 +423,18 @@ llm_semantic_merge() {
     # resolves an unmerged index entry regardless of content, so the marker
     # and bound gates below carry the real verification.
     git add -- $files
-    if git diff --name-only --diff-filter=U | grep -q .; then
+    # Auto-resolve .beads conflicts: main's live store wins. Workers merging
+    # main into their branch transitively carry .beads content; those files
+    # conflict when the sync loop merges the branch back. No kimi session
+    # should ever burn time on store JSON.
+    BEADS_U=$(git diff --name-only --diff-filter=U -- .beads | tr '\n' ' ')
+    if [ -n "$BEADS_U" ]; then
+        for f in $BEADS_U; do
+            git checkout --ours "$f" 2>/dev/null || git show "HEAD:$f" > "$f" 2>/dev/null || rm -f "$f"
+            git add "$f"
+        done
+    fi
+    if git diff --name-only --diff-filter=U | grep -v '^\.beads/' | grep -q .; then
         return 1
     fi
 
@@ -585,7 +596,7 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
         # 100% success on single files). Multi-file conflicts go straight to
         # the janitor — the in-loop session fails ~80% there (75 dead sessions
         # measured), pure wasted spend.
-        CONFLICT_N=$(git diff --name-only --diff-filter=U | wc -l)
+        CONFLICT_N=$(git diff --name-only --diff-filter=U | grep -cv '^\.beads/' || true)
         if [ "$CONFLICT_N" -le 1 ] && llm_semantic_merge "$branch"; then
             store_staged=0; merge_staged_store_entries && store_staged=1
             if git diff --name-only --diff-filter=U | grep -q .; then
