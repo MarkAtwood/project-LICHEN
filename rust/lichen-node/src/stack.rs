@@ -603,7 +603,12 @@ impl<R: Radio> Stack<R> {
         }
 
         let wire = &buf[..pkt.len];
-        if !wire_is_for_local_stack(wire, self.node.node_id.0)? {
+        // The routable AddrForKey form embeds no IID
+        // (spec/decisions.jsonl `upstream-yggdrasil-addressing`), so the
+        // pre-filter must accept it by full-address equality too. The
+        // authenticated check below re-validates the destination fail-closed.
+        let local_native = lichen_link::ygg_addr_from_pubkey(self.local_public_key().as_bytes());
+        if !wire_is_for_local_stack(wire, self.node.node_id.0, local_native)? {
             return Ok(None);
         }
         let l2 = self.link.receive_frame(wire)?;

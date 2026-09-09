@@ -14,6 +14,7 @@ use lichen_core::l2_payload::{classify as classify_l2_payload, L2PayloadKind};
 use lichen_hal::{NonVolatile, Radio};
 use lichen_ipv6::Ipv6Header;
 use lichen_link::identity::iid_from_pubkey;
+use lichen_link::keys::PublicKey;
 use lichen_link::link_layer::{AuthenticatedFrame, LinkRxError};
 
 use crate::announce::AnnounceRejectReason;
@@ -32,9 +33,9 @@ use super::root_sig::{DecodedRootSig, DioFields};
 // re-targeted to the canonical multicast DIO address per R-09-005).
 use super::util::{
     advance_rpl_source_route, bootstrap_announce_peer, dao_parts, decapsulate_ipv6,
-    dio_dis_destination_is_allowed, eui64_link_local, ipv6_eui64, link_local_from_iid,
-    multicast_dis_jitter, routing_announce, rpl_ipv6_multicast_is_allowed, survey_routing_headers,
-    wire_is_for_local, RoutingHeaderSurvey, RPL_ALL_NODES,
+    dio_dis_destination_is_allowed, eui64_link_local, ipv6_eui64, l2_destination,
+    link_local_from_iid, multicast_dis_jitter, routing_announce, rpl_ipv6_multicast_is_allowed,
+    survey_routing_headers, wire_is_for_local, RoutingHeaderSurvey, RPL_ALL_NODES,
 };
 use super::{RplBorderIngressOutcome, RplReceiveOutcome, RplRole, RplStack};
 
@@ -55,7 +56,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     ) -> Result<Option<RplBorderIngressOutcome>, RplReceiveError> {
         self.routing_now_ms = self.routing_now_ms.max(now_ms);
         let now_ms = self.routing_now_ms;
-        if !wire_is_for_local(wire, self.stack.node_id().0)
+        if !wire_is_for_local(wire, self.stack.node_id().0, self.local_rpl_addr)
             .map_err(|error| RplReceiveError::Receive(RxError::Link(error)))?
         {
             return Ok(None);
@@ -182,7 +183,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     ) -> Result<Option<RplReceiveOutcome>, RplReceiveError> {
         self.routing_now_ms = self.routing_now_ms.max(now_ms);
         let now_ms = self.routing_now_ms;
-        if !wire_is_for_local(wire, self.stack.node_id().0)
+        if !wire_is_for_local(wire, self.stack.node_id().0, self.local_rpl_addr)
             .map_err(|error| RplReceiveError::Receive(RxError::Link(error)))?
         {
             return Ok(None);
@@ -256,7 +257,11 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                         Err(error) => return Err(RplReceiveError::Receive(error)),
                         Ok(RoutingHeaderSurvey::SourceRouted(_)) => {
                             return self
-                                .process_source_route(received, frame.sender().iid)
+                                .process_source_route(
+                                    received,
+                                    frame.sender().iid,
+                                    frame.sender().pubkey,
+                                )
                                 .await;
                         }
                         Ok(RoutingHeaderSurvey::Absent) => {}
@@ -338,6 +343,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         &mut self,
         mut received: ReceivedIpv6,
         sender_iid: [u8; 8],
+        sender_pubkey: PublicKey,
     ) -> Result<Option<RplReceiveOutcome>, RplReceiveError> {
         let local_link_addr = self.stack.local_addr().0;
         let current_destination: [u8; 16] = received.ipv6[24..40].try_into().unwrap();
@@ -357,9 +363,13 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             return Err(RplReceiveError::Receive(RxError::InvalidSourceRoute));
         }
 
-        let next_destination =
-            advance_rpl_source_route(&mut received.ipv6, current_destination, sender_iid)
-                .map_err(RplReceiveError::Receive)?;
+        let next_destination = advance_rpl_source_route(
+            &mut received.ipv6,
+            current_destination,
+            sender_iid,
+            &sender_pubkey,
+        )
+        .map_err(RplReceiveError::Receive)?;
         let Some(next_destination) = next_destination else {
             // SRH fully consumed and stripped: the former next-header chain
             // may now start with an IPv6-in-IPv6 tunnel to unwrap (R-05-063).
@@ -380,7 +390,11 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             return Err(RplReceiveError::Receive(RxError::HopLimitExceeded));
         }
         received.ipv6[7] -= 1;
-        let next_hop = ipv6_eui64(next_destination);
+        // The next source-route hop is a routable 02xx address post-AddrForKey
+        // (no embedded IID), so the L2 destination resolves through the
+        // authenticated peer table, not by slicing the low half.
+        let next_hop = l2_destination(next_destination, self.stack.link_ref())
+            .ok_or(RplReceiveError::Transmit(crate::stack::TxError::NoRoute))?;
         // Forwarded traffic uses Normal priority (P3)
         self.stack
             .send_ipv6_to(&received.ipv6, &next_hop, Priority::Normal)
