@@ -678,3 +678,8 @@ def test_capability_truncated_wire_bytes_raise_valueerror() -> None:
             protected_bytes=cbor2.dumps({1: SCHNORR48_ED25519_ALG}),
             payload_bytes=b"\xa1\x01",  # map(1) header, truncated value
         )
+
+
+def test_capability_from_cbor_rejects_non_map() -> None:
+    with pytest.raises(TypeError, match="CBOR map"):
+        CapabilityPayload.from_cbor(cbor2.dumps([1, 2]))

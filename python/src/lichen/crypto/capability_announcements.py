@@ -155,8 +155,15 @@ class CapabilityPayload:
 
     @classmethod
     def from_cbor(cls, data: bytes) -> CapabilityPayload:
-        """Decode payload from CBOR bytes."""
+        """Decode payload from CBOR bytes.
+
+        Raises:
+            TypeError: If the payload is not a CBOR map.
+            KeyError: If a required field is missing.
+        """
         payload_map = cbor2.loads(data)
+        if not isinstance(payload_map, dict):
+            raise TypeError("payload must be a CBOR map")
         return cls(
             capabilities=payload_map[_PAYLOAD_CAPABILITIES],
             prefix=payload_map[_PAYLOAD_PREFIX],

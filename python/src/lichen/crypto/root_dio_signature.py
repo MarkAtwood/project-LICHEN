@@ -158,8 +158,15 @@ class RootDioSignaturePayload:
 
     @classmethod
     def from_cbor(cls, data: bytes) -> RootDioSignaturePayload:
-        """Decode payload from CBOR bytes."""
+        """Decode payload from CBOR bytes.
+
+        Raises:
+            TypeError: If the payload is not a CBOR map.
+            KeyError: If a required field is missing.
+        """
         payload_map = cbor2.loads(data)
+        if not isinstance(payload_map, dict):
+            raise TypeError("payload must be a CBOR map")
         return cls(
             dodag_id=payload_map[_PAYLOAD_DODAG_ID],
             instance=payload_map[_PAYLOAD_INSTANCE],

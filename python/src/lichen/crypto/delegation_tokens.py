@@ -541,8 +541,15 @@ class PrefixDelegationTokenPayload:
 
     @classmethod
     def from_cbor(cls, data: bytes) -> PrefixDelegationTokenPayload:
-        """Decode payload from CBOR bytes."""
+        """Decode payload from CBOR bytes.
+
+        Raises:
+            TypeError: If the payload is not a CBOR map.
+            KeyError: If a required field is missing.
+        """
         payload_map = cbor2.loads(data)
+        if not isinstance(payload_map, dict):
+            raise TypeError("payload must be a CBOR map")
         return cls(
             prefix=payload_map[_PREFIX_PAYLOAD_PREFIX],
             prefix_len=payload_map[_PREFIX_PAYLOAD_PREFIX_LEN],

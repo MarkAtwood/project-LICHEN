@@ -517,3 +517,8 @@ def test_root_dio_garbage_wire_bytes_raise_valueerror() -> None:
             protected_bytes=cbor2.dumps({1: SCHNORR48_ED25519_ALG}),
             payload_bytes=cbor2.dumps([1, 2]),
         )
+
+
+def test_root_dio_from_cbor_rejects_non_map() -> None:
+    with pytest.raises(TypeError, match="CBOR map"):
+        RootDioSignaturePayload.from_cbor(cbor2.dumps([1, 2]))

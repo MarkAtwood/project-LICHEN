@@ -891,3 +891,12 @@ def test_prefix_token_truncated_wire_bytes_raise_valueerror() -> None:
             protected_bytes=cbor2.dumps({1: SCHNORR48_ED25519_ALG}),
             payload_bytes=b"\xa1\x01",  # map(1) header, truncated value
         )
+
+
+def test_prefix_from_cbor_rejects_non_map() -> None:
+    # A non-map payload must surface as TypeError (mirroring the sibling
+    # DelegationTokenPayload guard), not an IndexError from list indexing.
+    from lichen.crypto.delegation_tokens import PrefixDelegationTokenPayload
+
+    with pytest.raises(TypeError, match="CBOR map"):
+        PrefixDelegationTokenPayload.from_cbor(cbor2.dumps([1, 2]))

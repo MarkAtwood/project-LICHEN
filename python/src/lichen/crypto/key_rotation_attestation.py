@@ -131,8 +131,15 @@ class KeyRotationAttestationPayload:
 
     @classmethod
     def from_cbor(cls, data: bytes) -> KeyRotationAttestationPayload:
-        """Decode payload from CBOR bytes."""
+        """Decode payload from CBOR bytes.
+
+        Raises:
+            TypeError: If the payload is not a CBOR map.
+            KeyError: If a required field is missing.
+        """
         payload_map = cbor2.loads(data)
+        if not isinstance(payload_map, dict):
+            raise TypeError("payload must be a CBOR map")
         return cls(
             old_pubkey=payload_map[_PAYLOAD_OLD_PUBKEY],
             new_pubkey=payload_map[_PAYLOAD_NEW_PUBKEY],
