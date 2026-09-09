@@ -1,0 +1,7 @@
+{
+  "id": "1788919282192230306-1",
+  "issue_id": "project-LICHEN-worker6-x79p",
+  "author": "Mark Atwood",
+  "text": "d42k added more $files-derived word-split sites: files_nl=$(printf '%s\\n' $files) and grep -vxF \"$files_nl\" in the staged-set pin (sync-beads-workers.sh ~:101-102, :111). Same latent whitespace/glob/dash-prefix exposure (reviewer pass 2.4 flagged space-named conflicted paths would reintroduce a false-positive wedge; dash-prefix is a grep option-injection). Verified latent today (no such paths). The NUL-safe array fix for this bead should cover the new sites too.",
+  "created_at": "2026-09-09T02:01:22.192230306Z"
+}

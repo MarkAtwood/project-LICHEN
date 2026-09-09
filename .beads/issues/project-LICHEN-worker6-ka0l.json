@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-ka0l",
+  "title": "sync script: dead staging block in llm_semantic_merge (git add -- $files + unmerged re-check unreachable)",
+  "description": "sync-beads-workers.sh ~:140-145: 'git add -- $files; if git diff --name-only --diff-filter=U | grep -q .; then return 1; fi; return 0' is unreachable — the session line above ends in 'return $rc' (pre-existing shape; d42k's pin keeps it dead). The function's docstring contract ('Returns 0 only if every conflict is resolved') is therefore enforced only by the CALLER's diff-filter=U gate at the call site, and the happy path silently depends on the session itself running 'git add' on its resolutions. Delete the dead block and fix the comment, or hoist staging above the return when rc==0 and the state pin is clean. Flagged by reviewer kimi-k3 passes 1.1/2.4/3.4 (all noted pre-existing, not introduced by d42k).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:01:51.838884427Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T02:01:51.838884427Z",
+  "labels": [
+    "fleet-implementable"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ka0l",
+      "depends_on_id": "project-LICHEN-worker6-d42k",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T02:01:51.966898931Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

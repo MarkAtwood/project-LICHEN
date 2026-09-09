@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-ay62",
+  "title": "lichen-gateway test-code lint debt: --all-targets -D warnings fails in end_to_end.rs and test fixtures (pre-existing)",
+  "description": "Found while closing bead d5tj (2026-09-09): cargo clippy -p lichen-gateway --all-targets -- -D warnings fails on PRE-EXISTING test-code lints, invisible while the package declared no rust-version and CI's job was skipped. Sites: tests/end_to_end.rs:820 len_zero (\u003e= 1 vs !is_empty), :834 unused attacker_iid, :1124 empty line after doc comment; src/gateway.rs:2883 unused relay1 (encapsulation_fixture); src/tunnel_auth.rs:1028,1111 unused route (fixture). All in #[cfg(test)]/tests code — the --lib gate passes (d5tj). Note tests/end_to_end.rs has 2 pre-existing RED tests tracked by the ljgs adjudication bead; this bead is lint-only and must not weaken those tests. Fix mechanically (underscore prefix, !is_empty, join line); verify --lib and --all-targets clippy gates.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "chore",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:57:33.760127092Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:57:33.760127092Z",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ay62",
+      "depends_on_id": "project-LICHEN-worker6-d5tj",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T01:57:33.891025238Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

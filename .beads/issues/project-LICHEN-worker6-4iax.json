@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-4iax",
+  "title": "[bug] routing.rs:949 index underflow if a stored routing-table path is empty (path[path.len()-2])",
+  "description": "DaoManager selected-candidate diagnostic (rust/lichen-rpl/src/routing.rs:949): path[path.len() - 2] panics with underflow if path.len() == 1's sibling branch is not taken... actually the guard is path.len()==1 -\u003e node_address, else indexes path[len-2]; add_target_route admits empty paths (no min-length check on path), so a lookup returning an empty path slice would panic. Pre-existing edge case found by reviewer pass 3 of ow1e.111.7 (not introduced by the newtype change; the diff only touched that line incidentally). Fix: guard path.is_empty() or reject empty paths at add_target_route.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:58:07.504207914Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:59:56.961342585Z",
+  "started_at": "2026-09-09T01:59:56.961342585Z",
+  "lease_expires_at": "2026-09-09T02:04:56.961342585Z",
+  "heartbeat_at": "2026-09-09T01:59:56.961342585Z",
+  "labels": [
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-4iax",
+      "depends_on_id": "project-LICHEN-ow1e.111.7",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T01:58:07.605693776Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

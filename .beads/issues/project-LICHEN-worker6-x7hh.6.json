@@ -1,0 +1,37 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.6",
+  "title": "Build independent CCP2 conformance corpus",
+  "description": "Create revision-specific schema, independent wire/policy/state-transition fixtures and real production consumers for CCP2-001..026 per docs/ccp-conformance.md. Preserve legacy fixtures and classify their applicability. Use independent FNV/bitset/LoRa-airtime/interval-ledger arithmetic and independently constructed signed wire objects, not production-generated expected results. Cover counts1..255 including128 and256rejection, sparse/global indices, masks beyond32/64bits, asymmetric densities, sender-versus-receiver context, stale generations, actual receiver/half-duplex commitments, persistent hash collisions, complete-operation fit, ordinary-data-is-not-beacon, legal/accounting aliases and queue policy. Include corrected narrowband/300ms mathematical cases as feasibility evidence, not activation. Reuse worker6-cmj5, xzen, jnn2, 1lfx, jhfm, 7va6, cdwm and fa4t after checking what is already fixed; no local reimplementation of the production algorithm in consumers.",
+  "acceptance_criteria": "Frozen independent provenance and exact revision IDs; unknown fixture shapes and zero-consumption fail; Python/Rust/C consumers invoke real APIs; parser fuzz corpus and documented negative cases; no weakened legacy tests or round-trip-only/self-oracle proof. Three independent reviews for source changes, findings filed and resolved. Policy/wire evidence distinguished from production and RF compliance.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:56:58.111560211Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:56:58.111560211Z",
+  "labels": [
+    "testing",
+    "vectors",
+    "ccp",
+    "conformance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.6",
+      "depends_on_id": "project-LICHEN-worker6-x7hh",
+      "type": "parent-child",
+      "created_at": "2026-09-09T01:56:58.261692259Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.6",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T02:01:09.555361526Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

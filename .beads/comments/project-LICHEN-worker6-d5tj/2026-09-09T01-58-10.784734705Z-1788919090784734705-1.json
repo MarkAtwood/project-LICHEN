@@ -1,0 +1,7 @@
+{
+  "id": "1788919090784734705-1",
+  "issue_id": "project-LICHEN-worker6-d5tj",
+  "author": "Mark Atwood",
+  "text": "FULL CLOSE REASON (the close call's reason was accidentally overwritten with 'd5tj duplicate close' by a redundant second close invocation — this comment is the record): Fixed: cargo clippy -p lichen-gateway --lib -- -D warnings passes on clippy 1.96. Fix shape per delegated review (kimi-k3, 2 passes): Cargo.toml declares rust-version.workspace = true so clippy MSRV-aware lints apply; slot.rs:604 keeps map_or(true,...) (is_none_or rejected: stabilized 1.82 \u003e workspace MSRV 1.81). Declaring MSRV exposed and fixed 2 pre-existing MSRV violations: gateway.rs:1126,1292 is_none_or -\u003e map_or(true,...) (semantics identical: none -\u003e true); lichend.rs:1666 is_multiple_of (Rust 1.87) -\u003e len() % 2 != 0. 263 lib tests green, fmt clean. Residuals filed: pre-existing --all-targets test-code lint debt (new P3, discovered-from d5tj) and workspace MSRV-declaration sweep (new P3, discovered-from d5tj).",
+  "created_at": "2026-09-09T01:58:10.784734705Z"
+}

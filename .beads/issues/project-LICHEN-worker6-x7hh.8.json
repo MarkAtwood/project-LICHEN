@@ -1,0 +1,37 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.8",
+  "title": "Integrate CCP2 in Rust production paths",
+  "description": "Integrate finalized CCP2 contract and independent fixtures through Rust core/node/gateway TX/RX andscheduler. Add approvedordered/versionedregionalplan semantics ratherthanusingOperatingClassParamsaschannelregistry; mask/indexboundaries, sparseglobalindicesandrealreceivercapabilities. Reuse b7z9.22/.23/.25/.29/.74 andexistingcodecs; removelegacydensitychannel/SF policyfromv2,holdprofile01SF10, preservecommonCH0windows,receivercommitments,grantownership,completefit andlegal/adaptivegroup/perfrequencyaccounting. Validateclock/generation/replay on adoption andonlyrealTDMAbeacons onrecovery. Fixedno_std bounds, no newunneededdependencies; fullupstreamYggidentitiesandbaselineSCHC/custodypreserved.",
+  "acceptance_criteria": "Production APIs consumefrozenindependentCCP2 vectors; node/gatewayintegrationcovershalfduplex,control/expiry,hardwarepassbandcounts,fullframeandbudgetrejection. Legacywire/testexpectations explicitlyseparated, notweakened. cargo testrelevantfeatures,no_std checks,cargofmt andclippy pass. Threeindependentcorrectness/security/robustnessreviews,allfindingsfiled/fixed. No deploymentauthorizationclaim.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:01:04.35664978Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T02:01:06.040928606Z",
+  "labels": [
+    "rust",
+    "ccp",
+    "local-ok",
+    "conformance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8",
+      "depends_on_id": "project-LICHEN-worker6-x7hh",
+      "type": "parent-child",
+      "created_at": "2026-09-09T02:01:04.590057957Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6",
+      "type": "blocks",
+      "created_at": "2026-09-09T02:01:05.415609585Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
