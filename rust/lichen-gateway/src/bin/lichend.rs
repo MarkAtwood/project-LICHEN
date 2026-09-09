@@ -290,10 +290,12 @@ async fn main() -> ExitCode {
     // caches (receiver-side replay gate), a silent self-DoS. Only a genuinely
     // fresh provisioning (no manifest, no security artifacts) may default 0.
     let claim_seq_exists = claim_seq_path.exists();
-    let gateway_preprovisioned = loaded_manifest.is_some()
-        || artifact_presence.iter().any(|present| *present);
+    let gateway_preprovisioned =
+        loaded_manifest.is_some() || artifact_presence.iter().any(|present| *present);
     if gateway_preprovisioned && !claim_seq_exists {
-        error!("claim_seq counter missing on provisioned gateway; refusing to reset replay counter");
+        error!(
+            "claim_seq counter missing on provisioned gateway; refusing to reset replay counter"
+        );
         return ExitCode::FAILURE;
     }
     match lichen_gateway::slot::ClaimSeqStore::load(&claim_seq_path) {

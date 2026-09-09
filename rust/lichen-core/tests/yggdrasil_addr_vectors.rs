@@ -120,7 +120,9 @@ fn corpus_shape() {
     );
     // The rejected native profile must not leak back into the live corpus.
     assert!(
-        vectors.iter().all(|v| v["profile"] != "lichen_native_sha512"),
+        vectors
+            .iter()
+            .all(|v| v["profile"] != "lichen_native_sha512"),
         "live corpus must not hold rejected native-profile vectors"
     );
     let legacy = load_legacy_document();
@@ -164,7 +166,10 @@ fn upstream_subnet_anchor_matches_byte_exact() {
     assert_eq!(subnet[0] & 0x01, 0x01, "subnet prefix bit must be set");
     // And shares the leading-1 count byte with the address.
     let addr = lichen_core::addr::ygg_addr_from_pubkey(&pubkey);
-    assert_eq!(subnet[1], addr[1], "subnet and address share leading-1 count");
+    assert_eq!(
+        subnet[1], addr[1],
+        "subnet and address share leading-1 count"
+    );
 }
 
 /// Test-local pins produced by running upstream's own `address.go` @422836ee

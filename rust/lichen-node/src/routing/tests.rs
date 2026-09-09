@@ -871,7 +871,10 @@ fn spoofed_dao_target_is_rejected_before_replay_state_changes() {
     assert!(!root.process_dao_at_ms(&dao, target, link_local(3), 0));
     assert!(root.lookup_route(Ipv6Addr::from(target)).is_none());
     assert!(root.process_dao_at_ms(&dao, target, target, 0));
-    assert_eq!(root.lookup_route(Ipv6Addr::from(target)), Some([Ipv6Addr::from(target)].as_slice()));
+    assert_eq!(
+        root.lookup_route(Ipv6Addr::from(target)),
+        Some([Ipv6Addr::from(target)].as_slice())
+    );
 }
 
 #[test]
@@ -1170,7 +1173,9 @@ fn finite_route_expires_during_idle_lookup_and_timer() {
     assert!(root.set_dao_lifetime_unit(1));
 
     assert!(root.process_dao_at_ms(&dao, target, target, 1_000));
-    assert!(root.lookup_route_at(Ipv6Addr::from(target), 1_999).is_some());
+    assert!(root
+        .lookup_route_at(Ipv6Addr::from(target), 1_999)
+        .is_some());
     root.trickle_start(2_000, 0);
     assert!(root.lookup_route(Ipv6Addr::from(target)).is_none());
 }
@@ -1217,8 +1222,12 @@ fn dao_clock_expires_across_u32_boundary() {
     assert!(root.set_dao_lifetime_unit(1));
 
     assert!(root.process_dao_at_ms(&dao, target, target, WRAP - 296));
-    assert!(root.lookup_route_at(Ipv6Addr::from(target), WRAP + 703).is_some());
-    assert!(root.lookup_route_at(Ipv6Addr::from(target), WRAP + 704).is_none());
+    assert!(root
+        .lookup_route_at(Ipv6Addr::from(target), WRAP + 703)
+        .is_some());
+    assert!(root
+        .lookup_route_at(Ipv6Addr::from(target), WRAP + 704)
+        .is_none());
 }
 
 #[test]
@@ -1233,7 +1242,9 @@ fn dao_clock_expires_after_half_range_gap() {
 
     let start = 1_000u64;
     assert!(root.process_dao_at_ms(&dao, target, target, start));
-    assert!(root.lookup_route_at(Ipv6Addr::from(target), start + HALF).is_none());
+    assert!(root
+        .lookup_route_at(Ipv6Addr::from(target), start + HALF)
+        .is_none());
 }
 
 #[test]

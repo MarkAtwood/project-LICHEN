@@ -233,10 +233,7 @@ fn test_sfn_wrap_continuity() {
     let hash = lichen_hash_32(&eui);
     assert_eq!(
         slot_at_current,
-        (hash
-            .wrapping_add(last_sfn)
-            .wrapping_add(delta)
-            % num_slots as u32) as u16
+        (hash.wrapping_add(last_sfn).wrapping_add(delta) % num_slots as u32) as u16
     );
 }
 
@@ -387,10 +384,7 @@ fn test_delta_equals_slot_difference() {
         let s_current = TdmaScheduler::slot_for(&eui, current, num_slots).unwrap();
         // Unreduced-hash oracle: exact for any num_slots (the reduced-slot
         // identity (s_last + delta) % N is exact only when N divides 2^32).
-        let expected_slot = (hash
-            .wrapping_add(last)
-            .wrapping_add(delta)
-            % num_slots as u32) as u16;
+        let expected_slot = (hash.wrapping_add(last).wrapping_add(delta) % num_slots as u32) as u16;
         assert_eq!(
             s_last,
             (hash.wrapping_add(last) % num_slots as u32) as u16,

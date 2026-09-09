@@ -697,7 +697,14 @@ impl Router {
             use lichen_link::{identity::Identity, keys::Seed};
             let Some(identity) = (0u8..=u8::MAX)
                 .map(|seed| Identity::from_seed(Seed::new([seed; 32])))
-                .find(|identity| identity.iid == packet_source[8..])
+                .find(|identity| {
+                    // The DAO source may be the originator's link-local
+                    // (SHA-512 IID tail) or its routable upstream
+                    // AddrForKey /128; match either form.
+                    lichen_link::ygg_addr_from_pubkey(identity.pubkey.as_bytes()) == packet_source
+                        || (packet_source.starts_with(&[0xfe, 0x80, 0, 0, 0, 0, 0, 0])
+                            && identity.iid == packet_source[8..])
+                })
             else {
                 return false;
             };

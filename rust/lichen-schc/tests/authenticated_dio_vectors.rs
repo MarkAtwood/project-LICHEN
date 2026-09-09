@@ -51,8 +51,8 @@ fn authenticated_dio_vectors_drive_production_admission() {
     // the derivation swapped (i72x.2): root/victim DODAGIDs carry upstream
     // addresses; the 9 fixed-peer cases are byte-identical to the shared
     // corpus, which flips when the Python derivation migrates (i72x.6).
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/authenticated_schc_dio_upstream.json");
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/authenticated_schc_dio_upstream.json");
     let corpus: VectorFile = serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
     for vector in corpus.vectors {
         let sender_seed: [u8; 32] = hex(&vector.sender_seed_hex).try_into().unwrap();
