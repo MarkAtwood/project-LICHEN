@@ -28,6 +28,7 @@ import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from fractions import Fraction
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -37,6 +38,17 @@ if TYPE_CHECKING:
 # within a single step() call. Guards against giant-dt steps combined with
 # sub-microsecond leg times turning step() into a near-infinite loop.
 _MAX_STEP_ITERATIONS = 100_000
+
+
+def _exact_extent_cells(extent: float, spacing: float) -> int:
+    """Return floor(extent / spacing) computed on decimal-exact rationals.
+
+    Binary-float division misclassifies exact decimal multiples
+    (0.3 / 0.1 evaluates to 2.999...9), which made an area's max bound
+    unreachable as a grid point. Fraction over the shortest reprs recovers
+    the decimal intent; genuine partial cells still floor.
+    """
+    return math.floor(Fraction(repr(extent)) / Fraction(repr(spacing)))
 
 
 def _require_finite(name: str, value: float, *, allow_zero: bool = False) -> None:
@@ -986,7 +998,7 @@ class ManhattanGrid(MobilityPattern):
     def _grid_size(self, axis: int) -> int:
         """Return the maximum grid index along axis (0=x, 1=y)."""
         lo, hi = self.area_bounds[2 * axis], self.area_bounds[2 * axis + 1]
-        return int(math.floor((hi - lo) / self.spacing_m))
+        return _exact_extent_cells(hi - lo, self.spacing_m)
 
     def _snap_axis_index(self, value: float, axis: int) -> int:
         """Return the nearest grid index along axis, clamped into bounds."""
