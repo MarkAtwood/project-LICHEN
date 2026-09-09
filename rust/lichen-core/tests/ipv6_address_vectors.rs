@@ -112,6 +112,9 @@ fn key_derived_identity_binds_link_local_and_upstream_native() {
     assert_eq!(document["format_version"], 2);
     let legacy: Value = serde_json::from_str(LEGACY_IPV6_NATIVE_VECTORS)
         .expect("legacy/ipv6_addresses_native_sha512.json must parse");
+    // The quarantined corpus is frozen: pin its format so a restructuring
+    // there cannot silently change what the quarantine-integrity pins mean.
+    assert_eq!(legacy["format_version"], 1);
     let legacy_by_name: std::collections::BTreeMap<&str, &Value> = legacy["vectors"]
         .as_array()
         .expect("legacy vectors array")
@@ -141,16 +144,26 @@ fn key_derived_identity_binds_link_local_and_upstream_native() {
         // embed the IID (the rejected native-profile binding).
         let upstream = upstream_addr_for_pubkey(&pubkey);
         assert_eq!(native, upstream, "{name}");
+        // Compare as bytes (case-insensitive hex parse), not as a
+        // case-sensitive string.
         assert_eq!(
-            vector["native_packed"].as_str().expect("native_packed"),
-            upstream
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect::<String>(),
+            decode_hex::<16>(vector["native_packed"].as_str().expect("native_packed")),
+            upstream,
             "{name}: live corpus native_packed must be upstream AddrForKey"
         );
+        // The human-readable `native` text form must agree with native_packed.
         assert_eq!(
-            vector["iid_in_native"], false,
+            std::net::Ipv6Addr::from(upstream).to_string(),
+            vector["native"].as_str().expect("native"),
+            "{name}: native text must match native_packed"
+        );
+        // Missing/non-boolean iid_in_native must panic with the real cause,
+        // not a misleading rejected-profile message.
+        assert_eq!(
+            vector["iid_in_native"]
+                .as_bool()
+                .expect("iid_in_native must be a boolean"),
+            false,
             "{name}: routable address must not embed the IID (rejected profile)"
         );
         assert_eq!(link_local, expected_link_local, "{name}");
