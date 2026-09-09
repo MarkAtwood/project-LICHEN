@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: The contributors to the LICHEN project
 
-//! Canonical `ipv6-addresses.json` and QUARANTINED
-//! `legacy/yggdrasil-derivation.json` consumers.
+//! Canonical `ipv6-addresses.json` and QUARANTINED legacy corpora consumers
+//! (`legacy/yggdrasil-derivation.json`,
+//! `legacy/ipv6_addresses_native_sha512.json`).
 //!
-//! Key-derived identities bind `fe80::/10` and native `0200::/8` to the same
-//! SHA-512 IID. EUI-64 and short-address cases are link-interoperability
-//! helpers, not node identities.
-//!
-//! The derivation corpus encodes the REJECTED SHA-512 native profile (see
+//! Key-derived identities bind `fe80::/10` to the SHA-512 IID. The primary
+//! 0200::/8 native address fields are the REJECTED SHA-512 profile (see
 //! test/vectors/legacy/README.md; spec/decisions.jsonl
-//! upstream-yggdrasil-addressing). It is consumed here only as a
-//! quarantine-integrity pin of pre-migration behavior, never as a
-//! conformance oracle.
+//! upstream-yggdrasil-addressing) and are consumed here only as
+//! quarantine-integrity pins of pre-migration behavior, never as conformance
+//! oracles. EUI-64 and short-address cases are link-interoperability
+//! helpers, not node identities.
 
 use lichen_core::addr::{iid_from_pubkey_bytes, ygg_addr_from_pubkey, Ipv6Addr, NodeId};
 use lichen_core::short_addr::{short_addr_from_iid, short_addr_to_iid};
@@ -21,6 +20,8 @@ use serde_json::Value;
 const IPV6_ADDRESS_VECTORS: &str = include_str!("../../../test/vectors/ipv6-addresses.json");
 const YGG_DERIVATION_VECTORS: &str =
     include_str!("../../../test/vectors/legacy/yggdrasil-derivation.json");
+const LEGACY_IPV6_NATIVE_VECTORS: &str =
+    include_str!("../../../test/vectors/legacy/ipv6_addresses_native_sha512.json");
 
 fn decode_hex<const N: usize>(value: &str) -> [u8; N] {
     assert_eq!(
@@ -49,9 +50,22 @@ fn link_local_from_iid(iid: &[u8; 8]) -> [u8; 16] {
 }
 
 #[test]
-fn key_derived_identity_binds_link_local_and_native() {
+fn key_derived_identity_binds_link_local_and_quarantined_native() {
+    // The live corpus pins only the IID + link-local derivations. The
+    // primary/native 0200::/8 fields are the REJECTED SHA-512 profile and
+    // live in test/vectors/legacy/ipv6_addresses_native_sha512.json
+    // (QUARANTINED — quarantine-integrity pin only, never a conformance
+    // oracle; delete when the upstream AddrForKey migration lands).
     let document = ipv6_document();
     assert_eq!(document["format_version"], 2);
+    let legacy: Value = serde_json::from_str(LEGACY_IPV6_NATIVE_VECTORS)
+        .expect("legacy/ipv6_addresses_native_sha512.json must parse");
+    let legacy_by_name: std::collections::BTreeMap<&str, &Value> = legacy["vectors"]
+        .as_array()
+        .expect("legacy vectors array")
+        .iter()
+        .map(|v| (v["name"].as_str().expect("legacy vector name"), v))
+        .collect();
 
     let mut checked = 0;
     for vector in document["vectors"].as_array().expect("vectors array") {
@@ -61,9 +75,20 @@ fn key_derived_identity_binds_link_local_and_native() {
         let name = vector["name"].as_str().expect("vector name");
         let pubkey = decode_hex::<32>(vector["pubkey"].as_str().expect("pubkey"));
         let expected_iid = decode_hex::<8>(vector["iid"].as_str().expect("iid"));
-        let expected_native = decode_hex::<16>(vector["native_packed"].as_str().expect("native"));
         let expected_link_local =
             decode_hex::<16>(vector["link_local_packed"].as_str().expect("link-local"));
+        // The rejected-profile corpus must not leak back into the live file.
+        assert!(
+            vector.get("native_packed").is_none()
+                && vector.get("native").is_none()
+                && vector.get("iid_in_native").is_none(),
+            "{name}: live corpus must not carry rejected native fields"
+        );
+        let legacy_vector = legacy_by_name
+            .get(name)
+            .expect("every key_derived_identity vector keeps a quarantined twin");
+        let expected_native =
+            decode_hex::<16>(legacy_vector["native_packed"].as_str().expect("native"));
 
         let iid = iid_from_pubkey_bytes(&pubkey);
         let native = ygg_addr_from_pubkey(&pubkey);
@@ -82,8 +107,8 @@ fn key_derived_identity_binds_link_local_and_native() {
         assert_eq!(&link_local[8..], &iid[..], "{name}: fe80 IID");
         assert!(Ipv6Addr(link_local).is_link_local(), "{name}");
         assert_eq!(
-            vector["iid_in_native"], true,
-            "{name}: corpus records the binding"
+            legacy_vector["iid_in_native"], true,
+            "{name}: quarantined corpus records the binding"
         );
         checked += 1;
     }

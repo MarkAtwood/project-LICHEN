@@ -275,8 +275,9 @@ bit cleared (`0c02a50225b4baaa`), link-local = `fe80::` + IID, and primary =
 `[0x02] + SHA-512(pubkey)[0:7] + IID` (lower 64 bits == IID). Node uses
 link-local for control + single primary 02xx for everything else. Consistent
 with updated 05-routing.md and 06-security.md. Note: the primary/native
-derivation shown — and the corpus's `native`/`native_packed` fields — record
-the REJECTED SHA-512 native profile (spec/decisions.jsonl
+derivation shown — and the corpus's `native`/`native_packed` fields, now
+quarantined in `test/vectors/legacy/ipv6_addresses_native_sha512.json` —
+record the REJECTED SHA-512 native profile (spec/decisions.jsonl
 `upstream-yggdrasil-addressing`): pre-migration reference, not a conformance
 oracle; the routable address MUST equal upstream Yggdrasil `AddrForKey`. The
 IID and link-local derivations remain the live profile.

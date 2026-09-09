@@ -63,7 +63,7 @@ Complete index of every vector file (excluding `schema.json` and the per-family 
 | `address_classification.schema.json` | Closed schema for `address_classification.json` operation scenarios |
 | `dao_origin_signature.json` | Shared DAO Origin Signature conformance (v2 schema) |
 | `gradient_entry.json` | Gradient table entry ranking/comparison order (spec 11) |
-| `ipv6-addresses.json` | Pubkey → IID → fe80::/10 and primary/native address derivation |
+| `ipv6-addresses.json` | Pubkey → IID → fe80::/10 derivation (the primary/native 0200::/8 fields are the rejected SHA-512 profile, quarantined in `legacy/ipv6_addresses_native_sha512.json`) |
 | `ipv6-icmpv6.json` | ICMPv6 Echo/errors with pseudo-header checksum (RFC 4443, spec 6.4) |
 | `ipv6_malformed.json` | Malformed IPv6/ICMPv6/UDP rejection (RFC 8200/4443/768) |
 | `loadng.json` | LOADng 16-bit sequence-number wrap-aware freshness (RFC 1982) |
@@ -208,6 +208,7 @@ Complete index of every vector file (excluding `schema.json` and the per-family 
 |------|--------|
 | `node-addresses.json` | Human-readable node addresses, canonical set (**content-overlaps `node_address.json`**) |
 | `node_address.json` | Base32-from-SHA-512(pubkey[:8]) 13-char node address (**content-overlaps `node-addresses.json`**) |
+| `legacy/ipv6_addresses_native_sha512.json` | QUARANTINED primary/native 0200::/8 fields moved out of `ipv6-addresses.json` key vectors (see `legacy/README.md`) — not a conformance oracle |
 | `legacy/yggdrasil_address_native_sha512.json` | QUARANTINED legacy SHA-512 native profile corpus, moved verbatim out of `yggdrasil_address.json` (see `legacy/README.md`) — not a conformance oracle |
 | `legacy/yggdrasil-derivation.json` | QUARANTINED legacy SHA-512 native profile derivation corpus (see `legacy/README.md`) — not a conformance oracle |
 | `legacy/yggdrasil.json` | QUARANTINED legacy-profile `ygg_addr_from_pubkey` spot vectors (see `legacy/README.md`) — not a conformance oracle |

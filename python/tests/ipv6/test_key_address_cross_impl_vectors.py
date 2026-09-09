@@ -39,7 +39,14 @@ def _independent_derivation(public_key: bytes) -> tuple[bytes, bytes, bytes]:
 
 def test_ipv6_address_vectors_bind_one_key_to_both_addresses_byte_exact() -> None:
     document = _load("ipv6-addresses.json")
+    # QUARANTINE-INTEGRITY pin: the primary/native address fields encode the
+    # REJECTED SHA-512 native profile and live in the legacy corpus
+    # (test/vectors/legacy/README.md); delete when the upstream AddrForKey
+    # migration lands.
+    legacy = _load("legacy/ipv6_addresses_native_sha512.json")
     assert isinstance(document, dict)
+    assert isinstance(legacy, dict)
+    legacy_by_name = {item["name"]: item for item in legacy["vectors"]}
     vectors = document["vectors"]
     assert isinstance(vectors, list)
     key_vectors = [item for item in vectors if item["profile"] == "key_derived_identity"]
@@ -48,12 +55,13 @@ def test_ipv6_address_vectors_bind_one_key_to_both_addresses_byte_exact() -> Non
     for vector in key_vectors:
         public_key = bytes.fromhex(vector["pubkey"])
         iid, link_local, native = _independent_derivation(public_key)
+        legacy_vector = legacy_by_name[vector["name"]]
 
         assert iid.hex() == vector["iid"], vector["name"]
         assert link_local.hex() == vector["link_local_packed"], vector["name"]
-        assert native.hex() == vector["native_packed"], vector["name"]
+        assert native.hex() == legacy_vector["native_packed"], vector["name"]
         assert str(IPv6Address(link_local)) == vector["link_local"], vector["name"]
-        assert str(IPv6Address(native)) == vector["native"], vector["name"]
+        assert str(IPv6Address(native)) == legacy_vector["native"], vector["name"]
 
         assert _pubkey_to_iid(public_key) == iid, vector["name"]
         assert link_local_from_pubkey(public_key).packed == link_local, vector["name"]
@@ -113,20 +121,19 @@ def test_eui_and_short_vectors_are_interop_helpers_not_identity() -> None:
 
 
 def test_native_corpora_agree_without_byte_reversal() -> None:
-    # QUARANTINE-INTEGRITY cross-check: both corpora encode the REJECTED
-    # SHA-512 native profile (test/vectors/legacy/README.md). The
-    # ipv6-addresses.json native-side fields are quarantine-tracked
-    # separately (q6ko.3); until the upstream AddrForKey migration lands,
-    # this pins the pre-migration agreement between the two legacy corpora.
-    ipv6_document = _load("ipv6-addresses.json")
+    # QUARANTINE-INTEGRITY cross-check: both native corpora encode the
+    # REJECTED SHA-512 native profile (test/vectors/legacy/README.md;
+    # spec/decisions.jsonl upstream-yggdrasil-addressing) and are consumed
+    # here only as pre-migration pins — delete when the upstream AddrForKey
+    # migration lands. The agreement still matters: it is the tripwire
+    # against word/byte-order reversal in the derivation both corpora record.
+    ipv6_document = _load("legacy/ipv6_addresses_native_sha512.json")
     native_document = _load("legacy/yggdrasil_address_native_sha512.json")
     assert isinstance(ipv6_document, dict)
     assert isinstance(native_document, dict)
 
     ipv6_by_key = {
-        item["pubkey"]: item
-        for item in ipv6_document["vectors"]
-        if item["profile"] == "key_derived_identity"
+        item["pubkey"]: item for item in ipv6_document["vectors"]
     }
     native_by_key = {
         item["public_key"]: item

@@ -33,3 +33,4 @@ Files:
 | `yggdrasil.json` | Two legacy-profile spot vectors (`ygg_addr_from_pubkey` shape) |
 | `yggdrasil-derivation.json` | Legacy-profile derivation corpus: U/L-bit cases, IID binding invariant, substitution-attack negative entry |
 | `yggdrasil_address_native_sha512.json` | The ten `lichen_native_sha512` vectors moved verbatim out of `test/vectors/yggdrasil_address.json`, which now holds only the pinned upstream anchor and the length-rejection cases |
+| `ipv6_addresses_native_sha512.json` | The primary/native 0200::/8 fields (`native`, `native_packed`, `iid_in_native`) moved out of the five `key_derived_identity` vectors in `test/vectors/ipv6-addresses.json` (whose IID and link-local fields stay live) |

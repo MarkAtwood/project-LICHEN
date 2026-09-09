@@ -1,0 +1,52 @@
+{
+  "format_version": 1,
+  "quarantine": "QUARANTINED legacy fields: the primary/native address derivation ([0x02] || SHA-512(pubkey)[0:7] || IID) is the REJECTED SHA-512 native profile per spec/decisions.jsonl upstream-yggdrasil-addressing \u2014 the routable address MUST equal upstream Yggdrasil AddrForKey, which bit-packs the inverted pubkey with no hashing. These fields are historical reference only, retained for the in-flight upstream migration (bd epic project-LICHEN-worker6-q6ko); they MUST NOT be used as conformance oracles. See test/vectors/legacy/README.md. The IID derivation itself is the live profile (shared with ipv6-addresses.json).",
+  "moved_from": "test/vectors/ipv6-addresses.json key_derived_identity native/native_packed fields (2026-09-09, q6ko.3)",
+  "vectors": [
+    {
+      "name": "all_zero_pubkey",
+      "profile": "lichen_native_sha512",
+      "pubkey": "0000000000000000000000000000000000000000000000000000000000000000",
+      "native": "250:46ad:c1db:a838:5046:adc1:dba8:3886",
+      "native_packed": "025046adc1dba8385046adc1dba83886",
+      "iid": "5046adc1dba83886",
+      "iid_in_native": true
+    },
+    {
+      "name": "sha256_empty_as_pubkey",
+      "profile": "lichen_native_sha512",
+      "pubkey": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "native": "26b:4e6c:1fe3:6504:694e:6c1f:e365:4e1",
+      "native_packed": "026b4e6c1fe36504694e6c1fe36504e1",
+      "iid": "694e6c1fe36504e1",
+      "iid_in_native": true
+    },
+    {
+      "name": "rfc8032_test_public_key",
+      "profile": "lichen_native_sha512",
+      "pubkey": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "native": "20e:2a5:225:b4ba:c02:a502:25b4:baaa",
+      "native_packed": "020e02a50225b4ba0c02a50225b4baaa",
+      "iid": "0c02a50225b4baaa",
+      "iid_in_native": true
+    },
+    {
+      "name": "all_ab_pubkey",
+      "profile": "lichen_native_sha512",
+      "pubkey": "abababababababababababababababababababababababababababababababab",
+      "native": "2dd:e68b:6d67:350a:dde6:8b6d:6735:a45",
+      "native_packed": "02dde68b6d67350adde68b6d67350a45",
+      "iid": "dde68b6d67350a45",
+      "iid_in_native": true
+    },
+    {
+      "name": "all_ff_pubkey",
+      "profile": "lichen_native_sha512",
+      "pubkey": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "native": "227:cd69:3586:4716:25cd:6935:8647:16a7",
+      "native_packed": "0227cd693586471625cd6935864716a7",
+      "iid": "25cd6935864716a7",
+      "iid_in_native": true
+    }
+  ]
+}

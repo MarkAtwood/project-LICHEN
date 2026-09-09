@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
-"""Generate exact native IPv6 address vectors without importing LICHEN."""
+"""Generate exact IPv6 IID and link-local address vectors without importing LICHEN.
+
+The primary/native 0200::/8 address fields are the rejected SHA-512 native
+profile (spec/decisions.jsonl upstream-yggdrasil-addressing) and are
+quarantined in test/vectors/legacy/ipv6_addresses_native_sha512.json; this
+generator emits only the live IID and link-local profile.
+"""
 
 from __future__ import annotations
 
@@ -28,8 +34,12 @@ def _key_vector(name: str, public_key: bytes) -> dict[str, object]:
     digest = hashlib.sha512(public_key).digest()
     iid = bytearray(digest[:8])
     iid[0] &= 0xFD
-    native = bytes((0x02,)) + digest[:7] + bytes(iid)
     link_local = b"\xfe\x80" + bytes(6) + bytes(iid)
+    # The primary/native address fields ([0x02] || digest[:7] || iid) are the
+    # REJECTED SHA-512 native profile (spec/decisions.jsonl
+    # upstream-yggdrasil-addressing) and are quarantined in
+    # test/vectors/legacy/ipv6_addresses_native_sha512.json; this generator
+    # emits only the live IID and link-local profile.
     return {
         "name": name,
         "profile": "key_derived_identity",
@@ -37,9 +47,6 @@ def _key_vector(name: str, public_key: bytes) -> dict[str, object]:
         "iid": bytes(iid).hex(),
         "link_local": str(IPv6Address(link_local)),
         "link_local_packed": link_local.hex(),
-        "native": str(IPv6Address(native)),
-        "native_packed": native.hex(),
-        "iid_in_native": native[8:] == bytes(iid),
     }
 
 
@@ -97,16 +104,17 @@ def document() -> dict[str, object]:
         "$schema": "./schema.json",
         "format_version": 2,
         "description": (
-            "Exact Ed25519 pubkey to SHA-512 IID, link-local, and primary "
-            "0200::/8 native-address derivation. EUI-64 and short-address cases "
-            "are explicitly link-interoperability helpers, not node identities."
+            "Exact Ed25519 pubkey to SHA-512 IID and link-local derivation. "
+            "The primary 0200::/8 native-address fields are the REJECTED "
+            "SHA-512 native profile (spec/decisions.jsonl "
+            "upstream-yggdrasil-addressing) and are quarantined in "
+            "test/vectors/legacy/ipv6_addresses_native_sha512.json. EUI-64 "
+            "and short-address cases are explicitly link-interoperability "
+            "helpers, not node identities."
         ),
         "oracle": {
             "basis": "spec/03-addressing.md and spec/06-security.md Section 8.5",
-            "derivation": (
-                "h=SHA-512(pubkey); iid=h[0:8] with U/L cleared; "
-                "native=0x02||h[0:7]||iid"
-            ),
+            "derivation": "h=SHA-512(pubkey); iid=h[0:8] with U/L cleared",
             "implementation": "Python stdlib hashlib and ipaddress only",
             "generator_command": "python3 test/vectors/generate_ipv6_addresses.py",
         },
