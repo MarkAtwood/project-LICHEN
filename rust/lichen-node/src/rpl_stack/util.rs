@@ -197,7 +197,7 @@ pub(crate) fn rpl_ipv6_multicast_is_allowed(ipv6: &[u8]) -> bool {
         .is_some_and(|destination| destination[0] != 0xff || destination == RPL_ALL_NODES)
 }
 
-pub(crate) fn dio_dis_destination_is_allowed(ipv6: &[u8], local_link_addr: [u8; 16]) -> bool {
+pub(crate) fn dio_dis_destination_is_allowed(ipv6: &[u8], local_control_addr: [u8; 16]) -> bool {
     let Some(code) = ipv6.get(IPV6_HEADER_LEN + hdr_field::CODE_OFFSET) else {
         return false;
     };
@@ -211,7 +211,7 @@ pub(crate) fn dio_dis_destination_is_allowed(ipv6: &[u8], local_link_addr: [u8; 
         && ipv6_destination(ipv6).is_some_and(|destination| {
             destination == RPL_ALL_NODES
                 || (destination[..8] == [0xfe, 0x80, 0, 0, 0, 0, 0, 0]
-                    && destination[8..] == local_link_addr[8..])
+                    && destination[8..] == local_control_addr[8..])
         })
 }
 

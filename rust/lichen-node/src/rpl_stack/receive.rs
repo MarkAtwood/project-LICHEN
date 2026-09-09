@@ -562,10 +562,14 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 let RplRole::Root(rx) = &mut self.role else {
                     return Ok(RplReceiveOutcome::Dao(DaoHandlingOutcome::RouteRejected));
                 };
-                let origin_iid: [u8; 8] = source[8..].try_into().unwrap();
+                // The DAO source is the origin's primary 02xx address (spec
+                // 05-routing §8.6), which post-AddrForKey embeds no IID.
+                // Resolve the pinned key by full-address match, not by
+                // slicing the low 64 bits.
+                let origin_addr: [u8; 16] = source;
                 let admitted = self
                     .announces
-                    .pinned_pubkey_for(&origin_iid)
+                    .pinned_pubkey_for_addr(&origin_addr)
                     .is_some_and(|key| {
                         self.dao_admissions
                             .as_ref()
