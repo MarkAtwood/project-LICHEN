@@ -4,8 +4,10 @@
 
 from __future__ import annotations
 
+import grp
 import json
 import os
+import pwd
 import stat
 import sys
 import threading
@@ -809,7 +811,35 @@ def test_batch_lock_rejects_symlink_without_touching_destination(tmp_path: Path)
     assert lock_target.read_bytes() == b"sentinel"
 
 
+def _host_uses_user_private_group() -> bool:
+    """Whether this host follows the user-private-group convention (group
+    name == user name), which atomic_json relies on to accept a
+    group-writable parent directory."""
+    user = pwd.getpwuid(os.geteuid()).pw_name
+    group = grp.getgrgid(os.getegid()).gr_name
+    return group == user
+
+
+def test_batch_rejects_world_writable_parent_before_lock(tmp_path: Path) -> None:
+    unsafe = tmp_path / "unsafe"
+    unsafe.mkdir(mode=0o773)
+    unsafe.chmod(0o773)
+    try:
+        with pytest.raises(RuntimeError, match="parent directory is unsafe"):
+            atomic_write_json(unsafe / "vectors.json", {"generation": 1})
+        assert not (unsafe / ".lichen-vector-batch.lock").exists()
+    finally:
+        unsafe.chmod(0o700)
+
+
 def test_batch_rejects_group_writable_parent_before_lock(tmp_path: Path) -> None:
+    # On a shared-group host (group name != user name), a group-writable
+    # parent admits principals beyond the owner and stays fatal. Under the
+    # user-private-group convention the same mode is owner-equivalent and
+    # accepted — that acceptance is covered by
+    # test_batch_accepts_user_private_group_writable_parent.
+    if _host_uses_user_private_group():
+        pytest.skip("host follows the user-private-group convention")
     unsafe = tmp_path / "unsafe"
     unsafe.mkdir(mode=0o770)
     unsafe.chmod(0o770)
@@ -819,6 +849,24 @@ def test_batch_rejects_group_writable_parent_before_lock(tmp_path: Path) -> None
         assert not (unsafe / ".lichen-vector-batch.lock").exists()
     finally:
         unsafe.chmod(0o700)
+
+
+def test_batch_accepts_user_private_group_writable_parent(tmp_path: Path) -> None:
+    # UPG hosts run umask 002, so worker workspaces have group-writable
+    # checkouts; the parent check must not reject them (the group admits no
+    # principal beyond the owner). Non-UPG hosts skip: the strict rejection
+    # is covered by test_batch_rejects_group_writable_parent_before_lock.
+    if not _host_uses_user_private_group():
+        pytest.skip("host does not follow the user-private-group convention")
+    writable = tmp_path / "writable"
+    writable.mkdir(mode=0o770)
+    writable.chmod(0o770)
+    try:
+        destination = writable / "vectors.json"
+        atomic_write_json(destination, {"generation": 1})
+        assert destination.read_bytes() == b'{\n  "generation": 1\n}\n'
+    finally:
+        writable.chmod(0o700)
 
 
 def test_batch_rejects_symlinked_parent_before_lock(tmp_path: Path) -> None:

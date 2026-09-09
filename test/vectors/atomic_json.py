@@ -6,8 +6,10 @@
 from __future__ import annotations
 
 import fcntl
+import grp
 import json
 import os
+import pwd
 import secrets
 import stat
 from collections.abc import Sequence
@@ -94,6 +96,34 @@ def _read_exact_snapshot(
     return b"".join(chunks)
 
 
+def _group_write_reaches_owner_only(info: os.stat_result) -> bool:
+    """Whether the group-write bit admits no principal beyond the owner.
+
+    Single-user hosts conventionally run umask 002 against a user-private
+    group whose name equals the user name (the Debian/Ubuntu/RHEL adduser
+    default), so a group-writable parent directory there is owner-writable
+    in effect and workspaces created with that umask stay usable. A host
+    whose group name does not match its user name is treated as a
+    shared-group host and keeps the strict no-group-write requirement.
+    """
+    try:
+        user = pwd.getpwuid(info.st_uid).pw_name
+        group = grp.getgrgid(info.st_gid).gr_name
+    except KeyError:
+        return False
+    return bool(user) and group == user
+
+
+def _parent_mode_unsafe(info: os.stat_result) -> bool:
+    """A parent directory is unsafe when anyone beyond the owner's
+    user-private group can write it: other-writable is always fatal, and
+    group-writable is fatal except under the user-private-group convention
+    (see :func:`_group_write_reaches_owner_only`)."""
+    if info.st_mode & stat.S_IWOTH:
+        return True
+    return bool(info.st_mode & stat.S_IWGRP) and not _group_write_reaches_owner_only(info)
+
+
 def _open_owned_directory(path: Path) -> int:
     """Open and validate one directory; callers keep the descriptor pinned."""
     try:
@@ -103,7 +133,7 @@ def _open_owned_directory(path: Path) -> int:
     if (
         not stat.S_ISDIR(before.st_mode)
         or before.st_uid != os.geteuid()
-        or before.st_mode & 0o022
+        or _parent_mode_unsafe(before)
     ):
         raise RuntimeError("atomic JSON parent directory is unsafe")
     descriptor = os.open(path, os.O_RDONLY | _DIRECTORY | _NOFOLLOW)
@@ -112,7 +142,7 @@ def _open_owned_directory(path: Path) -> int:
         if (
             not stat.S_ISDIR(info.st_mode)
             or info.st_uid != os.geteuid()
-            or info.st_mode & 0o022
+            or _parent_mode_unsafe(info)
             or (info.st_dev, info.st_ino) != (before.st_dev, before.st_ino)
         ):
             raise RuntimeError("atomic JSON parent directory is unsafe")
