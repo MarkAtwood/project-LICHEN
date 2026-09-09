@@ -693,6 +693,29 @@ The right time to add these hooks is before any cloud provider commits
 to LICHEN integration, not after. After, it's a negotiation. Before,
 it's architecture.
 
+**The ask:** Free CA service. AWS already runs ACM (AWS Certificate
+Manager) and IoT Core device provisioning — both issue and manage
+certificates at scale, at zero marginal cost, as loss leaders for
+platform adoption. A LICHEN CA endpoint that signs node attestation
+certificates (binding Ed25519 mesh identity to an AWS account/device
+registry entry) is operationally trivial for them and strategically
+valuable: every node with an AWS-signed attestation is a node whose
+telemetry flows to CloudWatch, whose OTA updates come from S3, whose
+fleet management lives in IoT Device Management. The CA is the hook.
+
+The cost to AWS is approximately nothing — they already run the
+infrastructure, the HSMs, the OCSP responders, the CRL distribution.
+Adding a LICHEN attestation certificate type to ACM is a product
+feature, not a new service. And it's the kind of feature that makes
+competitors scramble to match: once AWS offers free LICHEN CA, Azure
+and GCP have to offer equivalent or concede the entire mesh IoT edge
+market.
+
+Let's Encrypt proved that free CA service drives ecosystem adoption
+faster than any other single intervention. Same principle, different
+layer. Let's Encrypt did it for HTTPS. AWS can do it for mesh
+identity. The certificate is the onramp.
+
 ---
 
 ## P25-Style IETF Network
