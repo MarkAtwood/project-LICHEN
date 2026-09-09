@@ -635,7 +635,7 @@ mod tests {
         // beacons still reach SYNCED despite interleaved misses.
         let st = fsm.on_beacon(true, false);
         assert_eq!(st, DesyncState::Recovering);
-        let st = fsm.on_beacon(true, false);
+        fsm.on_beacon(true, false);
         let st = fsm.on_beacon(true, false);
         assert_eq!(st, DesyncState::Synced);
     }
