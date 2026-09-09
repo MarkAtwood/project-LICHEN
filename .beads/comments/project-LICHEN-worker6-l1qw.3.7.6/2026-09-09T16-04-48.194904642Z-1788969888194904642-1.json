@@ -1,0 +1,7 @@
+{
+  "id": "1788969888194904642-1",
+  "issue_id": "project-LICHEN-worker6-l1qw.3.7.6",
+  "author": "Mark Atwood",
+  "text": "Decomposed into 5 independently landable children (Yegge's rule; greenfield session authority too large for one leaf). Land order: .1 (identity/generation/Rule-ID core) -\u003e .2 (bounded tables) -\u003e .3 (authenticated install/currentness/atomic invalidate) -\u003e .4 (24-bit counter + dup/conflict tiles) -\u003e .5 (ACK/abort authz + tombstone hold-down + Link/L2 API). .1-.5 must land in order (each builds on the prior); each is independently testable and landable. Parent released - closes when children do.",
+  "created_at": "2026-09-09T16:04:48.194904642Z"
+}
