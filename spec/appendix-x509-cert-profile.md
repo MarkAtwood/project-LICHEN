@@ -16,6 +16,19 @@ RFC 5280 certificates with an Ed25519 subject key can issue an
 interoperable LICHEN attestation certificate. No custom CSR format is
 required; requests use PKCS#10 (RFC 2986).
 
+**Proof of possession (REQUIRED at issuance).** Before issuing, the CA
+MUST verify that the requester controls the private key corresponding to
+the Ed25519 subject public key. For a PKCS#10 request this is the
+`certificationRequestInfo` self-signature: the CA MUST verify the request
+signature over the DER-encoded `certificationRequestInfo` using the
+subject public key it carries (RFC 2986) and MUST reject a request whose
+signature does not verify. A CA MUST NOT issue a LICHEN attestation
+certificate for a subject public key whose proof of possession it has not
+verified; without this check an attacker could obtain a certificate
+binding the SAN address (Section 4) to a key it does not control,
+undermining the key-to-address attestation of Section 8 step 4. No
+proof-of-possession round trip beyond the CSR self-signature is required.
+
 Key words MUST, MUST NOT, SHOULD, MAY are per RFC 2119.
 
 ## 1. Profile Summary
