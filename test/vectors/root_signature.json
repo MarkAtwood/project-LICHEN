@@ -106,7 +106,7 @@
       "dodagid": "02062f7c200618f7a0f14791738c5a1f",
       "dodagid_str": "206:2f7c:2006:18f7:a0f1:4791:738c:5a1f",
       "binding_valid": true,
-      "note": "DODAGID == AddrForKey(pubkey), LICHEN native 0200::/8 address"
+      "note": "DODAGID == AddrForKey(pubkey), upstream Yggdrasil 0200::/8 address"
     }
   ]
 }

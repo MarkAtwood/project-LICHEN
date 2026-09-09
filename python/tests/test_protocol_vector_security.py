@@ -465,7 +465,7 @@ def test_timing_dio_envelope_has_independent_integrity_checks() -> None:
         assert source_matches_signer is (case["name"] != "signed-wrong-signer"), case["name"]
 
 
-def test_root_vectors_use_native_addr_for_key_and_independent_signatures() -> None:
+def test_root_vectors_bind_dodagid_and_use_independent_signatures() -> None:
     for vector in _load("root_signature.json")["vectors"]:
         public_hex = vector.get("pubkey")
         if public_hex is None or len(public_hex) != 64:
