@@ -1,8 +1,7 @@
 //! DTN store-and-forward buffer (spec 9.8).
 
 extern crate std;
-use std::collections::HashSet;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::vec::Vec;
 
 /// Default DTN buffer size: 64KB per spec 9.8

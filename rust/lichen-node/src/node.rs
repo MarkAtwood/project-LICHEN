@@ -1,65 +1,39 @@
 //! Node state and receive-path dispatch.
 
-use lichen_core::addr::Ipv6Addr;
-use lichen_core::addr::NodeId;
 use lichen_core::constants::L2_DISPATCH_SCHC;
 #[cfg(feature = "std")]
-use lichen_core::constants::RPL_ICMPV6_TYPE;
-#[cfg(feature = "std")]
-use lichen_core::constants::RPL_INSTANCE_ID;
-use lichen_core::icmpv6;
-use lichen_core::icmpv6::echo_field;
+use lichen_core::constants::{RPL_ICMPV6_TYPE, RPL_INSTANCE_ID};
 #[cfg(feature = "std")]
 use lichen_core::icmpv6::hdr_field;
-use lichen_core::icmpv6::ICMPV6_HEADER_LEN;
-use lichen_core::ipv6::field;
-use lichen_core::ipv6::next_header;
-use lichen_core::ipv6::IPV6_HEADER_LEN;
-use lichen_core::l2_payload::body as l2_payload_body;
-use lichen_core::l2_payload::classify as classify_l2_payload;
-use lichen_core::l2_payload::L2PayloadKind;
+use lichen_core::icmpv6::{echo_field, ICMPV6_HEADER_LEN};
+use lichen_core::ipv6::{field, next_header, IPV6_HEADER_LEN};
+use lichen_core::l2_payload::{
+    body as l2_payload_body, classify as classify_l2_payload, L2PayloadKind,
+};
 use lichen_core::udp::UDP_HEADER_LEN;
+use lichen_core::{addr::Ipv6Addr, addr::NodeId, icmpv6};
 use lichen_schc::codec;
 
-use crate::port_dispatch::dispatch_by_port;
-use crate::port_dispatch::Dispatched;
-use crate::port_dispatch::UdpDispatchError;
+use crate::port_dispatch::{dispatch_by_port, Dispatched, UdpDispatchError};
 
 /// IPv6 version number expected in the first 4 bits of the header.
 const IPV6_VERSION: u8 = 6;
 
 #[cfg(feature = "std")]
-use crate::announce::AnnounceProcessor;
+use crate::routing::{DioProcessOutcome, Router, RplMaintenanceOutcome, TrickleSafeLivenessPolicy};
 #[cfg(feature = "std")]
-use crate::routing::DaoProcessError;
-#[cfg(feature = "std")]
-use crate::routing::DaoProcessOutcome;
-#[cfg(feature = "std")]
-use crate::routing::DaoProvisionError;
-#[cfg(feature = "std")]
-use crate::routing::DaoRxState;
-#[cfg(feature = "std")]
-use crate::routing::DaoVerifyError;
-#[cfg(feature = "std")]
-use crate::routing::DioProcessOutcome;
-#[cfg(feature = "std")]
-use crate::routing::Router;
-#[cfg(feature = "std")]
-use crate::routing::RplMaintenanceOutcome;
-#[cfg(feature = "std")]
-use crate::routing::TrickleSafeLivenessPolicy;
+use crate::{
+    announce::AnnounceProcessor,
+    routing::{DaoProcessError, DaoProcessOutcome, DaoProvisionError, DaoRxState, DaoVerifyError},
+};
 #[cfg(feature = "std")]
 use lichen_hal::NonVolatile;
 #[cfg(feature = "std")]
-use lichen_ipv6::icmpv6_checksum;
-#[cfg(feature = "std")]
-use lichen_ipv6::Addr;
-#[cfg(feature = "std")]
-use lichen_rpl::message::SignedDaoEnvelope;
+use lichen_ipv6::{icmpv6_checksum, Addr};
 #[cfg(feature = "std")]
 use lichen_rpl::routing::SignatureVerifiedDao;
 #[cfg(feature = "std")]
-use lichen_rpl::verify::dao_origin_digest;
+use lichen_rpl::{message::SignedDaoEnvelope, verify::dao_origin_digest};
 
 /// ICMPv6 RPL message codes.
 pub mod rpl_code {
@@ -880,8 +854,7 @@ fn wrap_compressed_reply(ipv6: &[u8], reply: &mut [u8]) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::port_dispatch::AppProtocol;
-    use crate::port_dispatch::UdpDispatchError;
+    use crate::port_dispatch::{AppProtocol, UdpDispatchError};
     use core::net::Ipv6Addr;
     #[allow(unused_imports)]
     use std::format;
@@ -1085,12 +1058,9 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn leaf_dao_is_forwarded_by_parent_and_processed_by_root() {
-        use crate::announce::AnnounceProcessor;
-        use crate::gradient::GradientTable;
+        use crate::{announce::AnnounceProcessor, gradient::GradientTable};
         use lichen_hal::storage::mem::MemStorage;
-        use lichen_link::identity::Identity;
-        use lichen_link::keys::Seed;
-        use lichen_link::link_layer::LinkLayer;
+        use lichen_link::{identity::Identity, keys::Seed, link_layer::LinkLayer};
         use lichen_rpl::routing::DaoAdmissionState;
 
         let root_id = NodeId([0x02, 0, 0, 0, 0, 0, 0, 1]);
@@ -1328,18 +1298,13 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn grouped_delegated_prefix_dao_is_forwarded_by_parent_and_processed_by_root() {
-        use crate::announce::AnnounceProcessor;
-        use crate::gradient::GradientTable;
-        use crate::routing::Dao;
-        use crate::routing::DaoOriginSignature;
-        use crate::routing::RplTarget;
-        use crate::routing::TransitInfo;
-        use crate::routing::DAO_ORIGIN_SIGNATURE_LEN;
-        use crate::routing::OPT_RPL_TARGET;
+        use crate::routing::{
+            Dao, DaoOriginSignature, RplTarget, TransitInfo, DAO_ORIGIN_SIGNATURE_LEN,
+            OPT_RPL_TARGET,
+        };
+        use crate::{announce::AnnounceProcessor, gradient::GradientTable};
         use lichen_hal::storage::mem::MemStorage;
-        use lichen_link::identity::Identity;
-        use lichen_link::keys::Seed;
-        use lichen_link::link_layer::LinkLayer;
+        use lichen_link::{identity::Identity, keys::Seed, link_layer::LinkLayer};
         use lichen_rpl::routing::DaoAdmissionState;
 
         let root_id = NodeId([0x02, 0, 0, 0, 0, 0, 0, 1]);
@@ -1594,12 +1559,9 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn production_signed_dao_cannot_mutate_equal_path_sequence() {
-        use crate::announce::AnnounceProcessor;
-        use crate::gradient::GradientTable;
+        use crate::{announce::AnnounceProcessor, gradient::GradientTable};
         use lichen_hal::storage::mem::MemStorage;
-        use lichen_link::identity::Identity;
-        use lichen_link::keys::Seed;
-        use lichen_link::link_layer::LinkLayer;
+        use lichen_link::{identity::Identity, keys::Seed, link_layer::LinkLayer};
         use lichen_rpl::routing::DaoAdmissionState;
 
         let root_id = NodeId([0x02, 0, 0, 0, 0, 0, 0, 1]);

@@ -23,32 +23,22 @@
 //! counter outside the record itself.
 
 #[cfg(feature = "std")]
-use std::collections::HashMap;
-#[cfg(feature = "std")]
-use std::collections::HashSet;
-#[cfg(feature = "std")]
-use std::vec;
-#[cfg(feature = "std")]
-use std::vec::Vec;
+use std::{
+    collections::{HashMap, HashSet},
+    vec,
+    vec::Vec,
+};
 
 #[cfg(feature = "std")]
 use crate::message::SignedDaoEnvelope;
 #[cfg(feature = "std")]
-use lichen_hal::storage::open_redundant;
-#[cfg(feature = "std")]
-use lichen_hal::storage::provision_redundant;
-#[cfg(feature = "std")]
-use lichen_hal::storage::update_redundant;
-#[cfg(feature = "std")]
-use lichen_hal::storage::RedundantOpenError;
-#[cfg(feature = "std")]
-use lichen_hal::storage::RedundantProvisionError;
-#[cfg(feature = "std")]
-use lichen_hal::storage::RedundantUpdateError;
-#[cfg(feature = "std")]
-use lichen_hal::storage::RedundantValue;
-#[cfg(feature = "std")]
-use lichen_hal::NonVolatile;
+use lichen_hal::{
+    storage::{
+        open_redundant, provision_redundant, update_redundant, RedundantOpenError,
+        RedundantProvisionError, RedundantUpdateError, RedundantValue,
+    },
+    NonVolatile,
+};
 #[cfg(feature = "std")]
 use lichen_link::keys::PublicKey;
 
@@ -731,9 +721,7 @@ pub(crate) fn decode_high_water(data: &[u8]) -> Option<HighWaterMap> {
 mod tests {
     use super::*;
     use crate::routing::DaoManager;
-    use lichen_hal::storage::mem::MemStorage;
-    use lichen_hal::storage::provision_redundant;
-    use lichen_hal::storage::update_redundant;
+    use lichen_hal::storage::{mem::MemStorage, provision_redundant, update_redundant};
 
     const INSTANCE: u8 = 7;
 

@@ -3,25 +3,17 @@
 
 //! RplRuntime integration for executor-neutral control loops.
 
-use lichen_hal::NonVolatile;
-use lichen_hal::Radio;
+use lichen_hal::{NonVolatile, Radio};
 
 use crate::routing::RplMaintenanceOutcome;
 use crate::routing::TrickleSafeLivenessPolicy;
-use crate::runtime::RplRuntime;
-use crate::runtime::RplRuntimeAction;
-use crate::runtime::RplRuntimeActionError;
-use crate::runtime::RplRuntimePoll;
-use crate::stack::RxError;
-use crate::stack::MAX_FRAME_SIZE;
+use crate::runtime::{RplRuntime, RplRuntimeAction, RplRuntimeActionError, RplRuntimePoll};
+use crate::stack::{RxError, MAX_FRAME_SIZE};
 
-use super::error::RplReceiveError;
-use super::error::RplRuntimeReceiveError;
-use super::error::RplRuntimeTrickleError;
+use super::error::{RplReceiveError, RplRuntimeReceiveError, RplRuntimeTrickleError};
 use super::util::RPL_ALL_NODES;
-use super::RplRuntimeReceiveOutcome;
-use super::RplStack;
 use super::RplTrickleTransmitOutcome;
+use super::{RplRuntimeReceiveOutcome, RplStack};
 
 impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// Run DAO-route and neighbor maintenance from one monotonic observation.

@@ -3,9 +3,7 @@
 //! Root-side routing table mapping targets to hop paths.
 
 #[cfg(feature = "std")]
-use std::collections::HashMap;
-#[cfg(feature = "std")]
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
@@ -189,7 +187,9 @@ impl RoutingTable {
     ) -> bool {
         if target.prefix_len == 128
             || path.last() != Some(&egress)
-            || path.iter().any(|hop| hop.octets() == *target.prefix())
+            || path
+                .iter()
+                .any(|hop| hop.octets() == *target.prefix())
         {
             return false;
         }

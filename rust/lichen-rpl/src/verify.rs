@@ -3,23 +3,11 @@
 //! Signature verification for signed DAO messages.
 
 #[cfg(feature = "std")]
-use crate::message::Dao;
+use crate::message::{Dao, DaoEnvelopeError, SignedDaoEnvelope};
 #[cfg(feature = "std")]
-use crate::message::DaoEnvelopeError;
+use lichen_link::{keys::PublicKey, schnorr, ygg_addr_from_pubkey};
 #[cfg(feature = "std")]
-use crate::message::SignedDaoEnvelope;
-#[cfg(feature = "std")]
-use lichen_link::keys::PublicKey;
-#[cfg(feature = "std")]
-use lichen_link::schnorr;
-#[cfg(feature = "std")]
-use lichen_link::ygg_addr_from_pubkey;
-#[cfg(feature = "std")]
-use sha2::Digest;
-#[cfg(feature = "std")]
-use sha2::Sha256;
-#[cfg(feature = "std")]
-use sha2::Sha512;
+use sha2::{Digest, Sha256, Sha512};
 
 #[cfg(feature = "std")]
 pub const DAO_ORIGIN_DOMAIN: &[u8] = b"LICHEN-DAO-ORIGIN-v1";

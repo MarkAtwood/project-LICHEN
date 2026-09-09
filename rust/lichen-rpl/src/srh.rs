@@ -10,9 +10,7 @@ use lichen_core::addr::Ipv6Addr;
 #[cfg(feature = "std")]
 use crate::message::RplError;
 #[cfg(feature = "std")]
-use lichen_core::error::BufferTooSmall;
-#[cfg(feature = "std")]
-use lichen_core::error::TooShort;
+use lichen_core::error::{BufferTooSmall, TooShort};
 
 /// Maximum complete route hops allowed by the LICHEN RPL profile.
 pub const MAX_ROUTE_HOPS: usize = 8;

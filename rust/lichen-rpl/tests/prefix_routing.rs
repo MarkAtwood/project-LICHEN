@@ -4,12 +4,9 @@
 use core::net::Ipv6Addr;
 
 use lichen_rpl::message::OPT_TRANSIT_INFO;
-use lichen_rpl::routing::DaoDiagnosticLimits;
-use lichen_rpl::routing::DaoManager;
-use lichen_rpl::routing::DaoProcessTiming;
-use lichen_rpl::routing::RouteTarget;
-use lichen_rpl::routing::RoutingTable;
-use lichen_rpl::routing::MAX_ROUTES;
+use lichen_rpl::routing::{
+    DaoDiagnosticLimits, DaoManager, DaoProcessTiming, RouteTarget, RoutingTable, MAX_ROUTES,
+};
 
 fn address(last: u8) -> Ipv6Addr {
     Ipv6Addr::from([0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0, 0, 0, 0, last])
@@ -199,5 +196,7 @@ fn prefix_and_dao_host_routes_share_one_atomic_capacity_budget() {
     assert!(result.is_err());
     assert_eq!(manager.routing_table().len(), MAX_ROUTES);
     assert_eq!(manager.routing_table().lookup(host), None);
-    assert!(manager.route_state_diagnostic(authority, 1).is_empty());
+    assert!(manager
+        .route_state_diagnostic(authority, 1)
+        .is_empty());
 }

@@ -3,38 +3,27 @@
 
 //! Stack provisioning and constructor methods.
 
-use std::collections::HashSet;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 use crate::rpl_stack::dao_tx_sched::DaoTxScheduler;
-use lichen_hal::storage::open_redundant;
-use lichen_hal::storage::provision_redundant;
-use lichen_hal::storage::update_redundant;
-use lichen_hal::storage::RedundantOpenError;
-use lichen_hal::storage::RedundantValue;
-use lichen_hal::NonVolatile;
-use lichen_hal::Radio;
+use lichen_hal::storage::{
+    open_redundant, provision_redundant, update_redundant, RedundantOpenError, RedundantValue,
+};
+use lichen_hal::{NonVolatile, Radio};
 use lichen_link::identity::iid_from_pubkey;
-use lichen_rpl::root_seq_cache::RootSeqCache;
-use lichen_rpl::root_seq_cache::ROOT_SEQ_WIRE_LEN;
-use lichen_rpl::routing::DaoAdmissionState;
-use lichen_rpl::routing::DaoAdmissionUpdateError;
-use lichen_rpl::routing::DaoPersistentOpenError;
-use lichen_rpl::routing::DaoProvisionError;
-use lichen_rpl::routing::DaoTxState;
+use lichen_rpl::root_seq_cache::{RootSeqCache, ROOT_SEQ_WIRE_LEN};
+use lichen_rpl::routing::{
+    DaoAdmissionState, DaoAdmissionUpdateError, DaoPersistentOpenError, DaoProvisionError,
+    DaoTxState,
+};
 
 use crate::announce::AnnounceProcessor;
-use crate::node::Node;
-use crate::node::RplNode;
-use crate::routing::DaoRxState;
-use crate::routing::Router;
+use crate::node::{Node, RplNode};
+use crate::routing::{DaoRxState, Router};
 use crate::secure::SecureStack;
 
-use super::error::DaoAdmissionError;
-use super::error::RplStackOpenError;
-use super::error::RplStackProvisionError;
-use super::RplRole;
-use super::RplStack;
+use super::error::{DaoAdmissionError, RplStackOpenError, RplStackProvisionError};
+use super::{RplRole, RplStack};
 
 /// Durable keys and format tag for the root-seq anti-replay cache
 /// (spec 06 §8.10.1). Provisional, unshipped scope-bound format; like the

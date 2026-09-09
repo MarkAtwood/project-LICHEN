@@ -4,14 +4,10 @@
 //! for cross-validation with the Python oracle.
 
 use lichen_rpl::message::Dio;
-use lichen_rpl::multi_instance::iid_compare_int;
-use lichen_rpl::multi_instance::resolve_slot_conflict;
-use lichen_rpl::multi_instance::validate_rpl_instance_id;
-use lichen_rpl::multi_instance::DaoBackboneBridge;
-use lichen_rpl::multi_instance::DaoTarget;
-use lichen_rpl::multi_instance::DaoTransit;
-use lichen_rpl::multi_instance::GatewayInfo;
-use lichen_rpl::multi_instance::MultiRootCoordinator;
+use lichen_rpl::multi_instance::{
+    iid_compare_int, resolve_slot_conflict, validate_rpl_instance_id, DaoBackboneBridge, DaoTarget,
+    DaoTransit, GatewayInfo, MultiRootCoordinator,
+};
 use serde_json::Value;
 use std::net::Ipv6Addr;
 use std::str::FromStr;

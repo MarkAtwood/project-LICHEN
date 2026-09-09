@@ -5,9 +5,7 @@ use std::collections::BTreeSet;
 use std::net::Ipv6Addr;
 use std::str::FromStr;
 
-use lichen_node::GradientEntry;
-use lichen_node::GradientSource;
-use lichen_node::GradientTable;
+use lichen_node::{GradientEntry, GradientSource, GradientTable};
 use serde::Deserialize;
 
 #[derive(Deserialize)]

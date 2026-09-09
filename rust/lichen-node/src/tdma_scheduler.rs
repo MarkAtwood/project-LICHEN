@@ -1,6 +1,7 @@
-use lichen_core::constants::TDMA_GUARD_MS;
-use lichen_core::constants::TDMA_SLOT_MS;
-use lichen_core::lichen_hash_32;
+use lichen_core::{
+    constants::{TDMA_GUARD_MS, TDMA_SLOT_MS},
+    lichen_hash_32,
+};
 pub struct TdmaScheduler;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -1,30 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: The contributors to the LICHEN project
 
-use lichen_rpl::message::Dao;
-use lichen_rpl::message::DaoOriginSignature;
-use lichen_rpl::message::OptionIter;
-use lichen_rpl::message::TransitInfo;
-use lichen_rpl::message::DAO_ORIGIN_SIGNATURE_LEN;
-use lichen_rpl::message::OPT_TRANSIT_INFO;
-use lichen_rpl::routing::dao_origin_digest;
-use lichen_rpl::routing::DaoAdmissionState;
-use lichen_rpl::routing::DaoDiagnosticDisposition;
-use lichen_rpl::routing::DaoDiagnosticLimits;
-use lichen_rpl::routing::DaoDiagnosticTarget;
-use lichen_rpl::routing::DaoManager;
-use lichen_rpl::routing::DaoProcessError;
-use lichen_rpl::routing::DaoProcessOutcome;
-use lichen_rpl::routing::DaoProcessTiming;
-use lichen_rpl::routing::RoutingTable;
-use lichen_rpl::routing::SignatureVerifiedDao;
-use lichen_rpl::routing::MAX_ROUTE_HOPS;
-use serde_json::json;
-use serde_json::Value;
+use lichen_rpl::message::{
+    Dao, DaoOriginSignature, OptionIter, TransitInfo, DAO_ORIGIN_SIGNATURE_LEN, OPT_TRANSIT_INFO,
+};
+use lichen_rpl::routing::{
+    dao_origin_digest, DaoAdmissionState, DaoDiagnosticDisposition, DaoDiagnosticLimits,
+    DaoDiagnosticTarget, DaoManager, DaoProcessError, DaoProcessOutcome, DaoProcessTiming,
+    RoutingTable, SignatureVerifiedDao, MAX_ROUTE_HOPS,
+};
+use serde_json::{json, Value};
 use std::net::Ipv6Addr;
-use std::sync::Arc;
-use std::sync::Barrier;
-use std::sync::Mutex;
+use std::sync::{Arc, Barrier, Mutex};
 
 const VECTORS: &str = include_str!("../../../test/vectors/rpl_route_state.json");
 
@@ -239,7 +226,8 @@ fn canonical_route_state_vectors_match_production_manager() {
             lifetime_unit_seconds,
             max_deadline_seconds: u64::MAX,
         };
-        let mut relation_manager = DaoManager::diagnostic_root(dodag_id, rpl_instance_id, dodag_id);
+        let mut relation_manager =
+            DaoManager::diagnostic_root(dodag_id, rpl_instance_id, dodag_id);
         relation_manager
             .process_route_state_diagnostic(
                 &route_dao(1, current, target, parent),
@@ -261,8 +249,8 @@ fn canonical_route_state_vectors_match_production_manager() {
             "stale" | "incomparable" => assert!(result.is_err(), "{name}"),
             expected => panic!("{name}: unknown sequence relation {expected}"),
         }
-        let state =
-            relation_manager.route_state_diagnostic(sequence_authority, lifetime_unit_seconds);
+        let state = relation_manager
+            .route_state_diagnostic(sequence_authority, lifetime_unit_seconds);
         assert_eq!(state.len(), 1, "{name}");
         assert_eq!(
             state[0].path_sequence,
@@ -275,7 +263,11 @@ fn canonical_route_state_vectors_match_production_manager() {
         );
     }
 
-    let mut tx_manager = DaoManager::new(sequence_authority, rpl_instance_id, dodag_id);
+    let mut tx_manager = DaoManager::new(
+        sequence_authority,
+        rpl_instance_id,
+        dodag_id,
+    );
     let mut last_logical_lifetime = None;
     for transition in document["tx_sequence_transitions"].as_array().unwrap() {
         let name = transition["name"].as_str().unwrap();
@@ -343,12 +335,15 @@ fn canonical_route_state_vectors_match_production_manager() {
         );
     }
 
-    let mut manager = DaoManager::diagnostic_root(dodag_id, rpl_instance_id, dodag_id);
+    let mut manager =
+        DaoManager::diagnostic_root(dodag_id, rpl_instance_id, dodag_id);
 
     for vector in document["vectors"].as_array().unwrap() {
         let name = vector["name"].as_str().unwrap();
         assert_eq!(
-            snapshot(manager.route_state_diagnostic(sequence_authority, lifetime_unit_seconds)),
+            snapshot(
+                manager.route_state_diagnostic(sequence_authority, lifetime_unit_seconds)
+            ),
             vector["before"],
             "{name}: before snapshot"
         );
@@ -388,7 +383,9 @@ fn canonical_route_state_vectors_match_production_manager() {
             "{name}: reason must be a canonical diagnostic string"
         );
         assert_eq!(
-            snapshot(manager.route_state_diagnostic(sequence_authority, lifetime_unit_seconds)),
+            snapshot(
+                manager.route_state_diagnostic(sequence_authority, lifetime_unit_seconds)
+            ),
             vector["expected"]["state"],
             "{name}: expected snapshot"
         );
@@ -423,11 +420,7 @@ fn zero_length_transit_is_rejected_without_public_state_mutation() {
         )
         .unwrap();
     let before = manager.route_state_diagnostic(authority.into(), timing.lifetime_unit_seconds);
-    let route_before = manager
-        .routing_table()
-        .lookup(Ipv6Addr::from(target))
-        .unwrap()
-        .to_vec();
+    let route_before = manager.routing_table().lookup(Ipv6Addr::from(target)).unwrap().to_vec();
     let mut malformed = vec![0, 0, 0, 2, 5, 18, 0, 128];
     malformed.extend_from_slice(&target);
     malformed.extend_from_slice(&[OPT_TRANSIT_INFO, 0]);
@@ -464,9 +457,7 @@ fn zero_length_transit_is_rejected_without_public_state_mutation() {
 #[test]
 fn authenticated_new_origin_sequence_cannot_bypass_path_sequence_freshness() {
     use lichen_hal::storage::mem::MemStorage;
-    use lichen_link::identity::Identity;
-    use lichen_link::keys::Seed;
-    use lichen_link::link_layer::LinkLayer;
+    use lichen_link::{identity::Identity, keys::Seed, link_layer::LinkLayer};
 
     let root = [0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
     let identity = Identity::from_seed(Seed::new([0x44; 32]));

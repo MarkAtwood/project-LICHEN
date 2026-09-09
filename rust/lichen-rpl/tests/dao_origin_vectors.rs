@@ -1,9 +1,8 @@
 use lichen_link::keys::PublicKey;
-use lichen_rpl::message::DaoEnvelopeError;
-use lichen_rpl::message::SignedDaoEnvelope;
-use lichen_rpl::routing::dao_origin_digest;
-use lichen_rpl::routing::DaoVerifyError;
-use lichen_rpl::routing::SignatureVerifiedDao;
+use lichen_rpl::{
+    message::{DaoEnvelopeError, SignedDaoEnvelope},
+    routing::{dao_origin_digest, DaoVerifyError, SignatureVerifiedDao},
+};
 use serde_json::Value;
 
 fn hex(value: &str) -> Vec<u8> {
@@ -26,8 +25,10 @@ fn dao_origin_signature_vectors_match_fixed_literals() {
     // test/vectors/dao_origin_signature.json flips to these bytes when the
     // Python derivation migrates (i72x.6); until then Python consumes the
     // native-profile corpus and Rust consumes this one.
-    let document: Value =
-        serde_json::from_str(include_str!("dao_origin_signature_upstream.json")).unwrap();
+    let document: Value = serde_json::from_str(include_str!(
+        "dao_origin_signature_upstream.json"
+    ))
+    .unwrap();
 
     for vector in document["vectors"].as_array().unwrap() {
         let name = vector["name"].as_str().unwrap();

@@ -9,12 +9,9 @@
 //! 2. Path cost calculation matches test vectors (rounding behavior)
 //! 3. Admissibility respects MAX_RANK_INCREASE ceiling
 
-use lichen_rpl::dodag::DodagRole;
-use lichen_rpl::dodag::DodagState;
-use lichen_rpl::dodag::ParentCandidate;
-use lichen_rpl::dodag::INFINITE_RANK;
-use lichen_rpl::dodag::MAX_RANK_INCREASE;
-use lichen_rpl::dodag::MIN_HOP_RANK_INCREASE;
+use lichen_rpl::dodag::{
+    DodagRole, DodagState, ParentCandidate, INFINITE_RANK, MAX_RANK_INCREASE, MIN_HOP_RANK_INCREASE,
+};
 use serde_json::Value;
 
 const VECTORS: &str = include_str!("../../../test/vectors/ccp_beacon_sig_gate.json");

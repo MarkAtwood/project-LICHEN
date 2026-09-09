@@ -3,18 +3,14 @@
 
 use core::net::Ipv6Addr;
 use lichen_core::addr::NodeId;
-use lichen_core::announce::write_announce_signed_data;
-use lichen_core::announce::Announce;
-use lichen_core::announce::AnnounceBuilder;
+use lichen_core::announce::{write_announce_signed_data, Announce, AnnounceBuilder};
 use lichen_hal::storage::mem::MemStorage;
 use lichen_link::identity::Identity;
 use lichen_link::keys::Seed;
 use lichen_link::schnorr::sign;
-use lichen_node::announce::AnnounceProcessor;
-use lichen_node::announce::MAX_TRACKED_ORIGINATORS;
+use lichen_node::announce::{AnnounceProcessor, MAX_TRACKED_ORIGINATORS};
 use lichen_node::gradient::GradientTable;
-use lichen_node::node::DaoHandlingOutcome;
-use lichen_node::node::RplNode;
+use lichen_node::node::{DaoHandlingOutcome, RplNode};
 use lichen_rpl::routing::DaoAdmissionState;
 
 const JSON: &str = include_str!("../../../test/vectors/dao_origin_signature.json");

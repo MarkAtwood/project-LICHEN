@@ -9,51 +9,24 @@ use std::collections::HashMap;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
-use lichen_coap::block::BlockOption;
-use lichen_coap::block::BlockReceiver;
-use lichen_coap::block::BlockSender;
-use lichen_coap::codec::CoapBuilder;
-use lichen_coap::codec::CoapError;
-use lichen_coap::codec::CoapPacket;
-use lichen_coap::codec::OptionIterator;
-use lichen_coap::codec::MAX_TOKEN_LEN;
-use lichen_coap::message::MessageCode;
-use lichen_coap::message::MessageType;
-use lichen_coap::observe::ClientEvent;
-use lichen_coap::observe::ClientNotification;
-use lichen_coap::observe::ObserveClient;
-use lichen_coap::observe::ObserveError;
-use lichen_coap::observe::ObserveKey;
-use lichen_coap::observe::ObserveRequest;
+use lichen_coap::block::{BlockOption, BlockReceiver, BlockSender};
+use lichen_coap::codec::{CoapBuilder, CoapError, CoapPacket, OptionIterator, MAX_TOKEN_LEN};
+use lichen_coap::message::{MessageCode, MessageType};
+use lichen_coap::observe::{
+    ClientEvent, ClientNotification, ObserveClient, ObserveError, ObserveKey, ObserveRequest,
+};
 use lichen_coap::option::OptionNumber;
 use lichen_core::constants::PORT_COAP;
 use lichen_hal::Radio;
-use lichen_ipv6::next_header;
-use lichen_ipv6::Addr;
-use lichen_ipv6::Ipv6Header;
-use lichen_ipv6::UdpHeader;
-use lichen_ipv6::IPV6_HEADER_LEN;
-use lichen_ipv6::UDP_HEADER_LEN;
+use lichen_ipv6::{next_header, Addr, Ipv6Header, UdpHeader, IPV6_HEADER_LEN, UDP_HEADER_LEN};
 use lichen_link::identity::PeerIdentity;
 use lichen_link::link_layer::LinkLayer;
-use lichen_oscore::request_identifiers;
-use lichen_oscore::validate_option;
-use lichen_oscore::Context;
-use lichen_oscore::ContextId;
-use lichen_oscore::ContextStateStore;
-use lichen_oscore::ContextStoreError;
-use lichen_oscore::OscoreError;
-use lichen_oscore::RequestIdentifiers;
-use lichen_oscore::ReservationError;
-use lichen_oscore::COAP_OPTION_OSCORE;
-use lichen_oscore::PIV_MAX_LEN;
-use lichen_oscore::TAG_LEN;
+use lichen_oscore::{
+    request_identifiers, validate_option, Context, ContextId, ContextStateStore, ContextStoreError,
+    OscoreError, RequestIdentifiers, ReservationError, COAP_OPTION_OSCORE, PIV_MAX_LEN, TAG_LEN,
+};
 
-use crate::stack::Priority;
-use crate::stack::ReceivedIpv6;
-use crate::stack::RxError;
-use crate::stack::Stack;
-use crate::stack::TxError;
+use crate::stack::{Priority, ReceivedIpv6, RxError, Stack, TxError};
 use lichen_core::addr::NodeId;
 
 /// OSCORE option number.
@@ -2158,24 +2131,14 @@ mod tests {
 
     use super::*;
     use core::convert::Infallible;
-    use lichen_coap::ObserveSequence;
-    use lichen_coap::ObserveServer;
-    use lichen_coap::ServerNotification;
+    use lichen_coap::{ObserveSequence, ObserveServer, ServerNotification};
     use lichen_hal::loopback::LoopbackRadio;
-    use lichen_hal::ChannelConfig;
-    use lichen_hal::RadioConfig;
-    use lichen_hal::RxPacket;
-    use lichen_hal::TxResult;
-    use lichen_link::identity::Identity;
-    use lichen_link::identity::PeerIdentity;
+    use lichen_hal::{ChannelConfig, RadioConfig, RxPacket, TxResult};
+    use lichen_link::identity::{Identity, PeerIdentity};
     use lichen_link::Seed;
-    use lichen_oscore::Context as OscoreContext;
-    use lichen_oscore::ContextId;
-    use lichen_oscore::SenderSequenceState;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::atomic::Ordering;
-    use std::sync::Arc;
-    use std::sync::Mutex;
+    use lichen_oscore::{Context as OscoreContext, ContextId, SenderSequenceState};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex};
     use std::vec;
 
     fn received(coap: &[u8], sender_iid: [u8; 8]) -> ReceivedSecureDatagram {

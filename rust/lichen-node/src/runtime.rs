@@ -325,12 +325,10 @@ mod tests {
     use core::net::Ipv6Addr;
     use lichen_core::addr::NodeId;
     use lichen_core::constants::RPL_INSTANCE_ID;
-    use lichen_link::identity::Identity;
-    use lichen_link::keys::Seed;
+    use lichen_link::{identity::Identity, keys::Seed};
     use lichen_rpl::routing::DaoManager;
 
-    use crate::Node;
-    use crate::Router;
+    use crate::{Node, Router};
 
     fn node() -> RplNode {
         let node_id = NodeId([0x02, 0, 0, 0, 0, 0, 0, 2]);

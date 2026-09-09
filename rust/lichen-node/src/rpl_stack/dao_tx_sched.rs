@@ -9,10 +9,9 @@
 //! [`lichen_rpl::dao_timing`] — the single oracle; nothing is duplicated
 //! here. The TX path (send_dao) consumes [`DaoTxScheduler::advance`].
 
-use lichen_rpl::dao_timing::dao_initial_delay_ms;
-use lichen_rpl::dao_timing::dao_retry_delay_ms;
-use lichen_rpl::dao_timing::dao_retry_exhausted;
-use lichen_rpl::dao_timing::DAO_REFRESH_INTERVAL_SECONDS;
+use lichen_rpl::dao_timing::{
+    dao_initial_delay_ms, dao_retry_delay_ms, dao_retry_exhausted, DAO_REFRESH_INTERVAL_SECONDS,
+};
 
 /// Refresh interval in ms (half the 30-min soft-state lifetime). Consumed
 /// by on_dao_sent; dead in non-test builds until b7z9.16.1(b) wires the TX

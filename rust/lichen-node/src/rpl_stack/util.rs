@@ -9,29 +9,22 @@ use std::vec::Vec;
 use lichen_core::announce::Announce;
 use lichen_core::constants::RPL_ICMPV6_TYPE;
 use lichen_core::icmpv6::hdr_field;
-use lichen_core::ipv6::field;
-use lichen_core::ipv6::next_header;
-use lichen_core::ipv6::IPV6_HEADER_LEN;
-use lichen_core::l2_payload::body as l2_payload_body;
-use lichen_core::l2_payload::classify as classify_l2_payload;
-use lichen_core::l2_payload::L2PayloadKind;
-use lichen_core::l2_payload::L2_ROUTING_TYPE_ANNOUNCE;
-use lichen_ipv6::icmpv6_checksum;
-use lichen_ipv6::Addr;
-use lichen_ipv6::Ipv6Header;
-use lichen_link::frame::AddrMode;
-use lichen_link::frame::LichenFrame;
+use lichen_core::ipv6::{field, next_header, IPV6_HEADER_LEN};
+use lichen_core::l2_payload::{
+    body as l2_payload_body, classify as classify_l2_payload, L2PayloadKind,
+    L2_ROUTING_TYPE_ANNOUNCE,
+};
+use lichen_ipv6::{icmpv6_checksum, Addr, Ipv6Header};
+use lichen_link::frame::{AddrMode, LichenFrame};
 use lichen_link::identity::PeerIdentity;
 use lichen_link::keys::PublicKey;
-use lichen_link::link_layer::LinkLayer;
-use lichen_link::link_layer::LinkRxError;
+use lichen_link::link_layer::{LinkLayer, LinkRxError};
 use lichen_link::schnorr;
 use lichen_rpl::routing::MAX_ROUTE_HOPS;
 use lichen_schc::codec;
 
 use crate::announce::AnnounceRejectReason;
-use crate::node::claims_rpl_ipv6;
-use crate::node::rpl_code;
+use crate::node::{claims_rpl_ipv6, rpl_code};
 use crate::stack::RxError;
 
 pub(crate) const RPL_ALL_NODES: [u8; 16] =

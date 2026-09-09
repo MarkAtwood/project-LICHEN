@@ -1244,9 +1244,7 @@ mod tests {
 
     #[test]
     fn version_lollipop_semantics() {
-        use core::cmp::Ordering::Equal;
-        use core::cmp::Ordering::Greater;
-        use core::cmp::Ordering::Less;
+        use core::cmp::Ordering::{Equal, Greater, Less};
 
         // RFC 6550 Section 7.2 applies the absolute-magnitude window before
         // RFC 1982 ordering. Distant same-region pairs are incomparable.
@@ -1286,9 +1284,7 @@ mod tests {
 
     #[test]
     fn lollipop_comparison_exhaustively_matches_rfc_6550_7_2() {
-        use core::cmp::Ordering::Equal;
-        use core::cmp::Ordering::Greater;
-        use core::cmp::Ordering::Less;
+        use core::cmp::Ordering::{Equal, Greater, Less};
 
         fn oracle(a: u8, b: u8) -> Option<core::cmp::Ordering> {
             if a == b {
@@ -1488,8 +1484,7 @@ mod tests {
 
     #[test]
     fn lollipop_sequence_window_boundaries_are_inclusive_per_rfc_6550_7_2() {
-        use core::cmp::Ordering::Greater;
-        use core::cmp::Ordering::Less;
+        use core::cmp::Ordering::{Greater, Less};
 
         // Same-region rule 3.2: |diff| <= SEQUENCE_WINDOW (16) is comparable
         // via RFC 1982 ordering; > 16 means desynchronization (None).
@@ -1597,8 +1592,7 @@ mod tests {
         lichen_link::link_layer::LinkLayer,
         lichen_link::link_layer::AuthenticatedFrame,
     ) {
-        use lichen_link::identity::Identity;
-        use lichen_link::identity::PeerIdentity;
+        use lichen_link::identity::{Identity, PeerIdentity};
         use lichen_link::keys::Seed;
         use lichen_link::link_layer::LinkLayer;
         use lichen_link::LinkSeqNum;

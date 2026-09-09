@@ -16,18 +16,12 @@ use lichen_hal::storage::mem::MemStorage;
 use lichen_link::identity::Identity;
 use lichen_link::keys::Seed;
 use lichen_link::link_layer::LinkLayer;
-use lichen_rpl::message::DaoOriginSignature;
-use lichen_rpl::message::DAO_ORIGIN_SIGNATURE_LEN;
-use lichen_rpl::message::OPT_TRANSIT_INFO;
-use lichen_rpl::routing::dao_origin_digest;
-use lichen_rpl::routing::DaoAdmissionState;
-use lichen_rpl::routing::DaoManager;
-use lichen_rpl::routing::DaoProcessError;
-use lichen_rpl::routing::DaoProcessOutcome;
-use lichen_rpl::routing::DaoProcessTiming;
-use lichen_rpl::routing::SignatureVerifiedDao;
-use lichen_rpl::verify::DaoMalformed;
-use lichen_rpl::verify::DaoVerifyError;
+use lichen_rpl::message::{DaoOriginSignature, DAO_ORIGIN_SIGNATURE_LEN, OPT_TRANSIT_INFO};
+use lichen_rpl::routing::{
+    dao_origin_digest, DaoAdmissionState, DaoManager, DaoProcessError, DaoProcessOutcome,
+    DaoProcessTiming, SignatureVerifiedDao,
+};
+use lichen_rpl::verify::{DaoMalformed, DaoVerifyError};
 use std::net::Ipv6Addr;
 
 fn signed_dao(
@@ -170,30 +164,12 @@ fn dao_prefix_authorization_allow_deny_matrix() {
 
                 if allowed {
                     assert_eq!(outcome, Ok(DaoProcessOutcome::Applied), "{name}");
-                    assert!(
-                        manager
-                            .routing_table()
-                            .lookup(Ipv6Addr::from(origin))
-                            .is_some(),
-                        "{name}"
-                    );
+                    assert!(manager.routing_table().lookup(Ipv6Addr::from(origin)).is_some(), "{name}");
                     assert_eq!(manager.origin_high_water().len(), 1, "{name}");
                 } else {
                     assert_eq!(outcome, Err(DaoProcessError::RouteRejected), "{name}");
-                    assert!(
-                        manager
-                            .routing_table()
-                            .lookup(Ipv6Addr::from(origin))
-                            .is_none(),
-                        "{name}"
-                    );
-                    assert!(
-                        manager
-                            .routing_table()
-                            .lookup(Ipv6Addr::from(foreign))
-                            .is_none(),
-                        "{name}"
-                    );
+                    assert!(manager.routing_table().lookup(Ipv6Addr::from(origin)).is_none(), "{name}");
+                    assert!(manager.routing_table().lookup(Ipv6Addr::from(foreign)).is_none(), "{name}");
                     assert!(manager.origin_high_water().is_empty(), "{name}");
                 }
             }
@@ -203,10 +179,9 @@ fn dao_prefix_authorization_allow_deny_matrix() {
 
 use lichen_hal::NonVolatile;
 use lichen_link::keys::PublicKey;
-use lichen_rpl::routing::DaoRxState;
-use lichen_rpl::routing::PrefixAuthorizationError;
-use lichen_rpl::routing::PrefixDelegationError;
-use lichen_rpl::routing::UnauthorizedPrefixReason;
+use lichen_rpl::routing::{
+    DaoRxState, PrefixAuthorizationError, PrefixDelegationError, UnauthorizedPrefixReason,
+};
 
 /// Transit option with an explicit flag byte (0x80 = external reachability).
 fn transit_option(flag: u8, path_sequence: u8, parent: [u8; 16]) -> Vec<u8> {
@@ -376,8 +351,16 @@ fn delegated_prefix_is_allowed_and_denial_leaves_no_state_mutation() {
         ),
         Err(DaoProcessError::RouteRejected)
     );
-    assert!(h.manager.routing_table().lookup(h.origin).is_none());
-    assert!(h.manager.routing_table().lookup(h.foreign).is_none());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(h.origin)
+        .is_none());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(h.foreign)
+        .is_none());
     assert!(h.manager.origin_high_water().is_empty());
     assert_eq!(h.storage.writes(), writes_before, "denial persists nothing");
     assert_eq!(format!("{:?}", h.rx_state), rx_before);
@@ -403,8 +386,16 @@ fn delegated_prefix_is_allowed_and_denial_leaves_no_state_mutation() {
         ),
         Ok(DaoProcessOutcome::Applied)
     );
-    assert!(h.manager.routing_table().lookup(h.foreign).is_some());
-    assert!(h.manager.routing_table().lookup(h.origin).is_some());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(h.foreign)
+        .is_some());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(h.origin)
+        .is_some());
     assert_eq!(h.manager.origin_high_water().len(), 1);
     assert!(h.storage.writes() > writes_before);
 }
@@ -634,7 +625,11 @@ fn external_egress_transit_is_rejected_at_routing_layer_without_mutation() {
         ),
         Err(DaoProcessError::RouteRejected)
     );
-    assert!(h.manager.routing_table().lookup(h.origin).is_none());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(h.origin)
+        .is_none());
     assert!(h.manager.origin_high_water().is_empty());
     assert_eq!(h.storage.writes(), writes_before);
 }
@@ -679,8 +674,16 @@ fn delegated_slash64_dao_installs_end_to_end() {
         ),
         Err(DaoProcessError::RouteRejected)
     );
-    assert!(h.manager.routing_table().lookup(delegated_prefix).is_none());
-    assert!(h.manager.routing_table().lookup(h.origin).is_none());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(delegated_prefix)
+        .is_none());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(h.origin)
+        .is_none());
     assert!(h.manager.origin_high_water().is_empty());
     assert_eq!(h.storage.writes(), writes_before, "denial persists nothing");
 
@@ -700,8 +703,16 @@ fn delegated_slash64_dao_installs_end_to_end() {
         ),
         Ok(DaoProcessOutcome::Applied)
     );
-    assert!(h.manager.routing_table().lookup(delegated_prefix).is_some());
-    assert!(h.manager.routing_table().lookup(h.origin).is_some());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(delegated_prefix)
+        .is_some());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(h.origin)
+        .is_some());
     assert_eq!(h.manager.origin_high_water().len(), 1);
 }
 
@@ -760,7 +771,11 @@ fn foreign_slash64_and_default_route_fail_closed_without_mutation() {
             "{name}"
         );
         assert!(h.manager.origin_high_water().is_empty(), "{name}");
-        assert!(h.manager.routing_table().lookup(h.origin).is_none());
+        assert!(h
+            .manager
+            .routing_table()
+            .lookup(h.origin)
+            .is_none());
         assert_eq!(
             h.storage.writes(),
             writes_before,

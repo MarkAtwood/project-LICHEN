@@ -13,13 +13,8 @@ use lichen_coap::option::content_format::CBOR;
 use lichen_hal::Radio;
 use lichen_oscore::ContextStateStore;
 
-use crate::dispatch::Dispatcher;
-use crate::dispatch::Request;
-use crate::dispatch::{self};
-use crate::secure::ReceivedSecureDatagram;
-use crate::secure::SecureError;
-use crate::secure::SecureResponseData;
-use crate::secure::SecureStack;
+use crate::dispatch::{self, Dispatcher, Request};
+use crate::secure::{ReceivedSecureDatagram, SecureError, SecureResponseData, SecureStack};
 use crate::stack::TxError;
 
 /// Outcome of dispatching a secure (or plaintext) CoAP request.
@@ -131,12 +126,9 @@ mod tests {
     use super::*;
     use lichen_coap::message::MessageCode;
     use lichen_hal::loopback::LoopbackRadio;
-    use lichen_link::identity::Identity;
-    use lichen_link::identity::PeerIdentity;
+    use lichen_link::identity::{Identity, PeerIdentity};
     use lichen_link::Seed;
-    use lichen_oscore::Context as OscoreContext;
-    use lichen_oscore::ContextId;
-    use lichen_oscore::SenderSequenceState;
+    use lichen_oscore::{Context as OscoreContext, ContextId, SenderSequenceState};
 
     use crate::dispatch::default_dispatcher;
     use crate::stack::Stack;

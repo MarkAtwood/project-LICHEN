@@ -6,8 +6,7 @@
 //! same corpus the Python suite (python/tests/test_dtn_option.py) consumes.
 //! Bead b7z9.8.3: Rust/Python/C three-way parity.
 
-use lichen_node::routing::dtn_option::decide_expiry_action;
-use lichen_node::routing::dtn_option::parse_dtn_option;
+use lichen_node::routing::dtn_option::{decide_expiry_action, parse_dtn_option};
 
 const VECTORS_JSON: &str = include_str!("../../../test/vectors/dtn_sflag_hbh.json");
 

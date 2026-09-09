@@ -5,19 +5,12 @@
 
 use lichen_hal::loopback::LoopbackRadio;
 use lichen_hal::storage::mem::MemStorage;
-use lichen_link::identity::Identity;
-use lichen_link::identity::PeerIdentity;
+use lichen_link::identity::{Identity, PeerIdentity};
 use lichen_link::Seed;
-use lichen_node::AnnounceProcessor;
-use lichen_node::GradientTable;
-use lichen_node::RplReceiveOutcome;
-use lichen_node::RplStack;
-use lichen_node::SecureStack;
-use lichen_oscore::Context;
-use lichen_oscore::ContextId;
-use lichen_oscore::ContextStateStore;
-use lichen_oscore::RecipientReplayState;
-use lichen_oscore::SenderSequenceState;
+use lichen_node::{AnnounceProcessor, GradientTable, RplReceiveOutcome, RplStack, SecureStack};
+use lichen_oscore::{
+    Context, ContextId, ContextStateStore, RecipientReplayState, SenderSequenceState,
+};
 
 #[derive(Default)]
 struct OscoreStore(Option<(ContextId, SenderSequenceState)>);

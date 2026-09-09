@@ -5,23 +5,15 @@
 
 use std::vec::Vec;
 
-use lichen_hal::NonVolatile;
-use lichen_hal::Radio;
+use lichen_hal::{NonVolatile, Radio};
 use lichen_ipv6::Addr;
-use lichen_oscore::Context;
-use lichen_oscore::ContextStateStore;
+use lichen_oscore::{Context, ContextStateStore};
 
-use crate::secure::secure_datagram_from_received;
-use crate::secure::ReceivedSecureDatagram;
-use crate::secure::RequestCorrelation;
-use crate::secure::SecureError;
-use crate::secure::SecureRequest;
-use crate::secure::SecureResponse;
-use crate::secure::SecureResponseData;
-use crate::secure::SecureRoute;
-use crate::stack::ReceivedIpv6;
-use crate::stack::RxError;
-use crate::stack::TxError;
+use crate::secure::{
+    secure_datagram_from_received, ReceivedSecureDatagram, RequestCorrelation, SecureError,
+    SecureRequest, SecureResponse, SecureResponseData, SecureRoute,
+};
+use crate::stack::{ReceivedIpv6, RxError, TxError};
 
 use super::RplStack;
 

@@ -7,11 +7,8 @@
 //! SFN-wrap desync, multi-root version conflict, recovery beacon
 //! revalidation, and the excessive-drift premise.
 
-use lichen_core::desync::DesyncFSM;
-use lichen_core::desync::DesyncState;
-use lichen_rpl::multi_instance::MultiRootState;
-use lichen_rpl::multi_instance::RootCandidate;
-use lichen_rpl::multi_instance::VersionChangeOutcome;
+use lichen_core::desync::{DesyncFSM, DesyncState};
+use lichen_rpl::multi_instance::{MultiRootState, RootCandidate, VersionChangeOutcome};
 use serde_json::Value;
 
 const VECTORS_JSON: &str = include_str!("../../../test/vectors/ccp16-desync.json");

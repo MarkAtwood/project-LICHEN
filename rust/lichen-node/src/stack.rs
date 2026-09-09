@@ -11,31 +11,20 @@ use std::vec;
 use std::vec::Vec;
 
 use lichen_core::addr::NodeId;
-use lichen_core::constants::L2_DISPATCH_SCHC;
-use lichen_core::constants::PORT_COAP;
-use lichen_core::constants::RULE_UNCOMPRESSED;
-use lichen_core::l2_payload::classify as classify_l2_payload;
-use lichen_core::l2_payload::L2PayloadKind;
+use lichen_core::constants::{L2_DISPATCH_SCHC, PORT_COAP, RULE_UNCOMPRESSED};
+use lichen_core::l2_payload::{classify as classify_l2_payload, L2PayloadKind};
 use lichen_hal::Radio;
-use lichen_ipv6::next_header;
-use lichen_ipv6::Addr;
-use lichen_ipv6::Ipv6Header;
-use lichen_ipv6::UdpHeader;
-use lichen_ipv6::IPV6_HEADER_LEN;
-use lichen_ipv6::UDP_HEADER_LEN;
-use lichen_link::frame::AddrMode;
-use lichen_link::frame::FrameError;
-use lichen_link::frame::LichenFrame;
-use lichen_link::link_layer::LinkRxError;
+use lichen_ipv6::{next_header, Addr, Ipv6Header, UdpHeader, IPV6_HEADER_LEN, UDP_HEADER_LEN};
 use lichen_link::seqnum::LinkSeqNum;
+use lichen_link::{
+    frame::{AddrMode, FrameError, LichenFrame},
+    link_layer::LinkRxError,
+};
 #[cfg(feature = "std")]
-use lichen_rpl::routing::SourceRoutingHeader;
-#[cfg(feature = "std")]
-use lichen_rpl::routing::MAX_ROUTE_HOPS;
+use lichen_rpl::routing::{SourceRoutingHeader, MAX_ROUTE_HOPS};
 use lichen_schc::codec;
 
-use crate::forward_buffer::ForwardBuffer;
-use crate::forward_buffer::ForwardError;
+use crate::forward_buffer::{ForwardBuffer, ForwardError};
 use crate::Node;
 
 /// Maximum wire frame size (LoRa MTU with some headroom).
@@ -1072,8 +1061,7 @@ pub fn find_dtn_hbh_option(next_header: u8, payload: &[u8]) -> Option<DtnSFlag> 
 mod tests {
     use super::*;
     use lichen_hal::loopback::LoopbackRadio;
-    use lichen_link::identity::Identity;
-    use lichen_link::identity::PeerIdentity;
+    use lichen_link::identity::{Identity, PeerIdentity};
     use lichen_link::Seed;
 
     // NOTE: CoAP tests use SecureStack (see secure.rs::secure_stack_oscore_roundtrip).

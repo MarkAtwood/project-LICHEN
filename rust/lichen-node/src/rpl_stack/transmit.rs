@@ -6,31 +6,22 @@
 use std::vec::Vec;
 
 use lichen_core::announce::Announce;
-use lichen_core::ipv6::next_header;
-use lichen_core::ipv6::IPV6_HEADER_LEN;
-use lichen_hal::NonVolatile;
-use lichen_hal::Radio;
-use lichen_hal::RadioConfig;
+use lichen_core::ipv6::{next_header, IPV6_HEADER_LEN};
+use lichen_hal::{NonVolatile, Radio, RadioConfig};
 use lichen_ipv6::Ipv6Header;
 use lichen_link::identity::iid_from_pubkey;
 use lichen_link::schnorr;
 use lichen_rpl::routing::DaoTxError;
 
-use crate::node::rpl_code;
-use crate::node::valid_ipv6_envelope;
-use crate::stack::Priority;
-use crate::stack::TxError;
+use crate::node::{rpl_code, valid_ipv6_envelope};
+use crate::stack::{Priority, TxError};
 
-use super::error::DaoSendError;
-use super::error::RplControlError;
-use super::util::dao_ipv6_packet;
-use super::util::ipv6_eui64;
-use super::util::ipv6_l2_destination;
-use super::util::link_local_from_iid;
-use super::util::rpl_ipv6_packet;
-use super::util::RPL_ALL_NODES;
-use super::RplRole;
-use super::RplStack;
+use super::error::{DaoSendError, RplControlError};
+use super::util::{
+    dao_ipv6_packet, ipv6_eui64, ipv6_l2_destination, link_local_from_iid, rpl_ipv6_packet,
+    RPL_ALL_NODES,
+};
+use super::{RplRole, RplStack};
 
 /// Root DIO signature validity window (spec 06 8.10.1: expiry is an
 /// absolute Unix timestamp; 5 minutes bounds the replay-useful window
