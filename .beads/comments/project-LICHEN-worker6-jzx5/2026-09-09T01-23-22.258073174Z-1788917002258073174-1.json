@@ -1,0 +1,7 @@
+{
+  "id": "1788917002258073174-1",
+  "issue_id": "project-LICHEN-worker6-jzx5",
+  "author": "Mark Atwood",
+  "text": "Independent corroboration from security review pass (worker4, 2026-09-08 session): re-derived the same mismatch bottom-up. lichen_eui64_to_iid XORs 0x02 (ipv6_addr.c:162 memmove+XOR); LICHEN link-locals embed the U/L-CLEARED canonical pubkey IID (identity_addr.c:43, lichen_link_rx.c:162-184 wire-EUI64 is U/L-SET, flipped once on address formation), so coap_server.c:651-652 produces sender_iid with bit 0x02 SET while main.c:189 root_iid has it CLEARED -\u003e tunnel_auth.c:343 memcmp always fails -\u003e WRONG_ROOT on every authentic grant; egress table stays empty -\u003e forwarding.c decapsulate denies everything (fail-closed). Fix direction agreed: the FLIP is the bug, not the binding - the OSCORE ctx store is keyed by wire-EUI64 space, but receive() compares in canonical pubkey-IID space (kid check at :345 also needs canonical, since the COSE kid is encoded from canonical root_iid). Remove the flip at coap_server.c:652; do NOT flip root_iid in main.c (would break the kid compare).",
+  "created_at": "2026-09-09T01:23:22.258073174Z"
+}
