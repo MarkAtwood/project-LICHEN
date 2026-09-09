@@ -1196,6 +1196,78 @@ Local facts and CA credentials can coexist. A node might have:
 - CA credential: `oidc:name = "Mark Atwood"` (portable identity)
 - Local fact: `lichen:priority = 2` (this mesh only)
 
+#### 8.13.3. LICHEN Node Attestation Certificate Profile
+
+This profile defines the minimum X.509v3 certificate needed to attest a
+LICHEN node. A certificate conforming to this profile binds one Ed25519 mesh
+identity to an issuer and does not replace link-layer authentication or
+TOFU. Certificates are optional and MUST NOT be included in every packet.
+
+**Subject public key:**
+
+- `SubjectPublicKeyInfo.algorithm.algorithm` MUST be `id-Ed25519`
+  (`1.3.101.112`), as specified by RFC 8410.
+- `subjectPublicKey` MUST contain the node's 32-byte Ed25519 public key.
+- The certificate MUST NOT contain an Ed25519 private key.
+
+**Subject alternative name:**
+
+- The certificate MUST contain exactly one `subjectAltName` entry of type
+  `iPAddress` containing the node's 16-byte routable IPv6 `/128`. Other SAN
+  types, when authorized, do not replace or duplicate this address entry.
+- That address MUST equal upstream Yggdrasil `AddrForKey(public_key)` and
+  therefore be in `0200::/8`. A verifier MUST derive the address from the
+  certificate public key and reject a certificate whose SAN differs.
+- DNS names, email addresses, and URI names MAY be included in addition to
+  the required address only when independently authorized by the issuer.
+  They are not node-identity inputs.
+
+**Node-role extension:**
+
+The certificate MUST contain the non-critical extension
+`id-pe-lichen-node-role`, provisionally defined as `{ id-pe 999 }`
+(`1.3.6.1.5.5.7.1.999`). This OID is a provisional profile identifier, not a
+claim that the `id-pe` arc is private-use. Before certificates are issued
+outside an experimental deployment, the LICHEN registry owner MUST replace
+this provisional OID with an assigned arc. Implementations MUST be
+configurable for that assigned OID and MUST reject an unknown OID when a role
+assertion is required.
+
+The extension value is DER-encoded `ENUMERATED`:
+
+| Value | Role |
+|-------|------|
+| `0` | leaf |
+| `1` | relay |
+| `2` | gateway |
+
+Only these values are valid. The role is an authorization claim, not a
+substitute for proof of key possession. A verifier MUST reject malformed,
+absent, or out-of-range role extensions when applying role-based policy.
+
+**Validity and issuer:**
+
+- `notBefore` and `notAfter` MUST use `GeneralizedTime` and be encoded in UTC.
+- `notBefore` SHOULD be no earlier than the issuance time minus five minutes
+  of clock skew.
+- The validity interval MUST NOT exceed 397 days. Shorter intervals are
+  RECOMMENDED for constrained nodes and SHOULD be renewed before expiry.
+- `issuer` MUST identify the issuing CA and MUST be identical to the issuer
+  name used by the CA certificate. The profile does not mandate a particular
+  distinguished-name string, but deployments MUST use one stable convention
+  (for example, `O=LICHEN, CN=<deployment CA>`).
+- `basicConstraints` MUST be present with `CA=FALSE`, and `keyUsage` MUST
+  include `digitalSignature` and MUST NOT include `keyCertSign` or `cRLSign`.
+- The issuing CA certificate MUST use `basicConstraints CA=TRUE`; a verifier
+  MUST validate the complete chain to a configured trust anchor before using
+  an attestation.
+
+The certificate signature algorithm is selected by the issuing CA and is
+validated according to the applicable PKIX profile. Certificate acceptance
+MUST additionally verify the chain, validity interval, required SAN, role
+extension, and the Ed25519 key/address binding. Failure MUST leave the
+existing TOFU or trust-store entry unchanged.
+
 ---
 
 ## 15. Security Considerations
