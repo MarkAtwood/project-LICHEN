@@ -205,10 +205,10 @@ public key from the CSR.
 ## 9. Interoperability Notes
 
 - A CA that supports RFC 8410 Ed25519 CSRs, critical iPAddress SAN,
-  and free-form extension OIDs can issue this profile without LICHEN
- -specific software. CAs that cannot add custom extensions may issue
-  certificates lacking the role extension (Section 5); only role-based
-  authorization is lost.
+  and free-form extension OIDs can issue this profile without
+  LICHEN-specific software. CAs that cannot add custom extensions may
+  issue certificates lacking the role extension (Section 5); only
+  role-based authorization is lost.
 - The `2.25` UUID-arc OID requires no registration with any authority;
   implementations hard-code the arc value above.
 - Test vectors for chain validation and cross-signing are tracked
