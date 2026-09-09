@@ -1724,6 +1724,10 @@ impl Gateway {
         let mut dst = [0u8; 16];
         dst.copy_from_slice(&ipv6_packet[field::DST_OFFSET..field::DST_OFFSET + 16]);
         if dst[0] == 0xfd {
+            // ULA-specific by design (i72x.4): ULA is external under the
+            // single-primary model, and without this early drop the
+            // fall-through would hairpin the packet back onto the upstream
+            // wire (is_local_mesh is false for ULA).
             warn!("upstream ULA destination is outside the LICHEN native profile");
             return None;
         }

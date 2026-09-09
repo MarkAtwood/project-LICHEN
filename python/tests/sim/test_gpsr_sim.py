@@ -15,7 +15,7 @@ None values aggressively, verify invariants.
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from ipaddress import IPv6Address
+from ipaddress import IPv6Address, IPv6Network
 
 import pytest
 
@@ -554,6 +554,11 @@ class TestGPSRFallback:
             dodag=None,
             loadng=None,  # No LOADng - forces GPSR fallback
             node_coords=node_coords,
+            # fd00::/8 must be opted in explicitly: ULA is external by
+            # default under the single-primary model (i72x.4), and without
+            # this the route drops on the external path before reaching the
+            # GPSR expiry logic this test pins.
+            mesh_prefixes={IPv6Network("fd00::/8")},
         )
 
         router.update_neighbor_coords(neighbor_addr, neighbor_coords)
