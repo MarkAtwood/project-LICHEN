@@ -2,13 +2,23 @@
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
 from __future__ import annotations
 
+import sys
 from concurrent.futures import ThreadPoolExecutor
+from hashlib import sha256
 from ipaddress import IPv6Address, IPv6Network
+from pathlib import Path
 
 import cbor2
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
+
+_VECTORS = Path(__file__).parents[3] / "test" / "vectors"
+sys.path.insert(0, str(_VECTORS))
+from reference_schnorr48 import (  # type: ignore[import-not-found] # noqa: E402, I001
+    ReferenceIdentity,
+    sign as reference_sign,
+)
 
 from lichen.crypto import schnorr48
 from lichen.crypto.identity import Identity
@@ -48,14 +58,14 @@ def _authorization(
     route: tuple[IPv6Address, ...] = ROUTE,
     path_seq: int = 7,
     expiry: int = NOW + 300,
-    egress_iid: bytes = EGRESS.iid,
+    egress_pubkey: bytes = EGRESS.pubkey,
 ) -> TunnelAuthorization:
-    return create_tunnel_authorization(identity, target, route, path_seq, expiry, egress_iid)
+    return create_tunnel_authorization(identity, target, route, path_seq, expiry, egress_pubkey)
 
 
 def _table(*, max_entries: int = 256, max_history: int | None = None) -> TunnelAuthorizationTable:
     return TunnelAuthorizationTable(
-        egress_iid=EGRESS.iid,
+        egress_pubkey=EGRESS.pubkey,
         root_iid=ROOT.iid,
         root_pubkey=ROOT.pubkey,
         max_entries=max_entries,
@@ -98,30 +108,44 @@ def _replace_cose(authorization: TunnelAuthorization, index: int, value: object)
 
 def test_canonical_fixed_vector_and_independent_signature_oracle() -> None:
     authorization = _authorization(path_seq=0x01020304, expiry=2_000_000_000)
-    # Fixed regression vector built from the field encodings in spec 06 section 8.11.
-    expected = bytes.fromhex(
-        "8447a1013a00010000a10448ed4242ead4ac69485833a601450200123456"
-        "02182803502e7e354dbb13f833200751c697c97e6a041a01020304051a77359400"
-        "0648b19edad2958934e15830bdd50fa020071c849b14b9ebda98e6c54106c7738"
-        "e788c877fb119d1c0044f671752dbe400d12ba3bda131f85fe72209"
+    # Byte-exact regression vector assembled from spec 06 section 8.11
+    # primitives: route_hash over the full 16-byte hop addresses via
+    # hashlib, and the signature from the independent reference Schnorr48
+    # implementation — never from the module under test.
+    route_bytes = b"".join(hop.packed for hop in ROUTE)
+    route_hash = sha256(route_bytes).digest()[:16]
+    payload = cbor2.dumps(
+        {
+            1: bytes.fromhex("0200123456"),
+            2: 40,
+            3: route_hash,
+            4: 0x01020304,
+            5: 2_000_000_000,
+            6: EGRESS.iid,
+        },
+        canonical=True,
     )
+    protected = cbor2.dumps({1: SCHNORR48_ED25519_ALG}, canonical=True)
+    sig_structure = cbor2.dumps(["Signature1", protected, b"", payload], canonical=True)
+    digest = sha256(sig_structure).digest()
+    reference_root = ReferenceIdentity.from_seed(bytes(range(32)))
+    assert reference_root.pubkey == ROOT.pubkey
+    signature = reference_sign(reference_root, digest)
+    expected = cbor2.dumps([protected, {4: ROOT.iid}, payload, signature], canonical=True)
     assert authorization.to_cose_sign1() == expected
 
-    protected, unprotected, payload, signature = cbor2.loads(expected)
-    assert cbor2.loads(protected) == {1: SCHNORR48_ED25519_ALG}
+    protected_out, unprotected, payload_out, signature_out = cbor2.loads(expected)
+    assert cbor2.loads(protected_out) == {1: SCHNORR48_ED25519_ALG}
     assert unprotected == {4: ROOT.iid}
-    assert cbor2.loads(payload) == {
+    assert cbor2.loads(payload_out) == {
         1: bytes.fromhex("0200123456"),
         2: 40,
-        3: bytes.fromhex("2e7e354dbb13f833200751c697c97e6a"),
+        3: route_hash,
         4: 0x01020304,
         5: 2_000_000_000,
         6: EGRESS.iid,
     }
-    sig_structure = cbor2.dumps(["Signature1", protected, b"", payload], canonical=True)
-    from hashlib import sha256
-
-    assert schnorr48.verify(ROOT.pubkey, sha256(sig_structure).digest(), signature)
+    assert schnorr48.verify(ROOT.pubkey, digest, signature_out)
 
 
 def test_root_route_installation_emits_oscore_post_only_for_bound_egress() -> None:
@@ -131,7 +155,7 @@ def test_root_route_installation_emits_oscore_post_only_for_bound_egress() -> No
         route=ROUTE,
         path_seq=7,
         expiry=NOW + 10,
-        egress_iid=EGRESS.iid,
+        egress_pubkey=EGRESS.pubkey,
         egress_capable=True,
         send=lambda request: requests.append(request) is None,
     )
@@ -151,7 +175,7 @@ def test_root_route_installation_emits_oscore_post_only_for_bound_egress() -> No
             route=ROUTE,
             path_seq=8,
             expiry=NOW + 10,
-            egress_iid=EGRESS.iid,
+            egress_pubkey=EGRESS.pubkey,
             egress_capable=False,
             send=lambda _: pytest.fail("non-egress route must not emit an authorization"),
         )
@@ -162,7 +186,7 @@ def test_root_route_installation_emits_oscore_post_only_for_bound_egress() -> No
         route=ROUTE,
         path_seq=8,
         expiry=NOW + 10,
-        egress_iid=EGRESS.iid,
+        egress_pubkey=EGRESS.pubkey,
         egress_capable=True,
         send=lambda _: (_ for _ in ()).throw(OSError("transport down")),
     )
@@ -201,7 +225,7 @@ def test_post_validates_signature_egress_expiry_and_is_atomic() -> None:
 
     wrong_egress = _authorization(
         route=(ROUTE[0], IPv6Address(OTHER_EGRESS.ygg_addr)),
-        egress_iid=OTHER_EGRESS.iid,
+        egress_pubkey=OTHER_EGRESS.pubkey,
         path_seq=8,
     )
     assert _post(table, wrong_egress).denial is TunnelDenial.WRONG_EGRESS
@@ -395,13 +419,13 @@ def test_route_validation_rejects_empty_long_looped_and_wrong_egress() -> None:
     with pytest.raises(TunnelAuthError):
         compute_route_hash(())
     with pytest.raises(TunnelAuthError):
-        compute_route_hash(tuple(bytes([i]) * 8 for i in range(9)))
+        compute_route_hash(tuple(bytes([i]) * 16 for i in range(9)))
     with pytest.raises(TunnelAuthError):
-        compute_route_hash((bytes(8), bytes(8)))
+        compute_route_hash((bytes(16), bytes(16)))
     with pytest.raises((TunnelAuthError, IndexError)):
-        create_tunnel_authorization(ROOT, TARGET, (), 1, NOW + 1, EGRESS.iid)
+        create_tunnel_authorization(ROOT, TARGET, (), 1, NOW + 1, EGRESS.pubkey)
     with pytest.raises(TunnelAuthError):
-        create_tunnel_authorization(ROOT, TARGET, ROUTE, 1, NOW + 1, OTHER_EGRESS.iid)
+        create_tunnel_authorization(ROOT, TARGET, ROUTE, 1, NOW + 1, OTHER_EGRESS.pubkey)
 
 
 def test_concurrent_sequences_commit_only_monotonic_authority() -> None:
