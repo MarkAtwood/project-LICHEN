@@ -62,7 +62,7 @@ fn downstream_can_construct_secure_rpl_owner() {
     let identity = Identity::from_seed(Seed::new([0x61; 32]));
     let local_rpl_addr = lichen_link::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
     let secure = SecureStack::from_radio(radio, identity, 128, 0).unwrap();
-    let announces = AnnounceProcessor::new(GradientTable::new(64), [0xfd, 0, 0, 0, 0, 0, 0, 1]);
+    let announces = AnnounceProcessor::new(GradientTable::new(64));
 
     let _owner = RplStack::provision_leaf(
         secure,
@@ -98,10 +98,7 @@ async fn downstream_secure_rpl_request() {
         alice_secure,
         alice_rpl_addr,
         bob_rpl_addr,
-        AnnounceProcessor::new(
-            GradientTable::new(64),
-            alice_rpl_addr[..8].try_into().unwrap(),
-        ),
+        AnnounceProcessor::new(GradientTable::new(64)),
         MemStorage::new(),
     )
     .unwrap();
@@ -109,10 +106,7 @@ async fn downstream_secure_rpl_request() {
         bob_secure,
         bob_rpl_addr,
         bob_rpl_addr,
-        AnnounceProcessor::new(
-            GradientTable::new(64),
-            bob_rpl_addr[..8].try_into().unwrap(),
-        ),
+        AnnounceProcessor::new(GradientTable::new(64)),
         MemStorage::new(),
     )
     .unwrap();
