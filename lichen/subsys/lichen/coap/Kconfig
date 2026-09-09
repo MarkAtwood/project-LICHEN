@@ -313,6 +313,7 @@ config LICHEN_COAP_LOCATION_LOG_LEVEL
 
 config LICHEN_COAP_METRICS
 	bool "CoAP /metrics resource (SenML RF/airtime counters)"
+	depends on LICHEN_COAP_SERVER
 	depends on !LICHEN_COAP_SERVER_STANDALONE
 	depends on LICHEN_SENML
 	depends on LICHEN_LORA_L2
