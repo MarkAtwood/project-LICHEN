@@ -973,91 +973,15 @@ fail:
 }
 
 #if IS_ENABLED(CONFIG_LICHEN_LORA_L2)
-static int lr1110_cad_impl(const struct device *dev, k_timeout_t timeout,
-			   bool *busy)
-{
-	if (busy == NULL) {
-		return -EINVAL;
-	}
-
-	/* Configure CAD params for the current LoRa config. The protocol fixes
-	 * CAD at three symbols; detection thresholds match SF10/BW125.
-	 * Exit to standby after CAD so the radio doesn't auto-RX. */
-	lr1110_radio_cad_params_t cad_params = {
-		.symbol_num = LICHEN_CSMA_CAD_TIMEOUT_SYMBOLS,
-		.det_peak   = 0x32,
-		.det_min    = 0x0A,
-		.exit_mode  = LR1110_RADIO_CAD_EXIT_MODE_STANDBYRC,
-		.timeout    = 0,
-	};
-
-	gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9, GPIO_INT_DISABLE);
-
-	LR1110_RETURN_ON_HAL_ERROR(
-		lr1110_radio_set_cad_params(dev, &cad_params));
-	LR1110_RETURN_ON_HAL_ERROR(
-		lr1110_system_set_dio_irq_params(
-			dev, LR1110_SYSTEM_IRQ_CADDONE_MASK |
-			     LR1110_SYSTEM_IRQ_CADDETECTED_MASK, 0));
-	LR1110_RETURN_ON_HAL_ERROR(
-		lr1110_radio_set_cad(dev));
-
-	/* Poll for CAD completion */
-	lr1110_system_stat1_t stat1;
-	lr1110_system_stat2_t stat2;
-	uint32_t irq = 0;
-	int64_t deadline = k_uptime_get() + k_ticks_to_ms_floor64(timeout.ticks);
-	do {
-		lichen_radio_progress();
-		k_sleep(K_MSEC(10));
-		lr1110_system_get_status(dev, &stat1, &stat2, &irq);
-		if (irq & (LR1110_SYSTEM_IRQ_CADDONE_MASK |
-			   LR1110_SYSTEM_IRQ_CADDETECTED_MASK)) {
-			break;
-		}
-	} while (k_uptime_get() < deadline);
-
-	lr1110_system_clear_irq(dev, irq);
-
-	int ret = lr1110_hal_get_last_error();
-	if (ret < 0) {
-		lr1110_system_set_standby(dev, LR1110_SYSTEM_STDBY_CONFIG_RC);
-		*busy = false;
-		return ret;
-	}
-
-	if (!(irq & (LR1110_SYSTEM_IRQ_CADDONE_MASK |
-		     LR1110_SYSTEM_IRQ_CADDETECTED_MASK))) {
-		/* A missing CAD completion is not evidence of a clear channel. */
-		LR1110_RETURN_ON_HAL_ERROR(
-			lr1110_system_set_standby(dev, LR1110_SYSTEM_STDBY_CONFIG_RC));
-		LR1110_RETURN_ON_HAL_ERROR(
-			lr1110_system_set_dio_irq_params(dev, LR1110_IRQ_RADIO, 0));
-		*busy = true;
-		return -ETIMEDOUT;
-	}
-
-	*busy = (irq & LR1110_SYSTEM_IRQ_CADDETECTED_MASK) != 0;
-
-	LR1110_RETURN_ON_HAL_ERROR(
-		lr1110_system_set_standby(dev, LR1110_SYSTEM_STDBY_CONFIG_RC));
-
-	/* Restore IRQ mask for normal radio operations */
-	LR1110_RETURN_ON_HAL_ERROR(
-		lr1110_system_set_dio_irq_params(dev, LR1110_IRQ_RADIO, 0));
-
-	LOG_DBG("lr1110: CAD %s", *busy ? "busy" : "clear");
-	return 0;
-}
-
 /* Async CAD poll step (uwip.2): re-arm every 10ms until CadDone/CadDetected
  * or deadline, mirroring cad_impl's fail-closed classification without
  * blocking the caller. Runs in the system workqueue; modem is held for the
  * whole CAD (released here before the done callback fires). */
 static void lr1110_cad_poll_fn(struct k_work *work)
 {
+	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
 	struct lr1110_data *drv =
-		CONTAINER_OF(work, struct lr1110_data, cad_poll);
+		CONTAINER_OF(dwork, struct lr1110_data, cad_poll);
 	lr1110_system_stat1_t stat1;
 	lr1110_system_stat2_t stat2;
 	uint32_t irq = 0;
@@ -1116,15 +1040,15 @@ static int lr1110_cad_start_impl(const struct device *dev, k_timeout_t timeout)
 
 	gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9, GPIO_INT_DISABLE);
 
-	int ret = lr1110_radio_set_cad_params(dev, &cad_params);
-	if (ret == 0) {
-		ret = lr1110_system_set_dio_irq_params(
-			dev, LR1110_SYSTEM_IRQ_CADDONE_MASK |
-			     LR1110_SYSTEM_IRQ_CADDETECTED_MASK, 0);
-	}
-	if (ret == 0) {
-		ret = lr1110_radio_set_cad(dev);
-	}
+	/* HAL entry points return void; errors surface via the HAL's sticky
+	 * last-error channel (same convention as the rest of this driver). */
+	lr1110_hal_clear_last_error();
+	lr1110_radio_set_cad_params(dev, &cad_params);
+	lr1110_system_set_dio_irq_params(
+		dev, LR1110_SYSTEM_IRQ_CADDONE_MASK |
+		     LR1110_SYSTEM_IRQ_CADDETECTED_MASK, 0);
+	lr1110_radio_set_cad(dev);
+	int ret = lr1110_hal_get_last_error();
 	if (ret != 0) {
 		/* Synchronous arm failure: no completion will be delivered. */
 		(void)lr1110_system_set_standby(
@@ -1137,24 +1061,6 @@ static int lr1110_cad_start_impl(const struct device *dev, k_timeout_t timeout)
 		k_uptime_get() + k_ticks_to_ms_floor64(timeout.ticks);
 	k_work_reschedule(&drv->cad_poll, K_MSEC(10));
 	return 0;
-}
-
-static int lr1110_lora_cad(const struct device *dev, k_timeout_t timeout,
-			   bool *busy)
-{
-	if (dev == NULL || busy == NULL) {
-		return -EINVAL;
-	}
-	struct lr1110_data *drv = dev->data;
-
-	if (!lr1110_modem_acquire(drv)) {
-		/* An armed async RX holds the modem. */
-		return -EBUSY;
-	}
-	int ret = lr1110_cad_impl(dev, timeout, busy);
-
-	lr1110_modem_release(drv);
-	return ret;
 }
 #endif
 
@@ -1217,12 +1123,7 @@ static int lr1110_init(const struct device *dev)
 #endif
 
 #if IS_ENABLED(CONFIG_LICHEN_LORA_L2)
-	int ret = lichen_lora_cad_register(dev, lr1110_lora_cad);
-	if (ret < 0) {
-		LOG_ERR("CAD extension registration failed (%d)", ret);
-		return ret;
-	}
-	ret = lichen_lora_cad_start_register(dev, lr1110_cad_start_impl);
+	int ret = lichen_lora_cad_start_register(dev, lr1110_cad_start_impl);
 	if (ret < 0) {
 		LOG_ERR("async CAD registration failed (%d)", ret);
 		return ret;

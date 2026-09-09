@@ -275,11 +275,6 @@ out:
 
 /* --- device init -------------------------------------------------------- */
 
-#if IS_ENABLED(CONFIG_LICHEN_LORA_L2)
-static int lora_renode_cad(const struct device *dev, k_timeout_t timeout,
-			    bool *busy);
-#endif
-
 static int lora_renode_init(const struct device *dev)
 {
 	const struct lora_renode_config *cfg = dev->config;
@@ -307,24 +302,11 @@ static int lora_renode_init(const struct device *dev)
 		LOG_WRN("peripheral not responding, continuing anyway");
 	}
 #if IS_ENABLED(CONFIG_LICHEN_LORA_L2)
-	return lichen_lora_cad_register(dev, lora_renode_cad);
+	/* No hardware CAD: emulated clear-channel completion (lora_cad). */
+	return lichen_lora_cad_start_register(dev, NULL);
 #endif
 	return 0;
 }
-
-#if IS_ENABLED(CONFIG_LICHEN_LORA_L2)
-static int lora_renode_cad(const struct device *dev, k_timeout_t timeout,
-			    bool *busy)
-{
-	ARG_UNUSED(dev);
-	ARG_UNUSED(timeout);
-	if (busy == NULL) {
-		return -EINVAL;
-	}
-	*busy = false; /* renode sim assumes clear */
-	return 0;
-}
-#endif
 
 static int lora_renode_send_async(const struct device *dev, uint8_t *data,
 				  uint32_t data_len, struct k_poll_signal *async)

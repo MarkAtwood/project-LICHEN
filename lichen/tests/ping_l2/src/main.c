@@ -27,6 +27,7 @@
 #include "lichen_l2.h"
 #include "lora_l2.h"
 #include "lora_loopback_test.h"
+#include <lichen/lora_cad.h>
 #include <lichen/tx_queue.h>
 
 /* White-box fault injection target: the module-static TX queue in lora_l2.c. */
@@ -659,6 +660,67 @@ ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
 					  expected_udp_packet,
 					  expected_udp_packet_len),
 		     "UDP packet was not observed through full L2 injection path");
+}
+
+/* uwip.3: the emulated async CAD path (loopback registers a NULL starter)
+ * must arm, deliver exactly one clear-channel verdict from the completion
+ * context, reject a concurrent arm while in flight, and free the slot for
+ * the next probe. This is the registry machinery the CSMA continuation in
+ * lora_l2_tx.c (csma_cad_probe) is built on. The callback runs on the
+ * system workqueue, so it only records — assertions stay on the test
+ * thread. */
+struct cad_test_ctx {
+	struct k_sem done_sem;
+	const struct device *dev;
+	bool busy;
+	int status;
+};
+
+static void cad_test_done(const struct device *dev, bool busy, int status,
+			  void *user_data)
+{
+	struct cad_test_ctx *ctx = user_data;
+
+	ctx->dev = dev;
+	ctx->busy = busy;
+	ctx->status = status;
+	k_sem_give(&ctx->done_sem);
+}
+
+ZTEST(ping_l2, test_async_cad_emulated_completion)
+{
+	struct cad_test_ctx ctx = {
+		.dev = NULL,
+		.busy = true,
+		.status = -1,
+	};
+	int ret;
+
+	k_sem_init(&ctx.done_sem, 0, 1);
+
+	ret = lichen_lora_cad_start(lora_dev, K_MSEC(50), cad_test_done, &ctx);
+	zassert_equal(ret, 0, "CAD arm failed: %d", ret);
+
+	/* In-flight probes are exclusive: a second arm fails closed. */
+	ret = lichen_lora_cad_start(lora_dev, K_MSEC(50), cad_test_done, &ctx);
+	zassert_equal(ret, -EBUSY, "concurrent CAD arm not rejected: %d", ret);
+
+	ret = k_sem_take(&ctx.done_sem, K_MSEC(500));
+	zassert_equal(ret, 0, "CAD completion never arrived");
+	zassert_equal(ctx.dev, lora_dev, "CAD done for the wrong device");
+	zassert_equal(ctx.status, 0, "CAD status: %d", ctx.status);
+	zassert_false(ctx.busy, "emulated CAD must report a clear channel");
+
+	/* The verdict consumed the slot: re-arm must succeed and deliver. */
+	k_sem_reset(&ctx.done_sem);
+	ctx.busy = true;
+	ctx.status = -1;
+	ret = lichen_lora_cad_start(lora_dev, K_MSEC(50), cad_test_done, &ctx);
+	zassert_equal(ret, 0, "CAD re-arm failed: %d", ret);
+	ret = k_sem_take(&ctx.done_sem, K_MSEC(500));
+	zassert_equal(ret, 0, "second CAD completion never arrived");
+	zassert_equal(ctx.status, 0, "second CAD status: %d", ctx.status);
+	zassert_false(ctx.busy, "second emulated CAD must report clear");
 }
 
 ZTEST_SUITE(ping_l2, NULL, ping_l2_setup, NULL, NULL, NULL);
