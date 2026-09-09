@@ -124,10 +124,18 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     }
 
     pub async fn send_dis(&mut self, destination: [u8; 16]) -> Result<(), TxError> {
+        // Unicast DIS targets a specific neighbor's link-local control
+        // address. Post-AddrForKey the routable destination embeds no IID,
+        // so the only valid derivation is from the peer's pinned public key
+        // (the IID's source of truth). A peer with no pin is unreachable.
         let control_destination = if destination[0] == 0xff {
             destination
         } else {
-            link_local_from_iid(destination[8..].try_into().expect("complete IPv6 IID"))
+            let peer_iid = self
+                .announces
+                .pinned_iid_for_addr(&destination)
+                .ok_or(TxError::NoRoute)?;
+            link_local_from_iid(peer_iid)
         };
         let packet = rpl_ipv6_packet(
             self.local_control_addr,

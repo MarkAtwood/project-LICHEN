@@ -128,7 +128,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 }
                 if !rpl_ipv6_multicast_is_allowed(&received.ipv6)
                     || !valid_rpl_ipv6(&received.ipv6)
-                    || !dio_dis_destination_is_allowed(&received.ipv6, self.local_rpl_addr)
+                    || !dio_dis_destination_is_allowed(&received.ipv6, self.local_control_addr)
                 {
                     return Ok(Some(RplBorderIngressOutcome::Control(
                         RplReceiveOutcome::RplRejected,
@@ -320,7 +320,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 if !valid_rpl_ipv6(&received.ipv6) {
                     return Ok(Some(RplReceiveOutcome::RplRejected));
                 }
-                if !dio_dis_destination_is_allowed(&received.ipv6, self.local_rpl_addr) {
+                if !dio_dis_destination_is_allowed(&received.ipv6, self.local_control_addr) {
                     return Ok(Some(RplReceiveOutcome::RplRejected));
                 }
                 self.process_rpl(frame, received, now_ms).await.map(Some)
@@ -562,10 +562,14 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 let RplRole::Root(rx) = &mut self.role else {
                     return Ok(RplReceiveOutcome::Dao(DaoHandlingOutcome::RouteRejected));
                 };
-                let origin_iid: [u8; 8] = source[8..].try_into().unwrap();
+                // The DAO source is the origin's primary 02xx address (spec
+                // 05-routing §8.6), which post-AddrForKey embeds no IID.
+                // Resolve the pinned key by full-address match, not by
+                // slicing the low 64 bits.
+                let origin_addr: [u8; 16] = source;
                 let admitted = self
                     .announces
-                    .pinned_pubkey_for(&origin_iid)
+                    .pinned_pubkey_for_addr(&origin_addr)
                     .is_some_and(|key| {
                         self.dao_admissions
                             .as_ref()

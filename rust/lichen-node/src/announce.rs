@@ -318,6 +318,28 @@ impl AnnounceProcessor {
         (iid_from_pubkey(&public_key) == *iid).then_some(public_key)
     }
 
+    /// Resolve a pinned public key by the peer's routable 02xx address
+    /// (upstream `AddrForKey`), not by IID. Post-AddrForKey the routable
+    /// address embeds no IID, so the only valid correlation is the full
+    /// address. Returns `None` when no pinned key derives the address.
+    pub fn pinned_pubkey_for_addr(&self, addr: &[u8; 16]) -> Option<PublicKey> {
+        for entry in self.pinned_keys.values() {
+            let public_key = PublicKey::new(entry.pubkey);
+            if lichen_link::ygg_addr_from_pubkey(public_key.as_bytes()) == *addr {
+                return Some(public_key);
+            }
+        }
+        None
+    }
+
+    /// Resolve a pinned peer's IID by its routable 02xx address
+    /// (`AddrForKey`), not by slicing the low 64 bits. Returns `None` when no
+    /// pinned key derives the address.
+    pub fn pinned_iid_for_addr(&self, addr: &[u8; 16]) -> Option<[u8; 8]> {
+        self.pinned_pubkey_for_addr(addr)
+            .map(|public_key| iid_from_pubkey(&public_key))
+    }
+
     /// Return a bounded, canonical snapshot for security-sensitive fallback
     /// resolution when an indexed claimed-IID lookup misses.
     ///
