@@ -96,6 +96,163 @@ impl RootSeqCache {
     }
 }
 
+// ── Durable persistence (std) ────────────────────────────────────────────────
+//
+// RSQ1 is a provisional, unshipped format with no migration. Each entry
+// carries its own `(dodag_id, instance)` key, so the record binds no node
+// scope: the high-water marks describe the ROOT's sequence, which is valid
+// anti-replay state for any local identity on any later provisioning. Slot
+// integrity is the bare CRC-32 of `lichen_hal::storage` — corruption
+// detection, not tamper resistance (see `crate::persistence` docs).
+
+#[cfg(feature = "std")]
+use lichen_hal::{
+    storage::{
+        open_redundant, provision_redundant, update_redundant, RedundantOpenError,
+        RedundantProvisionError, RedundantUpdateError, RedundantValue,
+    },
+    NonVolatile,
+};
+
+#[cfg(feature = "std")]
+pub(crate) const ROOT_SEQ_KEYS: [&str; 2] = ["rpl.rseq.a", "rpl.rseq.b"];
+#[cfg(feature = "std")]
+pub(crate) const ROOT_SEQ_MAGIC: [u8; 4] = *b"RSQ1";
+#[cfg(feature = "std")]
+const ROOT_SEQ_ENTRY_LEN: usize = 16 + 1 + 8;
+#[cfg(feature = "std")]
+const ROOT_SEQ_PAYLOAD_LEN: usize = 1 + MAX_ROOT_SEQ_KEYS * ROOT_SEQ_ENTRY_LEN;
+#[cfg(feature = "std")]
+const ROOT_SEQ_RECORD_LEN: usize = ROOT_SEQ_PAYLOAD_LEN + crate::persistence::SLOT_OVERHEAD;
+
+/// Failure to resume durable root-seq state.
+#[cfg(feature = "std")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RootSeqOpenError<E> {
+    /// No record was ever persisted.
+    Missing,
+    /// Present but unparsable: fail closed, never silently reset (a wiped
+    /// high-water mark would reopen the replay window).
+    Corrupt,
+    /// I/O failure.
+    Storage(E),
+}
+
+#[cfg(feature = "std")]
+impl RootSeqCache {
+    /// Open the durable high-water state.
+    pub fn open<S: NonVolatile>(
+        storage: &S,
+    ) -> Result<(Self, RedundantValue), RootSeqOpenError<S::Error>> {
+        let mut slot_a = [0u8; ROOT_SEQ_RECORD_LEN];
+        let mut slot_b = [0u8; ROOT_SEQ_RECORD_LEN];
+        let mut payload = [0u8; ROOT_SEQ_PAYLOAD_LEN];
+        let current = open_redundant(
+            storage,
+            ROOT_SEQ_KEYS,
+            ROOT_SEQ_MAGIC,
+            &mut slot_a,
+            &mut slot_b,
+            &mut payload,
+        )
+        .map_err(|error| match error {
+            RedundantOpenError::Missing => RootSeqOpenError::Missing,
+            RedundantOpenError::Corrupt | RedundantOpenError::BufferTooSmall => {
+                RootSeqOpenError::Corrupt
+            }
+            RedundantOpenError::Storage(error) => RootSeqOpenError::Storage(error),
+        })?;
+        let cache = Self::decode(&payload[..current.len]).ok_or(RootSeqOpenError::Corrupt)?;
+        Ok((cache, current))
+    }
+
+    /// Open the durable state, provisioning an empty record when absent.
+    ///
+    /// Covers fresh provisioning, reboot resume, and upgrade from a build
+    /// that predates the record. Corrupt state fails closed.
+    pub fn resume<S: NonVolatile>(
+        storage: &mut S,
+    ) -> Result<(Self, RedundantValue), RootSeqOpenError<S::Error>> {
+        match Self::open(storage) {
+            Ok(state) => Ok(state),
+            Err(RootSeqOpenError::Missing) => {
+                let (payload, len) = Self::default().encode();
+                let mut record = [0u8; ROOT_SEQ_RECORD_LEN];
+                provision_redundant(
+                    storage,
+                    ROOT_SEQ_KEYS,
+                    ROOT_SEQ_MAGIC,
+                    &payload[..len],
+                    &mut record,
+                )
+                .map_err(|error| match error {
+                    RedundantProvisionError::Exists => RootSeqOpenError::Corrupt,
+                    RedundantProvisionError::Storage(error) => RootSeqOpenError::Storage(error),
+                })?;
+                Self::open(storage)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Persist the cache as the next redundant generation.
+    pub fn persist<S: NonVolatile>(
+        &self,
+        storage: &mut S,
+        current: RedundantValue,
+    ) -> Result<RedundantValue, RedundantUpdateError<S::Error>> {
+        let (payload, len) = self.encode();
+        let mut record = [0u8; ROOT_SEQ_RECORD_LEN];
+        update_redundant(
+            storage,
+            ROOT_SEQ_KEYS,
+            ROOT_SEQ_MAGIC,
+            current,
+            &payload[..len],
+            &mut record,
+        )
+    }
+
+    fn encode(&self) -> ([u8; ROOT_SEQ_PAYLOAD_LEN], usize) {
+        let mut out = [0u8; ROOT_SEQ_PAYLOAD_LEN];
+        let count = self.entries.iter().flatten().count();
+        out[0] = count as u8;
+        let mut offset = 1;
+        for (dodag_id, instance, root_seq) in self.entries.iter().flatten() {
+            out[offset..offset + 16].copy_from_slice(dodag_id);
+            out[offset + 16] = *instance;
+            out[offset + 17..offset + ROOT_SEQ_ENTRY_LEN].copy_from_slice(&root_seq.to_be_bytes());
+            offset += ROOT_SEQ_ENTRY_LEN;
+        }
+        (out, offset)
+    }
+
+    /// Strict decode: exact length, bounded count, nonzero sequences, no
+    /// duplicate keys — any deviation is corrupt, never partially accepted.
+    fn decode(payload: &[u8]) -> Option<Self> {
+        let count = usize::from(*payload.first()?);
+        if count > MAX_ROOT_SEQ_KEYS || payload.len() != 1 + count * ROOT_SEQ_ENTRY_LEN {
+            return None;
+        }
+        let mut cache = Self::default();
+        for index in 0..count {
+            let offset = 1 + index * ROOT_SEQ_ENTRY_LEN;
+            let dodag_id: [u8; 16] = payload[offset..offset + 16].try_into().ok()?;
+            let instance = payload[offset + 16];
+            let root_seq = u64::from_be_bytes(
+                payload[offset + 17..offset + ROOT_SEQ_ENTRY_LEN]
+                    .try_into()
+                    .ok()?,
+            );
+            if root_seq == 0 || cache.cached(dodag_id, instance).is_some() {
+                return None;
+            }
+            cache.entries[index] = Some((dodag_id, instance, root_seq));
+        }
+        Some(cache)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -177,5 +334,119 @@ mod tests {
         dodag[0] = 0;
         assert_eq!(cache.accept(dodag, 0, 2), Ok(()));
         assert_eq!(cache.cached(dodag, 0), Some(2));
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+mod persistence_tests {
+    use super::*;
+    use lichen_hal::storage::mem::{MemStorage, MemStorageError};
+    use lichen_hal::storage::{provision_redundant, RedundantUpdateError};
+
+    const DODAG_A: [u8; 16] = [0x20; 16];
+    const DODAG_B: [u8; 16] = [0x21; 16];
+
+    #[test]
+    fn resume_provisions_empty_record_then_roundtrips_across_reopen() {
+        let mut storage = MemStorage::new();
+        let (cache, current) = RootSeqCache::resume(&mut storage).unwrap();
+        assert_eq!(cache.cached(DODAG_A, 0), None);
+
+        // Accept + persist, then "reboot": a fresh resume on the same
+        // storage restores the high-water marks.
+        let mut cache = cache;
+        cache.accept(DODAG_A, 0, 7).unwrap();
+        cache.accept(DODAG_B, 1, 9).unwrap();
+        let _current = cache.persist(&mut storage, current).unwrap();
+
+        let (restored, current) = RootSeqCache::resume(&mut storage).unwrap();
+        assert_eq!(restored.cached(DODAG_A, 0), Some(7));
+        assert_eq!(restored.cached(DODAG_B, 1), Some(9));
+
+        // A second persist advances the generation and both slots parse.
+        let mut restored = restored;
+        restored.accept(DODAG_A, 0, 8).unwrap();
+        let current = restored.persist(&mut storage, current).unwrap();
+        let (final_cache, _) = RootSeqCache::resume(&mut storage).unwrap();
+        assert_eq!(final_cache.cached(DODAG_A, 0), Some(8));
+        assert_eq!(final_cache.cached(DODAG_B, 1), Some(9));
+        assert!(current.generation >= 3);
+    }
+
+    #[test]
+    fn open_reports_missing_then_resume_fills_it() {
+        let storage = MemStorage::new();
+        assert_eq!(
+            RootSeqCache::open(&storage).unwrap_err(),
+            RootSeqOpenError::<MemStorageError>::Missing
+        );
+    }
+
+    #[test]
+    fn corrupt_both_slots_fail_closed() {
+        let mut storage = MemStorage::new();
+        storage.set_raw(ROOT_SEQ_KEYS[0], &[0xff; 64]);
+        storage.set_raw(ROOT_SEQ_KEYS[1], &[0x00; 10]);
+        assert_eq!(
+            RootSeqCache::resume(&mut storage).unwrap_err(),
+            RootSeqOpenError::<MemStorageError>::Corrupt
+        );
+    }
+
+    #[test]
+    fn wrong_magic_fails_closed() {
+        // DTX2-framed bytes under the root-seq keys must never open.
+        let mut storage = MemStorage::new();
+        let mut record = [0u8; ROOT_SEQ_RECORD_LEN];
+        provision_redundant(&mut storage, ROOT_SEQ_KEYS, *b"DTX2", &[0], &mut record).unwrap();
+        assert_eq!(
+            RootSeqCache::resume(&mut storage).unwrap_err(),
+            RootSeqOpenError::<MemStorageError>::Corrupt
+        );
+    }
+
+    #[test]
+    fn malformed_payloads_fail_closed() {
+        // Trailing garbage after a valid empty record.
+        assert!(RootSeqCache::decode(&[0, 0xAA]).is_none());
+        // Count beyond capacity.
+        assert!(RootSeqCache::decode(&[17]).is_none());
+        // Count/length mismatch.
+        assert!(RootSeqCache::decode(&[1, 0xAA]).is_none());
+        // Zero sequence is never valid state.
+        let mut zero_seq = std::vec![1u8];
+        zero_seq.extend_from_slice(&DODAG_A);
+        zero_seq.push(0);
+        zero_seq.extend_from_slice(&0u64.to_be_bytes());
+        assert!(RootSeqCache::decode(&zero_seq).is_none());
+        // Duplicate (dodag_id, instance) keys.
+        let mut duplicate = std::vec![2u8];
+        for _ in 0..2 {
+            duplicate.extend_from_slice(&DODAG_A);
+            duplicate.push(0);
+            duplicate.extend_from_slice(&7u64.to_be_bytes());
+        }
+        assert!(RootSeqCache::decode(&duplicate).is_none());
+        // A valid empty record decodes.
+        assert!(RootSeqCache::decode(&[0]).is_some());
+    }
+
+    #[test]
+    fn stale_handle_is_rejected() {
+        let mut storage = MemStorage::new();
+        let (mut cache, current) = RootSeqCache::resume(&mut storage).unwrap();
+        cache.accept(DODAG_A, 0, 7).unwrap();
+        let stale = current;
+        let current = cache.persist(&mut storage, current).unwrap();
+        // Replaying the superseded handle must not roll back the slot state.
+        assert_eq!(
+            cache.persist(&mut storage, stale).unwrap_err(),
+            RedundantUpdateError::Stale
+        );
+        // The current handle still advances.
+        cache.accept(DODAG_A, 0, 8).unwrap();
+        cache.persist(&mut storage, current).unwrap();
+        let (restored, _) = RootSeqCache::resume(&mut storage).unwrap();
+        assert_eq!(restored.cached(DODAG_A, 0), Some(8));
     }
 }

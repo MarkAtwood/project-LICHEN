@@ -121,6 +121,10 @@ pub struct RplStack<R: Radio, S: NonVolatile> {
     bootstrap_peers: VecDeque<[u8; 8]>,
     dao_admissions: Option<DaoAdmissionState>,
     root_seqs: RootSeqCache,
+    /// Durable generation handle for `root_seqs` (spec 06 §8.10.1 anti-replay
+    /// survives reboot; worker6-eebl). Every admitted high-water mark is
+    /// persisted BEFORE the in-memory cache is updated.
+    root_seq_store: lichen_hal::storage::RedundantValue,
     /// DAO TX scheduler state (b7z9.16.1(b) wires the TX consumer).
     dao_tx_sched: DaoTxScheduler,
     wall_clock_unix: Option<fn() -> u64>,
