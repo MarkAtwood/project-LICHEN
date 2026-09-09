@@ -118,6 +118,7 @@ For scoped flooding without full multicast routing, use **Hop Limit**:
 2. Sender broadcasts to ff03::1 (mesh-local all nodes)
 3. Each relay:
    - Receives packet
+   - MUST preserve the original IPv6 source address end-to-end (required by §6.3.3 relay accounting)
    - Decrements Hop Limit
    - If Hop Limit > 0: rebroadcast
    - If Hop Limit = 0: consume locally, don't relay
@@ -135,10 +136,18 @@ Each node tracks broadcasts it relays, per sender:
 
 ```
 Broadcast Relay State:
-  sender_iid: <IID of original sender>
+  sender_addr: <full 16-byte primary 0200::/8 /128 of original sender>
   hop_bucket[1-7]: <count in rolling 1-hour window>
   last_seen: <timestamp>
 ```
+
+The relay key is the full primary source address, not the IID: the routable
+/128 is upstream `AddrForKey` and embeds no IID (§6.2), and relays MUST
+preserve the original IPv6 source end-to-end (§6.3.2), so the key is present
+at every hop. Keying on 128 bits strengthens collision resistance over the
+64-bit IID; the key is not authenticated end-to-end for broadcast traffic
+(link-layer signatures are per-hop), so spoofed-source budget exhaustion
+remains a radio-adversary ceiling.
 
 **Hop-aware budgets:**
 
@@ -156,7 +165,7 @@ Higher Hop Limit = larger blast radius = stricter limit:
 
 ```
 on_receive_broadcast(packet):
-  sender = packet.source_iid
+  sender = packet.source_addr  # full primary /128, preserved end-to-end
   hl = packet.hop_limit
 
   if sender not in relay_state:
@@ -192,8 +201,8 @@ on_receive_broadcast(packet):
 
 **State size:**
 
-Per-sender entry: ~20 bytes (IID + 7 bucket counters + timestamp)
-At 100 active senders: ~2 KB
+Per-sender entry: ~27 bytes (16-byte address + 7 bucket counters + timestamp)
+At 100 active senders: ~2.7 KB
 
 #### 6.3.4. Border Router Multicast Filtering
 
