@@ -237,6 +237,10 @@ config LICHEN_COAP_KEYS
 	depends on LICHEN_SLIP_TRANSPORT
 	depends on ZCBOR
 	select COAP_URI_WILDCARD
+	# Real fingerprints need SHA-256 (mbedTLS under Zephyr 4.1). imply, not
+	# select: the degraded hex fallback in coap_keys_format.c is intentional
+	# for provider-less builds, mirroring the old TINYCRYPT_SHA256 imply.
+	imply MBEDTLS_SHA256
 	help
 	  Enable CoAP server resources for key store management per LCI spec
 	  section 17.5.5:
