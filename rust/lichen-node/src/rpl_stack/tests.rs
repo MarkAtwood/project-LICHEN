@@ -511,18 +511,18 @@ fn rfc6554_route_crosses_two_relays_and_restores_packet() {
     assert_eq!(routed[43], 2);
 
     assert_eq!(
-        advance_rpl_source_route(&mut routed, relay_one, source[8..].try_into().unwrap()).unwrap(),
+        advance_rpl_source_route(&mut routed, relay_one, source[8..].try_into().unwrap(), source).unwrap(),
         Some(relay_two)
     );
     assert_eq!(routed[43], 1);
     assert_eq!(
-        advance_rpl_source_route(&mut routed, relay_two, relay_one[8..].try_into().unwrap(),)
+        advance_rpl_source_route(&mut routed, relay_two, relay_one[8..].try_into().unwrap(), relay_one,)
             .unwrap(),
         Some(destination)
     );
     assert_eq!(routed[43], 0);
     assert_eq!(
-        advance_rpl_source_route(&mut routed, destination, relay_two[8..].try_into().unwrap(),)
+        advance_rpl_source_route(&mut routed, destination, relay_two[8..].try_into().unwrap(), relay_two,)
             .unwrap(),
         None
     );

@@ -255,7 +255,7 @@ fn yggdrasil_derivation_corpus_matches_upstream_addr_for_key() {
             assert_eq!(iid, decode_hex::<8>(expected));
         }
         assert_eq!(addr[0], 0x02);
-        if entry["test_type"] == "binding_invariant" {
+        if entry["test_type"] == "binding_invariant_rejected" {
             // The addr[8..] == IID invariant is retired with the rejected
             // profile; the entry now pins the upstream address for its key.
             binding += 1;

@@ -263,8 +263,14 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 if source_route.last() != Some(&destination) {
                     return None;
                 }
-                return source_route.first().copied().map(|first| RoutePlan {
-                    next_hop: util::ipv6_eui64(first),
+                // The first hop is a routable /128; its L2 EUI-64 is not
+                // derivable from the address (i72x.2) — resolve through the
+                // authenticated peer table, failing closed (no route).
+                let first = *source_route.first()?;
+                let mut next_hop = self.stack.link().peer_iid_for_routable_addr(&first)?;
+                next_hop[0] ^= 0x02;
+                return Some(RoutePlan {
+                    next_hop,
                     source_route,
                 });
             }

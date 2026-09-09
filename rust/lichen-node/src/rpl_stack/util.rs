@@ -149,7 +149,11 @@ pub(crate) fn routing_announce(payload: &[u8]) -> Result<&[u8], AnnounceRejectRe
     }
 }
 
-pub(crate) fn wire_is_for_local(wire: &[u8], local_eui64: [u8; 8]) -> Result<bool, LinkRxError> {
+pub(crate) fn wire_is_for_local(
+    wire: &[u8],
+    local_eui64: [u8; 8],
+    local_rpl_addr: [u8; 16],
+) -> Result<bool, LinkRxError> {
     let frame = LichenFrame::from_bytes(wire)?;
     Ok(match frame.addr_mode {
         AddrMode::None => inspect_schc_ipv6(&frame)
@@ -160,12 +164,18 @@ pub(crate) fn wire_is_for_local(wire: &[u8], local_eui64: [u8; 8]) -> Result<boo
             if claims_rpl_ipv6(&ipv6) {
                 return rpl_ipv6_multicast_is_allowed(&ipv6)
                     && ipv6_destination(&ipv6).is_some_and(|destination| {
-                        destination[0] == 0xff || ipv6_eui64(destination) == local_eui64
+                        destination[0] == 0xff
+                            || ipv6_eui64(destination) == local_eui64
+                            || destination == local_rpl_addr
                     });
             }
             let destination: [u8; 16] =
                 ipv6[field::DST_OFFSET..IPV6_HEADER_LEN].try_into().unwrap();
-            destination[0] == 0xff || ipv6_eui64(destination) == local_eui64
+            // Unicast to our routable /128 is for us; its low half is not
+            // the IID (i72x.2), so compare the full address as well.
+            destination[0] == 0xff
+                || ipv6_eui64(destination) == local_eui64
+                || destination == local_rpl_addr
         }),
     })
 }
@@ -410,6 +420,9 @@ pub fn survey_routing_headers(ipv6: &[u8]) -> Result<RoutingHeaderSurvey, RxErro
 /// `current_destination` is the packet's outer destination (the caller's local
 /// address); `sender_iid` is the authenticated link-layer sender, whose
 /// link-local address must never appear as the next hop (forwarding loop).
+/// `sender_routable` is the sender's routable /128 (derived from the
+/// link-authenticated sender key); it likewise must never be the next hop —
+/// its low half is not the IID (i72x.2), so both forms are compared exactly.
 ///
 /// Returns the next destination to relay to, or `None` when `segments_left`
 /// was already zero: the header is consumed, stripped, and the packet is
@@ -418,6 +431,7 @@ pub(crate) fn advance_rpl_source_route(
     ipv6: &mut Vec<u8>,
     current_destination: [u8; 16],
     sender_iid: [u8; 8],
+    sender_routable: [u8; 16],
 ) -> Result<Option<[u8; 16]>, RxError> {
     let view = match survey_routing_headers(ipv6)? {
         RoutingHeaderSurvey::SourceRouted(view) => view,
@@ -444,7 +458,7 @@ pub(crate) fn advance_rpl_source_route(
     let next_destination: [u8; 16] = ipv6[next_start..next_start + 16]
         .try_into()
         .expect("surveyed grid address");
-    if ipv6_eui64(next_destination) == ipv6_eui64(link_local_from_iid(sender_iid)) {
+    if next_destination == link_local_from_iid(sender_iid) || next_destination == sender_routable {
         return Err(RxError::InvalidSourceRoute);
     }
     ipv6[next_start..next_start + 16].copy_from_slice(&current_destination);
