@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-worker6-725b",
+  "title": "lichen-node: unused_mut at rpl_stack/tests.rs:3029 fails --all-features -D warnings clippy",
+  "description": "Found while verifying p21s. With the duplicated_attributes error fixed, cargo clippy -p lichen-node --all-targets --all-features -- -D warnings advances to the next pre-existing error: unused_mut on 'let mut sender = RplStack::provision_root(...)' at rust/lichen-node/src/rpl_stack/tests.rs:3029. Presumably feature-gated test code where the mut is only needed under other feature combos. Fix: remove the mut if truly unused under all feature combos, or scope it. One more blocker toward kpv0.6 (workspace clippy -D warnings clean). Also note: oscore-fork lib emits a dead_code warning (types.rs:90 ContextId::new) under this invocation — oscore is human-only, do not touch; flag to Mark.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T13:50:45.166617477Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T13:50:45.166617477Z",
+  "labels": [
+    "rust"
+  ]
+}
