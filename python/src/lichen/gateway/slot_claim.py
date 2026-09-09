@@ -352,12 +352,14 @@ class SlotClaim:
         if type(superframe_epoch) is not int or superframe_epoch < 0 or superframe_epoch > _MAX_U64:
             raise ClaimError("superframe_epoch must be a non-negative integer")
         mode = fields.get(_PAYLOAD_MODE)
-        if mode == _MODE_INTERLEAVED:
-            allocation_mode = AllocationMode.INTERLEAVED
-        elif mode == _MODE_CONTIGUOUS:
-            allocation_mode = AllocationMode.CONTIGUOUS
-        else:
+        # Type-strict: value equality admits CBOR false/true (bool) and
+        # float 0.0/1.0 as modes, which Rust's p.uint() rejects as
+        # MalformedClaim (slot.rs:589) — a signed-claim divergence (ft5w).
+        if type(mode) is not int or mode not in (_MODE_INTERLEAVED, _MODE_CONTIGUOUS):
             raise ClaimError("mode must be 0 (interleaved) or 1 (contiguous)")
+        allocation_mode = (
+            AllocationMode.INTERLEAVED if mode == _MODE_INTERLEAVED else AllocationMode.CONTIGUOUS
+        )
         expiry = fields.get(_PAYLOAD_EXPIRY)
         if type(expiry) is not int or expiry < 0 or expiry > _MAX_U64:
             raise ClaimError("expiry must be a non-negative integer")
@@ -374,7 +376,7 @@ class SlotClaim:
         if type(ordinal) is not int or ordinal < 0 or ordinal > _MAX_U64:
             raise ClaimError("ordinal must be a non-negative integer")
 
-        return cls(
+        claim = cls(
             gateway_iid=iid_bytes.hex(),
             slots=tuple(raw_slots),
             superframe_id=superframe_epoch,
@@ -384,6 +386,22 @@ class SlotClaim:
             ordinal=ordinal,
             signature=signature,
         )
+        # Canonical-form gate (5rfl/cb10): cbor2 decodes tag-2 bignums,
+        # non-minimal long-form uints, reordered/duplicate/unknown keys, and
+        # trailing payload bytes to the same field values a canonical claim
+        # has, so the type gates above accept wire forms Rust's strict
+        # reader and C's digest-the-received-bytes reject — and
+        # verify_slot_claim digests a canonical RE-ENCODE, so a
+        # signature-valid claim with the payload re-encoded non-canonically
+        # would be accepted here and rejected by every Rust/C peer:
+        # cross-implementation slot-map divergence. Byte-equality against
+        # the canonical re-encode closes ALL of these uniformly: the
+        # adjudicated wire contract is a deterministic-CBOR payload
+        # (spec/decisions.jsonl slot-claim-cose-sign1), keys 1-7 ascending,
+        # minimal heads, no trailing bytes.
+        if encode_claim_canonical(claim) != payload:
+            raise ClaimError("slot-claim payload must be canonically encoded")
+        return claim
 
 
 # ─── COSE_Sign1 wire format (spec/08-gateway-coordination.md GCP-6.5) ────────
