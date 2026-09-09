@@ -96,9 +96,7 @@ class TxReservation:
     """
 
     _future: Future[bool] | None = field(default=None, repr=False)
-    _future_loop: asyncio.AbstractEventLoop | None = field(
-        default=None, repr=False
-    )
+    _future_loop: asyncio.AbstractEventLoop | None = field(default=None, repr=False)
     _result: bool | None = field(default=None, repr=False)
 
     async def wait(self) -> bool:
@@ -142,28 +140,27 @@ class TxReservation:
             # Same value or conflict - idempotent, first wins
             return
         self._result = success
+        loop = self._future_loop
         if self._future is not None and not self._future.done():
             # Merge resolution: keep HEAD's stored-_future_loop form (the field
             # is captured in wait() above); it provides the same off-loop
             # marshaling as beads-worker-7's future.get_loop() form (bead
             # rbiz) while staying consistent with the rest of this class.
             on_owning_loop = False
-            if self._future_loop is not None:
+            if loop is not None:
                 try:
-                    on_owning_loop = (
-                        asyncio.get_running_loop() is self._future_loop
-                    )
+                    on_owning_loop = asyncio.get_running_loop() is loop
                 except RuntimeError:
                     on_owning_loop = False  # no running loop here: foreign
             if on_owning_loop:
                 self._future.set_result(success)
-            else:
+            elif loop is not None:
                 # Foreign thread (or loop-less thread): marshal the future
                 # mutation onto its owning loop — asyncio.Future.set_result
-                # is not thread-safe.
-                self._future_loop.call_soon_threadsafe(
-                    self._future.set_result, success
-                )
+                # is not thread-safe. wait() captures _future_loop together
+                # with _future, so loop is None only when no waiter exists;
+                # the recorded _result is applied by wait()'s catch-up.
+                loop.call_soon_threadsafe(self._future.set_result, success)
 
     def done(self) -> bool:
         """Return True if result has been set."""
@@ -288,7 +285,7 @@ class TxQueue:
         Called once by the owning LinkLayer so locally-originated TX and
         RX frames draw from one monotonic per-node id space (spec gy32).
         """
-        source = require_sync_callable(source, "pkt_id source")
+        require_sync_callable(source, "pkt_id source")
         self._pkt_id_source = source
 
     def _next_pkt_id(self) -> int:
@@ -613,8 +610,7 @@ class TxQueue:
                 if latency > self.stats.max_latency_ms:
                     self.stats.max_latency_ms = latency
                 self._avg_latency_ema = (
-                    self._EMA_ALPHA * latency
-                    + (1 - self._EMA_ALPHA) * self._avg_latency_ema
+                    self._EMA_ALPHA * latency + (1 - self._EMA_ALPHA) * self._avg_latency_ema
                 )
                 self.stats.avg_latency_ms = int(self._avg_latency_ema)
                 self.stats.packets_transmitted += 1
@@ -633,9 +629,7 @@ class TxQueue:
         else:
             # re-queued with original deadline_ms - prevents lifetime extension
             if entry not in self._entries:
-                logger.warning(
-                    "complete(success=False) but entry not in queue"
-                )
+                logger.warning("complete(success=False) but entry not in queue")
             else:
                 logger.debug(
                     "TX re-queued after failure, preserved deadline=%d",
