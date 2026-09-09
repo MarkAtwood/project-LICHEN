@@ -87,6 +87,11 @@
 #define ERANGE 34
 #endif
 
+/** No such entry (lookup miss) */
+#ifndef ENOENT
+#define ENOENT 2
+#endif
+
 #endif /* __ZEPHYR__ */
 
 /* ENOKEY is not exposed by every Zephyr errno configuration.  Value matches
