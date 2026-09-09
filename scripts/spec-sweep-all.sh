@@ -35,7 +35,25 @@ PYEOF
         python3 -c "import json,sys; d=json.load(sys.stdin).get('data',{}); print(int(d.get('total_credits',0)-d.get('total_usage',0)))" 2>/dev/null || echo 0
 }
 
-SECTIONS="spec/09-packets-timing.md spec/02a-coordinated-capacity.md spec/03-adaptation.md spec/06-security.md spec/02-physical-link.md spec/08-gateway-coordination.md spec/12-apps.md spec/04-network.md spec/11-lci.md spec/08-nodes.md spec/10-implementation.md spec/01-architecture.md spec/07-transport-app.md spec/appendix-border-router.md spec/appendix-bufferbloat.md spec/appendix-c-safety.md spec/drafts/draft-lichen-schnorr-00.md"
+# Full corpus (2026-09-09 expansion): every normative spec file, including
+# sections never swept (05-routing, 03-addressing, 02a-tdma, 02b, 19) and the
+# appendix tail. Already-swept sections whose spec moved after their matrix
+# are refreshed by deleting the stale matrix first (the skip logic then
+# re-sweeps them). Unmatched names (kiss-framing, THINKING-APPLICATION,
+# README, 99-acknowledgments, draft-yggdrasil-subnet-announcement) are
+# intentionally excluded pending human confirmation they are normative.
+SECTIONS="spec/09-packets-timing.md spec/02a-coordinated-capacity.md spec/03-adaptation.md spec/06-security.md spec/02-physical-link.md spec/08-gateway-coordination.md spec/12-apps.md spec/04-network.md spec/11-lci.md spec/08-nodes.md spec/10-implementation.md spec/01-architecture.md spec/07-transport-app.md spec/appendix-border-router.md spec/appendix-bufferbloat.md spec/appendix-c-safety.md spec/drafts/draft-lichen-schnorr-00.md spec/05-routing.md spec/03-addressing.md spec/02a-tdma.md spec/02b-ccp-receiver-aware.md spec/19-device-ux.md spec/appendix-ccp12-hopping.md spec/appendix-schc.md spec/appendix-senml.md spec/appendix-rpl.md spec/appendix-loadng.md spec/appendix-gatt-ipso.md spec/appendix-x509-cert-profile.md spec/appendix-design-rationale.md spec/appendix-misc.md"
+
+# Refresh stale matrices: if the spec file is newer than its matrix, the
+# matrix is out of date — remove it so the sweep re-runs that section.
+for SECTION in $SECTIONS; do
+    SECNAME=$(basename "$SECTION" .md)
+    MATRIX="$REPO_ROOT/docs/spec-coverage/$SECNAME.md"
+    if [ -f "$MATRIX" ] && [ "$REPO_ROOT/$SECTION" -nt "$MATRIX" ]; then
+        echo "refresh: $SECNAME (spec moved after sweep) — removing stale matrix"
+        rm -f "$MATRIX" "$REPO_ROOT/docs/spec-coverage/$SECNAME-flagged.md"
+    fi
+done
 
 for SECTION in $SECTIONS; do
     SECNAME=$(basename "$SECTION" .md)
