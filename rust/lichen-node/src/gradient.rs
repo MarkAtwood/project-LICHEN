@@ -170,18 +170,6 @@ impl GradientTable {
         Some(self.promote(index))
     }
 
-    /// Lookup gradient for destination by IID (last 8 bytes).
-    pub fn lookup_by_iid(&mut self, iid: &[u8; 8], now_ms: u32) -> Option<&GradientEntry> {
-        let index = self
-            .entries
-            .iter()
-            .position(|e| &e.destination[8..] == iid)?;
-        if is_expired(self.entries[index].expires_ms, now_ms) {
-            return None;
-        }
-        Some(self.promote(index))
-    }
-
     fn promote(&mut self, index: usize) -> &GradientEntry {
         let last = self.entries.len() - 1;
         if index != last {
@@ -315,8 +303,6 @@ mod tests {
     fn zero_capacity_rejects_updates_without_allocating() {
         let mut table = GradientTable::new(0);
         let destination = link_local(1);
-        let iid = destination[8..].try_into().unwrap();
-
         assert_eq!(table.entries.capacity(), 0);
         assert!(!table.update(make_entry(1, 2, 3, 100, GradientSource::Announce), 1000));
         assert!(!table.update(make_entry(1, 3, 1, 101, GradientSource::Rpl), 1000));
@@ -324,7 +310,6 @@ mod tests {
         assert_eq!(table.len(), 0);
         assert_eq!(table.iter().count(), 0);
         assert!(table.lookup(&destination, 1000).is_none());
-        assert!(table.lookup_by_iid(&iid, 1000).is_none());
 
         table.remove(&destination);
         let removed = table.remove_via(&link_local(2));

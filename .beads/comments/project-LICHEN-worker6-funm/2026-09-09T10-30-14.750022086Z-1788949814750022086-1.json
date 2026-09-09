@@ -1,7 +1,0 @@
-{
-  "id": "1788949814750022086-1",
-  "issue_id": "project-LICHEN-worker6-funm",
-  "author": "Mark Atwood",
-  "text": "NOT REPRODUCIBLE on current main (beads-worker-6, 2026-09-09). The import is not phantom: 'lora-medium @ git+https://github.com/MarkAtwood/lora-medium.git@5ddc92b' is a DECLARED dependency in python/pyproject.toml since 11a3157934 (2026-07-31, 'refactor(sim): extract core to lora-medium package'), resolved in python/uv.lock, and pinned BEFORE the duty_cycle.py import landed in 23a5572e83 (2026-08-26). The ModuleNotFoundError in this bead only occurs when invoking bare 'python3 -m pytest' outside the project environment — an unsupported invocation. With the project env (python/.venv, and via the CI pattern 'uv run --frozen --directory python'): 'pytest tests/schc tests/gateway tests/tui' collects 1842 cleanly and passes 1838 passed / 4 skipped; 'pytest tests/sim/test_duty_cycle.py' 30 passed. No code change made; bead premise ('no pyproject dependency') was stale/incorrect. Observation, not filed as a bead: lichen.timing (core) now hard-imports the sim extension, but since the dep is declared and required for the package, making it optional would be a speculative design change — owner can revisit if offline/no-Rust test environments become a requirement.",
-  "created_at": "2026-09-09T10:30:14.750022086Z"
-}

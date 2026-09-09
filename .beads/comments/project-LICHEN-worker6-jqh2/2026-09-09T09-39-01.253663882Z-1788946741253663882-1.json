@@ -1,7 +1,0 @@
-{
-  "id": "1788946741253663882-1",
-  "issue_id": "project-LICHEN-worker6-jqh2",
-  "author": "Mark Atwood",
-  "text": "Verified complete on beads-worker-6 (2026-09-09): the described fix already landed on main in 066140d2c8 'docs(spec): reconcile address prose with upstream' (also on beads-worker-4) — the stalled worker-5 merge bookkeeping left the bead open. Verified: (1) 04-network.md §6.1 lines 22-24 now state primary = upstream AddrForKey; (2) §6.2 lines 56-75 pseudocode shows the upstream invert/leading-1-count/bit-pack algorithm, IID scoped to 'link-local fe80::/10 address only', plus explicit 'implementations MUST NOT substitute the IID into its lower 64 bits' and SubnetForKey/0200::/7 aggregate paragraph; (3) §12.1/§12.2 consistent, example 200:848a:604f:bb7e:4384:65db:8db6:6895 byte-matches pinned vector yggdrasil_address.json upstream_addr_for_key (pubkey bdbacfd8...) and link-local matches ipv6-addresses.json rfc8032_test_public_key; (4) 03-addressing.md:22 audited — correctly states routable /128 == AddrForKey and 'does not contain this IID'. Line 58's 'pending migration' characterization of Rust/Python code is accurate on this branch (i72x.2 not merged here). 3 delegated review passes (kimi-k3): correctness PASS, security PASS, edge-cases found 1 defect — stray '+ ' patch artifact at 04-network.md:294, filed as separate bead.",
-  "created_at": "2026-09-09T09:39:01.253663882Z"
-}

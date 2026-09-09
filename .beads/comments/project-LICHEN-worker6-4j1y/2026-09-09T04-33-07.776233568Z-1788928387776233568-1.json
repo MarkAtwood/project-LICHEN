@@ -1,7 +1,0 @@
-{
-  "id": "1788928387776233568-1",
-  "issue_id": "project-LICHEN-worker6-4j1y",
-  "author": "Mark Atwood",
-  "text": "VERIFIED FIXED in tree (worker4, 2026-09-09): authorize_decapsulation at rust/lichen-gateway/src/tunnel_auth.rs:398-449 gathers ALL matching candidates, selects longest prefix_len with LRU tiebreak (entry.used \u003c best_entry.used), then checks expiry on the selected candidate only — exact Python max(candidates, key=prefixlen) parity per the comment at :401-405. Both requested tests exist: tunnel_auth_vectors.rs:380 longer_live_prefix_authorizes_when_earlier_shorter_entry_is_expired and :392 expired_longest_prefix_denies_without_falling_back_to_shorter_live_grant. Not claiming (one-P2-per-round rule) — safe to close on this evidence.",
-  "created_at": "2026-09-09T04:33:07.776233568Z"
-}

@@ -599,15 +599,17 @@ class TxQueue:
             raise TypeError("success must be bool")
 
         if success:
-            # Remove entry from queue (may have shifted position)
-            try:
-                self._entries.remove(entry)
-            except ValueError:
-                # Entry was already removed (expired/preempted) - reservation
-                # already signaled by whoever removed it, but we set_result
-                # anyway (idempotent, first-wins semantic)
-                pass
-            else:
+            # Remove the exact reserved object by identity, not value
+            # equality: a byte-identical twin inserted ahead of it while in
+            # flight must not be removed instead (the reserved twin would
+            # stay queued and stay reservation-eligible). Mirrors the
+            # identity semantics of fail()/cancel_reservation().
+            index = next(
+                (i for i, queued in enumerate(self._entries) if queued is entry),
+                None,
+            )
+            if index is not None:
+                del self._entries[index]
                 # Entry removed - update stats
                 latency = self._clock() - entry.enqueue_time_ms
                 if latency > self.stats.max_latency_ms:
@@ -627,6 +629,11 @@ class TxQueue:
                     len(self._entries),
                     self._capacity,
                 )
+            else:
+                # Entry was already removed (expired/preempted) - reservation
+                # already signaled by whoever removed it, but we set_result
+                # anyway (idempotent, first-wins semantic)
+                pass
             # Always signal reservation (idempotent if already signaled)
             if entry.reservation is not None:
                 entry.reservation.set_result(True)

@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-1fy3",
+  "title": "spec/test-vectors/rpl.json: stale duplicate DIO/DAO-ACK corpus asserts rejected SHA-512 native DODAGID",
+  "description": "Found by correctness codereview of nwm8 (worker4). spec/test-vectors/rpl.json:48-49,59,66,76,136,142 still carries the rejected SHA-512 native profile DODAGID (027dd5cfc679ab637dd5cfc679ab6342 / string 27d:d5cf:...) in 6 occurrences across the same DIO/DAO-ACK vectors just migrated in the canonical corpus test/vectors/rpl_messages.json (nwm8, upstream AddrForKey 202:24ae:...). Its dio_base description claims 'AddrForKey DODAGID' — false. No code consumes this file (only spec/test-vectors/frame.json has live consumers), but spec/appendix-c-safety.md:383 names spec/test-vectors/ as the test-vector location, so a spec reader sees bytes contradicting the settled upstream-yggdrasil-addressing decision and the migrated canonical corpus. Per project policy (report conflicting legacy fixtures): migrate to upstream AddrForKey, quarantine-label like gcp3_trust_models.json/x25519.json, or remove in favor of test/vectors/rpl_messages.json. P3 (unconsumed but spec-referenced).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T15:40:55.079595575Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T15:40:55.079595575Z",
+  "labels": [
+    "yggdrasil",
+    "spec-gap"
+  ]
+}

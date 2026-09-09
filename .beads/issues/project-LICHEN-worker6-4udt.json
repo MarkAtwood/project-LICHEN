@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-worker6-4udt",
+  "title": "lichen-node router.rs has live eprintln PROBE debug prints on main",
+  "description": "worker8 2026-09-09: rust/lichen-node/src/routing/router.rs:403,422,427,432,438,443,449,513,517,525 (at least) contain std::eprintln!(\"PROBE ...\") debug prints in production code paths (process_authenticated_dio / process_dio_with_etx_outcome), present on origin/main. Violates the no-dead-code/no-debug-prints rule; they fire on live DIO processing. Pre-existing (not from the i72x migration); remove them. One was removed incidentally in rpl_stack/receive.rs during i72x.2's receive-gate fix.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T14:17:07.773072509Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T14:17:07.773072509Z",
+  "labels": [
+    "rust"
+  ]
+}

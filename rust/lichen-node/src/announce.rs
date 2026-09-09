@@ -108,7 +108,6 @@ struct PinnedKeyEntry {
 #[derive(Clone)]
 pub struct AnnounceProcessor {
     gradient_table: GradientTable,
-    prefix: [u8; 8],
     seen: HashMap<[u8; 8], SeenEntry>,
     pinned_keys: HashMap<[u8; 8], PinnedKeyEntry>,
     /// Durable TOFU pin/floor state, shared with clones so a staged admission
@@ -126,24 +125,15 @@ impl AnnounceProcessor {
     /// and IID-collision attackers can re-pin at will. Only for tests and
     /// explicitly opt-in simulations; production MUST use
     /// [`AnnounceProcessor::with_trust_store`] with a persistent store.
-    pub fn new(gradient_table: GradientTable, prefix: [u8; 8]) -> Self {
-        Self::with_trust_store(
-            gradient_table,
-            prefix,
-            AnnounceTrustStore::ephemeral_unprotected(),
-        )
+    pub fn new(gradient_table: GradientTable) -> Self {
+        Self::with_trust_store(gradient_table, AnnounceTrustStore::ephemeral_unprotected())
     }
 
     /// Build a processor whose admission decisions commit to `store` before
     /// any in-memory state is applied (persist-first, spec GCP-6.5).
-    pub fn with_trust_store(
-        gradient_table: GradientTable,
-        prefix: [u8; 8],
-        store: AnnounceTrustStore,
-    ) -> Self {
+    pub fn with_trust_store(gradient_table: GradientTable, store: AnnounceTrustStore) -> Self {
         Self {
             gradient_table,
-            prefix,
             seen: HashMap::new(),
             pinned_keys: HashMap::new(),
             trust_store: Rc::new(RefCell::new(store)),
@@ -227,9 +217,9 @@ impl AnnounceProcessor {
         self.access_counter += 1;
         let access = self.access_counter;
 
-        let mut destination = [0u8; 16];
-        destination[..8].copy_from_slice(&self.prefix);
-        destination[8..].copy_from_slice(&iid);
+        // Routable destination MUST be upstream AddrForKey(originator pubkey),
+        // not prefix++IID (the rejected LICHEN-native derivation).
+        let destination = lichen_core::addr::ygg_addr_from_pubkey(announce.pubkey);
 
         let coords = GeoCoords::from_app_data(announce.app_data);
 
@@ -299,6 +289,18 @@ impl AnnounceProcessor {
             evicted_iid,
             announce.rx_channel,
         )
+    }
+
+    /// Resolve a pinned public key by the peer's routable 0200::/8 address.
+    ///
+    /// Upstream AddrForKey does not embed the IID in the address (i72x.2), so
+    /// the origin IID is not recoverable from the address bytes; scan the
+    /// pinned table (bounded by the announce table capacity) instead.
+    pub fn pinned_pubkey_for_routable(&self, addr: &[u8; 16]) -> Option<PublicKey> {
+        self.pinned_keys
+            .values()
+            .map(|entry| PublicKey::new(entry.pubkey))
+            .find(|key| lichen_core::addr::ygg_addr_from_pubkey(key.as_bytes()) == *addr)
     }
 
     pub fn pinned_pubkey_for(&self, iid: &[u8; 8]) -> Option<PublicKey> {
@@ -489,10 +491,6 @@ mod tests {
         addr
     }
 
-    fn ula_prefix() -> [u8; 8] {
-        [0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-    }
-
     fn make_signed_announce(
         identity: &Identity,
         seq_num: u16,
@@ -645,7 +643,7 @@ mod tests {
         let frame = hex::decode(VECTOR_FRAME[0]).unwrap();
         let announce = Announce::from_bytes(&frame).unwrap();
         let gradient_table = GradientTable::new(64);
-        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+        let mut processor = AnnounceProcessor::new(gradient_table);
 
         let result = processor.process(&announce, link_local(0xAA), 1000);
         assert!(result.accepted, "{:?}", result.reject_reason);
@@ -740,7 +738,7 @@ mod tests {
         let announce = Announce::from_bytes(&buf[..len]).unwrap();
 
         let gradient_table = GradientTable::new(64);
-        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+        let mut processor = AnnounceProcessor::new(gradient_table);
         let result = processor.process(&announce, link_local(0xAA), 1000);
         assert!(!result.accepted);
         assert_eq!(
@@ -774,7 +772,7 @@ mod tests {
     fn accept_valid_announce() {
         let identity = make_identity(0x01);
         let gradient_table = GradientTable::new(64);
-        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+        let mut processor = AnnounceProcessor::new(gradient_table);
 
         let mut buf = [0u8; 256];
         let len = make_signed_announce(&identity, 100, 3, 0, &[], &mut buf);
@@ -795,7 +793,7 @@ mod tests {
     fn reject_iid_mismatch() {
         let identity = make_identity(0x01);
         let gradient_table = GradientTable::new(64);
-        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+        let mut processor = AnnounceProcessor::new(gradient_table);
 
         let wrong_iid = [0xAA; 8];
         let mut signed_data = [0u8; 64];
@@ -835,7 +833,7 @@ mod tests {
     fn reject_invalid_signature() {
         let identity = make_identity(0x01);
         let gradient_table = GradientTable::new(64);
-        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+        let mut processor = AnnounceProcessor::new(gradient_table);
 
         let bad_sig = [0xFF; 48];
         let builder = AnnounceBuilder {
@@ -863,7 +861,7 @@ mod tests {
     fn reject_stale_seqnum() {
         let identity = make_identity(0x01);
         let gradient_table = GradientTable::new(64);
-        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+        let mut processor = AnnounceProcessor::new(gradient_table);
 
         // Accept first announce with seq_num 100
         let mut buf = [0u8; 256];
@@ -904,7 +902,7 @@ mod tests {
         let identity1 = make_identity(0x01);
         let identity2 = make_identity(0x02);
         let gradient_table = GradientTable::new(64);
-        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+        let mut processor = AnnounceProcessor::new(gradient_table);
 
         // Accept first announce from identity1
         let mut buf = [0u8; 256];
@@ -949,7 +947,7 @@ mod tests {
     fn key_pinning_tofu() {
         let identity = make_identity(0x01);
         let gradient_table = GradientTable::new(64);
-        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+        let mut processor = AnnounceProcessor::new(gradient_table);
 
         // No pinned key yet
         assert!(processor.pinned_pubkey_for(&identity.iid).is_none());
@@ -970,7 +968,7 @@ mod tests {
     fn exhaustive_pin_snapshot_is_bounded_and_revalidates_canonical_iids() {
         let identity = make_identity(0x01);
         let gradient_table = GradientTable::new(64);
-        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+        let mut processor = AnnounceProcessor::new(gradient_table);
         processor.pin_for_test(identity.pubkey);
         assert_eq!(processor.pinned_pubkeys_snapshot().unwrap().len(), 1);
 
@@ -988,7 +986,7 @@ mod tests {
     fn gradient_table_updated() {
         let identity = make_identity(0x01);
         let gradient_table = GradientTable::new(64);
-        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+        let mut processor = AnnounceProcessor::new(gradient_table);
 
         let mut buf = [0u8; 256];
         let len = make_signed_announce(&identity, 100, 3, 0, &[], &mut buf);
@@ -998,9 +996,7 @@ mod tests {
         processor.process(&announce, from_neighbor, 1000);
 
         // Build expected destination address
-        let mut expected_dst = [0u8; 16];
-        expected_dst[..8].copy_from_slice(&ula_prefix());
-        expected_dst[8..].copy_from_slice(&identity.iid);
+        let expected_dst = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
 
         let entry = processor.gradient_table_mut().lookup(&expected_dst, 1000);
         assert!(entry.is_some());
@@ -1015,7 +1011,7 @@ mod tests {
     fn hop_limit_prevents_relay() {
         let identity = make_identity(0x01);
         let gradient_table = GradientTable::new(64);
-        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+        let mut processor = AnnounceProcessor::new(gradient_table);
 
         // Announce at max hops (15)
         let mut buf = [0u8; 256];
@@ -1039,7 +1035,7 @@ mod tests {
     fn congestion_parsing() {
         let identity = make_identity(0x01);
         let gradient_table = GradientTable::new(64);
-        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+        let mut processor = AnnounceProcessor::new(gradient_table);
 
         let app_data = [0x02, 42];
         let mut buf = [0u8; 256];
@@ -1055,7 +1051,7 @@ mod tests {
     fn congestion_parsing_skips_unknown_types() {
         let identity = make_identity(0x01);
         let gradient_table = GradientTable::new(64);
-        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+        let mut processor = AnnounceProcessor::new(gradient_table);
 
         let app_data = [0xFF, 0xAA, 0xBB, 0x02, 77];
         let mut buf = [0u8; 256];
@@ -1070,7 +1066,7 @@ mod tests {
     #[test]
     fn lru_eviction() {
         let gradient_table = GradientTable::new(64);
-        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+        let mut processor = AnnounceProcessor::new(gradient_table);
         processor.max_entries = 3; // Small capacity for testing
 
         // Fill with 3 originators
@@ -1099,7 +1095,7 @@ mod tests {
     fn seqnum_wraparound_accepted() {
         let identity = make_identity(0x01);
         let gradient_table = GradientTable::new(64);
-        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+        let mut processor = AnnounceProcessor::new(gradient_table);
 
         // Start near max seq_num
         let mut buf = [0u8; 256];
@@ -1156,7 +1152,6 @@ mod tests {
         let gradient_table = GradientTable::new(64);
         let mut processor = AnnounceProcessor::with_trust_store(
             gradient_table,
-            ula_prefix(),
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x4A; 32]).unwrap(),
         );
 
@@ -1189,9 +1184,7 @@ mod tests {
 
         // Fail closed: the route/gradient state for the originator was not
         // mutated and nothing was pinned or replay-tracked in memory.
-        let mut destination = [0u8; 16];
-        destination[..8].copy_from_slice(&ula_prefix());
-        destination[8..].copy_from_slice(&identity.iid);
+        let destination = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
         assert!(processor
             .gradient_table_mut()
             .lookup(&destination, 1000)
@@ -1210,7 +1203,6 @@ mod tests {
 
         let mut processor = AnnounceProcessor::with_trust_store(
             GradientTable::new(64),
-            ula_prefix(),
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x5A; 32]).unwrap(),
         );
         processor.max_entries = 2;
@@ -1266,7 +1258,6 @@ mod tests {
         // and floor; the accepted sequence is now the durable floor.
         let mut reopened = AnnounceProcessor::with_trust_store(
             GradientTable::new(64),
-            ula_prefix(),
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x5A; 32]).unwrap(),
         );
         assert_eq!(
@@ -1297,7 +1288,6 @@ mod tests {
         {
             let mut processor = AnnounceProcessor::with_trust_store(
                 GradientTable::new(64),
-                ula_prefix(),
                 AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x7C; 32]).unwrap(),
             );
             // Direct delivery pins the origin and raises the floor to 100.
@@ -1311,7 +1301,6 @@ mod tests {
         // Restart: the pin and the seq-100 floor are durable.
         let mut restarted = AnnounceProcessor::with_trust_store(
             GradientTable::new(64),
-            ula_prefix(),
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x7C; 32]).unwrap(),
         );
         assert_eq!(
@@ -1350,7 +1339,6 @@ mod tests {
 
         let mut processor = AnnounceProcessor::with_trust_store(
             GradientTable::new(64),
-            ula_prefix(),
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x6B; 32]).unwrap(),
         );
         let mut buf = [0u8; 256];
@@ -1367,7 +1355,6 @@ mod tests {
         // lookups fail closed and admission is refused outright.
         let mut foreign = AnnounceProcessor::with_trust_store(
             GradientTable::new(64),
-            ula_prefix(),
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x6B ^ 0xFF; 32]).unwrap(),
         );
         assert!(foreign.pinned_pubkey_for(&identity.iid).is_none());
@@ -1380,9 +1367,7 @@ mod tests {
             result.reject_reason,
             Some(AnnounceRejectReason::PersistenceError)
         );
-        let mut destination = [0u8; 16];
-        destination[..8].copy_from_slice(&ula_prefix());
-        destination[8..].copy_from_slice(&identity.iid);
+        let destination = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
         assert!(foreign
             .gradient_table_mut()
             .lookup(&destination, 2000)
@@ -1407,7 +1392,6 @@ mod tests {
             .join(format!("announce-pin-{hex_iid}"));
         let mut processor = AnnounceProcessor::with_trust_store(
             GradientTable::new(64),
-            ula_prefix(),
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x7C; 32]).unwrap(),
         );
         let mut buf = [0u8; 256];
@@ -1443,7 +1427,6 @@ mod tests {
         }
         let mut rolled_back = AnnounceProcessor::with_trust_store(
             GradientTable::new(64),
-            ula_prefix(),
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x7C; 32]).unwrap(),
         );
         assert!(rolled_back.pinned_pubkey_for(&identity.iid).is_none());
@@ -1476,9 +1459,7 @@ mod tests {
             result.reject_reason,
             Some(AnnounceRejectReason::PersistenceError)
         );
-        let mut destination = [0u8; 16];
-        destination[..8].copy_from_slice(&ula_prefix());
-        destination[8..].copy_from_slice(&identity.iid);
+        let destination = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
         assert!(rolled_back
             .gradient_table_mut()
             .lookup(&destination, 4000)

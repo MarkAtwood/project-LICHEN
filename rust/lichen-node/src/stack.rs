@@ -603,7 +603,9 @@ impl<R: Radio> Stack<R> {
         }
 
         let wire = &buf[..pkt.len];
-        if !wire_is_for_local_stack(wire, self.node.node_id.0)? {
+        let local_rpl_addr =
+            lichen_core::addr::ygg_addr_from_pubkey(self.local_public_key().as_bytes());
+        if !wire_is_for_local_stack(wire, self.node.node_id.0, local_rpl_addr)? {
             return Ok(None);
         }
         let l2 = self.link.receive_frame(wire)?;
@@ -803,7 +805,11 @@ impl<R: Radio> Stack<R> {
     }
 }
 
-fn wire_is_for_local_stack(wire: &[u8], local_eui64: [u8; 8]) -> Result<bool, RxError> {
+fn wire_is_for_local_stack(
+    wire: &[u8],
+    local_eui64: [u8; 8],
+    local_rpl_addr: [u8; 16],
+) -> Result<bool, RxError> {
     let frame = LichenFrame::from_bytes(wire).map_err(LinkRxError::from)?;
     Ok(match frame.addr_mode {
         AddrMode::None => true,
@@ -825,7 +831,10 @@ fn wire_is_for_local_stack(wire: &[u8], local_eui64: [u8; 8]) -> Result<bool, Rx
                         } else {
                             let mut eui64: [u8; 8] = destination[8..].try_into().unwrap();
                             eui64[0] ^= 0x02;
-                            eui64 == local_eui64
+                            // A unicast frame to this node's routable /128 is
+                            // also for us; its low half is not the IID
+                            // (i72x.2), so compare the full address.
+                            eui64 == local_eui64 || destination == local_rpl_addr
                         }
                     })
             }

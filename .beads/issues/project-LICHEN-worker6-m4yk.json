@@ -9,10 +9,10 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-04T19:07:44.223448032Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-09-09T06:05:03.51720494Z",
-  "started_at": "2026-09-09T06:03:48.015488659Z",
-  "closed_at": "2026-09-09T06:05:03.51720494Z",
-  "close_reason": "Already fixed in-tree. Verified on heft native_sim/native/64: ping_l2 SUITE PASS 8/8, including test_udp_payload_reaches_socket_after_l2_injection (PASS) and both teardown tests. The m4yk recovery hardening (state-keyed is_running/needs_reinit recovery + idempotent reprovision_after_reinit at main.c:487-522) already present in main.c resolves the -ENOKEY-after-teardown ordering; the -126 log lines during teardown tests are transient queued-TX retries racing the key wipe, and both teardown tests still PASS. No code change needed; no files touched; nothing to codereview (zero source diff).",
+  "updated_at": "2026-09-09T15:28:43.208291817Z",
+  "started_at": "2026-09-09T15:27:13.46485905Z",
+  "closed_at": "2026-09-09T15:28:43.208291817Z",
+  "close_reason": "ALREADY-FIXED, verified green. Ran ping_l2 suite on heft native_sim/native/64 (west build -p always + run): 8/8 PASS, including the bead's failing test_udp_payload_reaches_socket_after_l2_injection (0.290s) and test_disable_retries_incomplete_queue_destruction. The fix is already in tree: main.c:487-493 keys recovery off lichen_lora_l2_is_running()/needs_reinit() state (not teardown folklore) and calls idempotent reprovision_after_reinit() (-EALREADY tolerated) explicitly per this bead — comment at :492 cites project-LICHEN-worker6-m4yk. The two -126 (no signing key) lines at boot are pre-init probes before ping_l2_setup loads the deterministic key at :198; not failures. No code change needed; test-ordering defect (a)(b)(c) resolved by the state-keyed recovery. Investigate items answered: ztest runs sorted section order; reprovision targets the live link_ctx (atomic restored at :167); the healthy-path cycle is skipped to avoid deafening a live RX arm.",
   "labels": [
     "zephyr",
     "tests"

@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-ukyq",
+  "title": "DAO relay gate: routable-source DAOs skip cheap anti-relay check (bounded airtime waste)",
+  "description": "Defense-in-depth follow-up correcting the overstated mv93 (closed: no route-poison — root's verify_signature enforces origin==ygg_addr_from_pubkey(pinned_key) and schnorr-binds origin+targets, so forged routable DAOs fail at the root). Residual, LOW severity: rust/lichen-node/src/node.rs:642-648 — the relay's direct-child anti-relay gate only rejects when source_is_link_local (645). A DAO naming a direct-child parent but arriving from a routable 02xx/GUA source skips the cheap early IID-mismatch rejection, so the relay forwards it (661-671) even though the root will discard it on signature. Cost: bounded LoRa airtime forwarding junk DAOs the root rejects (mitigated by the fragmenter bound and the external/E=1 drop in dao_parents_for_source). Pre-migration the gate was equally loose (same_interface matched link-local only), so this is not a regression. Optional hardening: correlate the routable source against a pinned pubkey (AnnounceProcessor::pinned_pubkey_for_routable, added in 7331) before forwarding a DAO that names a direct-child parent — OR leave as-is since the root is the real boundary. Decision: worth a comment/justification either way. Discovered-from mv93.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T15:34:51.083287189Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T15:34:51.083287189Z",
+  "labels": [
+    "rust",
+    "networking",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ukyq",
+      "depends_on_id": "project-LICHEN-worker6-mv93",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T15:34:51.1980085Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

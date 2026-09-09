@@ -140,15 +140,31 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         now_ms: u64,
     ) -> Result<(), SecureError> {
         let route = self.route_for(dst.0, now_ms, false).or_else(|| {
-            let peer_matches_destination = dst.0[8..] == peer_iid[..];
+            // The destination may be the peer's link-local (IID in the low
+            // half) or its routable /128 (no embedded IID, i72x.2): match
+            // both forms against the pinned peer key.
+            let peer_matches_destination = dst.0[8..] == peer_iid[..]
+                || self
+                    .stack
+                    .link_ref()
+                    .pinned_pubkey_for(peer_iid)
+                    .is_some_and(|key| {
+                        lichen_core::addr::ygg_addr_from_pubkey(key.as_bytes()) == dst.0
+                    });
             let authenticated = !matches!(
                 self.stack.link_ref().peer_auth_state(peer_iid),
                 lichen_link::link_layer::PeerAuthState::Unknown
             );
             (peer_matches_destination && authenticated && self.direct_neighbors.contains(peer_iid))
-                .then(|| super::RoutePlan {
-                    next_hop: super::util::ipv6_eui64(dst.0),
-                    source_route: Vec::new(),
+                .then(|| {
+                    // The L2 next hop is the peer's wire EUI-64: its IID with
+                    // the U/L bit toggled, valid for both destination forms.
+                    let mut next_hop = *peer_iid;
+                    next_hop[0] ^= 0x02;
+                    super::RoutePlan {
+                        next_hop,
+                        source_route: Vec::new(),
+                    }
                 })
         });
         let route = route.ok_or(SecureError::Tx(TxError::NoRoute))?;

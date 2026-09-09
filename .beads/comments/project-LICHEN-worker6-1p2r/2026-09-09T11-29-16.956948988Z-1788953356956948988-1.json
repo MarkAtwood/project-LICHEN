@@ -1,7 +1,0 @@
-{
-  "id": "1788953356956948988-1",
-  "issue_id": "project-LICHEN-worker6-1p2r",
-  "author": "Mark Atwood",
-  "text": "Decomposed 2026-09-09 (worker6) after re-baselining: the 44 reds exist on CURRENT main (480f8996a3) too — worker-5's merge restored the 9fceaf5406 upstream migration (my earlier 'main green' baseline was measured against stale 5324d4d4ed where production was still native; my branch adds only the rpl_messages red from my own reference rewiring). Children: x255.json pins (P2), yggdrasil-derivation regen + binding_invariant re-scope (P2, settled-decision enforcement), rpl_messages.json regen (P2), root_signature.json regen (P2), dao_origin 33+1 (P1, BLOCKED on lptm design decision), density_adaptive.json missing corpus (P2). Red-set proof: /tmp/opencode/i72x6a-oracle/reds-main.txt vs reds-branch.txt differ by exactly the rpl_messages test.",
-  "created_at": "2026-09-09T11:29:16.956948988Z"
-}

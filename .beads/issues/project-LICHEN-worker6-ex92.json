@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-ex92",
+  "title": "ipv6_address_vectors.rs red: ipv6-addresses.json still carries rejected native fields; legacy corpus missing binding_invariant entry",
+  "description": "Found during 3hto (yggdrasil_address corpus anchor). rust/lichen-core/tests/ipv6_address_vectors.rs fails 2 tests on current main (255fb11175): (1) key_derived_identity_binds_link_local_and_quarantined_native panics at :130 - all key_derived_identity vectors in test/vectors/ipv6-addresses.json (all_zero_pubkey, sha256_empty_as_pubkey, rfc8032_test_public_key, all_ab_pubkey, all_ff_pubkey) still carry the REJECTED native-profile fields native_packed/native/iid_in_native, which the post-i72x consumer asserts absent; (2) yggdrasil_derivation_corpus_matches_upstream_addr_for_key panics at :267 - legacy/yggdrasil-derivation.json has zero test_type=binding_invariant entries after its quarantine/regeneration (48c64007d1 i72x.6 slice), but the Rust consumer still asserts exactly one. Both data/consumer mismatches trace to the cf6da130bf merge (2026-09-09 05:23) and are UNRELATED to the yggdrasil_address.json corpus (proven: failures reference only ipv6-addresses.json and legacy/yggdrasil-derivation.json). Fix direction: either strip the native fields from the 5 live vectors and add/restore the binding-invariant entry, or adjust the consumers if i72x.6 intends a different corpus contract - coordinate with i72x.6 (corpus owner) and q6ko.3.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T14:40:08.873842749Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T15:29:32.921577429Z",
+  "closed_at": "2026-09-09T15:29:32.921577429Z",
+  "close_reason": "Fixed. Root cause was a two-contract merge conflict, not stale data: 457a8bf68c (q6ko.3) stripped native fields from live ipv6-addresses.json into quarantine, while 48c64007d1 (i72x.6 slice) + generate_ipv6_addresses.py regenerated them to carry UPSTREAM AddrForKey values; the cf6da130bf merge kept the B-side data and the A-side Rust consumer. Python suite (144 tests, B-side) was green; Rust consumer was stale. Fix in rust/lichen-core/tests/ipv6_address_vectors.rs: (1) key_derived_identity test now REQUIRES native_packed on each key_derived_identity vector and pins it byte-equal to the external upstream oracle table, plus asserts addr[8..]!=iid (rejected profile cannot slip), replacing the field-absence tripwire; quarantine-integrity pins on legacy corpus retained; (2) yggdrasil_derivation consumer accepts the regenerated binding_invariant_rejected entry type (binding\u003e=1). Module doc updated to describe the post-regeneration contract. Verification: lichen-core ALL suites green (26 test-result lines, 0 FAILED incl. ipv6_address_vectors 4/4); Python ipv6 suite 144/144 still green; test_vectors.py failures unchanged pre-existing (dao_origin o5bl, density_adaptive, x25519). 3x codereview on kimi-k3: pass1 found optional-check hole + stale comments (fixed: mandatory expect + doc rewrite), security PASS (fails closed on unknown pubkeys, rejected profile double-blocked), edge PASS (binding==1 -\u003e \u003e=1 hardened), final re-review PASS.",
+  "labels": [
+    "rust",
+    "vectors",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ex92",
+      "depends_on_id": "project-LICHEN-worker6-3hto",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T14:40:08.999588203Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "id": "project-LICHEN-worker6-725b",
+  "title": "lichen-node: unused_mut at rpl_stack/tests.rs:3029 fails --all-features -D warnings clippy",
+  "description": "Found while verifying p21s. With the duplicated_attributes error fixed, cargo clippy -p lichen-node --all-targets --all-features -- -D warnings advances to the next pre-existing error: unused_mut on 'let mut sender = RplStack::provision_root(...)' at rust/lichen-node/src/rpl_stack/tests.rs:3029. Presumably feature-gated test code where the mut is only needed under other feature combos. Fix: remove the mut if truly unused under all feature combos, or scope it. One more blocker toward kpv0.6 (workspace clippy -D warnings clean). Also note: oscore-fork lib emits a dead_code warning (types.rs:90 ContextId::new) under this invocation — oscore is human-only, do not touch; flag to Mark.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T13:50:45.166617477Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T16:42:57.305582011Z",
+  "started_at": "2026-09-09T16:21:53.165236608Z",
+  "closed_at": "2026-09-09T16:42:57.305582011Z",
+  "close_reason": "cargo clippy -p lichen-node --all-targets --all-features -- -D warnings now finishes clean. Fixed 4 blockers (3 surfaced before the named unused_mut could even be linted): (1) unused_mut sender at rpl_stack/tests.rs:2967 (was 3029 pre-drift; fixture returns it unmutated, callers rebind with their own mut) — removed mut; (2) duplicated attribute: inner #![allow(dead_code)] in dao_tx_timing.rs duplicated the #[allow(dead_code)] on mod dao_tx_timing at mod.rs:7 — removed inner (module always compiled under mod.rs, covers all feature combos); (3) unused import link_local_from_iid transmit.rs:21 — removed; (4) if_same_then_else transmit.rs:136 send_dis — merged identical branches into (destination[0]==0xff || destination[..8]==fe80::/64), exact semantic no-op. Verification: full clippy invocation green; rpl_stack:: tests show exactly the 4 documented pre-existing failures (root_dispatch, rpl_dispatch_rejects_invalid_ipv6, multicast_dio_and_dis, three_rpl_stacks/nnmc), 59 passed, zero new failures. 3x codereview delegated to kimi-k3: correctness PASS, security PASS (fallback set unchanged), edge-cases PASS (attempt needed retries due to garbled output; converged). Note preserved for Mark: oscore-fork types.rs:90 ContextId::new dead_code warning under this invocation — oscore is human-only, untouched.",
+  "labels": [
+    "rust"
+  ]
+}

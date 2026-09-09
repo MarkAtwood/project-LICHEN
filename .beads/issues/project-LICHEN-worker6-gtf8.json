@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-gtf8",
+  "title": "test_protocol_vector_security.py: root-binding biconditional conflates binding failure with admission failure",
+  "description": "From xszc codereview pass 1 (correctness, reviewer kimi-k3): python/tests/test_protocol_vector_security.py:361-363 asserts 'root_binding is (vector[\"expected\"][\"admitted\"] is True)'. This holds for the current authenticated_schc_dio.json corpus only because every non-admitted root vector also carries a non-binding DODAGID. A future root vector rejected for a non-binding reason (e.g., SCHC version mismatch, wrong role scope with a CORRECT DODAGID) while admitted=False would break the assertion even though binding itself is fine. Pre-existing structure (not introduced by the xszc one-line flip). Fix shape: split into two assertions — binding check applies only where the vector isolates binding (e.g., gate on an explicit vector field like expected.binding_valid), or assert binding == (admitted is True) only for vectors whose rejection stage is dodag binding. P3 test-robustness.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T16:13:58.835548275Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T16:13:58.835548275Z",
+  "labels": [
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-gtf8",
+      "depends_on_id": "project-LICHEN-worker6-xszc",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T16:13:58.934199779Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

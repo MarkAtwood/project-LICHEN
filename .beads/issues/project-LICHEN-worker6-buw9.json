@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-worker6-buw9",
+  "title": "Rename split: test_root_vectors_use_native_addr_for_key_and_independent_signatures",
+  "description": "Codereview pass-3 finding on e5a4091a27 (root_authorization upstream migration). python/tests/test_protocol_vector_security.py:438 — the function name claims 'native_addr_for_key' but the root_authorization.json loop (line 459) now checks upstream reference addr_for_key, not native SHA-512. 'native' in this codebase names the rejected SHA-512 profile (spec/decisions.jsonl upstream-yggdrasil-addressing), so the misdescription is load-bearing. The function also mixes three corpora (root_signature native, root_authorization upstream, rpl_messages anchor). Fix: split into three accurately-named tests.",
+  "status": "closed",
+  "priority": 4,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T13:11:01.867626656Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T13:16:02.605562912Z",
+  "started_at": "2026-09-09T13:11:07.821282491Z",
+  "closed_at": "2026-09-09T13:16:02.605562912Z",
+  "close_reason": "Split test_root_vectors_use_native_addr_for_key_and_independent_signatures (python/tests/test_protocol_vector_security.py:438) into three accurately-named tests: test_root_signature_vectors_use_legacy_sha512_... (native _addr_for_key loop, docstring warns against migrating the legacy corpus to the upstream oracle), test_root_authorization_vectors_use_upstream_addr_for_key_... (upstream reference addr_for_key loop), test_rpl_messages_root_dodagid_matches_reference_identity (anchor). Assertion bodies byte-identical; 28 passed; ruff check + format clean. 3x delegated codereview (kimi-k3): correctness/security/edge all PASS, zero findings.",
+  "labels": [
+    "python",
+    "vectors",
+    "yggdrasil"
+  ]
+}

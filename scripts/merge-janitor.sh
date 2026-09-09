@@ -164,7 +164,7 @@ while :; do
         for iss in $(cd "$REPO_ROOT/.beads/issues" && grep -l '"status": "open"' *.json 2>/dev/null); do
             ev="$REPO_ROOT/.beads/events/${iss%.json}.jsonl"
             [ -f "$ev" ] || continue
-            n=$(grep -c '"event_type":"lease_reclaimed"' "$ev" 2>/dev/null || echo 0)
+            n=$(grep -c '"event_type":"lease_reclaimed"' "$ev" 2>/dev/null) || n=0
             if [ "$n" -ge 3 ]; then
                 BEADS_DIR="$BEADS_DIR" bd update "${iss%.json}" --label "blocked:repeat-failure" --json >/dev/null 2>&1
                 if [ ! -f "$STATE_DIR/${iss%.json}.breaker" ]; then

@@ -1136,7 +1136,14 @@ impl<R: Radio> SecureStack<R> {
     ) -> Result<SecureResponse, SecureError> {
         let source = received.destination();
         let destination = received.source();
-        let mut l2_destination: [u8; 8] = destination.0[8..].try_into().unwrap();
+        // Link-local sources carry the IID in the low half; routable sources
+        // embed no IID (i72x.2), so the link-authenticated sender IID is
+        // authoritative for the L2 reply destination.
+        let mut l2_destination: [u8; 8] = if destination.0[..8] == [0xfe, 0x80, 0, 0, 0, 0, 0, 0] {
+            destination.0[8..].try_into().unwrap()
+        } else {
+            received.sender_iid
+        };
         l2_destination[0] ^= 0x02;
         self.decrypt_response_to(
             Some(SecureRoute {
@@ -1284,7 +1291,13 @@ impl<R: Radio> SecureStack<R> {
     ) -> Result<SecureObserveResponse, SecureError> {
         let source = received.destination();
         let destination = received.source();
-        let mut l2_destination: [u8; 8] = destination.0[8..].try_into().unwrap();
+        // Same IID sourcing as decrypt_response: link-local low half or the
+        // link-authenticated sender IID for routable sources (i72x.2).
+        let mut l2_destination: [u8; 8] = if destination.0[..8] == [0xfe, 0x80, 0, 0, 0, 0, 0, 0] {
+            destination.0[8..].try_into().unwrap()
+        } else {
+            received.sender_iid
+        };
         l2_destination[0] ^= 0x02;
         self.decrypt_observe_response_to(
             Some(SecureRoute {

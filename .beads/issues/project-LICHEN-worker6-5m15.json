@@ -9,10 +9,10 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T23:11:57.439218143Z",
   "created_by": "opencode-worker-7",
-  "updated_at": "2026-09-09T04:32:06.335012505Z",
-  "started_at": "2026-09-09T04:24:42.635460815Z",
-  "closed_at": "2026-09-09T04:32:06.335012505Z",
-  "close_reason": "adaptive_sf_select now clamps the DIO-signaled ASSIGNED_SF byte at entry: assigned_sf.unwrap_or(10).clamp(7, 12), mirroring python ccp.py:346 exactly (max(7, min(12, sf))) per spec 2a.8 SF_MIN/SF_MAX. Entry clamp + existing internal bounds provably keep the return in [7,12] for all inputs; schema-valid 7-12 and None paths are behavior-identical. New test adaptive_sf_select_clamps_assigned_sf_to_spec_range pins 0-\u003e7, 6-\u003e7, 13-\u003e12, 200-\u003e12, 7-\u003e7, 12-\u003e12 under benign RF (verified to disengage every step/floor). C gradient.c:318-321 checked per bead: already bounds out-of-range (reject-to-default), no C change needed. 48/48 rf_health lib tests + full lichen-core suite pass. 3x codereview delegated to kimi-k3: correctness PASS, security PASS (clamp-to-boundary confers zero extra attacker capability vs reject-to-default; C/Rust/Python malformed-DIO policy divergence filed as new P3 bead), edge-cases PASS (stale mechanism comment in adaptive_sf_step3_uses_spec_density_8 filed as new P3 bead).",
+  "updated_at": "2026-09-09T13:16:21.565304508Z",
+  "started_at": "2026-09-09T13:15:16.554299851Z",
+  "closed_at": "2026-09-09T13:16:21.565304508Z",
+  "close_reason": "Verified already resolved; no code change needed. Commit ddb11431f7 'fix(core): clamp assigned SF to [7,12] in adaptive_sf_select' landed the fix with the clamp cited in the code comment (rf_health.rs:657: assigned_sf.unwrap_or(10).clamp(7,12)). Every downstream mutation is bounded (saturating_add(2).min(12), saturating_sub(1).max(7), util\u003e200% -\u003e sf=12, post-step-6 floors max(11)/12), so the returned tuple is always within [7,12] for any u8 input incl. 0/6/13/200. Verified by audit of the full function and by the existing clamp tests (adaptive_sf_select_clamps_assigned_sf_to_spec_range, adaptive_sf_select_clamps_assigned_sf_no_rx_samples) plus the full adaptive_sf suite: all pass. No reviewer re-delegation for this no-op close; evidence is the landed commit's tests + code audit.",
   "labels": [
     "rust"
   ],

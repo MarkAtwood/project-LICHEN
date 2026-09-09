@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.12.2.2.1",
+  "title": "Adversarial blockwise fuzzing: OSCORE + Block1/Block2 reassembly",
+  "description": "Fuzz and adversarial-test the OSCORE blockwise transfer path for race conditions and reassembly bugs. CoAP block transfer is a known defect attractor for ordering, replay, and state-management races.\n\nTarget surfaces:\n1. Interleaved blocks from concurrent senders sharing receiver state\n2. PIV/replay window advancement vs block retransmission (ACK loss scenario)\n3. Timeout/cleanup atomicity during mid-transfer block decryption\n4. Injected blocks: forged PIVs, duplicate block nums, blocks for completed/expired sessions\n5. Block size (SZX) renegotiation mid-transfer with OSCORE AAD/nonce binding\n6. Memory/CPU exhaustion under sustained block injection (bounded reassembly)\n7. Block2 download: server sends blocks out of order, skips blocks, or sends extra blocks past completion\n\nApproach:\n- Rust proptest/cargo-fuzz on BlockSender/BlockReceiver with adversarial block sequences\n- Integration fuzz on SecureStack send_secure_block1/accept_secure_block2_response with injected/reordered/duplicated encrypted blocks\n- Explicit test cases for each numbered surface above\n- Verify no state leak (memory, PIV window, pending_requests) after aborted/attacked sessions\n\nAcceptance: all fuzz targets run 10M iterations without panic; each numbered surface has at least one explicit regression test.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T15:52:44.343863092Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T15:52:44.343863092Z",
+  "labels": [
+    "oscore"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.12.2.2.1",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.12.2.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T15:52:44.475497577Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

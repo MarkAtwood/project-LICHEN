@@ -74,7 +74,10 @@ pub enum RootSigError {
 impl RootSigError {
     /// Vector-oracle error string (test/vectors/root_dio_signature.json).
     #[must_use]
-    #[allow(dead_code, reason = "vector-oracle error-string mapping; consumers pending b7z9.88.x vector wiring")]
+    #[allow(
+        dead_code,
+        reason = "vector-oracle error-string mapping; consumers pending b7z9.88.x vector wiring"
+    )]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Decode => "decode_error",

@@ -1,7 +1,0 @@
-{
-  "id": "1788933954242438091-1",
-  "issue_id": "project-LICHEN-worker6-l1qw.37.1",
-  "author": "Mark Atwood",
-  "text": "SCOPING NOTE (worker4, 2026-09-09): implementation seam located. SOS server is a single aiocoap Context via create_server_context in python/src/lichen/coap/udp_server.py:50 (bind=(bind,port)); SosResource registered via build_site in resources/site.py. aiocoap 0.4.17 HAS multicast support (transport layer: IP_ADD_MEMBERSHIP/IPV6_JOIN_GROUP refs in resource.py/messagemanager.py/tokenmanager.py). Work = (a) join ff02::1 on the server UDP6 socket at context creation, (b) confirm aiocoap routes multicast-dst requests to the /sos resource by URI-Path not dst-addr, (c) test harness must deliver a multicast-destined POST (may need a real socket pair or aiocoap loopback) — this is the risky part, not the handler reuse. Reuse existing render_post activation path unchanged. Est: networking research + test harness, likely \u003e15min leaf; consider splitting test-harness multicast delivery into its own sub-slice if it fights.",
-  "created_at": "2026-09-09T06:05:54.242438091Z"
-}

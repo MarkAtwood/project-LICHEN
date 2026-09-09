@@ -1,7 +1,0 @@
-{
-  "id": "1788928400819203159-1",
-  "issue_id": "project-LICHEN-worker6-w4ut",
-  "author": "Mark Atwood",
-  "text": "worker3: target text (GeneralizedTime mandate) is on beads-worker-5 commit f579d84667, not merged to main; editing from this branch would conflict. Released for the worker-5 lineage.",
-  "created_at": "2026-09-09T04:33:20.819203159Z"
-}

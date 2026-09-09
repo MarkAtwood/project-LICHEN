@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-sy0m",
+  "title": "Test gap: 0x17 option carrying undecodable COSE blob (DecodedRootSig::from_cose_sign1 Err -\u003e Reject) is untested",
+  "description": "From edge-case review of b7z9.88.3. rust/lichen-node/src/rpl_stack/receive.rs:687-689: a well-formed 0x17 root-signature option whose payload fails COSE decode must Reject (fail-closed). No test pins this arm: the tampered tests (tests.rs:3159-3184) flip the Schnorr signature inside a decodable COSE (hits verify_signature), and truncated_root_signature_option_rejects hits the OptionIter overrun arm (receive.rs:672-674) instead. Add a gate-level test: duplicate the expired-signature fixture but replace the COSE blob with well-formed-TLV-wrapped garbage bytes, assert DioRootSigOutcome::Reject and empty root-seq cache. Labels: the primary area is networking (RPL gate), secondary rust.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T16:27:19.98210316Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T16:27:19.98210316Z",
+  "labels": [
+    "networking",
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-sy0m",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.88.3",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T16:27:20.106212918Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -322,8 +322,8 @@ impl RplRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lichen_core::addr::NodeId;
     use core::net::Ipv6Addr;
+    use lichen_core::addr::NodeId;
     use lichen_core::constants::RPL_INSTANCE_ID;
     use lichen_link::{identity::Identity, keys::Seed};
     use lichen_rpl::routing::DaoManager;

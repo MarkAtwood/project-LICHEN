@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-r3e5",
+  "title": "lichen-gateway: 13 pre-existing red tests on beads-worker-6 (end_to_end DIO/DIS + tunnel_auth wired + resources reject-update)",
+  "description": "Found while working 010x. These fail identically on clean HEAD (19eff0b753) and after the 010x identity_iid wiring — NOT introduced by that change. Verified via git stash A/B. (1) end_to_end.rs: 10 red — gateway_dio_reply_has_valid_ipv6, gateway_dio_carries_root_metadata, gateway_handles_rpl_dis_from_mesh_node, gateway_maintains_rpl_state_across_dis_packets, gateway_rejects_replayed_authenticated_wire_before_forwarding, config_removal_revokes_durable_pin_and_context, runtime_ingress_handoff_rolls_back_when_sender_state_persistence_fails, runtime_ingress_handoff_commits_after_protected_response, runtime_ingress_dispatches_authenticated_gcp_slot_claim, restart_after_partial_context_install_self_heals. Most fail at take_mesh_reply().unwrap() = None (DIS/DIO network behavior). (2) tunnel_auth_vectors.rs: wired_egress_forwards_authorized_tunnel + wired_egress_matches_grant_under_distinct_root_via_own_iid_route_evidence. (3) resources.rs rejected_conflicting_claim_moves_highwater_and_peer_claim_together: local_address[8..].fill(0x01) vs peer seed 0x55 (iid a4d1...) — local 0x01 ALWAYS wins the IID tiebreak so the first claim returns 4.09 Conflict, never the expected 2.04; the test's local IID fill is inconsistent with its 'we win the tiebreak AFTER re-claim' intent (needs a HIGHER local IID like the 0xff tests, or a lower peer seed). Likely all post-AddrForKey/post-refactor drift, distinct from 010x. Repro: cargo test -p lichen-gateway.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T16:23:45.750084205Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T16:43:22.424215968Z",
+  "started_at": "2026-09-09T16:43:22.424215968Z",
+  "lease_expires_at": "2026-09-09T16:48:22.424215968Z",
+  "heartbeat_at": "2026-09-09T16:43:22.424215968Z",
+  "labels": [
+    "rust",
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-r3e5",
+      "depends_on_id": "project-LICHEN-worker6-010x",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T16:23:45.890206956Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

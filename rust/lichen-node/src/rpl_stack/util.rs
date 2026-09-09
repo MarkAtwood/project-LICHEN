@@ -17,7 +17,7 @@ use lichen_core::l2_payload::{
 use lichen_ipv6::{icmpv6_checksum, Addr, Ipv6Header};
 use lichen_link::frame::{AddrMode, LichenFrame};
 use lichen_link::identity::PeerIdentity;
-use lichen_link::link_layer::LinkRxError;
+use lichen_link::link_layer::{LinkLayer, LinkRxError};
 use lichen_link::schnorr;
 use lichen_rpl::routing::MAX_ROUTE_HOPS;
 use lichen_schc::codec;
@@ -37,6 +37,29 @@ pub(crate) fn ipv6_eui64(address: [u8; 16]) -> [u8; 8] {
 
 pub(crate) fn ipv6_l2_destination(address: [u8; 16]) -> Option<[u8; 8]> {
     (address[0] != 0xff).then(|| ipv6_eui64(address))
+}
+
+/// Resolve a unicast next-hop address to the 8-byte L2 destination (U/L bit
+/// set) used in extended-address frames and `send_ipv6_to`.
+///
+/// A link-local address embeds the IID (`fe80::iid`), so its L2 form is the
+/// low half with the U/L bit flipped. A routable 02xx address is upstream
+/// `AddrForKey` bit-packing with no embedded IID
+/// (spec/decisions.jsonl `upstream-yggdrasil-addressing`), so its link
+/// identity resolves only through the authenticated peer table. Multicast
+/// and unknown peers return `None` (fail closed: never slice an IID out of
+/// routable key material). The scan is bounded by the link peer-table
+/// capacity (64).
+pub(crate) fn l2_destination(address: [u8; 16], link: &LinkLayer) -> Option<[u8; 8]> {
+    if address[..8] == [0xfe, 0x80, 0, 0, 0, 0, 0, 0] {
+        return Some(ipv6_eui64(address));
+    }
+    if address[0] == 0xff {
+        return None;
+    }
+    let mut eui64 = link.peer_iid_for_routable_addr(&address)?;
+    eui64[0] ^= 0x02;
+    Some(eui64)
 }
 
 pub(crate) fn link_local_from_iid(iid: [u8; 8]) -> [u8; 16] {
@@ -149,7 +172,11 @@ pub(crate) fn routing_announce(payload: &[u8]) -> Result<&[u8], AnnounceRejectRe
     }
 }
 
-pub(crate) fn wire_is_for_local(wire: &[u8], local_eui64: [u8; 8]) -> Result<bool, LinkRxError> {
+pub(crate) fn wire_is_for_local(
+    wire: &[u8],
+    local_eui64: [u8; 8],
+    local_rpl_addr: [u8; 16],
+) -> Result<bool, LinkRxError> {
     let frame = LichenFrame::from_bytes(wire)?;
     Ok(match frame.addr_mode {
         AddrMode::None => inspect_schc_ipv6(&frame)
@@ -160,12 +187,18 @@ pub(crate) fn wire_is_for_local(wire: &[u8], local_eui64: [u8; 8]) -> Result<boo
             if claims_rpl_ipv6(&ipv6) {
                 return rpl_ipv6_multicast_is_allowed(&ipv6)
                     && ipv6_destination(&ipv6).is_some_and(|destination| {
-                        destination[0] == 0xff || ipv6_eui64(destination) == local_eui64
+                        destination[0] == 0xff
+                            || ipv6_eui64(destination) == local_eui64
+                            || destination == local_rpl_addr
                     });
             }
             let destination: [u8; 16] =
                 ipv6[field::DST_OFFSET..IPV6_HEADER_LEN].try_into().unwrap();
-            destination[0] == 0xff || ipv6_eui64(destination) == local_eui64
+            // Unicast to our routable /128 is for us; its low half is not
+            // the IID (i72x.2), so compare the full address as well.
+            destination[0] == 0xff
+                || ipv6_eui64(destination) == local_eui64
+                || destination == local_rpl_addr
         }),
     })
 }
@@ -410,6 +443,11 @@ pub fn survey_routing_headers(ipv6: &[u8]) -> Result<RoutingHeaderSurvey, RxErro
 /// `current_destination` is the packet's outer destination (the caller's local
 /// address); `sender_iid` is the authenticated link-layer sender, whose
 /// link-local address must never appear as the next hop (forwarding loop).
+/// `sender_routable` is the sender's routable /128; the caller derives it
+/// from the link-authenticated sender key (upstream `AddrForKey`), so this
+/// function compares the precomputed form rather than the key. It likewise
+/// must never be the next hop — its low half is not the IID (i72x.2), so
+/// both forms are compared exactly.
 ///
 /// Returns the next destination to relay to, or `None` when `segments_left`
 /// was already zero: the header is consumed, stripped, and the packet is
@@ -418,6 +456,7 @@ pub(crate) fn advance_rpl_source_route(
     ipv6: &mut Vec<u8>,
     current_destination: [u8; 16],
     sender_iid: [u8; 8],
+    sender_routable: [u8; 16],
 ) -> Result<Option<[u8; 16]>, RxError> {
     let view = match survey_routing_headers(ipv6)? {
         RoutingHeaderSurvey::SourceRouted(view) => view,
@@ -444,7 +483,7 @@ pub(crate) fn advance_rpl_source_route(
     let next_destination: [u8; 16] = ipv6[next_start..next_start + 16]
         .try_into()
         .expect("surveyed grid address");
-    if ipv6_eui64(next_destination) == ipv6_eui64(link_local_from_iid(sender_iid)) {
+    if next_destination == link_local_from_iid(sender_iid) || next_destination == sender_routable {
         return Err(RxError::InvalidSourceRoute);
     }
     ipv6[next_start..next_start + 16].copy_from_slice(&current_destination);

@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-831k",
+  "title": "Routable-address L2/local resolution: wire_is_for_local, stack unicast filter, source-route assembly",
+  "description": "Remaining post-AddrForKey IID-correlation sites from wuio (secure-CoAP slice landed as 4ca47bc4c3). These share a common design question: for a routable 02xx destination, the local/L2 check must be full-address equality against the local native address (or a full-AddrForKey-\u003elink-local-IID resolution via the pin table), NOT ipv6_eui64(addr) which slices the low 64 bits. Needs a unified resolution helper + the local native address plumbed to the wire-filter layer:\n1. rust/lichen-node/src/stack.rs:826 — wire_is_for_local_stack: eui64=destination[8..]^0x02 == local_eui64. A unicast SCHC frame to the node's 02xx native addr is wrongly dropped. Fix: compare full destination against local native (ygg_addr_from_pubkey(local_public_key)) in addition to the link-local EUI-64 path; needs local native plumbed in (currently only local_eui64 is passed).\n2. rust/lichen-node/src/rpl_stack/util.rs:163/168 — wire_is_for_local: ipv6_eui64(destination)==local_eui64 for 02xx destinations; same fix shape.\n3. rust/lichen-node/src/rpl_stack/mod.rs:270 + util.rs:447 — ipv6_eui64 on source-route first-hop / RH3 next-hop (routable 02xx targets); next-hop L2 addr must resolve via full address, not slice.\n4. rust/lichen-rpl/src/routing.rs:1646-1660 assemble_path_from — root source-route assembly matches native target [8..] against link-local parent [8..] (the protocol-defined alias). Post-AddrForKey a native target's low 64 bits are NOT the parent's link-local IID, so multi-hop source-route assembly breaks. Needs the alias re-derived via the pinned pubkey (native==ygg_addr_from_pubkey(parent_key)) or a parent_map keyed by both forms.\nVerified by independent site classification. The secure-CoAP pair (rpl_stack/secure.rs:143, secure.rs:1139/1287) was fixed in the wuio slice 4ca47bc4c3. Verify cargo test -p lichen-node + -p lichen-rpl green.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T15:16:33.932844576Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T15:55:11.558328457Z",
+  "started_at": "2026-09-09T15:37:11.570244684Z",
+  "closed_at": "2026-09-09T15:55:11.558328457Z",
+  "close_reason": "Sites 1-3 verified landed in d2de30e596 (fix(node): resolve peer identity by full AddrForKey): (1) stack.rs wire_is_for_local_stack compares full destination against local_rpl_addr in addition to the EUI-64 path; (2) util.rs wire_is_for_local same full-address form on both RPL and non-RPL branches; (3) mod.rs root source-route first hop resolves via peer_iid_for_routable_addr failing closed, and advance_rpl_source_route (former util.rs:447 RH3 site) compares both sender forms exactly with no ipv6_eui64 on routable addrs. Remaining ipv6_eui64 call sites all operate on link-locals (mod.rs:251 link-local branch, :284 gradient from_neighbor, :292 preferred_parent) where low half IS the IID - correct. Site 4 (routing.rs assemble_path_from [8..] alias, lines ~1652/1666) is root-caused to nnmc: the link-local-\u003eroutable parent_map alias cannot be fixed inside lichen-rpl (needs parent pubkey / design decision among nnmc options a/b/c, plus C parity). nnmc tracks it with the same red acceptance test. Verification: cargo test -p lichen-rpl --lib 253/253 green; cargo test -p lichen-node --lib 358/359 - sole failure is nnmc's acceptance test three_rpl_stacks_send_leaf_dao_via_preferred_parent, evidence commented on nnmc. No files changed this round (verification + bookkeeping of already-merged work); 3x codereview N/A per loop step 4 (applies to touched files).",
+  "labels": [
+    "rust",
+    "yggdrasil",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-831k",
+      "depends_on_id": "project-LICHEN-worker6-wuio",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T15:16:34.053118123Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

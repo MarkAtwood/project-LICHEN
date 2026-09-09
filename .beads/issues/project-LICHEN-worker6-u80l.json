@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-u80l",
   "title": "Clippy warnings on HEAD: needless_borrow lichend.rs:1140/1149, too-many-arguments secure.rs:642",
   "description": "P3 pre-existing clippy findings (not from the 2026-08-29 adoption work): lichen-gateway/src/bin/lichend.rs:1140,1149 needless_borrow on load_generation_floor(\u0026trust_floor_path) — drop the \u0026. lichen-node/src/secure.rs:642 send_secure_block1 has 8/7 args — group the store/state params into a struct or split the function. Repo policy runs clippy before commits; -D warnings would currently fail.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-29T19:05:39.013157Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T19:05:39.013157Z",
+  "updated_at": "2026-09-09T13:49:39.540686135Z",
+  "closed_at": "2026-09-09T13:49:39.540686135Z",
+  "close_reason": "Both named findings already resolved on HEAD: (1) lichend.rs needless_borrow sites gone — load_generation_floor call sites at :372/:1211/:1220/:1282 all pass PathBuf refs correctly, cargo clippy -p lichen-gateway clean; (2) send_secure_block1 (secure.rs:665) refactored to 6 params with the requested bundling (SecureRequestData struct) plus a justified #[allow(clippy::too_many_arguments)] with merge-resolution comment. Verified: cargo clippy -p lichen-gateway -p lichen-node --all-targets exits 0 on the named items. NOTE: --all-features surfaces a DIFFERENT pre-existing error (clippy::duplicated_attributes, dao_tx_timing.rs:14 vs mod.rs:7) — filed separately.",
   "labels": [
     "rust"
   ]

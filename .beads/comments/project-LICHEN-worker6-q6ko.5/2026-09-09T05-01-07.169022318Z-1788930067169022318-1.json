@@ -1,7 +1,0 @@
-{
-  "id": "1788930067169022318-1",
-  "issue_id": "project-LICHEN-worker6-q6ko.5",
-  "author": "Mark Atwood",
-  "text": "From q6ko.1 delegated reviews: docs/spec-coverage/ matrices also cite the old paths (06-security.md:31,35,39; 06-security-part1.md:29,33,37; 06-security-flagged.md:85,108,133; 06-security-part1-flagged.md:85,108,133; 04-network.md:13,16; 01-architecture.md:19). These look generated — check whether they are regenerated from source before hand-editing; if generated, leave to regeneration.",
-  "created_at": "2026-09-09T05:01:07.169022318Z"
-}

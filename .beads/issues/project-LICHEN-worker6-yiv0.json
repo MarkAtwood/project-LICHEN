@@ -9,10 +9,10 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-04T14:27:18.946476348Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-09-09T04:17:31.540755759Z",
-  "started_at": "2026-09-09T04:12:31.655498333Z",
-  "closed_at": "2026-09-09T04:17:31.540755759Z",
-  "close_reason": "Scope fully landed on main by 620ca2bcd3 + 49e460a240; verified all named tests assert correct codes, 270/270 gateway lib tests pass. Stale-comment residue filed as follow-up.",
+  "updated_at": "2026-09-09T12:58:16.204712599Z",
+  "started_at": "2026-09-09T12:54:56.05952851Z",
+  "closed_at": "2026-09-09T12:58:16.204712599Z",
+  "close_reason": "Verified: work already landed on this branch (620ca2bcd3 conflict arm 4.09 + winner-envelope echo with CF omitted for C byte-parity; 49e460a240 CF-0 omission; cd4e0c6731 doc comments). All named tests pass: gateway_coordinator_slot_conflict_resolution, conflict_response_echoes_own_recorded_envelope, rejected_conflicting_claim_moves_highwater_and_peer_claim_together, fully_occupied_superframe_rejects_claim_instead_of_under_allocating (stays 2.05), slot_state_write_failure_does_not_consume_verified_claim. 52 slot-filtered + 5 conflict-filtered lib tests green; no code change needed this round, so no files touched and 3x codereview N/A. Pre-existing unrelated failures found during full-suite run filed as kd0p (trust.rs/capability_announcements native-profile rot, 8 red) and ev38 (flaky max_claim_duration).",
   "labels": [
     "gateway"
   ],

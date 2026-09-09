@@ -1,0 +1,34 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.3.7.6.1",
+  "title": "schc_session: key generation + directional Rule-ID derivation core",
+  "description": "Parent project-LICHEN-worker6-l1qw.3.7.6 (spec/03-adaptation.md 5.6, authenticated bounded Zephyr SCHC session authority). Decomposed per Yegge's rule; this is one independently landable slice. Zephyr C in lichen/subsys/lichen/schc/ + host tests in lichen/tests/. Run host CMake tests on this Linux host (Attic toolchain absent; use local gcc/clang + cmake, ASan+UBSan per tests/cmake/test_common.cmake).\n\nSLICE 1 (foundation, no fragmentation logic): implement the identity/authority primitives the rest of 5.6 needs. (a) full 32-byte link-signing pubkey local/remote identity type + opaque key-generation token type; (b) endpoint ordering: endpoint A = lexicographically smaller canonical 32-byte key (unsigned octet compare), B = larger; equal keys do NOT identify a pair and MUST be rejected (-EINVAL); (c) directional Rule-ID derivation: A-\u003eB data/ACK-REQ/Sender-Abort = 0x78, B-\u003eA = 0x79, ACK/Receiver-Abort travel reverse but RETAIN the data transfer's Rule ID; derivation MUST come from the authenticated full signer identities, never EUI-64/untrusted addr/caller default; reject equal/mismatched direction. Expose as a small no_std-friendly module (e.g. schc_session.{c,h}) with unit tests for both directions, equal-key rejection, and lexicographic boundary (0x00.. vs 0xff..). LAND FIRST: slices 2-5 build on this.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T16:04:35.108027528Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T16:27:57.857802187Z",
+  "started_at": "2026-09-09T16:04:48.652478791Z",
+  "closed_at": "2026-09-09T16:27:57.857802187Z",
+  "close_reason": "Implemented the SCHC session authority identity/direction core (spec/03-adaptation.md 5.6). New module schc_session.{c,h} (lichen/subsys/lichen/schc/): (a) 32-byte full link-signing identity type + opaque lichen_schc_generation_t key-generation token; (b) endpoint ordering - A=lexicographically-smaller key (MSB-first unsigned octet memcmp), B=larger, equal keys rejected -EINVAL; (c) directional Rule-ID derivation - data/ACK-REQ/Sender-Abort use the data sender's Rule ID (A=0x78, B=0x79), ACK/Receiver-Abort travel reverse but RETAIN the data transfer's Rule ID, all derived from full authenticated identities (never EUI-64/untrusted/caller default); equal/mismatched direction rejected; direction_valid fails closed on any out-of-range role/class. Wired into Zephyr build (schc/CMakeLists.txt). Tests: new lichen/tests/schc_session (host CMake, UBSan; ASan unavailable on this host's gcc), 11/11 PASS covering ordering/MSB-first/equal-key/NULL/both directions/all 5 classes/mismatch rejection. 3x codereview delegated to kimi-k3 reviewer (opencode run): correctness PASS, security PASS, edge-cases PASS - two doc nits flagged and fixed (identity_cmp NULL-tolerance doc, directional_rule role-rejection doc). Slices .2-.5 build on this. Pre-existing note (not fixed, out of scope): schc/CMakeLists.txt lists schc_failure_tracker.c twice.",
+  "labels": [
+    "schc",
+    "link",
+    "security",
+    "zephyr",
+    "decomposed",
+    "local-ok"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.3.7.6.1",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.3.7.6",
+      "type": "parent-child",
+      "created_at": "2026-09-09T16:04:35.254877986Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
