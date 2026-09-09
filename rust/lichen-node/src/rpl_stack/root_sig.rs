@@ -518,12 +518,13 @@ pub(crate) mod tests {
     use std::vec;
     use std::vec::Vec;
 
-    // Fixtures regenerated for the upstream AddrForKey DODAGID binding
-    // (i72x.2): same seeds/fields as test/vectors/root_dio_signature.json
-    // (ROOT_SEED 0001020304050607*4, ATTACKER_SEED a0a1a2a3a4a5a6a7*4), with
-    // dodag_id = upstream AddrForKey(root_pubkey) per the Go oracle at
-    // yggdrasil-go@422836ee (020030ad221f03322adb901f8b731688), re-signed
-    // with the reference schnorr48 signer. The shared JSON flips in i72x.6.
+    // Fixtures byte-identical to the regenerated shared corpus
+    // test/vectors/root_dio_signature.json (i72x.6.a): upstream AddrForKey
+    // DODAGIDs per the Go oracle at yggdrasil-go@422836ee
+    // (020030ad221f03322adb901f8b731688), deterministic Schnorr48
+    // signatures, kid preserved. VALID_COSE_SIGN1 is
+    // root_dio_signature_valid_basic; the wrong-alg / kid-mismatch /
+    // impersonation constants are the same-named corpus vectors.
     pub(crate) const VALID_COSE_SIGN1: &str = "d28447a1013a00010000a10448203df4662ab81f5a5825a70150020030ad221f03322adb901f8b7316880200030104190100051a67748580060107025830c378cb37ffdb7fe365e88a94f40dcf34c462a0d55e15f310beb25b3bfd7e96555857df9f33a50c949fa1203784332502";
     pub(crate) const VALID_PUBKEY: [u8; 32] = [
         0xe7, 0xa9, 0x6e, 0xf0, 0x7e, 0x66, 0xea, 0x92, 0x37, 0xf0, 0x3a, 0x46, 0x74, 0xbb, 0xf4,

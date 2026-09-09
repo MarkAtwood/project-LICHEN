@@ -1837,7 +1837,7 @@ mod tests {
 
     // Byte-exact fixture: test/vectors/root_dio_signature.json case
     // root_dio_signature_valid_basic (external oracle, committed vectors).
-    const VECTOR_COSE_SIGN1: &str = "d28447a1013a00010000a10448203df4662ab81f5a5825a7015002203df4662ab81f203df4662ab81f5a0200030104190100051a677485800601070258304f9a6d7554edcaf70301635bddb2618a5e7165bb02e9ff1ec86f276bcfff356ba61171e0cef7861ce3a6be76c6d7fd00";
+    const VECTOR_COSE_SIGN1: &str = "d28447a1013a00010000a10448203df4662ab81f5a5825a70150020030ad221f03322adb901f8b7316880200030104190100051a67748580060107025830c378cb37ffdb7fe365e88a94f40dcf34c462a0d55e15f310beb25b3bfd7e96555857df9f33a50c949fa1203784332502";
 
     #[test]
     fn root_dio_signature_round_trips_vector_bytes() {
