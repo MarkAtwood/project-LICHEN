@@ -33,6 +33,7 @@ zephyr_ld_options(-Wl,--wrap=coap_oscore_authorize_mutating)
 target_sources(app PRIVATE
   src/main.c
   ../../subsys/lichen/coap/coap_server.c
+  ../../subsys/lichen/coap/coap_respond.c
 )
 
 # Per-service CoAP resource section (mirrors lichen/tests/coap_config).
