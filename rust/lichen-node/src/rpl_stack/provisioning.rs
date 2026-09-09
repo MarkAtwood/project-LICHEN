@@ -6,9 +6,12 @@
 use std::collections::{HashSet, VecDeque};
 
 use crate::rpl_stack::dao_tx_sched::DaoTxScheduler;
+use lichen_hal::storage::{
+    open_redundant, provision_redundant, update_redundant, RedundantOpenError, RedundantValue,
+};
 use lichen_hal::{NonVolatile, Radio};
 use lichen_link::identity::iid_from_pubkey;
-use lichen_rpl::root_seq_cache::RootSeqCache;
+use lichen_rpl::root_seq_cache::{RootSeqCache, ROOT_SEQ_WIRE_LEN};
 use lichen_rpl::routing::{
     DaoAdmissionState, DaoAdmissionUpdateError, DaoPersistentOpenError, DaoProvisionError,
     DaoTxState,
@@ -22,7 +25,89 @@ use crate::secure::SecureStack;
 use super::error::{DaoAdmissionError, RplStackOpenError, RplStackProvisionError};
 use super::{RplRole, RplStack};
 
+/// Durable keys and format tag for the root-seq anti-replay cache
+/// (spec 06 §8.10.1). Provisional, unshipped scope-bound format; like the
+/// DTX2/DRX2/DAD1 records there is intentionally no migration path.
+pub(crate) const ROOT_SEQ_KEYS: [&str; 2] = ["rpl.rseq.a", "rpl.rseq.b"];
+pub(crate) const ROOT_SEQ_MAGIC: [u8; 4] = *b"RSQ1";
+/// Slot record scratch size: payload plus the redundant-slot header/trailer
+/// (lichen_hal::storage SLOT_HEADER_LEN + SLOT_TRAILER_LEN).
+pub(crate) const ROOT_SEQ_RECORD_LEN: usize = ROOT_SEQ_WIRE_LEN + 24;
+
+/// Load the persisted root-seq high-water cache.
+///
+/// Missing state means a fresh node (empty cache, no slot handle). Any
+/// present-but-unreadable or corrupt record fails closed by propagating the
+/// error, mirroring the DAO RX open path: durable anti-replay state must
+/// never be silently discarded. A record left by a previous provisioning of
+/// the same storage still loads — its high-water marks are keyed by
+/// `(dodag_id, instance)` and remain valid anti-replay state.
+pub(crate) fn open_root_seq_state<S: NonVolatile>(
+    storage: &S,
+) -> Result<(RootSeqCache, Option<RedundantValue>), RedundantOpenError<S::Error>> {
+    let mut slot_a = [0u8; ROOT_SEQ_RECORD_LEN];
+    let mut slot_b = [0u8; ROOT_SEQ_RECORD_LEN];
+    let mut payload = [0u8; ROOT_SEQ_WIRE_LEN];
+    let current = match open_redundant(
+        storage,
+        ROOT_SEQ_KEYS,
+        ROOT_SEQ_MAGIC,
+        &mut slot_a,
+        &mut slot_b,
+        &mut payload,
+    ) {
+        Ok(current) => current,
+        Err(RedundantOpenError::Missing) => return Ok((RootSeqCache::default(), None)),
+        Err(error) => return Err(error),
+    };
+    let cache = RootSeqCache::decode(&payload[..current.len]).ok_or(RedundantOpenError::Corrupt)?;
+    Ok((cache, Some(current)))
+}
+
 impl<R: Radio, S: NonVolatile> RplStack<R, S> {
+    /// Persist a staged root-seq cache, then commit it in memory.
+    ///
+    /// Ordering mirrors the DAO RX path (`update_redundant` before `*self =
+    /// proposed`): the durable record advances BEFORE the in-memory cache,
+    /// so a failed write leaves both unchanged and the caller can degrade
+    /// without having extended trusted replay state. `Ok(())` guarantees the
+    /// staged cache is both durable and live; `Err(())` guarantees neither
+    /// advanced.
+    pub(crate) fn commit_root_seqs(&mut self, staged: RootSeqCache) -> Result<(), ()> {
+        let mut payload = [0u8; ROOT_SEQ_WIRE_LEN];
+        let len = staged.encode(&mut payload).ok_or(())?;
+        let mut record = [0u8; ROOT_SEQ_RECORD_LEN];
+        let next = match self.root_seq_store {
+            Some(current) => update_redundant(
+                &mut self.storage,
+                ROOT_SEQ_KEYS,
+                ROOT_SEQ_MAGIC,
+                current,
+                &payload[..len],
+                &mut record,
+            )
+            .map_err(|_| ())?,
+            None => {
+                provision_redundant(
+                    &mut self.storage,
+                    ROOT_SEQ_KEYS,
+                    ROOT_SEQ_MAGIC,
+                    &payload[..len],
+                    &mut record,
+                )
+                .map_err(|_| ())?;
+                RedundantValue {
+                    generation: 1,
+                    slot: 0,
+                    len,
+                }
+            }
+        };
+        self.root_seq_store = Some(next);
+        self.root_seqs = staged;
+        Ok(())
+    }
+
     pub fn provision_leaf<T: Into<SecureStack<R>>>(
         stack: T,
         local_rpl_addr: [u8; 16],
@@ -43,6 +128,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             dodag_id,
         )
         .map_err(RplStackProvisionError::Dao)?;
+        let (root_seqs, root_seq_store) =
+            open_root_seq_state(&storage).map_err(RplStackProvisionError::RootSeq)?;
         let rpl = RplNode {
             node: Node::new(stack.node_id()),
             router: Router::new(local_rpl_addr, dodag_id),
@@ -57,7 +144,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             local_control_addr: control_addr,
             bootstrap_peers: VecDeque::new(),
             dao_admissions: None,
-            root_seqs: RootSeqCache::default(),
+            root_seqs,
+            root_seq_store,
             dao_tx_sched: DaoTxScheduler::new(),
             wall_clock_unix: None,
             routing_now_ms: 0,
@@ -85,6 +173,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             dodag_id,
         )
         .map_err(RplStackOpenError::Dao)?;
+        let (root_seqs, root_seq_store) =
+            open_root_seq_state(&storage).map_err(RplStackOpenError::RootSeq)?;
         let rpl = RplNode {
             node: Node::new(stack.node_id()),
             router: Router::new(local_rpl_addr, dodag_id),
@@ -99,7 +189,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             local_control_addr: control_addr,
             bootstrap_peers: VecDeque::new(),
             dao_admissions: None,
-            root_seqs: RootSeqCache::default(),
+            root_seqs,
+            root_seq_store,
             dao_tx_sched: DaoTxScheduler::new(),
             wall_clock_unix: None,
             routing_now_ms: 0,
@@ -127,6 +218,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             lichen_core::constants::RPL_INSTANCE_ID,
             dodag_id,
         )?;
+        let (root_seqs, root_seq_store) =
+            open_root_seq_state(&storage).map_err(RplStackProvisionError::RootSeq)?;
         Ok(Self {
             rpl: RplNode {
                 node: Node::new(stack.node_id()),
@@ -140,7 +233,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             local_control_addr: control_addr,
             bootstrap_peers: VecDeque::new(),
             dao_admissions: Some(admissions),
-            root_seqs: RootSeqCache::default(),
+            root_seqs,
+            root_seq_store,
             dao_tx_sched: DaoTxScheduler::new(),
             wall_clock_unix: None,
             routing_now_ms: 0,
@@ -179,6 +273,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         {
             return Err(RplStackOpenError::AdmissionInconsistent);
         }
+        let (root_seqs, root_seq_store) =
+            open_root_seq_state(&storage).map_err(RplStackOpenError::RootSeq)?;
         Ok(Self {
             rpl: RplNode {
                 node: Node::new(stack.node_id()),
@@ -192,7 +288,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             local_control_addr: control_addr,
             bootstrap_peers: VecDeque::new(),
             dao_admissions: Some(admissions),
-            root_seqs: RootSeqCache::default(),
+            root_seqs,
+            root_seq_store,
             dao_tx_sched: DaoTxScheduler::new(),
             wall_clock_unix: None,
             routing_now_ms: 0,

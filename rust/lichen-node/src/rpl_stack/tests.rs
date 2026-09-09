@@ -3319,6 +3319,188 @@ fn root_sig_vector_pubkey() -> PublicKey {
     root_sig::tests::vector_pubkey()
 }
 
+#[test]
+fn verified_root_signature_high_water_survives_reboot() {
+    // eebl: the root_seq high-water must be durable. A captured
+    // still-unexpired DIO replayed AFTER a reboot must hit the restored
+    // cache and reject, never re-verify as fresh.
+    use lichen_hal::storage::mem::MemStorage;
+    let (mut stack, body) = gate_fixture_with_storage(MemStorage::new());
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    assert_eq!(
+        stack.verify_dio_root_signature(&body, &gate_fields()),
+        DioRootSigOutcome::Verified
+    );
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), Some(1));
+    let persisted = stack.storage().clone();
+    drop(stack);
+
+    // Simulated reboot: a new stack opened on the same durable storage.
+    let (mut rebooted, body) = gate_fixture_reopen(persisted);
+    assert_eq!(
+        rebooted.root_seq_cached(gate_dodag_id(), 0),
+        Some(1),
+        "high-water mark must be restored from durable storage"
+    );
+    rebooted.announces.pin_for_test(root_sig_vector_pubkey());
+    rebooted.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    assert_eq!(
+        rebooted.verify_dio_root_signature(&body, &gate_fields()),
+        DioRootSigOutcome::Reject,
+        "replayed DIO must be rejected after reboot"
+    );
+}
+
+#[test]
+fn root_signature_persist_failure_degrades_to_baseline_without_admission() {
+    // eebl: a storage fault must not extend trusted replay state. The gate
+    // degrades to Baseline (unassessable durability, like the unassessable
+    // clock) with the in-memory cache untouched; a retry on healthy storage
+    // still verifies.
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    stack.fail_next_storage_write();
+    assert_eq!(
+        stack.verify_dio_root_signature(&body, &gate_fields()),
+        DioRootSigOutcome::Baseline
+    );
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+    assert_eq!(
+        stack.verify_dio_root_signature(&body, &gate_fields()),
+        DioRootSigOutcome::Verified
+    );
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), Some(1));
+}
+
+#[test]
+fn corrupt_root_seq_record_fails_closed_at_open() {
+    // eebl: durable anti-replay state must never be silently discarded —
+    // a corrupt record fails the open instead of booting with an empty
+    // cache that would admit replays.
+    use lichen_hal::storage::mem::MemStorage;
+    use lichen_hal::storage::RedundantOpenError;
+    let (mut stack, body) = gate_fixture_with_storage(MemStorage::new());
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    assert_eq!(
+        stack.verify_dio_root_signature(&body, &gate_fields()),
+        DioRootSigOutcome::Verified
+    );
+    // A second admission (via the pub(crate) commit path — the gate has no
+    // seq-2 vector) advances the redundant record into slot B so the
+    // single-slot-torn case below has a surviving generation.
+    let mut staged = stack.root_seqs.clone();
+    staged.accept(gate_dodag_id(), 0, 2).unwrap();
+    stack.commit_root_seqs(staged).unwrap();
+    let persisted = stack.storage().clone();
+    drop(stack);
+
+    let mut corrupt = persisted.clone();
+    corrupt.set_raw("rpl.rseq.a", b"torn");
+    corrupt.set_raw("rpl.rseq.b", b"torn");
+    let result = gate_fixture_try_reopen(corrupt);
+    assert!(matches!(
+        result,
+        Err(RplStackOpenError::RootSeq(RedundantOpenError::Corrupt))
+    ));
+
+    // One surviving slot still opens: the newest valid generation wins.
+    let mut half_torn = persisted;
+    half_torn.set_raw("rpl.rseq.a", b"torn");
+    let (reopened, _) = gate_fixture_reopen(half_torn);
+    assert_eq!(reopened.root_seq_cached(gate_dodag_id(), 0), Some(2));
+}
+
+/// gate_fixture variant with caller-owned durable storage (for the
+/// simulated-reboot persistence pins).
+fn gate_fixture_with_storage(storage: MemStorage) -> (RplStack<MeshRadio, MemStorage>, Vec<u8>) {
+    let (body, dodag_id) = gate_body();
+    let node_identity = identity(41);
+    let (_mesh, [radio, _spare1, _spare2]) =
+        MeshHarness::new([node_identity.iid, [0u8; 8], [0u8; 8]]);
+    let stack = RplStack::provision_leaf(
+        Stack::new(radio, node_identity.clone(), 129, 0),
+        address(&node_identity, 1),
+        dodag_id,
+        announces(dodag_id[..8].try_into().unwrap()),
+        storage,
+    )
+    .unwrap();
+    (stack, body)
+}
+
+/// Reopen the gate-fixture leaf on existing durable storage (simulated
+/// reboot): `open_leaf` resumes the provisioned DAO TX state and loads the
+/// persisted root-seq cache.
+fn gate_fixture_reopen(storage: MemStorage) -> (RplStack<MeshRadio, MemStorage>, Vec<u8>) {
+    let (body, dodag_id) = gate_body();
+    let node_identity = identity(41);
+    let (_mesh, [radio, _spare1, _spare2]) =
+        MeshHarness::new([node_identity.iid, [0u8; 8], [0u8; 8]]);
+    let stack = gate_fixture_try_reopen_with(storage, radio, &node_identity, dodag_id)
+        .expect("reopen on intact storage");
+    (stack, body)
+}
+
+fn gate_fixture_try_reopen(
+    storage: MemStorage,
+) -> Result<
+    (RplStack<MeshRadio, MemStorage>, Vec<u8>),
+    RplStackOpenError<lichen_hal::storage::mem::MemStorageError>,
+> {
+    let (body, dodag_id) = gate_body();
+    let node_identity = identity(41);
+    let (_mesh, [radio, _spare1, _spare2]) =
+        MeshHarness::new([node_identity.iid, [0u8; 8], [0u8; 8]]);
+    let stack = gate_fixture_try_reopen_with(storage, radio, &node_identity, dodag_id)?;
+    Ok((stack, body))
+}
+
+fn gate_fixture_try_reopen_with(
+    storage: MemStorage,
+    radio: MeshRadio,
+    node_identity: &Identity,
+    dodag_id: [u8; 16],
+) -> Result<
+    RplStack<MeshRadio, MemStorage>,
+    RplStackOpenError<lichen_hal::storage::mem::MemStorageError>,
+> {
+    RplStack::open_leaf(
+        Stack::new(radio, node_identity.clone(), 129, 0),
+        address(node_identity, 1),
+        dodag_id,
+        announces(dodag_id[..8].try_into().unwrap()),
+        storage,
+    )
+}
+
+/// Signed DIO body (Dio + 0x17 option carrying VALID_COSE_SIGN1) and the
+/// vector DODAG id, factored out of gate_fixture for the storage-sharing
+/// reboot fixtures.
+fn gate_body() -> (Vec<u8>, [u8; 16]) {
+    use crate::rpl_stack::root_sig;
+    let cose = root_sig::tests::vector_cose();
+    let decoded = root_sig::DecodedRootSig::from_cose_sign1(&cose).unwrap();
+    let dio = lichen_rpl::message::Dio {
+        rpl_instance_id: decoded.payload.instance,
+        version: decoded.payload.version,
+        rank: decoded.payload.rank,
+        grounded: true,
+        mode_of_operation: decoded.payload.mop,
+        preference: 0,
+        dtsn: 0,
+        flags: 0,
+        dodag_id: decoded.payload.dodag_id,
+    };
+    let mut body = [0u8; lichen_rpl::message::Dio::SERIALIZED_LEN + 2 + 255];
+    let dio_len = dio.write_to(&mut body).unwrap();
+    let opt_len =
+        lichen_rpl::message::RootDioSignature::write_to(&cose, &mut body[dio_len..]).unwrap();
+    (body[..dio_len + opt_len].to_vec(), decoded.payload.dodag_id)
+}
+
 fn gate_dodag_id() -> [u8; 16] {
     use crate::rpl_stack::root_sig;
     root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose())

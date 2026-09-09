@@ -749,8 +749,12 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 return DioRootSigOutcome::Reject;
             }
         }
-        if self
-            .root_seqs
+        // Stage the admission, persist, then commit (DAO RX ordering: durable
+        // state advances before in-memory state, eebl). An in-memory-only
+        // accept would let a captured still-unexpired DIO replay as Verified
+        // across a reboot boundary.
+        let mut staged = self.root_seqs.clone();
+        if staged
             .accept(
                 decoded.payload.dodag_id,
                 decoded.payload.instance,
@@ -759,6 +763,14 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             .is_err()
         {
             return DioRootSigOutcome::Reject;
+        }
+        if self.commit_root_seqs(staged).is_err() {
+            // Storage fault: the signature is valid but its anti-replay state
+            // could not be made durable. Degrade exactly like the
+            // unassessable wall-clock case — process on link-layer baseline,
+            // with the in-memory cache left unchanged so a later DIO on
+            // healthy storage still verifies.
+            return DioRootSigOutcome::Baseline;
         }
 
         DioRootSigOutcome::Verified
