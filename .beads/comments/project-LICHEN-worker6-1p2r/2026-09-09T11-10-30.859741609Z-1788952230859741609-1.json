@@ -1,0 +1,7 @@
+{
+  "id": "1788952230859741609-1",
+  "issue_id": "project-LICHEN-worker6-1p2r",
+  "author": "Mark Atwood",
+  "text": "Inventory extension (i72x.6.a codereview pass 2, reviewer model): +1 red from reference rewiring commit eff0f51f8a (not the lineage merge): python/tests/test_protocol_vector_security.py::test_root_vectors_use_native_addr_for_key_and_independent_signatures fails at :466-469 because test/vectors/rpl_messages.json still encodes native-profile DODAGID for seed 0x00*32 while the assertion now compares against rewired reference ReferenceIdentity.from_seed(bytes(32)).ygg_addr (upstream). Fix = regenerate rpl_messages.json against the upstream reference (never weaken the assertion). Same-class stale-but-green noted by reviewer: test_protocol_vector_security.py:48-50 _addr_for_key helper still implements the native profile against root_signature.json/root_authorization.json (their 'root binding' check currently validates the rejected profile) — include in reconciliation scope. Total inventory: 45 failing tests + 2 stale-native corpora.",
+  "created_at": "2026-09-09T11:10:30.859741609Z"
+}

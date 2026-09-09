@@ -1,0 +1,7 @@
+{
+  "id": "1788950355353353742-1",
+  "issue_id": "project-LICHEN-worker6-i72x.6",
+  "author": "Mark Atwood",
+  "text": "Decomposed into i72x.6.a (reference_schnorr48 upstream AddrForKey + regen root_dio_signature.json), i72x.6.b (C test resync), i72x.6.c (Rust test flip). Sequencing: a -\u003e b,c. Parent closes when all land.",
+  "created_at": "2026-09-09T10:39:15.353353742Z"
+}

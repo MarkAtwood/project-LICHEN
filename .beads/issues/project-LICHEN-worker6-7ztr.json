@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-worker6-7ztr",
+  "title": "Worker branches starve when migration children land on disjoint branches (coordination hazard)",
+  "description": "Pattern hit 3x across rounds (7xyr, t7n7, 7jcp, osjz, viku.5, q3yq): a bead's prerequisite lands on a DIFFERENT worker branch than the one the claimant is on, so the bead is unclaimable even though its work is 'ready'. Concrete cases this round: (1) 7xyr Python route_hash — needs 7pt2 identity migration (on beads-worker-2/4 + local main, NOT origin/main) AND 5muj spec (was on main, not my branch until I synced); Mark has 7xyr in_progress (started 10:13). (2) 7jcp Rust route_hash — 'do not land against stale vectors' but osjz (shared corpus) is gated on 7xyr+xf1v(C, pending). (3) t7n7 — prereq l1qw.20 was on main, not my branch, until I merged origin/main (found my branch 71 behind, last sync ~11h). (4) viku.5/5hbz — Python trust_anchors reference on beads-worker-7, not main. The driver merges worker branches into main asynchronously, so 'ready' beads frequently have prerequisites in flight on sibling branches. Suggest: (a) worker loop should merge origin/main at round start when behind (I did this manually this round: resolved trust.rs + 04-network.md conflicts by taking main's i72x.2 versions), and/or (b) bd 'ready' should hide beads whose discovered-from/parent prerequisites are closed-but-not-on-the-claimant's-branch, and/or (c) the driver should rebase worker branches onto main more aggressively. Not claiming this is a code bug — it is a swarm-coordination observation for Mark/driver tuning.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "chore",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T10:20:38.621536107Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T10:20:38.621536107Z",
+  "labels": [
+    "networking"
+  ]
+}
