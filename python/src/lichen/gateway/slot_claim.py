@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING
 import cbor2
 
 from lichen.crypto import schnorr48
+from lichen.crypto.schnorr48 import COSE_KID_LABEL
 from lichen.link.channel import SUPERFRAME_DURATION_US
 
 if TYPE_CHECKING:
@@ -337,7 +338,7 @@ class SlotClaim:
         if major != 5 or pairs != 1:
             raise ClaimError("COSE unprotected header must be exactly {4: kid}")
         major, label, pos = _read_head(envelope, pos, "unprotected kid label")
-        if major != 0 or label != _COSE_KID_LABEL:
+        if major != 0 or label != COSE_KID_LABEL:
             raise ClaimError("COSE unprotected header must be exactly {4: kid}")
         kid, pos = _read_bstr(envelope, pos, "slot-claim kid")
         if len(kid) != 8:
@@ -437,7 +438,6 @@ _PAYLOAD_EXPIRY = 4
 _PAYLOAD_GATEWAY_IID = 5
 _PAYLOAD_CLAIM_SEQ = 6
 _PAYLOAD_ORDINAL = 7
-_COSE_KID_LABEL = 4
 _MODE_INTERLEAVED = 0
 _MODE_CONTIGUOUS = 1
 
