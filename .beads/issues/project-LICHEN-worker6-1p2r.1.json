@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-1p2r.1",
+  "title": "Regen x25519.json ygg_addr pins to upstream AddrForKey (3 reds)",
+  "description": "1p2r child. python/tests/test_vectors.py::test_x25519_key_derivation_vector fails 3/4 on current main (480f8996a3): vector ygg_addr fields encode the REJECTED native SHA-512 profile while production yggdrasil_address is now upstream AddrForKey (9fceaf5406 lineage restored via 5146dcfd9e+). Per the corpus's own QUARANTINE note, regen ygg_addr as pinned upstream AddrForKey byte-equality values (iid fields stay — retained link-local IID). Independent oracle: pinned anchor test/vectors/yggdrasil_address.json or live ~/GIT/yggdrasil-go AddrForKey (validated worker6 2026-09-09); NEVER the impl under test. NOTE x25519.json has no dedicated generator (hand-edit or extend generate.py).",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T11:28:21.668551608Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T11:30:24.129325769Z",
+  "started_at": "2026-09-09T11:30:24.129325769Z",
+  "lease_expires_at": "2026-09-09T11:35:24.129325769Z",
+  "heartbeat_at": "2026-09-09T11:30:24.129325769Z",
+  "labels": [
+    "python",
+    "vectors",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-1p2r.1",
+      "depends_on_id": "project-LICHEN-worker6-1p2r",
+      "type": "parent-child",
+      "created_at": "2026-09-09T11:28:21.843831691Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

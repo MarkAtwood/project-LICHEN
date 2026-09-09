@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-1p2r.3",
+  "title": "Regen rpl_messages.json DODAGID to upstream AddrForKey via generate.py (1 red)",
+  "description": "1p2r child. tests/test_protocol_vector_security.py::test_root_vectors_use_native_addr_for_key_and_independent_signatures fails (assert at :466-469) because test/vectors/rpl_messages.json still encodes native-profile DODAGID for seed 0x00*32 while the assertion compares against the now-upstream reference ReferenceIdentity.from_seed().ygg_addr (reference rewired in beads-worker-6 commit eff0f51f8a; on main the module is still native so this test passes there until that lands). Fix: regenerate rpl_messages.json via test/vectors/generate.py rpl_messages builder so its DODAGID equals upstream AddrForKey; expected oracle value 020224ae... (verify with live yggdrasil-go, never impl-derived). Keep the assertion unchanged — never weaken.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T11:28:52.93240943Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T11:28:52.93240943Z",
+  "labels": [
+    "python",
+    "vectors",
+    "coap",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-1p2r.3",
+      "depends_on_id": "project-LICHEN-worker6-1p2r",
+      "type": "parent-child",
+      "created_at": "2026-09-09T11:28:53.063955093Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
