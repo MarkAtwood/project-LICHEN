@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.3",
+  "title": "Evaluate microfragment hopping and FEC",
+  "description": "Evaluate the user-prioritized burst-survival/goodput objective while accepting greater message latency. Specify a per-link known-time/hop context, loss-resistant acquisition/header, hop phase despite missing fragments, bounded reassembly/expiry/replay, independently specified erasure FEC and authenticated bytes. Count complete PHY overhead: at SF10/BW125 a 300ms packet fits14 bytes while existing signed framing plus dispatch is at least62; do not claim130 useful bytes or trivial CPU. Benchmark actual IRQ/SPI/retune/sign/verify/FEC and memory/deadline costs, not hash-only cycles. Compare same-load baseline SCHC ACK-on-Error with candidate microfrag across independent receivers, shared receivers, correlated interference and header loss. Candidate may replace SCHC fragmentation (not compression) only in a separately versioned experimental profile; baseline remains unchanged.1280 bytes is normal IPv6 MTU, and uncompressed SCHC needs1281 bytes. Any change to authentication or audited OSCORE semantics needs separate human review; no silent weaker fragments.",
+  "acceptance_criteria": "Reproducible independent arithmetic/model and later explicitly qualified hardware evidence; report successful delivery, loss, latency, total/per-frequency airtime, CPU and memory. Validate FEC decoder with an independent oracle. No unsupported9x/50x/99-percent-idle claims, automatic legal approval or universally superior FEC assertion. Conclude prototype/revise/reject with explicit remaining gates; code changes require three independent reviews.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:55:42.605999977Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:55:42.605999977Z",
+  "labels": [
+    "experimental",
+    "research",
+    "ccp",
+    "conformance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh",
+      "type": "parent-child",
+      "created_at": "2026-09-09T01:55:42.809751558Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

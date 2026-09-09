@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.5",
+  "title": "Verify LR-FHSS receive feasibility",
+  "description": "Identify an actual LR-FHSS receiving hardware/demodulator/software path for future LICHEN2, with bounded memory/CPU/bandwidth measurements. Distinguish SX1262/LR1110 TX capability and ordinary narrow-BW LoRa RX/TX from LR-FHSS GMSK; a generic SX1302/SX1303 label does not establish LR-FHSS reception. Review documented existing implementations before proposing new silicon/SDR work. Treat500/250Hz channel counts and50-100 simultaneous links as speculative, not measured capacity. No hardware purchases, upstream posts or licensing decisions without explicit authorization.",
+  "acceptance_criteria": "Primary references identify exact supported waveform and receiver version; independent known/captured packet evidence or an explicit unverified/no-go result; tuning span, simultaneous passbands, demodulator count and TX constraints recorded separately. No implementation or certification claim from a product name alone.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:55:43.255397131Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:55:43.255397131Z",
+  "labels": [
+    "experimental",
+    "research",
+    "hardware",
+    "ccp",
+    "conformance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.5",
+      "depends_on_id": "project-LICHEN-worker6-x7hh",
+      "type": "parent-child",
+      "created_at": "2026-09-09T01:55:43.434860738Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
