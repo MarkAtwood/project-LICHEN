@@ -1,0 +1,42 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.10.2",
+  "title": "x7hh.10 leaf: Joined CI gate implementation",
+  "description": "Implement the joined CCP2 gate across Python/Rust/C production paths: signed wire and mixed-version rejection, real scheduler and radio paths (needs-linux; heft/AWS).",
+  "acceptance_criteria": "CI gate fails on any red stack; mixed-version and forged-wire cases exercised end-to-end.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-decomposition",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T03:37:40.644753441Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:42:53.72911411Z",
+  "started_at": "2026-09-09T05:42:53.72911411Z",
+  "lease_expires_at": "2026-09-09T05:47:53.72911411Z",
+  "heartbeat_at": "2026-09-09T05:42:53.72911411Z",
+  "labels": [
+    "testing",
+    "ci",
+    "ccp",
+    "conformance",
+    "needs-linux"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.10.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.10",
+      "type": "parent-child",
+      "created_at": "2026-09-09T03:37:40.788005929Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.10.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.10.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T03:38:29.129865502Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

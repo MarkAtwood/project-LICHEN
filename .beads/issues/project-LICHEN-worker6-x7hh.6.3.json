@@ -1,0 +1,49 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.6.3",
+  "title": "x7hh.6 leaf: Corpus consumed by real production consumers",
+  "description": "Wire the corpus into real production consumers (node/scheduler/radio paths), not test-only harnesses.",
+  "acceptance_criteria": "Each corpus fixture consumed by at least one production code path in one stack; consumed-by matrix recorded.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-decomposition",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T03:37:34.3721154Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:42:55.092492885Z",
+  "started_at": "2026-09-09T05:42:55.092492885Z",
+  "lease_expires_at": "2026-09-09T05:47:55.092492885Z",
+  "heartbeat_at": "2026-09-09T05:42:55.092492885Z",
+  "labels": [
+    "testing",
+    "vectors",
+    "ccp",
+    "conformance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.6.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6",
+      "type": "parent-child",
+      "created_at": "2026-09-09T03:37:34.537626217Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.6.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T03:38:19.92608051Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.6.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T03:38:20.509255488Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

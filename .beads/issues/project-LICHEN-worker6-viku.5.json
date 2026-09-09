@@ -1,0 +1,38 @@
+{
+  "id": "project-LICHEN-worker6-viku.5",
+  "title": "CA Credentials CoAP resource (§8.13.2)",
+  "description": "Implement portable CA credential handling from spec §8.13.2. Nodes present CA-signed COSE_Sign1 credentials containing x5chain. Resource: POST /.well-known/auth with credential, gateway validates chain against trust store and caches for session. Claims: oidc:name, oidc:email, lichen:fleet, lichen:role, lichen:emergency. Credential presentation protocol per spec §8.13 verification steps 1-7. Depends on trust store resource and cert profile.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T03:59:48.949798653Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T03:59:48.949798653Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-viku.5",
+      "depends_on_id": "project-LICHEN-worker6-viku",
+      "type": "parent-child",
+      "created_at": "2026-09-09T03:59:49.097372026Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-viku.5",
+      "depends_on_id": "project-LICHEN-worker6-viku.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T04:00:42.968994145Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-viku.5",
+      "depends_on_id": "project-LICHEN-worker6-viku.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T04:00:43.682763794Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

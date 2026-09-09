@@ -1032,7 +1032,9 @@ pub struct CoapResponse {
     pub code: u8,
     /// Response payload (CBOR encoded).
     pub payload: Zeroizing<Vec<u8>>,
-    /// Content format (60 for CBOR, 112 for SenML+CBOR).
+    /// Content format (60 for CBOR, 112 for SenML+CBOR). 0 means no
+    /// Content-Format option is emitted on the wire (per coap_oscore.h
+    /// "0 for none"); it is not a text/plain label.
     pub content_format: u16,
 }
 
@@ -1078,7 +1080,7 @@ impl CoapResponse {
         Self {
             code: 0x80, // 4.00 Bad Request
             payload: Zeroizing::new(message.as_bytes().to_vec()),
-            content_format: 0, // text/plain
+            content_format: 0, // no Content-Format option on the wire
         }
     }
 
@@ -2135,10 +2137,10 @@ impl GatewayCoordinator {
                 // the WINNING gateway's claim as payload — the C peer
                 // (coap_slot_coord.c conflict arm) echoes the winner's stored
                 // COSE_Sign1 bytes with the Content-Format option omitted;
-                // the Rust serializer (gateway.rs) instead maps
-                // content_format 0 to a present zero-length option, so the
-                // wire is not byte-identical to C. The
-                // spec payload is the winning gateway's claim; this
+                // the Rust serializer (gateway.rs
+                // encode_content_format_option) also omits the option when
+                // content_format is 0, so the wire is byte-identical to C.
+                // The spec payload is the winning gateway's claim; this
                 // gateway cannot mint a signed COSE claim on the responder
                 // path (no sender-side claim_seq machinery, l1qw.20), so
                 // when no envelope was recorded the 4.09 carries an empty
@@ -3239,9 +3241,11 @@ mod tests {
         assert_eq!(conflict_pubkey, peer_pubkey);
         let response = coordinator.handle_post_slots(&conflict, true, Some(&peer_pubkey), 4);
         assert_eq!(response.code, 0x89); // 4.09 Conflict
-                                         // The Rust serializer (gateway.rs) maps content_format 0 to a
-                                         // present zero-length Content-Format option (0xc0), NOT an omitted
-                                         // option as C does.
+                                         // The Rust serializer (gateway.rs
+                                         // encode_content_format_option) omits
+                                         // the Content-Format option when
+                                         // content_format is 0, byte-identical
+                                         // to C.
         assert_eq!(response.content_format, 0);
         assert_eq!(response.payload.as_slice(), envelope.as_slice());
     }

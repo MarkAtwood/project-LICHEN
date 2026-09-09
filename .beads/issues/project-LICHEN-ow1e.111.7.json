@@ -1,15 +1,13 @@
 {
   "id": "project-LICHEN-ow1e.111.7",
   "title": "Replace [u8; 16] with Ipv6Addr in lichen-rpl/src/table.rs RouteTarget, RouteEntry, RoutingTable (19 occurrences)",
-  "status": "closed",
+  "status": "open",
   "priority": 2,
   "issue_type": "task",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-28T04:52:42.338843Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-09T01:59:12.921624485Z",
-  "closed_at": "2026-09-09T01:59:12.921624485Z",
-  "close_reason": "Replaced [u8; 16] with core::net::Ipv6Addr across lichen-rpl table.rs address-shaped API (RouteEntry.path, RoutingTable rpl_managed_hosts/rpl_managed_prefixes, add_route/remove_route/mark_stale/mark_expired/entry_state/lookup/add_prefix_route; RouteTarget::host+contains take Ipv6Addr, RouteTarget::new/prefix intentionally keep raw bit-masked prefix bytes). Bridged routing.rs, node Router::lookup_route(_at)/inject_route, rpl_stack plan_route (RoutePlan stays raw), gateway mesh_to_mesh/is_local_mesh paths, and ~70 test call sites. 3 reviewer passes (kimi-k3: correctness/security/edge-cases) all PASS; reviewer-pass findings filed: worker6-767l (pre-existing failing test three_rpl_stacks_send_leaf_dao_via_preferred_parent, verified failing at 1cd8b86784 pre-change) and worker6-4iax (pre-existing routing.rs:949 empty-path index underflow). Clippy warnings introduced by the change fixed (15 useless conversions + 1 identity map); remaining warnings verified pre-existing at 1cd8b86784. cargo test: lichen-rpl 15/15 suites green (316 tests); lichen-node 345/346 (1 pre-existing RED, filed); lichen-gateway 252/253 (1 deliberately-RED per bead ljgs). Code landed via auto-sync commits 6af03283c2+7993672ba2 (external worker7 sync); nothing left to commit except .beads store writes.",
+  "updated_at": "2026-08-30T17:18:53.12354Z",
   "labels": [
     "newtype",
     "lichen-rpl",

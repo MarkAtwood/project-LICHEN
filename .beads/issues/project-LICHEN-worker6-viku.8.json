@@ -1,0 +1,38 @@
+{
+  "id": "project-LICHEN-worker6-viku.8",
+  "title": "Test vectors: cert chain validation and cross-signing",
+  "description": "Create test vector suite for X.509 attestation cert validation. Vectors must cover: (1) valid single-CA chain, (2) valid cross-signed chain (two CAs), (3) expired cert rejection, (4) wrong-key-usage rejection, (5) unknown CA rejection, (6) self-signed CA acceptance when in trust store, (7) chain depth limit, (8) Yggdrasil /128 SAN validation matches node identity, (9) hybrid ML-DSA/Ed25519 chain (future-proofing). Generate certs using Python cryptography library. Vectors in test/vectors/ca_attestation.json. All three impls must match.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:00:34.790954469Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T04:00:34.790954469Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-viku.8",
+      "depends_on_id": "project-LICHEN-worker6-viku",
+      "type": "parent-child",
+      "created_at": "2026-09-09T04:00:34.905035757Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-viku.8",
+      "depends_on_id": "project-LICHEN-worker6-viku.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T04:00:45.086861669Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-viku.8",
+      "depends_on_id": "project-LICHEN-worker6-viku.6",
+      "type": "blocks",
+      "created_at": "2026-09-09T04:00:45.816482933Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

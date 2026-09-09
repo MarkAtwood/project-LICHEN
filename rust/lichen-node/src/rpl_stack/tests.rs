@@ -1821,6 +1821,8 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
     ));
 
     relay.send_dao().await.unwrap();
+    // The relay's solicited-DIS DIO was already drained above (root rejected
+    // it), so the relay's DAO is the next frame root pops.
     let relay_dao_outcome = root.receive(1, 0).await.unwrap();
     assert!(
         matches!(

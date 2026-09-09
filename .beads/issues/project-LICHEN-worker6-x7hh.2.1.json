@@ -1,0 +1,34 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.2.1",
+  "title": "x7hh.2 leaf: FCC ID + grant exhibit collection (docs only)",
+  "description": "Collect FCC IDs, grants/exhibits, and frequency/modulation/power/antenna/integration restrictions for selected board/antenna/firmware profiles. Documentation only: no filings, purchases, or transmissions.",
+  "acceptance_criteria": "Dated authoritative sources recorded per device in docs; no blanket legal assertions.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-decomposition",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T03:37:28.120965678Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:42:56.503129391Z",
+  "started_at": "2026-09-09T05:42:56.503129391Z",
+  "lease_expires_at": "2026-09-09T05:47:56.503129391Z",
+  "heartbeat_at": "2026-09-09T05:42:56.503129391Z",
+  "labels": [
+    "docs",
+    "regulatory",
+    "ccp",
+    "conformance",
+    "qualification"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T03:37:28.281026167Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

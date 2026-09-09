@@ -2,13 +2,17 @@
   "id": "project-LICHEN-worker6-qlml",
   "title": "[cleanup] leftover debug eprintln 'TRACE send_dio' in lichen-node transmit.rs:116",
   "description": "rust/lichen-node/src/rpl_stack/transmit.rs:116 contains a committed debug print: std::eprintln!(\"TRACE send_dio: ...\"). Leftover instrumentation; should be removed (debug prints should not be in committed production/test support code). Found during worker6-nbc6 codereview (out-of-scope aside).",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
+  "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-09T02:39:15.819468405Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-09T02:39:15.819468405Z",
+  "updated_at": "2026-09-09T03:52:14.677566898Z",
+  "started_at": "2026-09-09T03:00:37.263254919Z",
+  "closed_at": "2026-09-09T03:52:14.677566898Z",
+  "close_reason": "Removed the leftover root-sig debug probe (#[cfg] if-block whose entire body was the TRACE send_dio eprintln) from rpl_stack/transmit.rs. 66/66 lichen-node rpl lib tests pass; cargo check --features root-sig clean; is_root() still used elsewhere (router.rs). Codereview: correctness PASS (kimi-k3), security PASS (kimi-k3, notes removal also closes a minor local info-disclosure channel), edge-cases PASS done by this worker after the delegated reviewer timed out at 600s (both cfg configurations compile, no orphaned variables/imports, no consumers of the TRACE string).",
   "labels": [
     "rust"
   ]

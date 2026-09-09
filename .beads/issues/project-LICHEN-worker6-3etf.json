@@ -1,0 +1,19 @@
+{
+  "id": "project-LICHEN-worker6-3etf",
+  "title": "lichen-gateway slot.rs:472 needless borrow (clippy)",
+  "description": "cargo clippy -p lichen-gateway: 'this expression creates a reference which is immediately dereferenced by the compiler' at lichen-gateway/src/slot.rs:472 — w.bstr(\u0026payload) should be w.bstr(payload). Pre-existing, unrelated to yiv0's diff; fix is one line, verify with cargo test -p lichen-gateway.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:43:15.30873368Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T04:46:25.564904362Z",
+  "started_at": "2026-09-09T04:43:27.166841728Z",
+  "closed_at": "2026-09-09T04:46:25.564904362Z",
+  "close_reason": "Removed needless borrow at slot.rs:472 (w.bstr(\u0026payload) -\u003e w.bstr(payload)). 3x kimi-k3 review passes: correctness PASS, security no defects, edge-cases PASS. Validation: cargo clippy -p lichen-gateway no longer reports the lint; cargo test -p lichen-gateway 367 passed / 0 failed.",
+  "labels": [
+    "gateway"
+  ]
+}

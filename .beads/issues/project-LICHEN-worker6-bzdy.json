@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-bzdy",
+  "title": "Dead Drop §18.9 rate limiting still keys per-source (IID or OSCORE context) — same upstream-addressing conflict as nj4k",
+  "description": "Codereview edge-pass on nj4k (confessions §18.10.3) flagged: spec/12-apps.md:1675 (Dead Drop §18.9) still reads 'Enforced per-source (IID or OSCORE context)'. Same upstream-yggdrasil-addressing conflict nj4k just fixed in §18.10.3: under upstream AddrForKey the routable /128 embeds no IID, so IID keying is unimplementable for flooded/remote posts. Mitigating: Dead Drop writes (POST) appear to require OSCORE (:1692), so the IID branch may be dead text for the write path -- but the sibling normative rule should be reconciled to the same key (OSCORE sender identity, or full IPv6 source per 04-network.md §6.3.2) for consistency with §18.10.3. Apply the same fix pattern as nj4k (commit pending on beads-worker-7). NOTE: 04-network.md §6.2/§12.1 still carry the rejected SHA-512 native profile text (IID==lower-64); reconcile citations to upstream addressing, not the stale §6.2 wording. See also §18.4.1 SOS (:725) 'source IID' -- separate concern, may have own bead.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T05:52:17.435082837Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:52:17.435082837Z",
+  "labels": [
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-bzdy",
+      "depends_on_id": "project-LICHEN-worker6-nj4k",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T05:52:17.595143023Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

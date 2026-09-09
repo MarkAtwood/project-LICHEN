@@ -29,7 +29,9 @@ bool lichen_rpl_prefix_canonicalize(uint8_t *prefix, uint8_t prefix_len)
 	if (remaining_bits != 0) {
 		prefix[whole_bytes] &= (uint8_t)(0xffU << (8 - remaining_bits));
 	}
-	memset(&prefix[used_bytes], 0, 16 - used_bytes);
+	if (used_bytes < 16) {
+		memset(&prefix[used_bytes], 0, (size_t)(16 - used_bytes));
+	}
 	return true;
 }
 

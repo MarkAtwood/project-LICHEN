@@ -544,9 +544,9 @@ fn wired_coap_tunnel_auth_fails_closed_on_missing_oscore_wrong_root_and_wrong_eg
 // forwarded to external networks must be covered by a current-root grant
 // (Gateway::ingest_mesh_frame_at_superframe → GatewayCoordinator::authorize_egress).
 
+use lichen_core::addr::Ipv6Addr as CoreIpv6Addr;
 use lichen_core::constants::L2_DISPATCH_SCHC;
 use lichen_core::icmpv6;
-use lichen_core::addr::Ipv6Addr as CoreIpv6Addr;
 use lichen_gateway::Gateway;
 use lichen_link::identity::{Identity, PeerIdentity};
 use lichen_link::keys::Seed as LinkSeed;
@@ -555,10 +555,18 @@ use lichen_link::schnorr;
 use lichen_link::seqnum::LinkSeqNum;
 use lichen_schc::codec;
 
-const EXTERNAL_DST: [u8; 16] = [0x20, 0x01, 0x48, 0x60, 0x48, 0x60, 0, 0, 0, 0, 0, 0, 0, 0, 0x88, 0x88];
-const GRANTED_SRC: [u8; 16] = [0x02, 0x00, 0x12, 0x34, 0x56, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x42];
-const OUTSIDE_SRC: [u8; 16] = [0x02, 0x00, 0x99, 0x99, 0x99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x42];
-const GRANT_PREFIX: [u8; 16] = [0x02, 0x00, 0x12, 0x34, 0x56, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+const EXTERNAL_DST: [u8; 16] = [
+    0x20, 0x01, 0x48, 0x60, 0x48, 0x60, 0, 0, 0, 0, 0, 0, 0, 0, 0x88, 0x88,
+];
+const GRANTED_SRC: [u8; 16] = [
+    0x02, 0x00, 0x12, 0x34, 0x56, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x42,
+];
+const OUTSIDE_SRC: [u8; 16] = [
+    0x02, 0x00, 0x99, 0x99, 0x99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x42,
+];
+const GRANT_PREFIX: [u8; 16] = [
+    0x02, 0x00, 0x12, 0x34, 0x56, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
 
 fn gateway_identity() -> Identity {
     Identity::from_seed(LinkSeed::new([0x02; 32]))
@@ -674,8 +682,7 @@ fn provision_expired_grant_refused(gateway: &mut Gateway) {
         gw_iid,
     )
     .unwrap();
-    let post =
-        build_root_post(claim, &route, gw_iid, &identity.privkey, &identity.pubkey).unwrap();
+    let post = build_root_post(claim, &route, gw_iid, &identity.privkey, &identity.pubkey).unwrap();
     let response = gateway.coordinator_mut().handle_request(
         CoapMethod::Post,
         "tunnel-auth",
@@ -713,11 +720,16 @@ fn provision_grant(gateway: &mut Gateway, expiry: u64) {
     let identity = gateway_identity();
     let gw_iid = iid_from_pubkey_bytes(identity.pubkey.as_bytes());
     let route = [gw_iid];
-    let claim =
-        TunnelAuthorization::new(GRANT_PREFIX, 40, route_hash(&route).unwrap(), 7, expiry, gw_iid)
-            .unwrap();
-    let post =
-        build_root_post(claim, &route, gw_iid, &identity.privkey, &identity.pubkey).unwrap();
+    let claim = TunnelAuthorization::new(
+        GRANT_PREFIX,
+        40,
+        route_hash(&route).unwrap(),
+        7,
+        expiry,
+        gw_iid,
+    )
+    .unwrap();
+    let post = build_root_post(claim, &route, gw_iid, &identity.privkey, &identity.pubkey).unwrap();
     let response = gateway.coordinator_mut().handle_request(
         CoapMethod::Post,
         "tunnel-auth",
@@ -727,6 +739,46 @@ fn provision_grant(gateway: &mut Gateway, expiry: u64) {
         0,
     );
     assert_eq!(response.code, 0x44, "grant POST must be accepted (2.04)");
+}
+
+/// Mint a grant signed by a DODAG root that is NOT the gateway itself,
+/// covering the gateway's own IID as the egress, and POST it into the
+/// coordinator under that root binding (0x44 expected).
+fn provision_grant_from_distinct_root(gateway: &mut Gateway) {
+    let root_identity = Identity::from_seed(LinkSeed::new([0x77; 32]));
+    let root_iid = iid_from_pubkey_bytes(root_identity.pubkey.as_bytes());
+    gateway.coordinator_mut().set_tunnel_auth_root(root_iid);
+    let gw_iid = iid_from_pubkey_bytes(gateway_identity().pubkey.as_bytes());
+    let route = [gw_iid];
+    let claim = TunnelAuthorization::new(
+        GRANT_PREFIX,
+        40,
+        route_hash(&route).unwrap(),
+        7,
+        unix_secs() + 3600,
+        gw_iid,
+    )
+    .unwrap();
+    let post = build_root_post(
+        claim,
+        &route,
+        root_iid,
+        &root_identity.privkey,
+        &root_identity.pubkey,
+    )
+    .unwrap();
+    let response = gateway.coordinator_mut().handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        post.body.as_bytes(),
+        true,
+        Some(root_identity.pubkey.as_bytes()),
+        0,
+    );
+    assert_eq!(
+        response.code, 0x44,
+        "distinct-root grant must be accepted (2.04)"
+    );
 }
 
 async fn ingest_source_to(
@@ -756,7 +808,27 @@ async fn wired_egress_forwards_authorized_tunnel() {
         .expect("authorized tunnel must be forwarded upstream");
     assert_eq!(upstream[0] >> 4, 6, "upstream datagram is IPv6");
     assert_eq!(&upstream[8..24], &GRANTED_SRC, "inner source preserved");
-    assert_eq!(&upstream[24..40], &EXTERNAL_DST, "inner destination preserved");
+    assert_eq!(
+        &upstream[24..40],
+        &EXTERNAL_DST,
+        "inner destination preserved"
+    );
+}
+
+#[tokio::test]
+async fn wired_egress_matches_grant_under_distinct_root_via_own_iid_route_evidence() {
+    // Root ≠ gateway: route evidence must be the gateway's own IID (it is the
+    // egress), not the bound DODAG root IID, or the grant can never match.
+    let mut gateway = fresh_gateway();
+    let mut peer = MeshPeer::new();
+    peer.bootstrap(&mut gateway, 0).await;
+    provision_grant_from_distinct_root(&mut gateway);
+
+    let upstream = ingest_source_to(&mut peer, &mut gateway, GRANTED_SRC, EXTERNAL_DST)
+        .await
+        .expect("grant over the gateway's own IID must be forwarded upstream");
+    assert_eq!(upstream[0] >> 4, 6, "upstream datagram is IPv6");
+    assert_eq!(&upstream[8..24], &GRANTED_SRC, "inner source preserved");
 }
 
 #[tokio::test]

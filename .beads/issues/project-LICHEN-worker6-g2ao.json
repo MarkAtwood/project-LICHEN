@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-g2ao",
+  "title": "Extend illustrative-address disclaimer to opaque 0200::/8 placeholders in 11-lci examples",
+  "description": "Security-review P3 finding from project-LICHEN-worker6-l87u. spec/11-lci.md node-primary examples at ~lines 325 ('\"root\": \"0200:1234:5678:9abc::1\"'), 598, 608, 620, 633, 652 use opaque placeholder /128s (0200:...::1, ::aaaa:bbbb:cccc:dddd, ::1111:2222:3333:4444). These do NOT embed an IID (no downgrade invitation) and are valid AddrForKey output shapes, but the new note at 11-lci.md:296-298 tells readers a real primary is bit-packed AddrForKey bytes, and the global 'illustrative shorthand' disclaimer at line ~181 covers only fe80::1. Extend that disclaimer (or add one sentence near §17.5 examples) stating that all 0200:1234:5678:9abc::... addresses in this document are illustrative placeholders, not literal AddrForKey outputs. Docs-polish only; no normative change. Low priority.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T05:08:58.361849895Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:08:58.361849895Z",
+  "labels": [
+    "lci",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-g2ao",
+      "depends_on_id": "project-LICHEN-worker6-l87u",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T05:08:58.48617346Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

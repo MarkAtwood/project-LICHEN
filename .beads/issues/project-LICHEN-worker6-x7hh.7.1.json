@@ -1,0 +1,41 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.7.1",
+  "title": "x7hh.7 leaf: Python scheduler TX path: slot_map beacon writer",
+  "description": "Integrate finalized CCP2 policy/wire through the Python scheduler TX path including slot_map beacon writing (spec 02a 2a.2), reusing b7z9.22 helpers.",
+  "acceptance_criteria": "Beacon bytes match corpus vectors; scheduler emits only receiver-admissible schedules.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-decomposition",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T03:37:34.952356507Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:42:54.949764152Z",
+  "started_at": "2026-09-09T05:42:54.949764152Z",
+  "lease_expires_at": "2026-09-09T05:47:54.949764152Z",
+  "heartbeat_at": "2026-09-09T05:42:54.949764152Z",
+  "labels": [
+    "python",
+    "ccp",
+    "conformance",
+    "local-ok"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.7",
+      "type": "parent-child",
+      "created_at": "2026-09-09T03:37:35.116127284Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T03:38:21.084702147Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

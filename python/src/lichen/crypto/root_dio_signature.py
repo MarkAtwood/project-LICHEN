@@ -32,7 +32,7 @@ decision.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from hashlib import sha256
 from ipaddress import IPv6Address
 from typing import TYPE_CHECKING
@@ -40,17 +40,11 @@ from typing import TYPE_CHECKING
 import cbor2
 
 from . import schnorr48
+from .schnorr48 import COSE_ALG_LABEL, COSE_KID_LABEL, SCHNORR48_ED25519_ALG
 from .identity import _pubkey_to_iid, yggdrasil_address
 
 if TYPE_CHECKING:
     from .identity import Identity
-
-# COSE algorithm ID for Schnorr48-Ed25519 (private use range)
-SCHNORR48_ED25519_ALG = -65537
-
-# COSE header labels
-COSE_ALG_LABEL = 1  # Algorithm
-COSE_KID_LABEL = 4  # Key ID
 
 # Payload map keys (integer keys per spec to minimize size)
 _PAYLOAD_DODAG_ID = 1
@@ -93,7 +87,7 @@ def _build_sig_structure(protected: bytes, payload: bytes) -> bytes:
     return cbor2.dumps(sig_structure)
 
 
-@dataclass
+@dataclass(frozen=True)
 class RootDioSignaturePayload:
     """Root DIO Signature payload per spec section 8.10.1.
 
@@ -159,8 +153,15 @@ class RootDioSignaturePayload:
 
     @classmethod
     def from_cbor(cls, data: bytes) -> RootDioSignaturePayload:
-        """Decode payload from CBOR bytes."""
+        """Decode payload from CBOR bytes.
+
+        Raises:
+            TypeError: If the payload is not a CBOR map.
+            KeyError: If a required field is missing.
+        """
         payload_map = cbor2.loads(data)
+        if not isinstance(payload_map, dict):
+            raise TypeError("payload must be a CBOR map")
         return cls(
             dodag_id=payload_map[_PAYLOAD_DODAG_ID],
             instance=payload_map[_PAYLOAD_INSTANCE],
@@ -172,7 +173,7 @@ class RootDioSignaturePayload:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class RootDioSignature:
     """COSE_Sign1 Root DIO Signature per spec section 8.10.1.
 
@@ -188,22 +189,46 @@ class RootDioSignature:
     payload: RootDioSignaturePayload
     root_iid: bytes
     signature: bytes
+    protected_bytes: bytes | None = None
+    payload_bytes: bytes | None = None
 
     def __post_init__(self) -> None:
         if len(self.root_iid) != 8:
             raise ValueError(f"root_iid must be 8 bytes, got {len(self.root_iid)}")
         if len(self.signature) != 48:
             raise ValueError(f"signature must be 48 bytes, got {len(self.signature)}")
+        if (self.protected_bytes is None) != (self.payload_bytes is None):
+            raise ValueError("wire bstrs must be retained as a pair or not at all")
+        if self.payload_bytes is not None:
+            # The retained wire bstrs are what the signature is verified over
+            # (RFC 9052 section 4.4); they must decode to exactly the payload
+            # carried on the object, or verify would authenticate one payload
+            # while callers read another (desync via mismatched construction
+            # or dataclasses.replace).
+            try:
+                decoded = RootDioSignaturePayload.from_cbor(self.payload_bytes)
+            except (TypeError, KeyError, IndexError, ValueError, cbor2.CBORDecodeError) as e:
+                raise ValueError(f"payload_bytes do not decode to a valid payload: {e}") from None
+            if decoded != self.payload:
+                raise ValueError("payload_bytes do not decode to the payload on the signature")
 
     def to_cose_sign1(self) -> bytes:
         """Encode as COSE_Sign1 structure.
 
+        When wire bstrs were retained (decode or creation), they are emitted
+        verbatim so a forwarded/stored signature object stays signature-valid
+        for downstream verifiers (RFC 9052 section 4.4).
+
         Returns:
             CBOR-encoded COSE_Sign1 array
         """
-        protected = _encode_protected_header()
+        protected = (
+            self.protected_bytes if self.protected_bytes is not None else _encode_protected_header()
+        )
+        payload_bytes = (
+            self.payload_bytes if self.payload_bytes is not None else self.payload.to_cbor()
+        )
         unprotected = {COSE_KID_LABEL: self.root_iid}
-        payload_bytes = self.payload.to_cbor()
 
         cose_sign1 = [protected, unprotected, payload_bytes, self.signature]
         return cbor2.dumps(cose_sign1)
@@ -248,7 +273,10 @@ class RootDioSignature:
         if not isinstance(signature, bytes) or len(signature) != 48:
             raise ValueError("signature must be 48 bytes")
 
-        return cls(payload=payload, root_iid=root_iid, signature=signature)
+        sig = cls(payload=payload, root_iid=root_iid, signature=signature)
+        # Retain the transported bstrs (RFC 9052 section 4.4): the signature
+        # covers them verbatim, not any re-encoding of the decoded payload.
+        return replace(sig, protected_bytes=protected_bytes, payload_bytes=payload_bytes)
 
 
 def create_root_dio_signature(
@@ -297,7 +325,13 @@ def create_root_dio_signature(
     to_sign = sha256(sig_structure).digest()
     signature = schnorr48.sign(identity.privkey, identity.pubkey, to_sign)
 
-    return RootDioSignature(payload=payload, root_iid=identity.iid, signature=signature)
+    return RootDioSignature(
+        payload=payload,
+        root_iid=identity.iid,
+        signature=signature,
+        protected_bytes=protected,
+        payload_bytes=payload_bytes,
+    )
 
 
 def verify_root_dio_signature(
@@ -349,9 +383,14 @@ def verify_root_dio_signature(
     if payload.dodag_id != yggdrasil_address(pubkey).packed:
         return False, "DODAG_ID_MISMATCH"
 
-    # Step 1: Verify signature
-    protected = _encode_protected_header()
-    payload_bytes = payload.to_cbor()
+    # Step 1: Verify signature over the transported bstrs (RFC 9052 section
+    # 4.4), falling back to re-encoding for a field-constructed object.
+    if root_dio_sig.protected_bytes is not None and root_dio_sig.payload_bytes is not None:
+        protected = root_dio_sig.protected_bytes
+        payload_bytes = root_dio_sig.payload_bytes
+    else:
+        protected = _encode_protected_header()
+        payload_bytes = payload.to_cbor()
     sig_structure = _build_sig_structure(protected, payload_bytes)
     to_verify = sha256(sig_structure).digest()
 

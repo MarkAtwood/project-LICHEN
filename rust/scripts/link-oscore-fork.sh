@@ -8,9 +8,11 @@
 # symlinked copy resolves rust_dir to the copy's parent and is unsupported.
 #
 # Idempotent: safe to run before every cargo invocation (CI, fresh clones).
-# CI runners have neither candidate path and provisioning is not wired yet,
-# so the script exits 1 there until the fork checkout is provisioned at a
-# candidate location (tracked in the LICHEN beads: CI oscore provisioning).
+# On dev hosts this script creates the rust/oscore-fork symlink at a
+# candidate fork checkout. CI runners instead materialize rust/oscore-fork
+# as a real pinned clone via the .github/actions/oscore-fork composite
+# action, so they never invoke this script; if it runs with no candidate
+# checkout available (no fork found, CI env), it exits 1.
 set -euo pipefail
 
 rust_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

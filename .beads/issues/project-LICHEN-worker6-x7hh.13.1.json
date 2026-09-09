@@ -1,0 +1,56 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.13.1",
+  "title": "x7hh.13 leaf: Traceability docs refresh after core evidence exists",
+  "description": "Update docs/ccp-conformance.md, CCP/PHY pages under docs/spec-coverage, flagged companions, vector catalog/provenance, and draft/index references after x7hh.10/.11/.12 evidence exists (parent stays blocked).",
+  "acceptance_criteria": "Docs match actual store/test state; counts re-read at publication; no aspirational claims.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-decomposition",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T03:37:42.845991124Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:42:53.203408159Z",
+  "started_at": "2026-09-09T05:42:53.203408159Z",
+  "lease_expires_at": "2026-09-09T05:47:53.203408159Z",
+  "heartbeat_at": "2026-09-09T05:42:53.203408159Z",
+  "labels": [
+    "docs",
+    "ccp",
+    "conformance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.13.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.13",
+      "type": "parent-child",
+      "created_at": "2026-09-09T03:37:42.993691794Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.13.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.10.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T03:38:29.743381379Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.13.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.11.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T03:38:30.376895079Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.13.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.12.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T03:38:31.018879568Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

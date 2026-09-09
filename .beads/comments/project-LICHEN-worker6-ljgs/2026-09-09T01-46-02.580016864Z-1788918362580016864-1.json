@@ -1,7 +1,0 @@
-{
-  "id": "1788918362580016864-1",
-  "issue_id": "project-LICHEN-worker6-ljgs",
-  "author": "Mark Atwood",
-  "text": "Evidence from 3mz9 round (2026-09-09): runtime_ingress_dispatches_authenticated_gcp_slot_claim (end_to_end.rs:1048) fails identically on baseline (before 3mz9's fallback change, verified by stash+retest) and after it — same assertion 'code 0x89 \u0026\u0026 options == [0xc1, 60]'. The failure mode now relevant for the adjudication: the 4.09 fallback payload is empty (no Content-Format semantics, option encodes 0xc0 after review-pass fixes), so when the winning gateway has no recorded own envelope the runtime dispatch test can never see [0xc1, 60] — the assertion presumes the winner's COSE echo path (record_own_claim_envelope), which has no production caller until the sender-side machinery (l1qw.20) lands. Adjudication shape (ljgs) therefore also decides: (a) does the test provision a recorded own envelope (echo path, spec-conformant payload), or (b) does the empty fallback stand? Note the gateway_count-off-wire COSE encode_cose path used by the echo test already exists (SlotClaim::encode_cose).",
-  "created_at": "2026-09-09T01:46:02.580016864Z"
-}

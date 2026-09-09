@@ -9,10 +9,10 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-04T14:27:18.946476348Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-09-09T00:39:34.038865498Z",
-  "started_at": "2026-09-09T00:33:02.94627847Z",
-  "closed_at": "2026-09-09T00:39:34.038865498Z",
-  "close_reason": "Already landed at HEAD by 63715aa4f0 (which corrected b6f5d79741's wrong 0x93 constant to the real 4.09=0x89): win-arm returns CoapResponse::conflict (resources.rs:1979, constructor :1031-1037), the 3 named conflict tests assert 0x89 (resources.rs:2750/2951/2995), fully_occupied insufficient_free_slots stays 2.05 (:2826), silent-discard/4.03 arms untouched. Verified: 252 lib tests pass + 1 ignored (reviewer's 253 count = ignored test); end_to_end RED is runtime_ingress_dispatches_authenticated_gcp_slot_claim, deliberately RED per human bead ljgs. Item (3) slot_state_write_failure retry trace: retry now correctly lands on 4.09 conflict path, test asserts 0x89 at :2951. 1 reviewer pass (kimi-k3 correctness): PASS, no defects; passes 2-3 of 3x protocol not run since this round produced zero code changes (verification-only close), noted here per protocol. Residual spec step-11 payload divergence (rejection map vs winning gateway's claim) filed as project-LICHEN-worker6-3mz9 - structural, outside this bead's declared scope.",
+  "updated_at": "2026-09-09T04:17:31.540755759Z",
+  "started_at": "2026-09-09T04:12:31.655498333Z",
+  "closed_at": "2026-09-09T04:17:31.540755759Z",
+  "close_reason": "Scope fully landed on main by 620ca2bcd3 + 49e460a240; verified all named tests assert correct codes, 270/270 gateway lib tests pass. Stale-comment residue filed as follow-up.",
   "labels": [
     "gateway"
   ],

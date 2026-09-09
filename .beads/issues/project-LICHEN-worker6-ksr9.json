@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-ksr9",
+  "title": "Fix x509 appendix normative contradictions and scope",
+  "description": "Codereview findings (kimi-k3, 3 passes) against spec/appendix-x509-cert-profile.md created in viku.1. Fixes needed, all in that one file: (1) scope the MUST-conform requirement to the end-entity cert only — CA/intermediate certs cannot conform (CA=true, non-Ed25519 OK per §7); (2) 'exactly one iPAddress' (§4) contradicts the permitted second link-local iPAddress — reword, forbid a second native 0200::/8 entry, define verifier handling of a mismatched-IID link-local; (3) SAN criticality: summary table says 'critical' unconditionally and spec/06 §8.13.2 block repeats it, but §4 only mandates critical when subject is empty — align (RFC 5280: non-critical when subject non-empty); (4) worked SAN example address 0210:1112:1314:1516:1718:191a:1b1c:1d1e is non-constructible (U/L bit 0x02 set in IID byte 0; bytes 1-7 != IID bytes 0-6) — replace with a constructed example; (5) dangling refs '03-addressing.md §2' — the derivation section is 3.1; (6) validity claim: 396 days matches no CA/B value (BR max was 398; SC-081 steps down further) and 'current practice' is wrong — fix; (7) specify verifier rule for present-but-empty role BIT STRING (treat as unasserted); (8) add MUST-level floor on CA signature algorithm (SHA-256 class or Ed25519) — 'any widely supported' admits SHA-1; (9) drop unresolvable bead IDs (viku.7/viku.8) from spec text.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:21:15.949986761Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T04:38:58.400290056Z",
+  "started_at": "2026-09-09T04:26:18.108766755Z",
+  "closed_at": "2026-09-09T04:38:58.400290056Z",
+  "close_reason": "All 9 findings fixed in spec/appendix-x509-cert-profile.md (+ spec/06-security.md §8.13.2): (1) MUST-conform scoped to end-entity cert, intermediates/roots declared ordinary RFC 5280 CA certs; (2) 'exactly one iPAddress' reworded — one native entry required, second native forbidden, one same-IID link-local allowed, verifiers ignore all non-native entries incl. IID-mismatched link-local; (3) SAN criticality aligned: critical iff subject empty (table, §4, 06 §8.13.2); (4) worked example replaced with constructible one (pubkey 000102..1f, SHA-512-derived addr 023d:94ee:...:0aef, DER verified + cross-validated against python/src/lichen/crypto/identity.py yggdrasil_address); (5) 03-addressing.md §2 -\u003e §3.1 x4; (6) validity 396d -\u003e 200d (CA/B SC-081 max for certs issued on/after 2026-03-15), 825d cap retained; (7) present-but-empty role BIT STRING = unasserted; (8) SHA-256-class signature floor, MD5/SHA-1 MUST NOT; (9) viku.7/viku.8 bead IDs dropped. 3x codereview: pass1 (correctness, kimi-k3 via opencode) PASS; pass2 (security, kimi-k3 via opencode) 1 finding (EE scoping not propagated to 06 §8.13.2 — regression within this diff, fixed inline); pass3 (edge) opencode timed out, performed by worker model: PASS. Pre-existing word-wrap nit filed as project-LICHEN-worker6-3lvh (P4).",
+  "labels": [
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ksr9",
+      "depends_on_id": "project-LICHEN-worker6-viku.1",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T04:21:16.099551437Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

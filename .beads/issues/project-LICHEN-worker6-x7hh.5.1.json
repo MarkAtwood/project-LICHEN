@@ -1,0 +1,35 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.5.1",
+  "title": "x7hh.5 leaf: LR-FHSS RX hardware/demodulator path survey",
+  "description": "Identify an actual LR-FHSS receiving hardware/demodulator/software path for future LICHEN2, distinguishing SX1262/LR1110 TX capability and ordinary narrow-BW LoRa RX/TX from LR-FHSS RX.",
+  "acceptance_criteria": "At least one concrete RX path identified or absence documented with evidence; distinctions recorded.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-decomposition",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T03:37:32.127624652Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:42:55.6504497Z",
+  "started_at": "2026-09-09T05:42:55.6504497Z",
+  "lease_expires_at": "2026-09-09T05:47:55.6504497Z",
+  "heartbeat_at": "2026-09-09T05:42:55.6504497Z",
+  "labels": [
+    "phy",
+    "research",
+    "ccp",
+    "conformance",
+    "experimental",
+    "hardware"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.5.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.5",
+      "type": "parent-child",
+      "created_at": "2026-09-09T03:37:32.296735554Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

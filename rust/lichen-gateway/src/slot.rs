@@ -527,6 +527,12 @@ impl RawSlotClaim {
     /// would keep the last), unknown payload keys are rejected (cbor2
     /// ignores them), and the unprotected kid must equal the payload's
     /// gateway_iid (Python ignores the kid beyond its 8-byte shape).
+    /// Payload keys must additionally be strictly ascending and the payload
+    /// must end exactly at the last pair — the payload is adjudicated
+    /// deterministic-CBOR (spec/decisions.jsonl slot-claim-cose-sign1). C
+    /// rejects both forms (its verifier digests the received payload bytes,
+    /// coap_slot_coord.c:394); Python's decoder still accepts them — that
+    /// parity gap is tracked on the Python slot-claim beads.
     pub fn from_cose(envelope: &[u8], slots_per_superframe: u32) -> Result<Self, SlotError> {
         let malformed = |_| SlotError::MalformedClaim;
         let mut r = Reader::new(envelope);
@@ -565,11 +571,15 @@ impl RawSlotClaim {
         let mut claim_seq: Option<u32> = None;
         let mut ordinal: Option<u64> = None;
         let mut seen: u8 = 0;
+        let mut last_key: u64 = 0;
         for _ in 0..pairs {
             let key = p.uint().map_err(malformed)?;
-            if key == 0 || key > 7 || seen & (1 << key) != 0 {
+            // Deterministic-CBOR map: keys strictly ascending (a key of 0 is
+            // covered — it can never follow last_key == 0).
+            if key == 0 || key > 7 || key <= last_key || seen & (1 << key) != 0 {
                 return Err(SlotError::MalformedClaim);
             }
+            last_key = key;
             seen |= 1 << key;
             match key {
                 1 => {
@@ -601,6 +611,8 @@ impl RawSlotClaim {
                 _ => ordinal = Some(p.uint().map_err(malformed)?),
             }
         }
+        // Deterministic-CBOR payload ends exactly at the last pair: trailing
+        // bytes inside the payload bstr are rejected.
         if !p.finished() {
             return Err(SlotError::MalformedClaim);
         }
@@ -634,6 +646,14 @@ impl RawSlotClaim {
         })
     }
 
+    /// Digest the received COSE payload bytes for the signature check.
+    ///
+    /// Merge resolution: HEAD's received-bytes digest is kept over
+    /// beads-worker-4's canonical re-encode (`claim_payload`). The two are
+    /// byte-identical for every claim that reaches verification — from_cose
+    /// rejects all non-canonical payloads (deterministic-CBOR per
+    /// spec/decisions.jsonl slot-claim-cose-sign1) — and binding the exact
+    /// wire bytes matches the C verifier (coap_slot_coord.c:394).
     fn cose_sig_digest(&self) -> Result<[u8; 32], SlotError> {
         cose_sig_digest(
             self.cose_payload
@@ -2452,69 +2472,69 @@ mod tests {
     }
 
     #[test]
-    fn cose_verification_binds_noncanonical_payload_bytes() {
-        let (private, public) = derive_keypair(&Seed::new([43; 32]));
-        let pubkey = *public.as_bytes();
-        let iid = crate::trust::iid_from_pubkey(&pubkey);
-        let payload = SlotClaimPayload {
-            slots: vec![1, 2],
-            superframe_epoch: 9,
-            mode: AllocationMode::Interleaved,
-            expiry: 5_000_000,
-            gateway_iid: iid,
-            claim_seq: 0,
-            ordinal: Some(0),
+    fn cose_decode_rejects_reordered_payload_keys_and_trailing_bytes() {
+        // spec/decisions.jsonl slot-claim-cose-sign1 adjudicated the payload
+        // as deterministic-CBOR: keys strictly ascending, no trailing bytes.
+        // The decoder itself rejects both forms; the verifier digests the
+        // received payload bytes (C parity, coap_slot_coord.c:394), so they
+        // would fail the signature check even if decoded. Python's decoder
+        // still accepts them — tracked parity gap. (Merge resolution: this
+        // keeps beads-worker-4's decode-time rejection test. HEAD's
+        // cose_verification_binds_noncanonical_payload_bytes expected a
+        // reordered payload to decode and then fail with InvalidSignature,
+        // which the adjudicated strict decoder forbids; HEAD's
+        // cose_decode_rejects_trailing_payload_data is subsumed by the
+        // trailing-bytes case below.)
+        let kid = oracle_payload().gateway_iid;
+        let signature = [7u8; SIGNATURE_LEN];
+        let build = |payload: &[u8]| {
+            let mut buf = vec![0u8; payload.len() + 128];
+            let len = {
+                let mut w = Writer::new(&mut buf);
+                w.byte(0x84).unwrap();
+                w.bstr(PROTECTED).unwrap();
+                w.byte(0xa1).unwrap();
+                w.byte(0x04).unwrap();
+                w.bstr(&kid).unwrap();
+                w.bstr(payload).unwrap();
+                w.bstr(&signature).unwrap();
+                w.position()
+            };
+            buf.truncate(len);
+            buf
         };
-        let canonical = payload.encode_canonical().unwrap();
-        let signature = sign(&private, &public, &cose_sig_digest(&canonical).unwrap());
 
-        // Keep the signed fields unchanged while using a non-canonical map
-        // ordering for the payload on the wire.
-        let mut noncanonical = vec![0u8; canonical.len()];
-        let length = {
-            let mut writer = Writer::new(&mut noncanonical);
-            writer.head(5, 7).unwrap();
-            writer.uint(2).unwrap();
-            writer.uint(9).unwrap();
-            writer.uint(1).unwrap();
-            writer.head(4, 2).unwrap();
-            writer.uint(1).unwrap();
-            writer.uint(2).unwrap();
-            writer.uint(3).unwrap();
-            writer.uint(0).unwrap();
-            writer.uint(4).unwrap();
-            writer.uint(5_000_000).unwrap();
-            writer.uint(5).unwrap();
-            writer.bstr(&iid).unwrap();
-            writer.uint(6).unwrap();
-            writer.uint(0).unwrap();
-            writer.uint(7).unwrap();
-            writer.uint(0).unwrap();
-            writer.position()
+        // Every key 1-7 present exactly once, but keys 3 and 2 swapped.
+        let mut reordered = vec![0u8; 64];
+        let reordered_len = {
+            let mut w = Writer::new(&mut reordered);
+            w.byte(0xa7).unwrap();
+            w.uint(1).unwrap();
+            w.head(4, 0).unwrap();
+            w.uint(3).unwrap();
+            w.uint(0).unwrap();
+            w.uint(2).unwrap();
+            w.uint(7).unwrap();
+            w.uint(4).unwrap();
+            w.uint(5_000_000).unwrap();
+            w.uint(5).unwrap();
+            w.bstr(&kid).unwrap();
+            w.uint(6).unwrap();
+            w.uint(3).unwrap();
+            w.uint(7).unwrap();
+            w.uint(0).unwrap();
+            w.position()
         };
-        noncanonical.truncate(length);
-        let envelope = cose_envelope_with_kid(&noncanonical, &signature, &iid);
-        let claim = RawSlotClaim::from_cose(&envelope, 60).unwrap();
-        let mut verifier = SlotClaimVerifier::new_ephemeral(16).unwrap();
         assert_eq!(
-            verifier.verify(claim, &pubkey, 9).unwrap_err(),
-            SlotError::InvalidSignature
+            RawSlotClaim::from_cose(&build(&reordered[..reordered_len]), 60).unwrap_err(),
+            SlotError::MalformedClaim
         );
-    }
 
-    #[test]
-    fn cose_decode_rejects_trailing_payload_data() {
-        let (envelope, _pubkey, _) = signed_cose_envelope([44; 32], vec![1], 9);
-        // The payload is the bstr immediately before the signature.
-        let payload_start = envelope.iter().position(|byte| *byte == 0x58).unwrap();
-        let payload_len = envelope[payload_start + 1] as usize;
-        let payload_data_start = payload_start + 2;
-        let payload_data_end = payload_data_start + payload_len;
-        let mut malformed = envelope.clone();
-        malformed[payload_start + 1] += 1;
-        malformed.splice(payload_data_end..payload_data_end, [0xff]);
+        // Canonical payload with one trailing byte inside the payload bstr.
+        let mut trailing = oracle_payload().encode_canonical().unwrap();
+        trailing.push(0x00);
         assert_eq!(
-            RawSlotClaim::from_cose(&malformed, 60).unwrap_err(),
+            RawSlotClaim::from_cose(&build(&trailing), 60).unwrap_err(),
             SlotError::MalformedClaim
         );
     }

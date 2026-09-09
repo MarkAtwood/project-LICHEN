@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-t0x5",
+  "title": "Harden x509 appendix verifier semantics",
+  "description": "Codereview findings (kimi-k3, security+edge passes) against spec/appendix-x509-cert-profile.md created in viku.1; these change verifier-behavior requirements (§8): (1) the key-to-address binding check (§8 step 4) compares only the lower 64 bits — MUST recompute the full 16-byte native address ([0x02]+SHA-512(pubkey)[0:7]+IID) and compare all 128 bits, otherwise a cert with arbitrary upper bytes passes while attesting an address the node does not own; (2) wholesale chain replacement has no freshness ordering — a node re-issued a reduced cert can re-present its older still-valid chain and roll verifiers back (last-presented-wins); add a replace-only-if-newer rule (e.g. strictly later notBefore/notAfter, reject older chains); (3) role extension is not scoped to authorized anchors — any chain to ANY configured trust anchor (incl. the optional public default CA) would satisfy lichen:relay=true by default, promoting every identity anchor to a mesh-wide forwarding grantor and contradicting the gateway-local lichen:relay local-fact model (06-security.md 8.13.1); add normative text that role-bearing anchors MUST be separately configured and that absence of role assertion must not be read as leaf.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:21:28.648569984Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:43:35.249680125Z",
+  "labels": [
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-t0x5",
+      "depends_on_id": "project-LICHEN-worker6-viku.1",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T04:21:28.787386211Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

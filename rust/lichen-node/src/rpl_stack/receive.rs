@@ -625,11 +625,13 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 // Solicited DIS response: re-target to the canonical
                 // multicast DIO address (RPL_ALL_NODES, ff02::1a). Per the
                 // R-09-005 admission contract (Python parity, worker6-ehcn
-                // option (A)) a unicast-destination DIO would be
-                // inadmissible at wire_is_for_local before admission even
-                // runs — and the leaf still joins by hearing the multicast
-                // DIO. RFC 6550 8.3's unicast-response SHOULD is overridden
-                // by the profile contract.
+                // option (A)) a unicast-destination DIO is rejected by the
+                // canonical-multicast gate inside the peer's
+                // process_authenticated_dio (lichen-schc codec; the failed
+                // admission also revokes the sender's join state) — and the
+                // leaf still joins by hearing the multicast DIO. RFC 6550
+                // 8.3's unicast-response SHOULD is overridden by the
+                // profile contract.
                 self.send_dio(RPL_ALL_NODES)
                     .await
                     .map_err(RplReceiveError::Transmit)?;

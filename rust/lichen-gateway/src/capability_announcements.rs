@@ -187,6 +187,24 @@ pub fn from_cose_sign1(data: &[u8]) -> Result<CapabilityAnnouncement, AnnounceEr
         announcer_iid: announcer_iid.ok_or(AnnounceError::Malformed)?,
     };
 
+    // spec 8.12 (06-security): the prefix is ceil(prefix_len/8) bytes.
+    // Range + exact-length checks mirror Python CapabilityPayload
+    // __post_init__ (capability_announcements.py:113-121) exactly. Without
+    // them a non-byte-aligned prefix_len is ambiguous on the wire, and
+    // into_entry() would silently truncate an over-long prefix to 16 bytes.
+    // NOTE: unlike tunnel-auth (rust prefix_is_canonical, python
+    // tunnel_auth.py:144, C tunnel_auth.c prefix_valid), bits beyond
+    // prefix_len are NOT masked here — Python's capability validator has no
+    // such check, and identical wire verdicts take precedence; trailing-bit
+    // masking for capability prefixes is tracked separately.
+    if payload.prefix_len > 128 {
+        return Err(AnnounceError::Malformed);
+    }
+    let expected_octets = usize::from(payload.prefix_len.div_ceil(8));
+    if payload.prefix.len() != expected_octets {
+        return Err(AnnounceError::Malformed);
+    }
+
     // kid in the unprotected header must match the payload announcer IID.
     let kid = unprotected_kid(unprotected).ok_or(AnnounceError::KidMismatch)?;
     if kid != payload.announcer_iid {
@@ -444,6 +462,91 @@ mod tests {
     fn malformed_cose_is_rejected() {
         assert_eq!(from_cose_sign1(&[]), Err(AnnounceError::Malformed));
         assert_eq!(from_cose_sign1(&[0x80]), Err(AnnounceError::Malformed));
+    }
+
+    /// Build a structurally valid COSE_Sign1 envelope around a crafted
+    /// payload map (kid == announcer IID so the kid check passes; the dummy
+    /// signature is never reached on decode failures).
+    fn envelope_with_prefix(prefix: &[u8], prefix_len: i64) -> Vec<u8> {
+        let iid = [0x42u8; 8];
+        let payload_map = Value::Map(vec![
+            (
+                Value::Integer(Integer::from(PAYLOAD_CAPABILITIES)),
+                Value::Integer(Integer::from(1)),
+            ),
+            (
+                Value::Integer(Integer::from(PAYLOAD_PREFIX)),
+                Value::Bytes(prefix.to_vec()),
+            ),
+            (
+                Value::Integer(Integer::from(PAYLOAD_PREFIX_LEN)),
+                Value::Integer(Integer::from(prefix_len)),
+            ),
+            (
+                Value::Integer(Integer::from(PAYLOAD_EXPIRY)),
+                Value::Integer(Integer::from(4_000_000_000i64)),
+            ),
+            (
+                Value::Integer(Integer::from(PAYLOAD_SEQ)),
+                Value::Integer(Integer::from(1)),
+            ),
+            (
+                Value::Integer(Integer::from(PAYLOAD_ANNOUNCER_IID)),
+                Value::Bytes(iid.to_vec()),
+            ),
+        ]);
+        let mut payload_bytes = Vec::new();
+        ciborium::ser::into_writer(&payload_map, &mut payload_bytes).unwrap();
+        let unprotected = Value::Map(vec![(
+            Value::Integer(Integer::from(4)),
+            Value::Bytes(iid.to_vec()),
+        )]);
+        let envelope = Value::Array(vec![
+            Value::Bytes(encode_protected_header()),
+            unprotected,
+            Value::Bytes(payload_bytes),
+            Value::Bytes(vec![0u8; 48]),
+        ]);
+        let mut encoded = Vec::new();
+        ciborium::ser::into_writer(&envelope, &mut encoded).unwrap();
+        encoded
+    }
+
+    #[test]
+    fn noncanonical_prefix_is_rejected() {
+        // spec 8.12: prefix is ceil(prefix_len/8) bytes; prefix_len 0-128
+        // (Python CapabilityPayload __post_init__ parity).
+        // prefix_len out of range.
+        assert_eq!(
+            from_cose_sign1(&envelope_with_prefix(&[0u8; 17], 129)),
+            Err(AnnounceError::Malformed)
+        );
+        // Byte count must equal ceil(prefix_len/8) exactly.
+        assert_eq!(
+            from_cose_sign1(&envelope_with_prefix(&[0u8; 8], 128)),
+            Err(AnnounceError::Malformed)
+        );
+        assert_eq!(
+            from_cose_sign1(&envelope_with_prefix(&[0u8; 16], 64)),
+            Err(AnnounceError::Malformed)
+        );
+        // Non-byte-aligned with a trailing bit set beyond prefix_len:
+        // ACCEPTED, matching Python's capability validator (no tail-bit
+        // mask — unlike tunnel-auth; see the note in from_cose_sign1).
+        let tail_bits = envelope_with_prefix(&[0x02, 0x00, 0x12, 0x34, 0x01], 33);
+        assert_eq!(
+            from_cose_sign1(&tail_bits).expect("tail-bit /33 decodes per Python parity").payload.prefix_len,
+            33
+        );
+        // Non-byte-aligned canonical form (trailing bits zero) decodes.
+        let ok = envelope_with_prefix(&[0x02, 0x00, 0x12, 0x34, 0x80], 33);
+        let announcement = from_cose_sign1(&ok).expect("canonical /33 must decode");
+        assert_eq!(announcement.payload.prefix_len, 33);
+        // prefix_len 0 carries an empty prefix.
+        let zero = envelope_with_prefix(&[], 0);
+        let announcement = from_cose_sign1(&zero).expect("prefix_len 0 must decode");
+        assert_eq!(announcement.payload.prefix_len, 0);
+        assert!(announcement.payload.prefix.is_empty());
     }
 
     #[test]

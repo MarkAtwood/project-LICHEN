@@ -1,0 +1,42 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.2.2",
+  "title": "x7hh.2 leaf: Operating-basis matrix incl 15.247 classification",
+  "description": "Build per-device allowed/disallowed/unverified configuration matrix distinguishing 15.247 ordinary FHSS vs DTS vs hybrid; verify bandwidth/spacing, hopping, occupancy, and paragraph(h) coordination evidence.",
+  "acceptance_criteria": "Matrix cites exact grant evidence; fixed-CH0/receiver-home operation not assumed FHSS-compliant; gaps marked unverified.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-decomposition",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T03:37:28.732433471Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:42:56.359557595Z",
+  "started_at": "2026-09-09T05:42:56.359557595Z",
+  "lease_expires_at": "2026-09-09T05:47:56.359557595Z",
+  "heartbeat_at": "2026-09-09T05:42:56.359557595Z",
+  "labels": [
+    "docs",
+    "regulatory",
+    "ccp",
+    "conformance",
+    "qualification"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T03:37:28.906477564Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.2.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T03:38:18.814645117Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

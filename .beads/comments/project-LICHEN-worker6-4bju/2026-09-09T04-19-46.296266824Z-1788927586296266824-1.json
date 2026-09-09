@@ -1,0 +1,7 @@
+{
+  "id": "1788927586296266824-1",
+  "issue_id": "project-LICHEN-worker6-4bju",
+  "author": "Mark Atwood",
+  "text": "Related defect found during project-LICHEN-worker6-1k3i: lichen/subsys/lichen/l2/ipv6_addr.h:284 doc comment for lichen_yggdrasil_addr() claims to implement 'the exact AddrForKey algorithm from yggdrasil-go ... matching the official Yggdrasil daemon bit-for-bit' but then documents the rejected SHA-512 native profile (h=SHA-512(pubkey); addr=[0x02]||h[0:7]||h[0:8]). Fix the doc comment (or implement real AddrForKey) as part of this bead. Real algorithm: invert key bits; addr[0]=0x02; addr[1]=count of leading 1 bits in inverted key; drop leading 1s and first 0 bit; bit-pack remainder into addr[2:16]. Oracle: test/vectors/yggdrasil_address.json upstream_addr_for_key.",
+  "created_at": "2026-09-09T04:19:46.296266824Z"
+}
