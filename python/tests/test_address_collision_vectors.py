@@ -153,8 +153,8 @@ def test_public_constants_match_canonical_vector() -> None:
 
 def test_public_binding_helper_returns_canonical_address() -> None:
     public_key = bytes.fromhex("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
-    result = verify_native_address_binding("020e:02a5:0225:b4ba:0c02:a502:25b4:baaa", public_key)
-    assert result.packed.hex() == "020e02a50225b4ba0c02a50225b4baaa"
+    result = verify_native_address_binding("0200:514a:cffc:fa9d:ea90:5568:0258:6d37", public_key)
+    assert result.packed.hex() == "0200514acffcfa9dea90556802586d37"
 
 
 def test_restart_rejects_regression_and_malformed_state() -> None:
