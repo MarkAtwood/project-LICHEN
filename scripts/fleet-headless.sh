@@ -98,6 +98,6 @@ print(n)" 2>/dev/null || echo 0)
         echo 0 > "$STATE/worker$N.noclose"
     fi
 
-    # Outcome canary contribution + small breath between rounds
-    sleep 5
+    # Minimal breath between rounds — throughput mode
+    sleep 2
 done
