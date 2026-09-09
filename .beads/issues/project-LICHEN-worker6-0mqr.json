@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-0mqr",
+  "title": "sync script: .beads worktree writes by the LLM session are ungated; corrupted store can be committed by post-loop checkpoints",
+  "description": "Reviewer kimi-k3 pass 2.2. The prompt-level 'do not touch .beads/' (:110) is not enforced: nothing detects the session writing .beads/** directly in main's worktree during the 900s window. snapshot_store (:301) preserves the corrupted state and post-loop checkpoints (:332-346) commit it into main's history. Fix: snapshot 'git status --porcelain .beads/' (or store tree hash) pre-session and require unchanged post-session.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:17:23.360665422Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:17:23.360665422Z",
+  "labels": [
+    "fleet-implementable"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-0mqr",
+      "depends_on_id": "project-LICHEN-worker6-1dyx",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T01:17:23.49147238Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

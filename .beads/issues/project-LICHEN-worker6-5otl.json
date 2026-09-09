@@ -2,17 +2,17 @@
   "id": "project-LICHEN-worker6-5otl",
   "title": "desync.rs in-crate test unused binding breaks clippy -D warnings",
   "description": "valid_beacon_resets_missed_counter_in_recovering (rust/lichen-core/src/desync.rs:638, from 86c69c827b) has let st = fsm.on_beacon(true, false); whose binding is shadowed before ever being read — cargo check -p lichen-core --tests emits unused_variables warning, so cargo clippy -p lichen-core --all-targets -- -D warnings fails. Fix: make the middle call a bare statement (matches the existing bare fsm.on_beacon pattern a few lines up in the same test; result is intentionally unchecked there, final call is asserted). Test-only, zero behavior change. Discovered-from: project-LICHEN-worker6-psxx verification pass.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-09T01:10:33.400686495Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-09T01:10:47.426233581Z",
+  "updated_at": "2026-09-09T01:14:01.668709951Z",
   "started_at": "2026-09-09T01:10:47.426233581Z",
-  "lease_expires_at": "2026-09-09T01:15:47.426233581Z",
-  "heartbeat_at": "2026-09-09T01:10:47.426233581Z",
+  "closed_at": "2026-09-09T01:14:01.668709951Z",
+  "close_reason": "Fixed: middle on_beacon call made a bare statement in valid_beacon_resets_missed_counter_in_recovering (matches the existing bare-call pattern in the same test; final call still asserted). Landed in commit 8da0fa55b4 — note: the swarm's periodic sync sweeper auto-committed the edit under a 'chore(beads): worker3 sync' message before I could stage it with a proper test(core) message; content is exactly the 1-line fix, verified via git show 8da0fa55b4. Verification: cargo clippy -p lichen-core --lib -- -D warnings now exits clean (0 unused_variable); cargo test -p lichen-core all green (412+); the pre-existing 33 --all-targets clippy errors in seqnum.rs/yggdrasil_addr_vectors.rs are unrelated and filed separately.",
   "labels": [
     "rust"
   ]

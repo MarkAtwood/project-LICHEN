@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-d42k",
+  "title": "sync script: LLM session can git commit the merge itself; no HEAD pin — main advances ungated while caller reports manual-resolution",
+  "description": "Reviewer kimi-k3 pass 2.1. Session runs with shell/git access mid-merge up to 900s (sync-beads-workers.sh:110); pre-commit hook only blocks .beads/rust/crates/oscore. If the session runs 'git commit' itself: staged_now empties → missing gate returns 1 → caller's 'git merge --abort' (:316) silently no-ops (no merge in flight) → branch reported as manual-resolution while main ALREADY advanced with an ungated merge commit, and rerere records it. Fix: snapshot 'git rev-parse HEAD' before :110; if HEAD moved after the session, reset --hard to it before any gate.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:17:22.339619302Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:17:22.339619302Z",
+  "labels": [
+    "fleet-implementable"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-d42k",
+      "depends_on_id": "project-LICHEN-worker6-1dyx",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T01:17:22.470614827Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
