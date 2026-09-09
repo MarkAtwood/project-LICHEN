@@ -1222,6 +1222,16 @@ TOFU. Certificates are optional and MUST NOT be included in every packet.
   the required address only when independently authorized by the issuer.
   They are not node-identity inputs.
 
+**Subject and SAN criticality:**
+
+- The `subject` distinguished name SHOULD be the empty sequence: node
+  identity is carried by the public key and the SAN, not by a DN. Issuers
+  MAY include a subject DN for display or inventory purposes, but verifiers
+  MUST NOT use it as a node-identity input.
+- When the subject is empty, the `subjectAltName` extension MUST be marked
+  critical, as required by RFC 5280 §4.1.2.6 and §4.2.1.6. When a non-empty
+  subject is present, the SAN remains REQUIRED but MAY be non-critical.
+
 **Node-role extension:**
 
 The certificate MUST contain the non-critical extension
@@ -1270,8 +1280,9 @@ absent, or out-of-range role extensions when applying role-based policy.
 The certificate signature algorithm is selected by the issuing CA and is
 validated according to the applicable PKIX profile. Certificate acceptance
 MUST additionally verify the chain, validity interval, required SAN, role
-extension, and the Ed25519 key/address binding. Failure MUST leave the
-existing TOFU or trust-store entry unchanged.
+extension, and the Ed25519 key/address binding, and MUST reject a certificate
+whose subject is empty when the SAN is not marked critical. Failure MUST
+leave the existing TOFU or trust-store entry unchanged.
 
 ---
 
