@@ -115,6 +115,11 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             // length so the frame-budget accounting can be verified.
             std::eprintln!("TRACE send_dio: len={} ipv6={}", len, packet.len());
         }
+        std::eprintln!(
+            "DIO src={:02x?} dst={:02x?}",
+            &packet[8..12],
+            &packet[24..28]
+        );
         let l2_destination = ipv6_l2_destination(control_destination);
         // RPL DIO is control traffic (P1) and is carried uncompressed
         // (Rule 255): the authenticated-DIO admission gate accepts only
