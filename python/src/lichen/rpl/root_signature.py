@@ -10,7 +10,8 @@ a legitimate root. Per the spec, root legitimacy is established through:
 3. Root pubkey is TOFU-pinned or pre-provisioned
 
 The DODAGID binding ensures the root's public key derives to the advertised
-DODAGID (which is a key-derived native 0200::/8 address). An attacker cannot forge a
+DODAGID (the upstream yggdrasil-go AddrForKey 0200::/8 address). An attacker
+cannot forge a
 DIO for a DODAGID they don't control because they lack the private key.
 
 This module provides reference implementations (oracles) for cross-implementation

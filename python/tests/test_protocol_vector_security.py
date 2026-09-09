@@ -45,11 +45,6 @@ def _eui64_for_key(public_key: bytes) -> bytes:
     return bytes(eui64)
 
 
-def _addr_for_key(public_key: bytes) -> bytes:
-    digest = hashlib.sha512(public_key).digest()
-    return b"\x02" + digest[:7] + _iid_for_key(public_key)
-
-
 def _upstream_addr_for_key(public_key: bytes) -> bytes:
     """Upstream yggdrasil-go AddrForKey (rubw): invert, count leading 1s,
     skip the first 0 bit, bit-pack whole bytes into addr[2:16]."""
