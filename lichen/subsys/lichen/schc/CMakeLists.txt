@@ -14,6 +14,7 @@ zephyr_library_sources(
   schc_helpers.c
   schc_failure_tracker.c
   schc_session.c
+  schc_session_table.c
 )
 
 zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
