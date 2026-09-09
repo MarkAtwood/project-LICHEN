@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-osjz",
+  "title": "Regenerate test/vectors/tunnel_authorization.json for AddrForKey + 16-byte-hop route_hash",
+  "description": "Shared corpus for 5muj + its Rust/Python/C children. test/vectors/tunnel_authorization.json embeds the REJECTED derivation (identity address_hex = 02 + iid doubling, e.g. root 02ed4242ead4ac69ed4242ead4ac6948) and route_hash values computed over 8-byte IIDs. After 5muj (spec) and the impl children land: regenerate via test/vectors/generate_tunnel_authorization.py so (1) identity address_hex fields equal upstream AddrForKey(pubkey) (the corpus shares the i72x.6 identity-migration concern), and (2) all route_hash values are computed over full 16-byte hop addresses. The generator must use an INDEPENDENT oracle for the address bytes (upstream address_test.go anchor / pinned vectors), never the impl under test. Land AFTER the Rust/Python/C children so all four consumers flip to the new corpus together. Discovered-from 5muj.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T08:42:37.609384937Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T08:42:37.609384937Z",
+  "labels": [
+    "vectors",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-osjz",
+      "depends_on_id": "project-LICHEN-worker6-5muj",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T08:42:37.756860124Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

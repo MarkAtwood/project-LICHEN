@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-k0fr",
+  "title": "Add L2_DISPATCH_SOS=0x16 constant + classifier arm to C, Rust, Python link layers",
+  "description": "Spec now assigns L2 dispatch 0x16 = SOS emergency alert (02-physical-link.md §4.1, bead oun2) and 12-apps.md §18.4.3 requires senders to emit it. Implementations only define 0x14/0x15: C lichen/subsys/lichen/link/include/lichen/l2_payload.h:32-33 (classifier at :49-52 rejects 0x16, so C nodes would DROP spec-defined SOS frames), Rust rust/lichen-core/src/constants.rs:52-53, Python python/src/lichen/constants.py:42-43 (+ addressing.py:46-53 docstring). Add LICHEN_L2_DISPATCH_SOS / L2_DISPATCH_SOS = 0x16 to all three, extend the C l2_payload classifier to accept it, and wire the SOS sender path to emit dispatch 0x16 (12-apps.md §18.4.3 REQUIRED). Cross-impl parity: all three must classify 0x16 identically.",
+  "status": "in_progress",
+  "priority": 3,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T08:38:41.801608735Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T08:49:08.43870877Z",
+  "started_at": "2026-09-09T08:49:08.43870877Z",
+  "lease_expires_at": "2026-09-09T08:54:08.43870877Z",
+  "heartbeat_at": "2026-09-09T08:49:08.43870877Z",
+  "labels": [
+    "link"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-k0fr",
+      "depends_on_id": "project-LICHEN-worker6-oun2",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T08:38:41.917936914Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
