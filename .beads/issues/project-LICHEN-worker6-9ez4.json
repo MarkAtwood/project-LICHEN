@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-9ez4",
+  "title": "Python SlotClaim: allocation_mode never validated — raw int constructs and silently serializes inverted",
+  "description": "Codereview finding (ft5w correctness pass, reviewer kimi-k3), P3. SlotClaim.__post_init__ (python/src/lichen/gateway/slot_claim.py:171-221) validates every field except allocation_mode, and encode_claim_canonical (:343-347) maps ANY non-AllocationMode.INTERLEAVED value to CONTIGUOUS. AllocationMode is a plain Enum (not IntEnum), so SlotClaim(..., allocation_mode=0) constructs without error and serializes inverted (intent interleaved=0 -\u003e wire contiguous=1). Rust gets this strictness at compile time (mode: AllocationMode type). Local-construction-only (decode always yields enum members; no wire adversary), but a silent intent-inversion trap for any local caller. Fix: isinstance check in __post_init__ rejecting non-AllocationMode values, or explicit else: raise in encode_claim_canonical. Pin with a construct test: allocation_mode=0 and allocation_mode='interleaved' raise ClaimError.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:31:15.289923849Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T02:33:59.028164505Z",
+  "started_at": "2026-09-09T02:31:57.510612532Z",
+  "closed_at": "2026-09-09T02:33:59.028164505Z",
+  "close_reason": "Done. __post_init__ now requires isinstance(allocation_mode, AllocationMode); raw int 0/1, str, None raise ClaimError (previously constructed silently and serialized INVERTED — any non-INTERLEAVED value maps to wire CONTIGUOUS at encode_claim_canonical). Pins: construct test rejecting 4 bad types + accepting both enum members. 103 passed, 3 skipped. 1x delegated correctness review: PASS; reviewer-confirmed no existing non-enum callers. (Reviewer's noted truncated comment + over-indented return at slot_claim.py:530-531 is pre-existing from commit a3bf9e62a7, out of scope.)",
+  "labels": [
+    "python",
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-9ez4",
+      "depends_on_id": "project-LICHEN-worker6-ft5w",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T02:31:15.450593169Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

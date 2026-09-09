@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-excr",
+  "title": "Implement spec 19 device HMI: v0.1 screen inventory + LED language across tiers",
+  "description": "spec/19-device-ux.md is now normative. Work items: (1) screen ring (Boot/Status/Position/Last-message/screensaver) on T-Echo e-ink per §5/§6 — data from existing CoAP resources; (2) same ring on Heltec OLED with screensaver; (3) LED language table §10 in the board LED drivers (fixed patterns, event-driven); (4) button grammar §4 (short-press ring advance, hold-to-SOS, guarded reset); (5) mono token set §7 in the display driver; (6) string table §13. All choices not covered by the spec go through §12 tiebreakers recorded as ux-default beads — do not escalate aesthetics. SOS semantics (§8) are the only blocking questions.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "feature",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:33:52.663624264Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T02:33:52.663624264Z",
+  "labels": [
+    "zephyr",
+    "lci"
+  ]
+}

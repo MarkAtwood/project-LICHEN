@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-5rfl",
+  "title": "Python COSE slot-claim decode accepts in-range tag-2 bignums and non-minimal long-form uints — signed-claim wire-verdict divergence vs Rust",
+  "description": "Codereview findings (ft5w correctness+security+edge passes, reviewer kimi-k3), consolidated: cbor2 decodes CBOR tag-2 bignums (e.g. c2 41 00 = 0) and non-minimal long-form uints (e.g. 18 00) to plain Python int, so every 'type(x) is not int' gate in python/src/lichen/gateway/slot_claim.py decode_cose (keys 1/2/3/4/6/7: :271/:278/:284/:290/:296/:302) accepts them; Rust p.uint()/head(0) accepts only major-type-0 (and rejects non-canonical forms as MalformedClaim). Severity is P2, not P3: the verify-path mitigation does NOT hold for in-range bignums — verify_slot_claim digests the canonical RE-ENCODE (encode_claim_canonical), which reproduces the exact bytes the signer signed, so a malicious gateway key holder (in threat model for gateway-to-gateway) signs a canonical claim, flips a field to tag-2 bignum on the wire, and Python accepts+advances the replay cache while every Rust peer discards the identical envelope as malformed: cross-impl slot-map divergence from a signature-valid claim. Fix options (reviewer-suggested): byte-equality gate — after decode, re-encode canonically and require encode_claim_canonical(decoded) == received payload bstr before accepting, which closes ALL fields uniformly; or a cbor2 tag-hook that neutralizes tag-2 auto-decode plus a canonical-form check. Pin with wire tests: tag-2 bignum 0/1 at mode key 3, long-form 18 00 at claim_seq, expecting ClaimError. Systemic to all uint fields — covers the mode-specific residual noted in ft5w review.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:31:08.324115755Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T02:36:32.32178199Z",
+  "started_at": "2026-09-09T02:36:32.32178199Z",
+  "lease_expires_at": "2026-09-09T02:41:32.32178199Z",
+  "heartbeat_at": "2026-09-09T02:36:32.32178199Z",
+  "labels": [
+    "python",
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-5rfl",
+      "depends_on_id": "project-LICHEN-worker6-ft5w",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T02:31:08.58145613Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
