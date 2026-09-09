@@ -2748,6 +2748,11 @@ fn root_seq_cache_is_reachable_from_stack_state() {
 // non-root rank from the root trips the role gate. Preserved from HEAD:
 // the gate-level pins below (gate_fixture / gate_fields and the three
 // verify_dio_root_signature tests) and the NON_STORING_MOP name.
+//
+// Merge note (main x beads-worker-6, criss-cross re-merge): this merge
+// had two bases and worker-6's side of the file was byte-identical to
+// the older base (an ancestor of HEAD), so it contained nothing new;
+// HEAD's newer evolution above is kept and no worker-6 intent is lost.
 
 const VECTOR_EXPIRY_UNIX: u64 = 1_735_689_600;
 
