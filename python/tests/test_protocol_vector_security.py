@@ -435,7 +435,11 @@ def test_timing_dio_envelope_has_independent_integrity_checks() -> None:
         assert source_matches_signer is (case["name"] != "signed-wrong-signer"), case["name"]
 
 
-def test_root_vectors_use_native_addr_for_key_and_independent_signatures() -> None:
+def test_root_signature_vectors_use_legacy_sha512_addr_for_key_and_independent_signatures() -> None:
+    """root_signature.json still pins the rejected SHA-512 native profile (i72x.6
+    regen is tracked separately). This loop intentionally checks that legacy
+    corpus against the local native derivation; do NOT migrate it to the
+    upstream addr_for_key oracle used for root_authorization.json below."""
     for vector in _load("root_signature.json")["vectors"]:
         public_hex = vector.get("pubkey")
         if public_hex is None or len(public_hex) != 64:
@@ -451,6 +455,8 @@ def test_root_vectors_use_native_addr_for_key_and_independent_signatures() -> No
             )
             assert (valid_signature and binding) is vector["valid"]
 
+
+def test_root_authorization_vectors_use_upstream_addr_for_key_and_independent_signatures() -> None:
     for vector in _load("root_authorization.json")["vectors"]:
         public_key = bytes.fromhex(vector["pubkey_hex"])
         if len(public_key) != 32:
@@ -464,6 +470,8 @@ def test_root_vectors_use_native_addr_for_key_and_independent_signatures() -> No
         )
         assert (binding and signature) is vector["expected_valid"]
 
+
+def test_rpl_messages_root_dodagid_matches_reference_identity() -> None:
     expected = ReferenceIdentity.from_seed(bytes(32)).ygg_addr
     for vector in _load("rpl_messages.json")["vectors"]:
         if vector["type"] == "dio":
