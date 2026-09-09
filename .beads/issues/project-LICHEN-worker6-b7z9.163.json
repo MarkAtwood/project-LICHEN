@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.163",
+  "title": "[spec-gap][R-02AT-033] TDMA vector-consumer asymmetry: ccp9*/ccp16-hop/tdma_ccp_fsm unconsumed by Rust/C; ccp_load_balancing unconsumed by C; slot_adjust_ticks unasserted (spec 02a-tdma.md:83,91)",
+  "description": "Spec 02a-tdma.md:83: All MUST match test/vectors/ccp_tdma.json, ccp_load_balancing.json, ccp9*.json exactly. Independent oracles. Classification: divergent (cross-stack consumer asymmetry). Consumer census 2026-09-09: ccp_tdma.json - py python/tests/test_vectors.py:4022-4029 (test_ccp_tdma_vectors) + timing/test_ccp7.py:76; rust lichen-link/tests/tdma_clock_vectors.rs:17-18; C literals only (lichen/tests/link_crypto/src/main.c:595-739 case F reproduces data_window_last_millisecond, no JSON read). ccp_load_balancing.json - py tests/sim/test_tdma.py:212 pins tdma_slot_assignment_static_hash + guard_time_boundary_sf10 but SKIPS drift_compensation_two_beacons; rust lichen-core/src/rf_health.rs:1193 reads expected_ppm/slot_adjust_ticks and DISCARDS them (let _ticks :1213-1219); C none. ccp9-rendezvous.json (hyphen) - py test_vectors.py:1881-1887 + test_ccp_sync_vector_consumers.py:454-495; rust/C none. ccp9_rendezvous.json (underscore twin) - py test_ccp_sync_vector_consumers.py:395-431; exempt from schema validation while the hyphen twin is validated (test_vectors.py:5559 vs :195); rust/C none. ccp16-hop.json - py test_vectors.py:1819-1863 + link/test_channel.py:494-501 + test_ccp_sync_vector_consumers.py:225-271; rust/C none. tdma_ccp_fsm.json - py timing/test_tdma_fsm.py:20-21 sole consumer; rust/C none. Also R-02AT-035: slot_adjust_ticks=8 (02a-tdma.md:91) is asserted by no test in any stack; the validating logic exists at python/src/lichen/sim/tdma.py:166-177 but is only fed ccp_tdma.json vectors, never the ccp_load_balancing drift vector. Spec 02a-tdma.md:42 claims rendezvous matches ccp9-rendezvous.json and ccp16-hop.json exactly - true only for Python. Coordinate with existing beads b7z9.106 (CCP-16 vector reconciliation) and b7z9.25.4 (rust ccp16-desync consumer, closed). Suggested placement: add include_str!-style consumers to rust (lichen-node or lichen-link tests) for ccp9-rendezvous.json, ccp16-hop.json, tdma_ccp_fsm.json; port a C consumer test for ccp_tdma.json/ccp_load_balancing.json/ccp9*/tdma_ccp_fsm.json; assert drift_compensation_two_beacons expected_ppm=1600 and slot_adjust_ticks=8 in py+rust; merge or differentiate the ccp9 twins. From spec-coverage sweep 2026-09-09 (docs/spec-coverage/02a-tdma.md R-02AT-013/033/035).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T23:31:44.116501653Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T23:31:44.116501653Z",
+  "labels": [
+    "tdma",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.163",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T23:31:44.241682662Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

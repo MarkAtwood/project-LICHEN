@@ -1,0 +1,7 @@
+{
+  "id": "1788996713124261675-1",
+  "issue_id": "project-LICHEN-worker6-rul5",
+  "author": "Mark Atwood",
+  "text": "Second collision instance, 2026-09-09 23:30-23:31Z: bd create reissued project-LICHEN-worker6-b7z9.156 for a NEW bead (TDMA beacon-format spec-gap) while b7z9.156 was already in use since 23:04:22Z (firmware/bridge-zephyr pubkey_to_iid SHA-256 divergence, filed by the addressing sweep worker) - the create silently CLOBBERED the existing issue (flat file .beads/issues/project-LICHEN-worker6-b7z9.156.json now holds the TDMA bead; bd list no longer returns the pubkey_to_iid bead). The stale sequence counter is consistent with the store corruption this bead tracks. Recovery: the addressing worker's bead was recreated verbatim (content preserved from pre-clobber bd list output) as project-LICHEN-worker6-b7z9.158 with a RECREATED prefix in its description - its dependency edges (parent b7z9) were re-added but any inbound discovered-from links from the original may be lost; forensics should also check whether other ids created around 22:53-23:04 were clobbered similarly.",
+  "created_at": "2026-09-09T23:31:53.124261675Z"
+}
