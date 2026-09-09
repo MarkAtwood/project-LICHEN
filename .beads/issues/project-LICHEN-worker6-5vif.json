@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-5vif",
+  "title": "Acknowledge spoofed-source budget-exhaustion ceiling for broadcast accounting in security analysis",
+  "description": "Security-pass finding from project-LICHEN-worker6-0adq (pre-existing gap, not introduced by the relay-key fix). The §6.3.3 broadcast relay budget key (now the full primary /128) is not authenticated end-to-end for broadcast traffic: link-layer Schnorr signatures are per-hop (relays re-sign with their own keys, 02-physical-link.md:305-308), OSCORE is pairwise/unicast, DAO-origin auth is DAO-only. A radio adversary can mint fresh keypairs for fresh budget identities (Sybil) or spoof sources to exhaust victim budgets; 06-security.md's DoS treatment (:18 generic row, :1319 jamming only) does not acknowledge this ceiling. The §6.3.3 note now states the ceiling inline; add matching treatment to 06-security.md's threat/DoS analysis (coordinate with nqz6.3.3's audit scope) describing the residual risk and why per-hop budgets remain worthwhile despite it.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T05:21:43.792255307Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:21:43.792255307Z",
+  "labels": [
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-5vif",
+      "depends_on_id": "project-LICHEN-worker6-0adq",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T05:21:43.928763657Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,7 +1,0 @@
-{
-  "id": "1788906780806779901-1",
-  "issue_id": "project-LICHEN-worker6-biod",
-  "author": "Mark Atwood",
-  "text": "PROTOCOL CORRECTION for all agents: FLEET WORKERS use bare bd (never beads-safe — worker8 lost two rounds to the wrapper's lock-wait + mid-merge commit hazards). External/one-off agents: bare bd is fully durable; beads-safe is optional and now merge-safe (skips its checkpoint commit while a merge is in flight).",
-  "created_at": "2026-09-08T22:33:00.806779901Z"
-}

@@ -433,21 +433,22 @@ fn unfragmented_ingress_admits_only_local_or_broadcast_wire_destinations() {
     let mut wrapped = [0u8; 512];
     let l2 = wrap_unfragmented_schc(&compressed[..schc_len], &mut wrapped).unwrap();
 
-    let foreign =
-        sign_and_receive_mode(&alice, &mut bob, l2, &charlie_eui, AddrMode::Extended, 2, 2);
+    let mut wire = [0u8; 256];
+    let length = alice
+        .build_frame_with_addr_mode(
+            0,
+            LinkSeqNum::new(2),
+            &charlie_eui,
+            l2,
+            AddrMode::Extended,
+            &mut wire,
+        )
+        .unwrap();
+    assert!(matches!(
+        bob.receive_frame_at(&wire[..length], 2),
+        Err(lichen_link::LinkRxError::NotForUs)
+    ));
     let mut ipv6 = [0xa5; 512];
-    assert_eq!(
-        accept_authenticated_schc_packet(
-            &bob,
-            &policy,
-            &alice_peer,
-            &foreign,
-            &mut ipv6,
-            MAX_SINGLE_FRAME_SCHC_PACKET,
-        ),
-        Err(SchcError::InvalidPeerEvidence)
-    );
-    assert_eq!(ipv6, [0xa5; 512]);
 
     let local = sign_and_receive_mode(&alice, &mut bob, l2, &bob_eui, AddrMode::Extended, 3, 3);
     let ipv6_len = accept_authenticated_schc_packet(
@@ -473,20 +474,20 @@ fn unfragmented_ingress_admits_only_local_or_broadcast_wire_destinations() {
     .unwrap();
     assert_eq!(&ipv6[..ipv6_len], packet.as_slice());
 
-    let short = sign_and_receive_mode(&alice, &mut bob, l2, &[0x12, 0x34], AddrMode::Short, 5, 5);
-    ipv6.fill(0xa5);
-    assert_eq!(
-        accept_authenticated_schc_packet(
-            &bob,
-            &policy,
-            &alice_peer,
-            &short,
-            &mut ipv6,
-            MAX_SINGLE_FRAME_SCHC_PACKET,
-        ),
-        Err(SchcError::InvalidPeerEvidence)
-    );
-    assert_eq!(ipv6, [0xa5; 512]);
+    let length = alice
+        .build_frame_with_addr_mode(
+            0,
+            LinkSeqNum::new(5),
+            &[0x12, 0x34],
+            l2,
+            AddrMode::Short,
+            &mut wire,
+        )
+        .unwrap();
+    assert!(matches!(
+        bob.receive_frame_at(&wire[..length], 5),
+        Err(lichen_link::LinkRxError::NotForUs)
+    ));
 
     let mut bob_link_local = [0u8; 16];
     bob_link_local[..2].copy_from_slice(&[0xfe, 0x80]);

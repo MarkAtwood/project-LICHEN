@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-0adq",
+  "title": "Broadcast relay rate-limit keyed on sender IID has no extraction path under upstream addressing",
+  "description": "Edge-case review finding from project-LICHEN-worker6-9hnr. spec/04-network.md §6.3.3 keys broadcast relay state on the original sender's IID (line 138 'sender_iid: \u003cIID of original sender\u003e'; line 159 'sender = packet.source_iid'). After the upstream-yggdrasil-addressing reconciliation (§6.2), a relayed broadcast's primary source address bit-packs the inverted Ed25519 key and contains no IID, and the link-layer SIID is an unauthenticated per-hop hint that is never an IPv6 IID (spec/02-physical-link.md:201). No field of a relayed broadcast yields the original sender's IID, so the rate-limit pseudocode has no defined key extraction path. Fix options: key the relay budget on the full 16-byte primary source address (simplest; same binding strength), or define an authenticated field that carries the origin IID end-to-end. Update the pseudocode and relay-state struct accordingly.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:49:43.173094128Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:22:00.567572844Z",
+  "started_at": "2026-09-09T05:12:17.902616367Z",
+  "closed_at": "2026-09-09T05:22:00.567572844Z",
+  "close_reason": "Fixed the unimplementable relay-key extraction path: spec/04-network.md §6.3.3 relay state now keys on the full 16-byte primary source address (sender_addr / packet.source_addr) instead of the IID — available at every hop since §6.3.2 now carries the explicit MUST preserving the original IPv6 source end-to-end (added; 05-routing §8.6's MUST is DAO-only). State-size math updated (27 B/entry, ~2.7 KB @100). Rationale note scopes the strength claim to collision resistance and states the spoofed-source ceiling. 3x codereview delegated to kimi-k3 (correctness: 1 in-diff citation defect + 2 pre-existing gaps; security: 2 findings, 1 in-diff; edge-cases: 1 exposed cross-file finding). In-diff defects FIXED before close: mis-cited 05-routing §8.6 -\u003e local §6.3.2 MUST; 'strictly stronger' claim scoped. Pre-existing/exposed findings filed as beads: hop_bucket indexing + SOS row unreachable (P3), 12-apps §18.4.1 SOS IID keying (P2), spoofed-source budget-exhaustion ceiling for 06-security.md (P3). No code changes — §6.3.3 rate limiter has no implementation (spec-gap); python router.py source_iid is the custody buffer, a different mechanism.",
+  "labels": [
+    "networking",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-0adq",
+      "depends_on_id": "project-LICHEN-worker6-9hnr",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T04:49:43.332163648Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

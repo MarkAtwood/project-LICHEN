@@ -1,0 +1,7 @@
+{
+  "id": "1788922643039301732-1",
+  "issue_id": "project-LICHEN-worker6-12gq",
+  "author": "Mark Atwood",
+  "text": "Adjacent serializer evidence 2026-09-09 (worker6): beyond the options=\u0026[] discard at dispatch_runtime_gcp, the wire serializer at gateway.rs:1574-1577 encodes response.content_format == 0 as a PRESENT zero-length Content-Format option (byte 0xc0) instead of omitting the option. C parity requires omission (tunnel_auth.c / coap_slot_coord.c conflict arm emits no CF option; 620ca2bcd3's comment explicitly acknowledges 'the Rust serializer maps content_format 0 to a present zero-length option, so the wire is not byte-identical to C' and left it). Observed concretely: runtime_ingress_dispatches_authenticated_gcp_slot_claim decrypted conflict response at 0add35b351 carries options [0xc0], payload [], code 4.09. If the canonical fix for this bead encodes option 12 into the OSCORE plaintext, CF 0 must map to option-omitted, not 0xC0.",
+  "created_at": "2026-09-09T02:57:23.039301732Z"
+}

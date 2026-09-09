@@ -14,15 +14,18 @@
 
 #include "lichen_util.h"
 
+/* SHA-256 digest length (provider-independent). */
+#define UTIL_SHA256_DIGEST_SIZE 32
+
 ZTEST(lichen_util, test_sha256_accepts_null_empty_input)
 {
-	static const uint8_t empty_sha256[TC_SHA256_DIGEST_SIZE] = {
+	static const uint8_t empty_sha256[UTIL_SHA256_DIGEST_SIZE] = {
 		0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14,
 		0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24,
 		0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c,
 		0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55,
 	};
-	uint8_t output[TC_SHA256_DIGEST_SIZE];
+	uint8_t output[UTIL_SHA256_DIGEST_SIZE];
 
 	memset(output, 0xa5, sizeof(output));
 
@@ -34,7 +37,7 @@ ZTEST(lichen_util, test_sha256_accepts_null_empty_input)
 
 ZTEST(lichen_util, test_sha256_rejects_null_nonempty_input)
 {
-	uint8_t output[TC_SHA256_DIGEST_SIZE];
+	uint8_t output[UTIL_SHA256_DIGEST_SIZE];
 
 	zassert_equal(lichen_sha256(NULL, 1, output, sizeof(output)), -EINVAL,
 		      "sha256 rejects NULL input with nonzero length");
@@ -50,10 +53,10 @@ ZTEST(lichen_util, test_sha256_rejects_null_output)
 
 ZTEST(lichen_util, test_sha256_rejects_small_output)
 {
-	uint8_t output[TC_SHA256_DIGEST_SIZE];
+	uint8_t output[UTIL_SHA256_DIGEST_SIZE];
 
-	zassert_equal(lichen_sha256(NULL, 0, output, TC_SHA256_DIGEST_SIZE - 1), -ENOMEM,
-		      "sha256 rejects output buffer smaller than TC_SHA256_DIGEST_SIZE");
+	zassert_equal(lichen_sha256(NULL, 0, output, UTIL_SHA256_DIGEST_SIZE - 1), -ENOMEM,
+		      "sha256 rejects output buffer smaller than UTIL_SHA256_DIGEST_SIZE");
 }
 
 ZTEST(lichen_util, test_iid_to_human_address_matches_node_address_vectors)

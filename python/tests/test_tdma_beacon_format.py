@@ -75,9 +75,42 @@ def test_parse_rejects_reserved_flag_bits() -> None:
         parse_header(bytes(data))
 
 
+def test_parse_rejects_num_slots_zero() -> None:
+    """beacon_header_num_slots_zero_rejected: shared cross-runtime oracle."""
+    vector = next(
+        v
+        for v in VECTORS["vectors"]
+        if v["name"] == "beacon_header_num_slots_zero_rejected"
+    )
+    with pytest.raises(BeaconFormatError):
+        parse_header(bytes.fromhex(vector["input"]["header_hex"]))
+
+
 def test_serialize_rejects_reserved_flag_bits() -> None:
     header = TdmaBeaconHeader(
         epoch=1, num_slots=16, sfn=0, timestamp=0, flags=0x80,
+        rx_chains=1, setup_window=0, occupied_time=0, guard=50,
+        channel_mask=1,
+    )
+    with pytest.raises(BeaconFormatError):
+        serialize_header(header)
+
+    # Dual fault: reserved-flags precedence over num_slots == 0 must
+    # match parse order and the C codec (beacon.c checks flags first).
+    dual = TdmaBeaconHeader(
+        epoch=1, num_slots=0, sfn=0, timestamp=0, flags=0x80,
+        rx_chains=1, setup_window=0, occupied_time=0, guard=50,
+        channel_mask=1,
+    )
+    with pytest.raises(BeaconFormatError):
+        serialize_header(dual)
+
+
+def test_serialize_rejects_num_slots_zero() -> None:
+    """TX-side mirror of beacon_header_num_slots_zero_rejected: a header
+    every receiver's parse gate rejects must not be emittable."""
+    header = TdmaBeaconHeader(
+        epoch=1, num_slots=0, sfn=0, timestamp=0, flags=0,
         rx_chains=1, setup_window=0, occupied_time=0, guard=50,
         channel_mask=1,
     )

@@ -81,3 +81,10 @@ firmware/bridge-zephyr/build/
 build_heltec_gw/
 build-test/
 build_gateway_heltec/
+
+# Fleet runtime markers (ephemeral host-local state; durable records are beads)
+.fleet-paused
+.fleet-drained
+.fleet-stalled
+.fleet-burn-2000
+.fleet-waste

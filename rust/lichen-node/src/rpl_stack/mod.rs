@@ -3,6 +3,8 @@
 
 //! Production ownership and dispatch for the std RPL stack.
 
+// Dead until b7z9.16 wires the DAO TX scheduler (spec 09 14.2).
+#[allow(dead_code)]
 mod dao_tx_timing;
 mod error;
 mod provisioning;
@@ -176,13 +178,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// Interim `dead_code` expectation: the receiver call site lands with the
     /// root-signature validation bead (b7z9.37.1); the expectation then stops
     /// being fulfilled and must be removed.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "root-signature receiver call site lands in b7z9.37.1"
-        )
-    )]
+    #[allow(dead_code, reason = "root-signature receiver call site lands in b7z9.37.1")]
     pub(crate) fn root_seqs_mut(&mut self) -> &mut RootSeqCache {
         &mut self.root_seqs
     }
@@ -247,8 +243,13 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             });
         }
         if self.rpl.router.is_root() {
-            if let Some(path) = self.rpl.router.lookup_route_at(&destination, now_ms) {
-                let source_route = path.to_vec();
+            if let Some(path) = self
+                .rpl
+                .router
+                .lookup_route_at(core::net::Ipv6Addr::from(destination), now_ms)
+            {
+                let source_route: Vec<[u8; 16]> =
+                    path.iter().map(core::net::Ipv6Addr::octets).collect();
                 if source_route.last() != Some(&destination) {
                     return None;
                 }

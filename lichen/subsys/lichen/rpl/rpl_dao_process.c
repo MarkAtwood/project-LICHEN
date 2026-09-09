@@ -442,8 +442,13 @@ void lichen_rpl_prefix_delegations_reset(void)
  * MUST be the origin's own canonical /128 or an exact prefix delegated to it
  * via lichen_rpl_prefix_delegate(). Mirrors rust/lichen-rpl/src/routing.rs
  * authorize_dao_prefixes(). Generalized bodies (prefix_len 1..=128) are
- * canonicalized per 8.7.1: reserved flags and bits beyond the Prefix Length
- * are ignored; truncated bodies, prefix_len > 128, and ::/0 fail closed.
+ * canonicalized per 8.7.1 — only in that canonicalization sense are reserved
+ * flags and bits beyond the Prefix Length "ignored" here. The reserved
+ * Target Flags octet itself is NOT ignored system-wide: semantic ingest
+ * enforces it per 8.6 R-05-035 (extract_updates rejects a nonzero flags
+ * octet before any route-state mutation; see the Target check above), so a
+ * nonzero-flags DAO never reaches this gate's authorization outcome.
+ * Truncated bodies, prefix_len > 128, and ::/0 fail closed.
  */
 static bool dao_targets_authorized(const uint8_t *dao_bytes, size_t len,
 				   const uint8_t *origin)

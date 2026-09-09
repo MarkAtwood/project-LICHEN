@@ -645,7 +645,8 @@ impl RfHealthMetrics {
         // radio configuration (matches python ccp.py step 1-2 clamp). The
         // baseline is NOT the adaptive_sf() table form — that would
         // double-count load/density before steps 3-6 and the floors see
-        // them a second time (b7z9.29.3).
+        // them a second time (b7z9.29.3). SF_MIN/SF_MAX per spec
+        // 2a.8:636 (python ccp.py `max(7, min(12, sf))`; 5m15).
         let mut sf = assigned_sf.unwrap_or(10).clamp(7, 12);
         let util = utilization.unwrap_or(0);
         let loss_fp = ema_loss_fp.unwrap_or(0);
@@ -1089,6 +1090,31 @@ mod tests {
         let (sf, allowed) = m.adaptive_sf_select(Some(8), None, None);
         assert_eq!(sf, 7);
         assert!(allowed);
+    }
+
+    #[test]
+    fn adaptive_sf_select_clamps_assigned_sf_no_rx_samples() {
+        // assigned_sf is a DIO-signaled 1-byte field (spec 2a.8:636):
+        // out-of-range values must never reach radio configuration
+        // (5m15; matches python ccp.py `max(7, min(12, sf))`). Merge
+        // dedup: kept alongside the benign-RF clamp test above because
+        // fresh metrics exercise the empty-SnrStats `avg() -> None`
+        // default (snr_ema unwrap_or(0)); renamed to resolve the
+        // duplicate test name.
+        let m = RfHealthMetrics::new();
+        // Neutral conditions: no step raises or lowers SF, so the
+        // returned value is the clamped baseline itself.
+        let (sf0, allowed0) = m.adaptive_sf_select(Some(0), None, None);
+        assert_eq!(sf0, 7);
+        assert!(allowed0);
+        let (sf200, allowed200) = m.adaptive_sf_select(Some(200), None, None);
+        assert_eq!(sf200, 12);
+        assert!(allowed200);
+        let (sf6, allowed6) = m.adaptive_sf_select(Some(6), None, None);
+        assert_eq!(sf6, 7);
+        assert!(allowed6);
+        let (sf13, _) = m.adaptive_sf_select(Some(13), None, None);
+        assert_eq!(sf13, 12);
     }
 
     #[test]

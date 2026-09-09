@@ -28,6 +28,7 @@
 #include "lichen_l2.h"
 #include "lora_l2.h"
 #include "lora_loopback_test.h"
+#include <lichen/lora_cad.h>
 #include <lichen/tx_queue.h>
 
 /* White-box fault injection target: the module-static TX queue in lora_l2.c. */
@@ -470,23 +471,36 @@ ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
 	 *   publish test) can fire their driver send after the fresh arm
 	 *   and re-trip the re-arm abort; the stragglers are finite, so a
 	 *   bounded retry converges.
-	 * - still RUNNING (the teardown path completed without aborting):
-	 *   deinit() refuses with "still running, call stop() first"
+	 * - still RUNNING (the teardown path completed without aborting;
+	 *   with the uhyf root cause fixed — a same-callback re-arm -EBUSY
+	 *   is now treated as healthy-still-armed — this is the common
+	 *   case): deinit() refuses with "still running, call stop() first"
 	 *   (-EBUSY) and init() would refuse too, so the unconditional
-	 *   cycle degrades into refusals (bead m4yk). The running module
-	 *   is already the state we want — skip the cycle, and never
-	 *   disarm a live RX arm out from under it.
+	 *   cycle degrades into refusals (bead m4yk), and its driver-level
+	 *   disarm would deafen an armed, healthy L2. The running module
+	 *   is already the state we want — skip the cycle, just drain the
+	 *   driver queue and let straggler sends settle, and never disarm
+	 *   a live RX arm out from under it.
 	 *
 	 * Either way the disable path wiped the link_ctx at net_if_down,
 	 * so reprovision re-loads key + peer afterwards. */
-	if (lichen_lora_l2_needs_reinit()) {
+	if (lichen_lora_l2_is_running() && !lichen_lora_l2_needs_reinit()) {
+		/* Healthy: no recovery cycle — just quiesce straggler sends. */
+		lora_loopback_test_reset(lora_dev);
+		/* Idempotent (-EALREADY tolerated): the UDP TX path must not
+		 * depend on earlier teardown tests remembering to
+		 * reprovision (project-LICHEN-worker6-m4yk). */
+		reprovision_after_reinit();
+		k_sleep(K_MSEC(150));
+	} else {
 		for (int attempt = 0; attempt < 3; attempt++) {
 			lora_loopback_test_reset(lora_dev);
 			ret = lora_recv_async(lora_dev, NULL, NULL);
 			zassert_true(ret == 0 || ret == -EINVAL,
 				     "stale driver arm not clearable: %d", ret);
 			ret = lichen_lora_l2_deinit();
-			zassert_true(ret == 0 || ret < 0, "post-abort deinit: %d", ret);
+			zassert_true(ret == 0 || ret == -EBUSY,
+				     "post-abort deinit: %d", ret);
 			zassert_ok(lichen_lora_l2_init(), "post-abort re-init failed");
 			zassert_ok(lichen_lora_l2_start(), "post-abort lora start failed");
 			ret = net_if_up(test_iface);
@@ -703,6 +717,89 @@ ZTEST(ping_l2, test_disable_retries_incomplete_queue_destruction)
 	 * peer, which a bare key re-load would miss (RX SIID lookup would
 	 * fail with -LICHEN_EAUTH). */
 	reprovision_after_reinit();
+}
+
+/* Merge resolution: beads-worker-8 carried an older copy of
+ * test_udp_payload_reaches_socket_after_l2_injection here; main superseded
+ * it with the state-keyed recovery version above (beads m4yk /
+ * worker6-uhyf), so the stale duplicate is dropped (a duplicate ZTEST name
+ * would also fail to link). The branch's genuinely new uwip.3 CAD test
+ * below is kept. */
+/* uwip.3: the emulated async CAD path (loopback registers a NULL starter)
+ * must arm, deliver exactly one clear-channel verdict from the completion
+ * context, reject a concurrent arm while in flight, and free the slot for
+ * the next probe. This is the registry machinery the CSMA continuation in
+ * lora_l2_tx.c (csma_cad_probe) is built on. The callback runs on the
+ * system workqueue, so it only records — assertions stay on the test
+ * thread. */
+struct cad_test_ctx {
+	struct k_sem done_sem;
+	const struct device *dev;
+	bool busy;
+	int status;
+};
+
+static void cad_test_done(const struct device *dev, bool busy, int status,
+			  void *user_data)
+{
+	struct cad_test_ctx *ctx = user_data;
+
+	ctx->dev = dev;
+	ctx->busy = busy;
+	ctx->status = status;
+	k_sem_give(&ctx->done_sem);
+}
+
+ZTEST(ping_l2, test_async_cad_emulated_completion)
+{
+	struct cad_test_ctx ctx = {
+		.dev = NULL,
+		.busy = true,
+		.status = -1,
+	};
+	int ret;
+
+	k_sem_init(&ctx.done_sem, 0, 1);
+
+	ret = lichen_lora_cad_start(lora_dev, K_MSEC(50), cad_test_done, &ctx);
+	zassert_equal(ret, 0, "CAD arm failed: %d", ret);
+
+	/* In-flight probes are exclusive: a second arm fails closed. */
+	ret = lichen_lora_cad_start(lora_dev, K_MSEC(50), cad_test_done, &ctx);
+	zassert_equal(ret, -EBUSY, "concurrent CAD arm not rejected: %d", ret);
+
+	ret = k_sem_take(&ctx.done_sem, K_MSEC(500));
+	zassert_equal(ret, 0, "CAD completion never arrived");
+	zassert_equal(ctx.dev, lora_dev, "CAD done for the wrong device");
+	zassert_equal(ctx.status, 0, "CAD status: %d", ctx.status);
+	zassert_false(ctx.busy, "emulated CAD must report a clear channel");
+
+	/* The verdict consumed the slot: re-arm must succeed and deliver. */
+	k_sem_reset(&ctx.done_sem);
+	ctx.busy = true;
+	ctx.status = -1;
+	ret = lichen_lora_cad_start(lora_dev, K_MSEC(50), cad_test_done, &ctx);
+	zassert_equal(ret, 0, "CAD re-arm failed: %d", ret);
+	ret = k_sem_take(&ctx.done_sem, K_MSEC(500));
+	zassert_equal(ret, 0, "second CAD completion never arrived");
+	zassert_equal(ctx.status, 0, "second CAD status: %d", ctx.status);
+	zassert_false(ctx.busy, "second emulated CAD must report clear");
+
+	/* A window that cannot contain the emulated CAD duration must fail
+	 * closed (-ETIMEDOUT, busy), matching the hardware driver's deadline
+	 * classification instead of reporting a clear channel. K_NO_WAIT is
+	 * the only such window at 100 ticks/s (tick quantization floors
+	 * K_MSEC(1) to a 10 ms deadline, exactly like the lr1110 driver). */
+	k_sem_reset(&ctx.done_sem);
+	ctx.busy = false;
+	ctx.status = 0;
+	ret = lichen_lora_cad_start(lora_dev, K_NO_WAIT, cad_test_done, &ctx);
+	zassert_equal(ret, 0, "short-window CAD arm failed: %d", ret);
+	ret = k_sem_take(&ctx.done_sem, K_MSEC(500));
+	zassert_equal(ret, 0, "short-window CAD completion never arrived");
+	zassert_equal(ctx.status, -ETIMEDOUT, "short-window CAD status: %d",
+		      ctx.status);
+	zassert_true(ctx.busy, "short-window CAD must report busy");
 }
 
 ZTEST_SUITE(ping_l2, NULL, ping_l2_setup, NULL, NULL, NULL);

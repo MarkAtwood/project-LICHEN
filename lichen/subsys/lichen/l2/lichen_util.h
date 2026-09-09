@@ -15,8 +15,10 @@
 #include <zephyr/toolchain.h>
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/printk.h>
-#include <tinycrypt/sha256.h>
-#include <tinycrypt/constants.h>
+
+/* SHA-256 provider lives in lichen_util.c only: TinyCrypt on host builds,
+ * mbedTLS under Zephyr (TinyCrypt is deprecated in Zephyr 4.1). Callers
+ * include no crypto headers. */
 
 /*
  * LICHEN-specific error codes (only when link layer is available).

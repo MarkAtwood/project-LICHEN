@@ -130,6 +130,12 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                     || !valid_rpl_ipv6(&received.ipv6)
                     || !dio_dis_destination_is_allowed(&received.ipv6, self.local_rpl_addr)
                 {
+                    std::eprintln!(
+                        "PROBE ingress_gate mc={} valid={} dst={}",
+                        rpl_ipv6_multicast_is_allowed(&received.ipv6),
+                        valid_rpl_ipv6(&received.ipv6),
+                        dio_dis_destination_is_allowed(&received.ipv6, self.local_rpl_addr)
+                    );
                     return Ok(Some(RplBorderIngressOutcome::Control(
                         RplReceiveOutcome::RplRejected,
                     )));

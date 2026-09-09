@@ -24,6 +24,8 @@ fn load_document() -> Value {
     serde_json::from_str(VECTORS_JSON).expect("yggdrasil_address.json must parse")
 }
 
+// usize::is_multiple_of stabilized in Rust 1.87; the workspace MSRV is 1.81
+// (Cargo.toml rust-version), so keep the modulo form here.
 #[allow(clippy::manual_is_multiple_of)]
 fn decode_hex(value: &str) -> Vec<u8> {
     assert!(value.len() % 2 == 0, "odd-length hex: {value}");

@@ -1,0 +1,4 @@
+{"id":"01a08435-7679-76ed-9d3e-e6ffbac5d03d","issue_id":"project-LICHEN-worker6-30dx","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-09T03:28:11.385455382Z"}
+{"id":"01a08435-7682-75d2-a996-189e0ac7b65d","issue_id":"project-LICHEN-worker6-30dx","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: gateway","created_at":"2026-09-09T03:28:11.394382606Z"}
+{"id":"01a08435-7687-7e1f-acc9-000936df464e","issue_id":"project-LICHEN-worker6-30dx","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: python","created_at":"2026-09-09T03:28:11.399926903Z"}
+{"id":"01a08435-8230-7532-8fb0-fb855f43a567","issue_id":"project-LICHEN-worker6-30dx","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Fixed in 81393b64b3: cap test now boundary-discriminating (exactly-at-cap parses past gate; one-over-cap size-rejected).","created_at":"2026-09-09T03:28:14.384341353Z"}

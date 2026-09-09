@@ -78,6 +78,13 @@ static int8_t rx_stage_snr;
 static atomic_t rx_enabled;
 static atomic_t rx_pending;
 static atomic_t rx_armed;
+
+/*
+ * One-shot second chance for the -EBUSY-still-armed fast path (see
+ * lora_l2_rx_arm): 0 = first -EBUSY gets a retry, 1 = retry spent, accept
+ * the still-armed state. Cleared on a successful arm and on rx_start().
+ */
+static atomic_t ebusy_second_chance;
 static atomic_t rx_session;
 
 /** Consecutive re-arm failures before the module gives up (ABORTED). */
@@ -149,7 +156,23 @@ static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
  */
 static uint8_t consecutive_failures;
 
-static void lora_l2_rx_arm(void)
+int lora_l2_rx_disarm_locked(void)
+{
+	int ret;
+
+	if (!atomic_get(&rx_armed)) {
+		return 0;
+	}
+
+	ret = LORA_RECV_ASYNC(lora_data.lora_dev, NULL);
+	if (ret == 0) {
+		atomic_set(&rx_armed, 0);
+		return 0;
+	}
+	return ret;
+}
+
+void lora_l2_rx_arm(void)
 {
 	int ret;
 
@@ -174,19 +197,55 @@ static void lora_l2_rx_arm(void)
 		return;
 	}
 
-	ret = LORA_RECV_ASYNC(lora_data.lora_dev, lora_l2_rx_isr_cb);
-	k_mutex_unlock(&modem_mutex);
+	/* Drivers hold their modem lease across an async RX arm. */
+	ret = lora_l2_rx_disarm_locked();
+	if (ret < 0) {
+		k_mutex_unlock(&modem_mutex);
+		LOG_ERR("lora_l2: recv_async disarm failed (%d), retrying", ret);
+		goto retry;
+	}
 
+	ret = LORA_RECV_ASYNC(lora_data.lora_dev, lora_l2_rx_isr_cb);
 	if (ret == 0) {
 		consecutive_failures = 0;
+		atomic_set(&ebusy_second_chance, 0);
 		atomic_set(&rx_armed, 1);
+		k_mutex_unlock(&modem_mutex);
 		lichen_radio_progress();
 		return;
 	}
+	k_mutex_unlock(&modem_mutex);
 
 	if (ret == -ENOTSUP) {
 		LOG_ERR("lora_l2: driver lacks recv_async; RX impossible");
 		atomic_set(&current_state, LORA_ABORTED);
+		return;
+	}
+
+	if (ret == -EBUSY && atomic_get(&rx_armed)) {
+		/*
+		 * The driver is still armed with OUR callback (persistent
+		 * registration across deliveries; e.g. lora_loopback, which
+		 * returns -EBUSY on re-arm while recv_cb != NULL). That is a
+		 * healthy still-armed state, not a dead radio: reset the
+		 * failure counter and stop retrying - the driver will call
+		 * us on the next frame.
+		 *
+		 * Guard against a stale rx_armed on a driver that DOES
+		 * disarm at delivery (one-shot contract): a transient -EBUSY
+		 * there would otherwise silence the radio forever, since no
+		 * retry is scheduled and arm is only reached from a delivery
+		 * or a scheduled retry. Grant exactly one second-chance
+		 * retry; if it also reports -EBUSY with rx_armed set, accept
+		 * the still-armed state. Persistent-registration drivers
+		 * merely burn one 10 ms timer per abort-recovery cycle.
+		 */
+		if (atomic_cas(&ebusy_second_chance, 0, 1)) {
+			goto retry;
+		}
+		atomic_set(&ebusy_second_chance, 0);
+		consecutive_failures = 0;
+		lichen_radio_progress();
 		return;
 	}
 
@@ -226,7 +285,7 @@ static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
 	ARG_UNUSED(dev);
 	LORA_RECV_CB_UNUSED;
 
-	if (!atomic_get(&rx_enabled)) {
+	if (!atomic_get(&rx_enabled) || lora_get_state() != LORA_RUNNING) {
 		/* Stop raced the delivery; the packet is dropped, which is
 		 * what the radio would have lost anyway when disarming. The
 		 * gate comes first so a stale-armed driver cannot flip the
@@ -241,8 +300,9 @@ static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
 		/* Driver-contract violation: disable further staging and fail
 		 * closed. The radio stays unarmed for this session. */
 		atomic_set(&rx_enabled, 0);
-		atomic_set(&rx_armed, 0);
 		atomic_set(&current_state, LORA_ABORTED);
+		/* Cancellation must run outside interrupt context. */
+		RX_WORK_SUBMIT(&rx_work);
 		return;
 	}
 
@@ -318,6 +378,10 @@ static void rx_work_fn(struct k_work *work)
 
 	if (lora_get_state() == LORA_RUNNING) {
 		lora_l2_rx_arm();
+	} else if (atomic_get(&rx_armed) &&
+		   k_mutex_lock(&modem_mutex, K_MSEC(RX_TIMEOUT_MS + 1000)) == 0) {
+		(void)lora_l2_rx_disarm_locked();
+		k_mutex_unlock(&modem_mutex);
 	}
 }
 
@@ -341,7 +405,7 @@ int lora_l2_rx_start(void)
 
 	consecutive_failures = 0;
 	atomic_clear(&rx_pending);
-	atomic_set(&rx_enabled, 1);
+	atomic_set(&ebusy_second_chance, 0);
 	atomic_inc(&rx_session);
 
 	if (k_mutex_lock(&modem_mutex, K_MSEC(RX_TIMEOUT_MS + 1000)) != 0) {
@@ -350,15 +414,38 @@ int lora_l2_rx_start(void)
 		return -EBUSY;
 	}
 
-	ret = LORA_RECV_ASYNC(lora_data.lora_dev, lora_l2_rx_isr_cb);
+	ret = lora_l2_rx_disarm_locked();
+	if (ret == 0) {
+		ret = LORA_RECV_ASYNC(lora_data.lora_dev, lora_l2_rx_isr_cb);
+	}
+	if (ret == 0) {
+		atomic_set(&rx_armed, 1);
+	}
 	k_mutex_unlock(&modem_mutex);
+
+	if (ret == -EBUSY && atomic_get(&rx_armed)) {
+		/*
+		 * The driver still holds the registration from a previous
+		 * session (persistent-registration drivers; e.g. lora_loopback
+		 * rejects re-arm while recv_cb != NULL). Our callback is the
+		 * same one this session would have installed, so accept the
+		 * existing arm instead of wedging every future start(): stop()
+		 * may have skipped the disarm (session mismatch, modem busy)
+		 * believing this start owned the arm - if this start also
+		 * failed, nothing would ever clear it short of deinit.
+		 */
+		LOG_DBG("lora_l2: start reusing driver arm from prior session");
+		atomic_set(&rx_enabled, 1);
+		atomic_set(&ebusy_second_chance, 0);
+		atomic_set(&rx_armed, 1);
+		return 0;
+	}
 
 	if (ret < 0) {
 		atomic_set(&rx_enabled, 0);
 		return ret;
 	}
-
-	atomic_set(&rx_armed, 1);
+	atomic_set(&rx_enabled, 1);
 	return 0;
 }
 
@@ -392,8 +479,6 @@ void lora_l2_rx_stop(void)
 	atomic_val_t session = atomic_get(&rx_session);
 	int ret;
 
-	atomic_set(&rx_enabled, 0);
-
 	if (atomic_get(&rx_session) == session) {
 		k_work_cancel_delayable(&rx_work);
 		{
@@ -418,14 +503,14 @@ void lora_l2_rx_stop(void)
 		k_mutex_unlock(&modem_mutex);
 		return;
 	}
+	atomic_set(&rx_enabled, 0);
 
 	if (atomic_get(&rx_armed)) {
-		ret = LORA_RECV_ASYNC(dev, NULL);
+		ret = lora_l2_rx_disarm_locked();
 		if (ret < 0) {
 			LOG_WRN("lora_l2: recv_async disarm failed (%d)", ret);
 		}
 	}
-	atomic_set(&rx_armed, 0);
 	atomic_clear(&rx_pending);
 	k_mutex_unlock(&modem_mutex);
 }

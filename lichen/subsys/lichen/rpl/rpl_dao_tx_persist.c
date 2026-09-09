@@ -452,6 +452,7 @@ enum lichen_rpl_dao_tx_finalize_status lichen_rpl_dao_tx_finalize_signed(
 		return LICHEN_DAO_TX_FINALIZE_STALE;
 	case LICHEN_DAO_TX_TX_CORRUPT:
 		return LICHEN_DAO_TX_FINALIZE_CORRUPT;
+	case LICHEN_DAO_TX_TX_STORAGE_ERROR:
 	default:
 		return LICHEN_DAO_TX_FINALIZE_STORAGE_ERROR;
 	}

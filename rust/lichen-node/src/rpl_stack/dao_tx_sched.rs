@@ -159,7 +159,7 @@ mod tests {
         let mut sched = DaoTxScheduler::new();
         let deadline = sched.schedule_initial(5_000, u32::MAX);
         // oracle: offset = max_ms * rand / u32::MAX, clamped to max
-        assert!(deadline >= 5_000 && deadline <= 7_000);
+        assert!((5_000..=7_000).contains(&deadline));
     }
 
     #[test]

@@ -1,0 +1,34 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.1.1",
+  "title": "x7hh.1 leaf: Revision/mode + binding-field encodings",
+  "description": "Specify non-ambiguous revision/mode discrimination and authenticated schedule/root/DODAG/generation/plan/profile binding field encodings per spec/02b (CCP2-002/003/004). Coordinate completed helpers xzen/0aod/b7z9.22/.23/.74/qe1t rather than rebuilding.",
+  "acceptance_criteria": "Exact bounded encoding table with independent worked bytes; three review rounds filed and resolved.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T03:37:25.577046604Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:25:57.226168368Z",
+  "started_at": "2026-09-09T05:25:57.226168368Z",
+  "lease_expires_at": "2026-09-09T05:30:57.226168368Z",
+  "heartbeat_at": "2026-09-09T05:25:57.226168368Z",
+  "labels": [
+    "networking",
+    "ccp",
+    "wire",
+    "conformance",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T03:37:25.743574337Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

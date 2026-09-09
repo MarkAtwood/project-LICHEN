@@ -36,21 +36,11 @@ for n in 1 2 3 4 5 6 7 8; do
     fi
 done
 
-# The four controllers (worker windows are the driver's responsibility)
+# Controllers (worker rounds are headless loops, one window per worker)
 ensure_window sync "exec ./scripts/sync-beads-loop.sh 15"
-ensure_window driver "exec ./scripts/fleet-driver.sh 10 0"
 ensure_window janitor "exec ./scripts/merge-janitor.sh"
-
-# sweep-all: only if discovery is still pending (any of the section stems
-# missing) — a completed sweep must NOT be resurrected.
-PENDING=0
-for s in 09-packets-timing 02a-coordinated-capacity 03-adaptation 06-security \
-         02-physical-link 12-apps 01-architecture 04-network 07-transport-app \
-         08-gateway-coordination 08-nodes 10-implementation 11-lci \
-         appendix-border-router appendix-bufferbloat appendix-c-safety \
-         draft-lichen-schnorr-00; do
-    [ -f "docs/spec-coverage/$s.md" ] || PENDING=1
+for n in 1 2 3 4 5 6 7 8; do
+    ensure_window "hw$n" "exec ./scripts/fleet-headless.sh $n"
 done
-if [ "$PENDING" -eq 1 ] && ! pgrep -f 'Spec Coverage Sweep' >/dev/null 2>&1; then
-    ensure_window sweep-all "exec ./scripts/spec-sweep-all.sh"
-fi
+
+# (sweep-all retired: all 17 sections swept, discovery closed)

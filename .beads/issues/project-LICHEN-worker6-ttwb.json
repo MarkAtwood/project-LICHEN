@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-ttwb",
+  "title": "puck t_echo_nrf52840.conf sets CONFIG_LICHEN_COAP_LOCATION=y but prj.conf STANDALONE=y forces it n (dead line)",
+  "description": "Two independent codereview passes on s8rl flagged: lichen/apps/puck/boards/t_echo_nrf52840.conf:122 sets CONFIG_LICHEN_COAP_LOCATION=y (added 35b8c194eb, 2026-07-19), but lichen/apps/puck/prj.conf:24 sets CONFIG_LICHEN_COAP_SERVER_STANDALONE=y (added 6bdacf9d2d, 2026-08-31) and LICHEN_COAP_LOCATION depends on !LICHEN_COAP_SERVER_STANDALONE -- so Kconfig forces LOCATION=n with an unsatisfied-deps warning on every puck t_echo build. The /sensors/location resource has never been compiled into that build. Decision: (a) drop the dead LOCATION=y line from the board conf, or (b) if the resource is wanted on puck t_echo, the modular-mode respond path (who provides lichen_coap_respond when STANDALONE=n) must be resolved first -- that is a real architectural gap since coap_server.c (STANDALONE-only) holds the sole production definition.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:55:24.196302118Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:17:12.959799157Z",
+  "closed_at": "2026-09-09T05:17:12.959799157Z",
+  "close_reason": "Chose option (a): dropped the dead CONFIG_LICHEN_COAP_LOCATION=y line + its stale comment from lichen/apps/puck/boards/t_echo_nrf52840.conf. The line was unsatisfiable: prj.conf:24 sets LICHEN_COAP_SERVER_STANDALONE=y and LOCATION depends on !STANDALONE, so Kconfig forced LOCATION=n with an unsatisfied-deps warning on every build -- the resource was never compiled in. Option (b) (enable location on puck t_echo) requires resolving the modular-mode lichen_coap_respond gap (coap_server.c is STANDALONE-only and holds the sole production definition) -- a real architectural decision beyond a P3 config cleanup; left as future work. CONFIG_LICHEN_SENML retained (shared encoder, still referenced). No other puck file references COAP_LOCATION. Codereview NOTE: opencode run (kimi-k3 reviewer) hung at 300s timeout -- API issue; per worker step 4 fallback performed the 3 passes (correctness/security/edge) myself. No findings.",
+  "labels": [
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ttwb",
+      "depends_on_id": "project-LICHEN-worker6-s8rl",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T04:55:24.339343972Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

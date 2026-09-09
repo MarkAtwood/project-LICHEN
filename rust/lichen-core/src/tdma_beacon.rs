@@ -67,6 +67,8 @@ pub enum ParseError {
     TooShort,
     /// Reserved flag bits (4-7) are set.
     ReservedFlagSet,
+    /// num_slots is zero (structurally meaningless slot modulus).
+    NumSlotsZero,
 }
 
 impl core::fmt::Display for ParseError {
@@ -74,6 +76,7 @@ impl core::fmt::Display for ParseError {
         match self {
             Self::TooShort => write!(f, "buffer too short for TDMA beacon header"),
             Self::ReservedFlagSet => write!(f, "reserved flag bits (4-7) must be zero"),
+            Self::NumSlotsZero => write!(f, "num_slots must be nonzero"),
         }
     }
 }
@@ -87,6 +90,9 @@ impl TdmaBeaconHeader {
         let flags = data[13];
         if flags & flags::RESERVED_MASK != 0 {
             return Err(ParseError::ReservedFlagSet);
+        }
+        if data[4] == 0 {
+            return Err(ParseError::NumSlotsZero);
         }
         Ok(Self {
             epoch: u32::from_be_bytes([data[0], data[1], data[2], data[3]]),
@@ -104,13 +110,18 @@ impl TdmaBeaconHeader {
 
     /// Serialize header to bytes.
     ///
-    /// Returns `Err(ReservedFlagSet)` if reserved flag bits (4-7) are set.
+    /// Returns `Err(ReservedFlagSet)` if reserved flag bits (4-7) are set,
+    /// or `Err(NumSlotsZero)` if `num_slots` is zero (structurally
+    /// meaningless slot modulus that every receiver's parse gate rejects).
     pub fn serialize(&self, out: &mut [u8]) -> Result<(), ParseError> {
         if out.len() < HEADER_SIZE {
             return Err(ParseError::TooShort);
         }
         if self.flags & flags::RESERVED_MASK != 0 {
             return Err(ParseError::ReservedFlagSet);
+        }
+        if self.num_slots == 0 {
+            return Err(ParseError::NumSlotsZero);
         }
         out[0..4].copy_from_slice(&self.epoch.to_be_bytes());
         out[4] = self.num_slots;
@@ -527,6 +538,13 @@ mod tests {
     }
 
     #[test]
+    fn test_num_slots_zero_rejected() {
+        let mut buf = [0u8; HEADER_SIZE];
+        buf[4] = 0;
+        assert_eq!(TdmaBeaconHeader::parse(&buf), Err(ParseError::NumSlotsZero));
+    }
+
+    #[test]
     fn test_signature_bytes() {
         let beacon = [0u8; MIN_BEACON_SIZE];
         let sig = signature_bytes(&beacon).unwrap();
@@ -576,6 +594,33 @@ mod tests {
         };
         let mut buf = [0u8; HEADER_SIZE];
         assert_eq!(hdr.serialize(&mut buf), Err(ParseError::ReservedFlagSet));
+
+        // Dual fault: reserved-flags precedence over num_slots == 0 must
+        // match parse order and the C codec (beacon.c checks flags first).
+        let dual = TdmaBeaconHeader {
+            flags: 0x10,
+            num_slots: 0,
+            ..hdr
+        };
+        assert_eq!(dual.serialize(&mut buf), Err(ParseError::ReservedFlagSet));
+    }
+
+    #[test]
+    fn test_serialize_rejects_num_slots_zero() {
+        let hdr = TdmaBeaconHeader {
+            epoch: 0,
+            num_slots: 0,
+            sfn: 0,
+            timestamp: 0,
+            flags: 0,
+            rx_chains: 1,
+            setup_window: 0,
+            occupied_time: 0,
+            guard: 0,
+            channel_mask: 0,
+        };
+        let mut buf = [0u8; HEADER_SIZE];
+        assert_eq!(hdr.serialize(&mut buf), Err(ParseError::NumSlotsZero));
     }
 
     #[test]

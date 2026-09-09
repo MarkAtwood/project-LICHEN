@@ -2,13 +2,25 @@
 	aliases {
 		gnss = &l76k;
 	};
-};
 
-&uart1 {
-	status = "okay";
-	current-speed = <9600>;
-	l76k: l76k {
-		compatible = "quectel,l76k";
+	/*
+	 * The modem-uart backend requires an interrupt-capable UART
+	 * (MODEM_BACKEND_UART depends on UART_INTERRUPT_DRIVEN ||
+	 * UART_ASYNC_API), and native_sim's uart1 is a zephyr,native-posix-uart
+	 * whose driver has no IRQ API and never selects
+	 * SERIAL_SUPPORT_INTERRUPT — assigning UART_INTERRUPT_DRIVEN=y aborts
+	 * the Kconfig merge. Mock the L76K on a zephyr,uart-emul node instead
+	 * (project-LICHEN-worker6-daz7): it selects SERIAL_SUPPORT_INTERRUPT
+	 * and needs no host tty.
+	 */
+	euart1: uart-emul-1 {
+		compatible = "zephyr,uart-emul";
 		status = "okay";
+		current-speed = <9600>;
+
+		l76k: l76k {
+			compatible = "quectel,l76k";
+			status = "okay";
+		};
 	};
 };

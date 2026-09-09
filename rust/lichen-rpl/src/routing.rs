@@ -562,7 +562,9 @@ impl DaoManager {
     }
 
     /// Process a verified DAO received from an authenticated immediate sender.
-    /// Sender-to-target authorization (per IPv6/IID identity rules) precedes replay and any route mutation.
+    /// Ordering follows spec/05-routing.md 8.6: per-key replay classification
+    /// precedes prefix authorization and sender-to-target authorization; both
+    /// precede replay-floor persistence and route-state mutation.
     pub fn process_signature_verified<S: NonVolatile>(
         &mut self,
         verified: &SignatureVerifiedDao<'_>,
@@ -941,12 +943,12 @@ impl DaoManager {
                     .collect::<Option<Vec<_>>>()?;
                 let selected_candidate = if disposition == DaoDiagnosticDisposition::Active {
                     self.routing_table
-                        .lookup(&target.octets())
+                        .lookup(*target)
                         .and_then(|path| {
                             let parent = if path.len() == 1 {
                                 self.node_address
                             } else {
-                                Ipv6Addr::from(path[path.len() - 2])
+                                path[path.len() - 2]
                             };
                             let candidate = self
                                 .candidate_map
@@ -958,7 +960,7 @@ impl DaoManager {
                                 preference_subfield: Self::path_control_rank(
                                     candidate.path_control,
                                 )? + 1,
-                                path: path.iter().map(|hop| Ipv6Addr::from(*hop)).collect(),
+                                path: path.to_vec(),
                             })
                         })
                 } else {
@@ -1621,6 +1623,13 @@ impl DaoManager {
         )? {
             return Ok(None);
         }
+        // `target == root` (or its canonical link-local alias) yields an empty
+        // chain: root-to-self is not a route. Treat it as no-route rather than
+        // install an empty path that would later panic the diagnostic at
+        // path[path.len() - 2].
+        if chain.is_empty() {
+            return Ok(None);
+        }
         chain.reverse();
         Ok(Some(chain))
     }
@@ -1791,12 +1800,11 @@ impl DaoManager {
                     if routes.routes.len() >= MAX_ROUTES {
                         return None;
                     }
-                    let octets: Vec<[u8; 16]> = path.iter().map(Ipv6Addr::octets).collect();
                     routes.routes.insert(
-                        RouteTarget::host(target.octets()),
-                        RouteEntry::fresh(&octets),
+                        RouteTarget::host(*target),
+                        RouteEntry::fresh(&path),
                     );
-                    routes.rpl_managed_hosts.insert(target.octets());
+                    routes.rpl_managed_hosts.insert(*target);
                 }
                 Ok(None) => {}
                 Err(()) => return None,
@@ -1810,7 +1818,7 @@ impl DaoManager {
                 if let Some(entry) = routes.routes.get_mut(prefix) {
                     let _ = entry.mark_expired();
                 }
-            } else if let Some(path) = routes.lookup(egress) {
+            } else if let Some(path) = routes.lookup(*egress) {
                 let egress_path = path.to_vec();
                 if !egress_path.is_empty() {
                     routes
@@ -1837,17 +1845,75 @@ mod tests {
     }
 
     #[test]
+    fn routing_table_rejects_empty_paths() {
+        let mut table = RoutingTable::new();
+        let target = Ipv6Addr::from(ll(3));
+        // An empty host path must not be admitted: it would leave a stored
+        // entry whose path slice is empty, panicking the diagnostic at
+        // routing.rs path[path.len() - 2].
+        assert!(!table.add_route(target, &[]));
+        assert!(table.lookup(target).is_none());
+        assert!(table.is_empty());
+
+        // A refresh with an empty path must not shrink an existing path.
+        let path = [Ipv6Addr::from(ll(2)), target];
+        assert!(table.add_route(target, &path));
+        assert!(!table.add_route(target, &[]));
+        assert_eq!(table.lookup(target), Some(path.as_slice()));
+
+        // add_prefix_route is equally unable to install an empty path.
+        let prefix = RouteTarget::new(ll(9), 64).unwrap();
+        let egress = Ipv6Addr::from(ll(8));
+        assert!(!table.add_prefix_route(prefix, egress, &[]));
+        assert!(table.lookup(Ipv6Addr::from(ll(9))).is_none());
+    }
+
+    #[test]
+    fn dao_for_root_self_installs_no_empty_route() {
+        use crate::message::OPT_TRANSIT_INFO;
+        use crate::routing::{DaoDiagnosticLimits, DaoProcessTiming};
+
+        // A DAO advertising the root's own /128 as a target (with a non-root
+        // parent, so contains_cycle does not reject it as a self-loop) must not
+        // install a route. assemble_path_from(root) yields an empty chain;
+        // without the empty-chain guard rebuilt_routes would insert that empty
+        // path and the diagnostic would panic at path[path.len() - 2].
+        let root = Ipv6Addr::from(ll(1));
+        let parent = Ipv6Addr::from(ll(2));
+        let authority = Ipv6Addr::from(ll(3));
+        let mut manager = DaoManager::diagnostic_root(root, 0, root);
+        let mut dao = vec![0, 0, 0, 1, 5, 18, 0, 128];
+        dao.extend_from_slice(&root.octets()); // target == root
+        dao.extend_from_slice(&[OPT_TRANSIT_INFO, 20, 0, 0x80, 1, 255]);
+        dao.extend_from_slice(&parent.octets()); // parent != root
+        let limits = DaoDiagnosticLimits {
+            max_targets: 16,
+            max_candidates_per_target: 16,
+            max_candidates: 16,
+        };
+        let timing = DaoProcessTiming {
+            now_seconds: 0,
+            lifetime_unit_seconds: 1,
+            max_deadline_seconds: u64::MAX,
+        };
+        let _ = manager.process_route_state_diagnostic(&dao, authority, timing, limits);
+        assert!(manager.routing_table().lookup(root).is_none());
+        // Must not panic on the empty-path diagnostic.
+        let _ = manager.route_state_diagnostic(authority, 1);
+    }
+
+    #[test]
     fn routing_table_add_lookup_remove() {
         let mut table = RoutingTable::new();
-        let target = ll(3);
-        let path = [ll(2), ll(3)];
+        let target = Ipv6Addr::from(ll(3));
+        let path = [Ipv6Addr::from(ll(2)), target];
         assert!(table.add_route(target, &path));
 
         assert_eq!(table.len(), 1);
-        assert_eq!(table.lookup(&target), Some(path.as_slice()));
+        assert_eq!(table.lookup(target), Some(path.as_slice()));
 
-        table.remove_route(&target);
-        assert!(table.lookup(&target).is_none());
+        table.remove_route(target);
+        assert!(table.lookup(target).is_none());
         assert!(table.is_empty());
     }
 

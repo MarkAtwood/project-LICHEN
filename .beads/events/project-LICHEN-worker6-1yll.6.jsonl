@@ -1,4 +1,0 @@
-{"id":"01a082aa-e52d-72ac-995c-5865bbc018ec","issue_id":"project-LICHEN-worker6-1yll.6","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-08T20:17:13.005175974Z"}
-{"id":"01a082aa-e532-70c2-92b3-b0c6cbbbd90d","issue_id":"project-LICHEN-worker6-1yll.6","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: rust","created_at":"2026-09-08T20:17:13.01005063Z"}
-{"id":"01a082aa-e536-79d8-b86e-a5208daa94f4","issue_id":"project-LICHEN-worker6-1yll.6","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: diagnosability","created_at":"2026-09-08T20:17:13.014645832Z"}
-{"id":"01a082aa-e53b-73cc-aaf9-e498e04d2a37","issue_id":"project-LICHEN-worker6-1yll.6","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: testing","created_at":"2026-09-08T20:17:13.019249842Z"}

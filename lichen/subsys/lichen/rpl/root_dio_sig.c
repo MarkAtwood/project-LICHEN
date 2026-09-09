@@ -216,7 +216,6 @@ int root_dio_sig_decode(const uint8_t *data, size_t len,
 		}
 		for (uint64_t i = 0; i < q_arg; i++) {
 			uint64_t key = 0;
-			uint8_t v_major;
 			uint64_t v_arg;
 
 			if (root_sig_read_uint(&q, &key) != ROOT_SIG_OK ||

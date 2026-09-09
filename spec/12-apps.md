@@ -11,6 +11,15 @@ This section defines standard application-layer features using IETF protocols.
 All features use CoAP (RFC 7252) with CBOR payloads and leverage existing
 standards wherever possible.
 
+Application-generated mesh traffic, including Observe notifications, is
+subject to radio queue backpressure, deadlines, and eligible-TX priority in
+07-transport-app.md §10.2 and appendix-bufferbloat.md. The node owns resource
+state and notification scheduling as specified in 11-lci.md §17.8.8.
+[Receiver-Aware CCP](02b-ccp-receiver-aware.md) defines the adopted policy and
+qualified full-band experiments; new wire activation remains gated on exact
+versioned encodings and independent conformance oracles, not an assumption of
+production readiness.
+
 ### 18.1. Messaging
 
 Text messaging between nodes, supporting unicast, multicast, and broadcast.
@@ -83,15 +92,16 @@ Content-Format: application/cbor
 }
 ```
 
-New messages trigger Observe notifications.
+New messages trigger Observe notifications. Coalescing replaceable state
+updates MUST NOT merge or discard individual inbox messages or custody records.
 
 **Delivery Service Selection:**
 
 Messages use the **message delivery service** (custody transfer,
 store-and-forward) by default. The sender's node sets the DTN S and C flags
-(see 05-routing.md §9.8) and sends via CoAP CON. This enables planetary-scale
-delivery across multiple meshes and gateways, surviving hours or days of
-recipient unavailability.
+(see 05-routing.md §9.8) and sends via CoAP CON. This enables best-effort
+store-and-forward across multiple meshes and gateways during hours or days of
+recipient unavailability, within the existing TTL and storage policies.
 
 Broadcast messages (`to: "ff02::1"`) use the datagram service (no custody,
 best-effort).
@@ -148,6 +158,9 @@ receipt for all messages with ID <= the `ack_through` value.
 | Delivered | Delivered | Explicit receipt or `ack_through` in reply |
 | Expired | May not have been delivered | TTL expired, no receipt received |
 
+Custody acceptance records forwarding responsibility, not guaranteed delivery.
+A delivery receipt confirms recipient acceptance, not human reading.
+
 The sender does not retry after TTL expiry. The custody chain is the retry
 mechanism -- each custodian keeps attempting the next hop until TTL expires.
 If a message expires without confirmation, the sender's UI indicates this and
@@ -155,7 +168,16 @@ the user decides whether to resend manually.
 
 #### 18.1.3. Canned Messages
 
-Pre-defined messages for quick sending (configurable):
+Pre-defined messages for quick sending. Nodes ship with a default set and
+users can replace any slot via PUT. Canned messages are the primary input
+method on e-ink devices (3-button cycle + select) and a shortcut on
+full-keyboard surfaces.
+
+**Design criteria:** Each message must make sense as a standalone
+transmission with no follow-up required. Short enough for LoRa efficiency.
+Unambiguous without context.
+
+**Default Set (16 messages in 4 categories):**
 
 ```
 GET coap://[node]/msg/canned
@@ -163,28 +185,90 @@ Content-Format: application/cbor
 
 {
   "messages": [
-    {"id": 0, "text": "I'm OK"},
-    {"id": 1, "text": "Need assistance"},
-    {"id": 2, "text": "At checkpoint"},
-    {"id": 3, "text": "Returning to base"},
-    {"id": 4, "text": "Emergency - send help"}
+    {"id": 0,  "cat": "status",  "text": "I'm OK"},
+    {"id": 1,  "cat": "status",  "text": "Busy, can't talk"},
+    {"id": 2,  "cat": "status",  "text": "Low battery"},
+    {"id": 3,  "cat": "status",  "text": "Heading out, back later"},
+
+    {"id": 4,  "cat": "move",    "text": "On my way"},
+    {"id": 5,  "cat": "move",    "text": "At checkpoint"},
+    {"id": 6,  "cat": "move",    "text": "Returning to base"},
+    {"id": 7,  "cat": "move",    "text": "Stopped, holding position"},
+
+    {"id": 8,  "cat": "coord",   "text": "Copy"},
+    {"id": 9,  "cat": "coord",   "text": "Negative"},
+    {"id": 10, "cat": "coord",   "text": "Wait one"},
+    {"id": 11, "cat": "coord",   "text": "Meet at my position"},
+
+    {"id": 12, "cat": "urgent",  "text": "Need assistance (non-emergency)"},
+    {"id": 13, "cat": "urgent",  "text": "Medical issue, need help"},
+    {"id": 14, "cat": "urgent",  "text": "Lost, need directions"},
+    {"id": 15, "cat": "urgent",  "text": "EMERGENCY - send help NOW"}
   ]
 }
 ```
+
+Category `cat` is a display hint for grouping in the UI. IDs 0-11 are
+normal priority; 12-14 are priority=1 (high); 15 is priority=2 (emergency,
+triggers SOS path per §18.5).
+
+**Sending:**
 
 ```
 POST coap://[destination]/msg/inbox
 Content-Format: application/cbor
 
-{"canned": 4, "ack": true}
+{"canned": 8, "ack": true}
 ```
+
+Recipients render the canned text. The `canned` field is the ID; the
+recipient's node looks up the text locally. This saves airtime — only
+the ID (1 byte) is transmitted, not the full text string.
+
+**User Customization:**
+
+Users can replace any canned message via PUT. Custom messages persist
+across reboots (stored in flash).
+
+```
+PUT coap://[node]/msg/canned/7
+Content-Format: application/cbor
+
+{"text": "Grabbing beer, want one?"}
+
+Response: 2.04 Changed
+```
+
+To reset a slot to its default:
+
+```
+DELETE coap://[node]/msg/canned/7
+
+Response: 2.02 Deleted    ; slot reverts to factory default
+```
+
+**Constraints:**
+- Maximum 16 slots (IDs 0-15)
+- Maximum text length: 64 bytes UTF-8
+- Slot 15 is always emergency; users MAY change its text but it always
+  sends as priority=2 and triggers SOS path
+- Custom messages MUST be transmitted as full text (not ID) when the
+  recipient may not have the same customization — implementations SHOULD
+  include both `canned` ID and `body` text when the slot has been
+  customized
+
+**E-ink compose flow:**
+1. PREV/NEXT cycles through canned messages grouped by category
+2. Category headers shown: STATUS / MOVEMENT / COORD / URGENT
+3. SELECT sends immediately (with confirmation for urgent category)
+4. Long-press SELECT on any message opens recipient picker first
 
 #### 18.1.4. Store-and-Forward
 
-Messages use custody transfer (05-routing.md §9.8.1) for reliable
+Messages use custody transfer (05-routing.md §9.8.1) for best-effort
 store-and-forward delivery. When the destination is unreachable, each
-custody-capable node in the path persists the message to flash and takes
-responsibility for forwarding it.
+custody-capable node that accepts custody persists the message to flash and
+takes responsibility for attempting forwarding under the existing policies.
 
 The custody chain works as follows:
 
@@ -315,6 +399,10 @@ local density estimate (`EstimateDensity`, 02a-coordinated-capacity.md
 §2a.10.3) exceeds 20, the beacon interval MUST be at least 300 seconds
 regardless of motion state, preventing position broadcast from dominating
 airtime. Parameters take effect on the next beacon cycle.
+
+If radio admission is delayed, the node MAY replace an unsent position update
+with newer state for the same resource and destination. This does not relax
+beacon intervals or freshness deadlines, or permit coalescing distinct messages.
 
 Nodes receiving beacons update their position cache:
 
@@ -610,9 +698,9 @@ Priority alerting for emergencies.
 
 #### 18.4.1. SOS Authentication and Rate Limiting
 
-SOS messages are high-priority and trigger network-wide flooding. Without
-controls, fake SOS floods cause denial of service. All SOS messages MUST
-be authenticated and rate-limited.
+SOS messages are high-priority and trigger controlled flooding within the
+existing forwarding scope and TTL limits. Without controls, fake SOS floods
+cause denial of service. All SOS messages MUST be authenticated and rate-limited.
 
 **Authentication (REQUIRED):**
 
@@ -661,6 +749,9 @@ Nodes SHOULD support operator commands to:
 - Manually blacklist/whitelist nodes
 - Disable rate limiting entirely (trusted network)
 
+These overrides affect application abuse controls only; they do not relax
+radio TX eligibility or regulatory accounting (§18.4.6).
+
 #### 18.4.2. Emergency Alert Format
 
 ```cbor
@@ -703,7 +794,8 @@ Response: 2.04 Changed
 
 Nodes receiving SOS:
 1. Display alert prominently
-2. Re-broadcast once (controlled flooding, TTL-limited)
+2. Re-broadcast once when TX is eligible (controlled flooding, TTL-limited,
+   within the existing forwarding scope)
 3. Log to `/sos/log`
 
 #### 18.4.4. SOS Button Behavior
@@ -757,10 +849,18 @@ Content-Format: application/cbor
 
 When SOS is active:
 
-1. **Priority routing:** SOS packets get priority in TX queue
+1. **Priority routing:** SOS packets get priority among eligible TX
 2. **Beacon boost:** Originating node beacons position every 30s
-3. **Relay duty:** All nodes relay SOS (once per SOS ID)
+3. **Relay duty:** All nodes within the forwarding scope attempt eligible SOS
+   relay (once per SOS ID)
 4. **Persistence:** SOS remains active until cancelled or 4-hour timeout
+
+These are best-effort forwarding obligations, not a delivery guarantee or an
+emergency regulatory bypass. SOS and boosted position beacons MUST NOT preempt
+committed RX, exceed legal or adaptive airtime limits, or start unless the full
+radio operation plus guard fits the opportunity. Existing authentication,
+rate, queue, expiry, and forwarding-scope limits still apply; urgency does not
+create airtime budget by changing channels or retuning.
 
 ### 18.5. Presence and Status
 

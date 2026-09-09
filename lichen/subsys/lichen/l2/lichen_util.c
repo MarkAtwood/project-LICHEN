@@ -8,22 +8,42 @@
 
 #include "lichen_util.h"
 
+/* Zephyr 4.1 marks TinyCrypt DEPRECATED (Kconfig aborts on the warning);
+ * mbedTLS supplies the identical SHA-256 there. Host tests keep TinyCrypt
+ * (stub or module) so existing host harnesses are unchanged. The provider
+ * key is CONFIG_MBEDTLS_SHA256, not __ZEPHYR__: a bare-Zephyr build with
+ * no LICHEN configs (e.g. tests/util compiling this file standalone) may
+ * still select the mbedTLS path via CONFIG_MBEDTLS=y in its prj.conf. */
+#if defined(__ZEPHYR__) && defined(CONFIG_MBEDTLS_SHA256)
+#include <mbedtls/sha256.h>
+#define LICHEN_SHA256_DIGEST_SZ 32
+#else
+#include <tinycrypt/sha256.h>
+#include <tinycrypt/constants.h>
+#define LICHEN_SHA256_DIGEST_SZ TC_SHA256_DIGEST_SIZE
+#endif
+
 /* Compile-time sanity check: SHA-256 always produces 32 bytes */
-BUILD_ASSERT(TC_SHA256_DIGEST_SIZE == 32,
+BUILD_ASSERT(LICHEN_SHA256_DIGEST_SZ == 32,
              "SHA-256 digest size must be 32 bytes");
 
 int lichen_sha256(const uint8_t *input, size_t inlen,
                   uint8_t *output, size_t outlen)
 {
-    struct tc_sha256_state_struct state;
-    int ret = 0;
-
     if ((input == NULL && inlen > 0) || output == NULL) {
         return -EINVAL;
     }
-    if (outlen < TC_SHA256_DIGEST_SIZE) {
+    if (outlen < LICHEN_SHA256_DIGEST_SZ) {
         return -ENOMEM;
     }
+
+#if defined(__ZEPHYR__) && defined(CONFIG_MBEDTLS_SHA256)
+    /* One-shot: mbedtls_sha256 only fails on internal errors; preserve the
+     * historic stage-mapped errno contract as -EIO. */
+    return mbedtls_sha256(input, inlen, output, 0) == 0 ? 0 : -EIO;
+#else
+    struct tc_sha256_state_struct state;
+    int ret = 0;
 
     if (tc_sha256_init(&state) != TC_CRYPTO_SUCCESS) {
         ret = -EIO;
@@ -35,6 +55,7 @@ int lichen_sha256(const uint8_t *input, size_t inlen,
     }
     secure_zero(&state, sizeof(state));
     return ret;
+#endif
 }
 
 int lichen_iid_to_human_address(const uint8_t *iid, char *buf, size_t buflen)

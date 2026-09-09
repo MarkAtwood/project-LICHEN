@@ -5,11 +5,21 @@ config LICHEN_TUNNEL_AUTH
 	bool "Fail-closed egress tunnel authorization"
 	depends on LICHEN_LINK_SCHNORR
 	select LICHEN_CRYPTO_MONOCYPHER
-	select TINYCRYPT
-	select TINYCRYPT_SHA256
+	select MBEDTLS
+	select MBEDTLS_SHA256
 	help
 	  Verify root-issued COSE_Sign1 tunnel grants and enforce them before
 	  forwarding inner IPv6 packets to an external interface.
+
+config LICHEN_CAPABILITY_ANNOUNCE
+	bool "Capability announcement verification (spec 8.12)"
+	depends on LICHEN_LINK_SCHNORR
+	select LICHEN_CRYPTO_MONOCYPHER
+	select TINYCRYPT
+	select TINYCRYPT_SHA256
+	help
+	  Verify node capability announcements (COSE_Sign1, Schnorr48) received
+	  by the DODAG root per spec/06-security.md section 8.12.
 
 if LICHEN_TUNNEL_AUTH
 

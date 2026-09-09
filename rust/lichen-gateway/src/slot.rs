@@ -391,6 +391,7 @@ pub struct RawSlotClaim {
     ordinal: Option<u64>,
     signature: [u8; SIGNATURE_LEN],
     sig_form: ClaimSigForm,
+    cose_payload: Option<Vec<u8>>,
 }
 
 /// COSE_Sign1 slot-claim payload (spec/08 GCP-6.5).
@@ -455,19 +456,23 @@ impl SlotClaimPayload {
     /// 4.4) with the shared `{1: -65537}` protected header.
     pub(crate) fn cose_sig_digest(&self) -> Result<[u8; 32], SlotError> {
         let payload = self.encode_canonical()?;
-        let malformed = |_| SlotError::MalformedClaim;
-        let mut input = vec![0u8; payload.len() + 32];
-        let len = {
-            let mut w = Writer::new(&mut input);
-            w.byte(0x84).map_err(malformed)?;
-            w.tstr(b"Signature1").map_err(malformed)?;
-            w.bstr(PROTECTED).map_err(malformed)?;
-            w.bstr(&[]).map_err(malformed)?;
-            w.bstr(&payload).map_err(malformed)?;
-            w.position()
-        };
-        Ok(Sha256::digest(&input[..len]).into())
+        cose_sig_digest(&payload)
     }
+}
+
+fn cose_sig_digest(payload: &[u8]) -> Result<[u8; 32], SlotError> {
+    let malformed = |_| SlotError::MalformedClaim;
+    let mut input = vec![0u8; payload.len() + 32];
+    let len = {
+        let mut w = Writer::new(&mut input);
+        w.byte(0x84).map_err(malformed)?;
+        w.tstr(b"Signature1").map_err(malformed)?;
+        w.bstr(PROTECTED).map_err(malformed)?;
+        w.bstr(&[]).map_err(malformed)?;
+        w.bstr(&payload).map_err(malformed)?;
+        w.position()
+    };
+    Ok(Sha256::digest(&input[..len]).into())
 }
 
 /// How the signature over a [`RawSlotClaim`] is bound to its content.
@@ -500,6 +505,7 @@ impl RawSlotClaim {
             ordinal: None,
             signature,
             sig_form: ClaimSigForm::DomainTranscript,
+            cose_payload: None,
         })
     }
 
@@ -636,26 +642,24 @@ impl RawSlotClaim {
             ordinal,
             signature,
             sig_form: ClaimSigForm::CoseSign1,
+            cose_payload: Some(payload_bytes.to_vec()),
         })
     }
 
-    /// Re-encode the decoded fields into the canonical signed payload.
+    /// Digest the received COSE payload bytes for the signature check.
     ///
-    /// Mirrors Python verification, which digests a re-encode of the decoded
-    /// claim rather than the received payload bytes. Non-canonical wire
-    /// variants (reordered keys, trailing bytes, non-minimal integers) are
-    /// rejected by [`RawSlotClaim::from_cose`] before this runs, so the
-    /// signature check only ever sees canonical payloads.
-    fn claim_payload(&self) -> SlotClaimPayload {
-        SlotClaimPayload {
-            slots: self.slots.clone(),
-            superframe_epoch: self.superframe_id,
-            mode: self.mode,
-            expiry: self.expiry,
-            gateway_iid: self.gateway_iid,
-            claim_seq: self.claim_sequence,
-            ordinal: self.ordinal,
-        }
+    /// Merge resolution: HEAD's received-bytes digest is kept over
+    /// beads-worker-4's canonical re-encode (`claim_payload`). The two are
+    /// byte-identical for every claim that reaches verification — from_cose
+    /// rejects all non-canonical payloads (deterministic-CBOR per
+    /// spec/decisions.jsonl slot-claim-cose-sign1) — and binding the exact
+    /// wire bytes matches the C verifier (coap_slot_coord.c:394).
+    fn cose_sig_digest(&self) -> Result<[u8; 32], SlotError> {
+        cose_sig_digest(
+            self.cose_payload
+                .as_deref()
+                .ok_or(SlotError::MalformedClaim)?,
+        )
     }
 
     pub fn gateway_iid(&self) -> &Iid {
@@ -851,8 +855,10 @@ impl SlotClaimVerifier {
     /// Verify one claim for exactly the current superframe.
     ///
     /// Exact matching rejects both captured old claims and pre-played future
-    /// claims. A gateway may re-claim within a superframe only by advancing the
-    /// signed `claim_sequence`, preserving the required loser-reclaim flow.
+    /// claims. The replay gate is the pure `claim_seq` high-water per gateway
+    /// IID (GCP-6.5 step 8): a re-claim — in any superframe — must advance the
+    /// signed `claim_sequence`, preserving the loser-reclaim flow and blocking
+    /// seq rollback from a rebooted or NVS-wiped sender.
     pub fn verify(
         &mut self,
         claim: RawSlotClaim,
@@ -877,7 +883,6 @@ impl SlotClaimVerifier {
             }
             ClaimSigForm::CoseSign1 => {
                 let digest = claim
-                    .claim_payload()
                     .cose_sig_digest()
                     .map_err(|_| SlotError::InvalidSignature)?;
                 verify_gateway_message(gateway_pubkey, &digest, &claim.signature)
@@ -893,7 +898,12 @@ impl SlotClaimVerifier {
             });
         }
         if let Some(previous) = self.last_seen.get(&claim.gateway_iid) {
-            if (claim.superframe_id, claim.claim_sequence) <= *previous {
+            // GCP-6.5 step 8 (spec/08): pure claim_seq high-water per gateway
+            // IID — reject claim_seq <= cached regardless of superframe. The
+            // stale/future-superframe gate above already rejects old- and
+            // future-superframe claims; this gate additionally blocks seq
+            // rollback inside a newer superframe.
+            if claim.claim_sequence <= previous.1 {
                 return Err(SlotError::Replay {
                     gateway_iid: claim.gateway_iid,
                     superframe_id: claim.superframe_id,
@@ -1148,27 +1158,40 @@ impl ClaimSeqStore {
             .checked_add(1)
             .ok_or(SlotError::ArithmeticOverflow)?;
         let temp_path = slot_claim_seq_temp_path(&self.path, value)?;
+        // A crash between temp-create and rename leaves the temp behind; if
+        // the rebooting process lands on the same PID and value, create_new
+        // would fail forever. A stale temp is garbage from a dead attempt
+        // whose rename never landed, so remove it and retry once.
+        let mut open = OpenOptions::new();
+        open.write(true).create_new(true);
+        let mut file = match open.open(&temp_path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                fs::remove_file(&temp_path)
+                    .map_err(|error| SlotError::StorageIo(error.to_string()))?;
+                open.open(&temp_path)
+                    .map_err(|error| SlotError::StorageIo(error.to_string()))?
+            }
+            Err(error) => return Err(SlotError::StorageIo(error.to_string())),
+        };
         let result = (|| -> Result<(), SlotError> {
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&temp_path)
-                .map_err(|error| SlotError::StorageIo(error.to_string()))?;
             file.write_all(CLAIM_SEQ_MAGIC)
                 .and_then(|_| file.write_all(&value.to_be_bytes()))
                 .and_then(|_| file.sync_all())
                 .map_err(|error| SlotError::StorageIo(error.to_string()))?;
             fs::rename(&temp_path, &self.path)
                 .map_err(|error| SlotError::StorageIo(error.to_string()))?;
-            if let Some(parent) = self
+            // Bare relative paths have an empty parent(); "." is the real
+            // parent and skipping its fsync would allow the rename to be lost
+            // after next_seq already returned.
+            let parent = self
                 .path
                 .parent()
                 .filter(|parent| !parent.as_os_str().is_empty())
-            {
-                File::open(parent)
-                    .and_then(|directory| directory.sync_all())
-                    .map_err(|error| SlotError::StorageIo(error.to_string()))?;
-            }
+                .unwrap_or_else(|| Path::new("."));
+            File::open(parent)
+                .and_then(|directory| directory.sync_all())
+                .map_err(|error| SlotError::StorageIo(error.to_string()))?;
             Ok(())
         })();
         if result.is_err() {
@@ -1187,10 +1210,7 @@ fn slot_claim_seq_temp_path(path: &Path, value: u32) -> Result<PathBuf, SlotErro
         .ok_or_else(|| SlotError::StorageIo("claim-seq path has no UTF-8 file name".into()))?;
     // The ever-increasing value keeps successive saves from colliding with a
     // leftover temp (mirrors the generation suffix in slot_replay_temp_path).
-    Ok(path.with_file_name(format!(
-        ".{name}.tmp-{value}-{}",
-        std::process::id()
-    )))
+    Ok(path.with_file_name(format!(".{name}.tmp-{value}-{}", std::process::id())))
 }
 
 /// Canonical, domain-separated signed transcript for a slot claim.
@@ -2455,10 +2475,16 @@ mod tests {
     fn cose_decode_rejects_reordered_payload_keys_and_trailing_bytes() {
         // spec/decisions.jsonl slot-claim-cose-sign1 adjudicated the payload
         // as deterministic-CBOR: keys strictly ascending, no trailing bytes.
-        // Both forms are signature-valid under Rust's canonical re-encode
-        // verifier, so the decoder itself must reject them (C's verifier
-        // digests the received payload bytes, so both forms fail there;
-        // Python's decoder still accepts them — tracked parity gap).
+        // The decoder itself rejects both forms; the verifier digests the
+        // received payload bytes (C parity, coap_slot_coord.c:394), so they
+        // would fail the signature check even if decoded. Python's decoder
+        // still accepts them — tracked parity gap. (Merge resolution: this
+        // keeps beads-worker-4's decode-time rejection test. HEAD's
+        // cose_verification_binds_noncanonical_payload_bytes expected a
+        // reordered payload to decode and then fail with InvalidSignature,
+        // which the adjudicated strict decoder forbids; HEAD's
+        // cose_decode_rejects_trailing_payload_data is subsumed by the
+        // trailing-bytes case below.)
         let kid = oracle_payload().gateway_iid;
         let signature = [7u8; SIGNATURE_LEN];
         let build = |payload: &[u8]| {
@@ -2673,6 +2699,34 @@ mod tests {
     }
 
     #[test]
+    fn replay_gate_is_pure_claim_seq_highwater_across_superframes() {
+        let mut verifier = SlotClaimVerifier::new_ephemeral(4).unwrap();
+        let (first, pubkey) = signed_raw_claim_with_sequence([36; 32], vec![1], 10, 5, 60);
+        verifier.verify(first, &pubkey, 10).unwrap();
+
+        // Lower seq in a newer superframe: (superframe, seq) tuple ordering
+        // would accept it; the GCP-6.5 step 8 high-water MUST reject it.
+        let (rollback, pubkey) = signed_raw_claim_with_sequence([36; 32], vec![2], 11, 4, 60);
+        assert!(matches!(
+            verifier.verify(rollback, &pubkey, 11),
+            Err(SlotError::Replay { .. })
+        ));
+
+        // Equal seq in a newer superframe is replay too.
+        let (equal, pubkey) = signed_raw_claim_with_sequence([36; 32], vec![2], 11, 5, 60);
+        assert!(matches!(
+            verifier.verify(equal, &pubkey, 11),
+            Err(SlotError::Replay { .. })
+        ));
+
+        // Advancing seq re-claims normally across the superframe boundary.
+        let (advance, pubkey) = signed_raw_claim_with_sequence([36; 32], vec![3], 11, 6, 60);
+        let accepted = verifier.verify(advance, &pubkey, 11).unwrap();
+        assert_eq!(accepted.claim_sequence(), 6);
+        assert_eq!(accepted.slots(), &[3]);
+    }
+
+    #[test]
     fn claim_signature_binds_slots_identity_and_superframe() {
         let (raw, pubkey) = signed_raw_claim([32; 32], vec![1, 2], 10, 60);
         let mut verifier = SlotClaimVerifier::new_ephemeral(4).unwrap();
@@ -2828,5 +2882,17 @@ mod tests {
             ClaimSeqStore::load(&path),
             Err(SlotError::CorruptState)
         ));
+    }
+
+    #[test]
+    fn claim_seq_recovers_from_stale_temp() {
+        let path = test_claim_seq_path("stale-temp");
+        // Crash artifact: the temp for value 1 left behind by a dead attempt.
+        let name = path.file_name().unwrap().to_str().unwrap();
+        let stale = path.with_file_name(format!(".{name}.tmp-1-{}", std::process::id()));
+        fs::write(&stale, b"junk").unwrap();
+        let mut store = ClaimSeqStore::load(&path).unwrap();
+        assert_eq!(store.next_seq().unwrap(), 1);
+        assert!(!stale.exists());
     }
 }

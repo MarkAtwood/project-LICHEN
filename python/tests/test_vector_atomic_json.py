@@ -809,16 +809,62 @@ def test_batch_lock_rejects_symlink_without_touching_destination(tmp_path: Path)
     assert lock_target.read_bytes() == b"sentinel"
 
 
-def test_batch_rejects_group_writable_parent_before_lock(tmp_path: Path) -> None:
+def _directory_group_is_owner_only(directory: Path) -> bool:
+    """The module's own verdict for *directory*'s group-write exposure.
+    Decided from the directory's st_uid/st_gid — a setgid TMPDIR gives
+    scratch directories a group that differs from the process egid."""
+    info = directory.stat()
+    return atomic_json._group_write_reaches_owner_only(info)
+
+
+def test_batch_rejects_world_writable_parent_before_lock(tmp_path: Path) -> None:
     unsafe = tmp_path / "unsafe"
-    unsafe.mkdir(mode=0o770)
-    unsafe.chmod(0o770)
+    unsafe.mkdir(mode=0o773)
+    unsafe.chmod(0o773)
     try:
         with pytest.raises(RuntimeError, match="parent directory is unsafe"):
             atomic_write_json(unsafe / "vectors.json", {"generation": 1})
         assert not (unsafe / ".lichen-vector-batch.lock").exists()
     finally:
         unsafe.chmod(0o700)
+
+
+def test_batch_rejects_group_writable_parent_before_lock(tmp_path: Path) -> None:
+    # When group-write reaches principals beyond the owner (shared group,
+    # or a nominally-private group with extra members), a group-writable
+    # parent stays fatal. Where the verified user-private-group convention
+    # holds, the same mode is accepted — that path is covered by
+    # test_batch_accepts_user_private_group_writable_parent.
+    unsafe = tmp_path / "unsafe"
+    unsafe.mkdir(mode=0o770)
+    unsafe.chmod(0o770)
+    if _directory_group_is_owner_only(unsafe):
+        pytest.skip("directory group is owner-only here; see the accept test")
+    try:
+        with pytest.raises(RuntimeError, match="parent directory is unsafe"):
+            atomic_write_json(unsafe / "vectors.json", {"generation": 1})
+        assert not (unsafe / ".lichen-vector-batch.lock").exists()
+    finally:
+        unsafe.chmod(0o700)
+
+
+def test_batch_accepts_user_private_group_writable_parent(tmp_path: Path) -> None:
+    # UPG hosts run umask 002, so worker workspaces have group-writable
+    # checkouts; the parent check must not reject them (the group admits no
+    # principal beyond the owner). Hosts failing the verified-UPG test skip:
+    # the strict rejection is covered by
+    # test_batch_rejects_group_writable_parent_before_lock.
+    writable = tmp_path / "writable"
+    writable.mkdir(mode=0o770)
+    writable.chmod(0o770)
+    if not _directory_group_is_owner_only(writable):
+        pytest.skip("directory group reaches non-owners here; see the reject test")
+    try:
+        destination = writable / "vectors.json"
+        atomic_write_json(destination, {"generation": 1})
+        assert destination.read_bytes() == b'{\n  "generation": 1\n}\n'
+    finally:
+        writable.chmod(0o700)
 
 
 def test_batch_rejects_symlinked_parent_before_lock(tmp_path: Path) -> None:

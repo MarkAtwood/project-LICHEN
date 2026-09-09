@@ -1,0 +1,7 @@
+{
+  "id": "1788929691245449469-1",
+  "issue_id": "project-LICHEN-worker6-83wu",
+  "author": "Mark Atwood",
+  "text": "VERIFIED: the merge already landed both pieces (worker4, 2026-09-09). rust/lichen-schc/src/codec.rs:1120-1137 — needed is computed pre-write (bit-counted residue form kept per the merge-resolution comment :1112-1119), needed\u003eout.len() BufferTooSmall at :1130, and the profile-limit precheck needed \u003e SCHC_FRAG_MAX_PACKET_SIZE -\u003e InvalidPacket('SCHC packet exceeds profile limit') at :1133-1137, before out[0]=RULE_MQTT_SN at :1139. Buffer-atomic. Not claiming (one-P2-per-round rule) — confirm the over-profile sentinel test exists (mqtt-sn sibling of coap_compress_over_profile_leaves_buffer_untouched), then safe to close.",
+  "created_at": "2026-09-09T04:54:51.245449469Z"
+}

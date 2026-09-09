@@ -1,0 +1,7 @@
+{
+  "id": "1788929310004079962-1",
+  "issue_id": "project-LICHEN-worker6-e2wz",
+  "author": "Mark Atwood",
+  "text": "Follow-up commit bbb-fix: added 'depends on LICHEN_COAP_SERVER' to LICHEN_COAP_METRICS (reviewer pass-3 found lichen_coap_respond link failure when COAP_SERVER=n; that call site lives in coap_metrics.c:70). Identical pre-existing gap on LICHEN_COAP_LOCATION filed as its own bead.",
+  "created_at": "2026-09-09T04:48:30.004079962Z"
+}
