@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import struct
 from ipaddress import IPv6Address
@@ -29,6 +30,49 @@ _VICTIM_SEED = bytes(range(128, 160))
 _DESTINATION = IPv6Address("ff02::1a")
 _PEER_DODAG = IPv6Address("0200::1")
 _OTHER_DODAG = IPv6Address("0200::2")
+
+
+def _upstream_addr_for_key(pubkey: bytes) -> bytes:
+    """Upstream yggdrasil-go AddrForKey (bit-invert, count leading 1s, bit-pack).
+
+    Matches Rust lichen-core ygg_addr_from_pubkey byte-for-byte, including
+    the Go byte-counter wrap at 256 and the trailing partial-byte discard.
+    Anchored at import time to the pinned upstream vector in
+    yggdrasil_address.json so this reimplementation cannot silently diverge.
+    """
+    if len(pubkey) != 32:
+        raise ValueError(f"pubkey must be 32 bytes, got {len(pubkey)}")
+    buf = bytes(b ^ 0xFF for b in pubkey)
+    ones = 0
+    first_zero = 256
+    for idx in range(256):
+        if (buf[idx // 8] >> (7 - idx % 8)) & 1:
+            ones = (ones + 1) & 0xFF
+        else:
+            first_zero = idx
+            break
+    packed = bytearray(14)
+    start = first_zero + 1
+    whole_bits = max(0, 256 - start) & ~7
+    for out_bit in range(min(whole_bits, 112)):
+        src = start + out_bit
+        if (buf[src // 8] >> (7 - src % 8)) & 1:
+            packed[out_bit // 8] |= 1 << (7 - out_bit % 8)
+    return bytes((0x02, ones)) + bytes(packed)
+
+
+def _upstream_anchor_check() -> None:
+    """Pin _upstream_addr_for_key to the upstream conformance vector."""
+    anchor_doc = json.loads((VECTORS_DIR / "yggdrasil_address.json").read_text())
+    anchor = next(v for v in anchor_doc["vectors"] if v["name"] == "upstream_addr_for_key")
+    derived = _upstream_addr_for_key(bytes.fromhex(anchor["public_key"]))
+    if derived.hex() != anchor["address"]:
+        raise SystemExit(
+            f"upstream AddrForKey anchor mismatch: {derived.hex()} != {anchor['address']}"
+        )
+
+
+_upstream_anchor_check()
 
 
 def _internet_checksum(data: bytes) -> int:
@@ -164,8 +208,9 @@ def build_document() -> dict[str, object]:
     root = ReferenceIdentity.from_seed(_ROOT_SEED)
     attacker = ReferenceIdentity.from_seed(_ATTACKER_SEED)
     victim = ReferenceIdentity.from_seed(_VICTIM_SEED)
-    root_dodag = IPv6Address(root.ygg_addr)
-    victim_dodag = IPv6Address(victim.ygg_addr)
+    # DODAGID = upstream AddrForKey(pubkey) (rubw; native profile rejected).
+    root_dodag = IPv6Address(_upstream_addr_for_key(root.pubkey))
+    victim_dodag = IPv6Address(_upstream_addr_for_key(victim.pubkey))
     version_3 = bytes.fromhex("130103")
     cases = [
         _signed_case(
