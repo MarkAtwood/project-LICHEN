@@ -399,19 +399,26 @@ class SlotClaim:
             ordinal=ordinal,
             signature=signature,
         )
+        # Merged: HEAD's gate comment kept (it covers the C peer and the
+        # full wire-contract summary); worker-5's two extra facts folded
+        # in — indefinite lengths among the malleations cbor2 admits, and
+        # the note that Rust's key loop does not yet enforce key order.
         # Canonical-form gate (5rfl/cb10): cbor2 decodes tag-2 bignums,
-        # non-minimal long-form uints, reordered/duplicate/unknown keys, and
-        # trailing payload bytes to the same field values a canonical claim
-        # has, so the type gates above accept wire forms Rust's strict
-        # reader and C's digest-the-received-bytes reject — and
-        # verify_slot_claim digests a canonical RE-ENCODE, so a
-        # signature-valid claim with the payload re-encoded non-canonically
-        # would be accepted here and rejected by every Rust/C peer:
-        # cross-implementation slot-map divergence. Byte-equality against
-        # the canonical re-encode closes ALL of these uniformly: the
-        # adjudicated wire contract is a deterministic-CBOR payload
-        # (spec/decisions.jsonl slot-claim-cose-sign1), keys 1-7 ascending,
-        # minimal heads, no trailing bytes.
+        # non-minimal long-form uints, indefinite lengths, reordered/
+        # duplicate/unknown keys, and trailing payload bytes to the same
+        # field values a canonical claim has, so the type gates above
+        # accept wire forms Rust's strict reader and C's digest-the-
+        # received-bytes reject — and verify_slot_claim digests a
+        # canonical RE-ENCODE, so a signature-valid claim with the payload
+        # re-encoded non-canonically would be accepted here and rejected
+        # by every Rust/C peer: cross-implementation slot-map divergence.
+        # Byte-equality against the canonical re-encode closes ALL of
+        # these uniformly: the adjudicated wire contract is a
+        # deterministic-CBOR payload (spec/decisions.jsonl
+        # slot-claim-cose-sign1), keys 1-7 ascending, minimal heads, no
+        # trailing bytes — including payload key order, which Rust's
+        # order-insensitive key loop does not yet enforce (tracked
+        # separately).
         if encode_claim_canonical(claim) != payload:
             raise ClaimError("slot-claim payload must be canonically encoded")
         return claim
