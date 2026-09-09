@@ -480,7 +480,8 @@ pub(crate) fn advance_rpl_source_route(
     let next_destination: [u8; 16] = ipv6[next_start..next_start + 16]
         .try_into()
         .expect("surveyed grid address");
-    let sender_is_next = ipv6_eui64(next_destination) == ipv6_eui64(link_local_from_iid(sender_iid))
+    let sender_is_next = ipv6_eui64(next_destination)
+        == ipv6_eui64(link_local_from_iid(sender_iid))
         || next_destination == lichen_core::addr::ygg_addr_from_pubkey(sender_pubkey.as_bytes());
     if sender_is_next {
         return Err(RxError::InvalidSourceRoute);

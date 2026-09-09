@@ -129,9 +129,7 @@ fn resolve_dao_signer_from_bounded_snapshot(
     // still proves the binding.
     let by_origin: std::vec::Vec<_> = candidates
         .iter()
-        .filter(|candidate| {
-            lichen_core::addr::ygg_addr_from_pubkey(candidate.as_bytes()) == origin
-        })
+        .filter(|candidate| lichen_core::addr::ygg_addr_from_pubkey(candidate.as_bytes()) == origin)
         .collect();
     if by_origin.len() > 1 {
         // Multiple verifying-capable pins for one origin: identity collision.
@@ -219,9 +217,7 @@ impl Node {
             // The 2000::/3 arm is equally promiscuous; both arms become an
             // exact check against this node's 0200::/7 AddrForKey identity
             // once i72x.2 lands the NodeId accessor (tracked in beads).
-            if dst_bytes == self.node_id.link_local_addr().0
-                || (dst_bytes[0] & 0xe0) == 0x20
-            {
+            if dst_bytes == self.node_id.link_local_addr().0 || (dst_bytes[0] & 0xe0) == 0x20 {
                 return self.reply_echo_ipv6(ipv6, reply);
             }
         }
@@ -651,8 +647,7 @@ impl RplNode {
                         let canonical_link_local_source = sender_addr[..8]
                             == [0xfe, 0x80, 0, 0, 0, 0, 0, 0]
                             && source_matches_sender_iid(&sender_addr, &sender_iid);
-                        if (!canonical_link_local_source
-                            && !is_native_or_global(&sender_addr))
+                        if (!canonical_link_local_source && !is_native_or_global(&sender_addr))
                             || !is_native_or_global(&dst)
                         {
                             return (0, RplEvent::None);
@@ -860,9 +855,9 @@ fn wrap_compressed_reply(ipv6: &[u8], reply: &mut [u8]) -> usize {
 mod tests {
     use super::*;
     use crate::port_dispatch::{AppProtocol, UdpDispatchError};
+    use core::net::Ipv6Addr;
     #[allow(unused_imports)]
     use std::format;
-    use core::net::Ipv6Addr;
 
     fn node(iid: u8) -> Node {
         Node::new(NodeId([0x02, 0, 0, 0, 0, 0, 0, iid]))
@@ -1226,7 +1221,10 @@ mod tests {
         let body_offset = IPV6_HEADER_LEN + hdr_field::BODY_OFFSET;
         let forwarded_dao = &forwarded_ipv6[body_offset..forwarded_n];
         assert_eq!(forwarded_dao, leaf_dao);
-        assert!(parent.router.lookup_route(Ipv6Addr::from(leaf_addr)).is_none());
+        assert!(parent
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr))
+            .is_none());
 
         assert_eq!(
             root.handle_frame_rpl(
@@ -1237,7 +1235,10 @@ mod tests {
             ),
             (0, RplEvent::DaoReceived)
         );
-        assert!(root.router.lookup_route(Ipv6Addr::from(leaf_addr)).is_none());
+        assert!(root
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr))
+            .is_none());
 
         let mut tampered = forwarded_dao.to_vec();
         tampered[3] ^= 1;
@@ -1254,7 +1255,10 @@ mod tests {
             ),
             DaoHandlingOutcome::BadSignature
         );
-        assert!(root.router.lookup_route(Ipv6Addr::from(leaf_addr)).is_none());
+        assert!(root
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr))
+            .is_none());
         assert_eq!(
             root.handle_dao(
                 forwarded_dao,
@@ -1542,7 +1546,13 @@ mod tests {
         // The delegated /64 propagated multi-hop and is installed at the root.
         assert_eq!(
             root.router.lookup_route(Ipv6Addr::from(delegated_prefix)),
-            Some([Ipv6Addr::from(parent_addr), Ipv6Addr::from(delegated_prefix)].as_slice())
+            Some(
+                [
+                    Ipv6Addr::from(parent_addr),
+                    Ipv6Addr::from(delegated_prefix)
+                ]
+                .as_slice()
+            )
         );
     }
 
@@ -1612,7 +1622,11 @@ mod tests {
             ),
             DaoHandlingOutcome::Applied
         );
-        let route = root.router.lookup_route(Ipv6Addr::from(origin)).unwrap().to_vec();
+        let route = root
+            .router
+            .lookup_route(Ipv6Addr::from(origin))
+            .unwrap()
+            .to_vec();
 
         let mut changed_lifetime = first_unsigned;
         let lifetime_index = changed_lifetime.len() - 17;
@@ -1631,7 +1645,10 @@ mod tests {
             ),
             DaoHandlingOutcome::RouteRejected
         );
-        assert_eq!(root.router.lookup_route(Ipv6Addr::from(origin)), Some(route.as_slice()));
+        assert_eq!(
+            root.router.lookup_route(Ipv6Addr::from(origin)),
+            Some(route.as_slice())
+        );
     }
 
     #[cfg(feature = "std")]
@@ -1666,7 +1683,10 @@ mod tests {
             ),
             (0, RplEvent::DaoReceived)
         );
-        assert!(root.router.lookup_route_at(Ipv6Addr::from(first_addr), 2_999).is_none());
+        assert!(root
+            .router
+            .lookup_route_at(Ipv6Addr::from(first_addr), 2_999)
+            .is_none());
         assert_eq!(
             root.handle_frame_rpl(
                 &first_packet,
@@ -1676,8 +1696,14 @@ mod tests {
             ),
             (0, RplEvent::DaoReceived)
         );
-        assert!(root.router.lookup_route(Ipv6Addr::from(first_addr)).is_none());
-        assert!(root.router.lookup_route_at(Ipv6Addr::from(first_addr), 3_000).is_none());
+        assert!(root
+            .router
+            .lookup_route(Ipv6Addr::from(first_addr))
+            .is_none());
+        assert!(root
+            .router
+            .lookup_route_at(Ipv6Addr::from(first_addr), 3_000)
+            .is_none());
     }
 
     #[cfg(feature = "std")]

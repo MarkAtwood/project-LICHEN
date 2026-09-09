@@ -628,7 +628,6 @@ impl<R: Radio> Stack<R> {
         // destination to this stack (or IPv6 multicast) before exposing it to
         // upper layers.
         let local_link = self.local_addr().0;
-        let local_native = lichen_link::ygg_addr_from_pubkey(self.local_public_key().as_bytes());
         if !ipv6_destination_is_local_or_multicast(&ipv6, &local_link, &local_native) {
             return Ok(None);
         }
@@ -808,7 +807,11 @@ impl<R: Radio> Stack<R> {
     }
 }
 
-fn wire_is_for_local_stack(wire: &[u8], local_eui64: [u8; 8]) -> Result<bool, RxError> {
+fn wire_is_for_local_stack(
+    wire: &[u8],
+    local_eui64: [u8; 8],
+    local_native: [u8; 16],
+) -> Result<bool, RxError> {
     let frame = LichenFrame::from_bytes(wire).map_err(LinkRxError::from)?;
     Ok(match frame.addr_mode {
         AddrMode::None => true,
@@ -828,9 +831,15 @@ fn wire_is_for_local_stack(wire: &[u8], local_eui64: [u8; 8]) -> Result<bool, Rx
                         if destination[0] == 0xff {
                             true
                         } else {
-                            let mut eui64: [u8; 8] = destination[8..].try_into().unwrap();
-                            eui64[0] ^= 0x02;
-                            eui64 == local_eui64
+                            // The routable 02xx form embeds no IID
+                            // (spec/decisions.jsonl `upstream-yggdrasil-addressing`),
+                            // so match it by full address; the legacy EUI-64
+                            // slice stays for link-local destinations.
+                            destination == local_native || {
+                                let mut eui64: [u8; 8] = destination[8..].try_into().unwrap();
+                                eui64[0] ^= 0x02;
+                                eui64 == local_eui64
+                            }
                         }
                     })
             }

@@ -188,7 +188,10 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// Interim `dead_code` expectation: the receiver call site lands with the
     /// root-signature validation bead (b7z9.37.1); the expectation then stops
     /// being fulfilled and must be removed.
-    #[allow(dead_code, reason = "root-signature receiver call site lands in b7z9.37.1")]
+    #[allow(
+        dead_code,
+        reason = "root-signature receiver call site lands in b7z9.37.1"
+    )]
     pub(crate) fn root_seqs_mut(&mut self) -> &mut RootSeqCache {
         &mut self.root_seqs
     }
@@ -247,11 +250,12 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             {
                 return None;
             }
-            return util::l2_destination(destination, self.stack.link_ref())
-                .map(|next_hop| RoutePlan {
+            return util::l2_destination(destination, self.stack.link_ref()).map(|next_hop| {
+                RoutePlan {
                     next_hop,
                     source_route: Vec::new(),
-                });
+                }
+            });
         }
         if self.rpl.router.is_root() {
             if let Some(path) = self
