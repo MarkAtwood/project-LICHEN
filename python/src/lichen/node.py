@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+import time
 from collections import OrderedDict
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -30,6 +31,8 @@ from enum import Enum, auto
 from ipaddress import IPv6Address, IPv6Network
 from types import MappingProxyType
 from typing import Literal, Protocol, cast
+
+from aiocoap import NON, POST, Message
 
 from lichen import port_dispatch
 from lichen._sync_callbacks import reject_awaitable_result, require_sync_callable
@@ -41,7 +44,9 @@ from lichen.announce.scheduler import (
     AnnounceScheduler,
     SchedulerConfig,
 )
+from lichen.coap.schc_channel import DEFAULT_COAP_PORT, wrap_coap
 from lichen.constants import L2_DISPATCH_ROUTING, L2_DISPATCH_SCHC
+from lichen.crypto.capability_announcements import create_capability_announcement
 from lichen.crypto.identity import Identity, PeerIdentity, yggdrasil_address
 from lichen.gradient import GRADIENT_TIMEOUT_MS, GradientTable
 from lichen.ipv6.addr import iid_to_eui64, make_link_local
@@ -162,6 +167,11 @@ RELAY_SEEN_MAX_SIZE = 128
 RELAY_SEEN_WINDOW_MS = 60_000
 RECEIVE_TIMEOUT_MAX_MS = 1_000
 SCHC_RETRANSMISSION_TIMEOUT_SECONDS = 10.0
+# Lifetime of a capability announcement (spec 06-security.md 8.12); mirrors
+# the 1-hour expiry used by the root-side resource tests.
+CAPABILITY_ANNOUNCE_TTL_S = 3600
+# Spec 8.12 capability bits: 0 = egress, 1 = prefix-delegation (2-7 reserved).
+MAX_CAPABILITY_BITMASK = 0b11
 
 
 def _validated_receive_timeout_ms(value: object) -> int:
@@ -209,6 +219,11 @@ class NodeConfig:
             implemented. The instance ID, DODAG ID, and expected role must be
             configured together; omitting all three disables DIO admission.
         rpl_dio_expected_role: Whether admitted DIO signers are roots or peers.
+        node_capabilities: Capability bitmask (spec 06-security.md 8.12:
+            bit 0 egress, bit 1 prefix-delegation; bits 2-7 reserved) that
+            is re-announced to the new DODAG root after a root change.
+            Why 0: A node with no capabilities has nothing the root needs;
+            announcing an empty set would only cost LoRa airtime.
     """
 
     receive_timeout_ms: int = 1000
@@ -226,6 +241,7 @@ class NodeConfig:
     rpl_dodag_version: int = 0
     rpl_mop: int = 1
     rpl_dio_expected_role: Literal["root", "peer"] | None = None
+    node_capabilities: int = 0
 
 
 @dataclass
@@ -334,6 +350,14 @@ class Node:
         default=None, init=False, repr=False
     )
 
+    # Capability re-announce bookkeeping (spec 8.12): a monotonically
+    # increasing in-memory seq is sufficient because every recipient of a
+    # re-announce is a NEW root with no cached seq floor for this node
+    # (bead 99sg.2; persistent claim_seq machinery is l1qw.20). The CoAP
+    # message ID is a per-node 16-bit counter for the NON POSTs.
+    _capability_announce_seq: int = field(default=0, init=False, repr=False)
+    _capability_announce_mid: int = field(default=0, init=False, repr=False)
+
     def __setattr__(self, name: str, value: object) -> None:
         if name == "peer_db" and isinstance(self.__dict__.get("peer_db"), MappingProxyType):
             raise AttributeError("peer_db is a read-only Node-managed view")
@@ -362,12 +386,15 @@ class Node:
         if self.config.rreq_jitter_min_ms > self.config.rreq_jitter_max_ms:
             raise ValueError("rreq_jitter_min_ms must not exceed rreq_jitter_max_ms")
         if (
-            self.config.persist_path is not None
-            and self.persistence_revision_anchor is None
+            type(self.config.node_capabilities) is not int
+            or not 0 <= self.config.node_capabilities <= MAX_CAPABILITY_BITMASK
         ):
             raise ValueError(
-                "persistence_revision_anchor required when persist_path is set"
+                "node_capabilities must be an integer in "
+                f"0..{MAX_CAPABILITY_BITMASK} (spec 8.12 bits 0-1; 2-7 reserved)"
             )
+        if self.config.persist_path is not None and self.persistence_revision_anchor is None:
+            raise ValueError("persistence_revision_anchor required when persist_path is set")
         # Create peer database with eviction checker bound to this node
         self._peer_db = PeerDatabase(
             initial_peers=self.peer_db if self.peer_db else None,
@@ -982,6 +1009,7 @@ class Node:
                     self._record_schc_failure(rx)
                     return
                 self._rule_version_failures.record_success(rx.sender_pubkey)
+                await self._reannounce_capabilities_to_new_root()
                 return
             delivery_payload = wrap_schc_payload(result.reassembled)
         else:
@@ -998,6 +1026,7 @@ class Node:
                     self._record_schc_failure(rx)
                     return
                 self._rule_version_failures.record_success(rx.sender_pubkey)
+                await self._reannounce_capabilities_to_new_root()
                 return
             try:
                 ipv6_bytes = self.link.accept_authenticated_schc_packet(rx)
@@ -1149,6 +1178,50 @@ class Node:
             and packet.payload[0] == RPL_ICMPV6_TYPE
             and packet.payload[1] == int(RplCode.DIO)
         )
+
+    async def _reannounce_capabilities_to_new_root(self) -> None:
+        """spec 8.12: re-announce capabilities to the new root after a root change.
+
+        Drains the DODAG's recorded DODAGID membership transitions and POSTs
+        a COSE_Sign1 capability announcement to each new root's
+        /.well-known/capability-announce over the SCHC/UDP/CoAP mesh
+        transport (fire-and-forget NON; the root's 2.04/4.03 is not awaited).
+        A node configured with no capabilities has nothing the root needs
+        and stays silent.
+        """
+        if self.dodag is None:
+            return
+        changes = self.dodag.take_root_changes()
+        capabilities = self.config.node_capabilities
+        if capabilities == 0:
+            return
+        for _previous, new_root in changes:
+            self._capability_announce_seq += 1
+            self._capability_announce_mid = (self._capability_announce_mid + 1) & 0xFFFF
+            announcement = create_capability_announcement(
+                self.identity,
+                capabilities,
+                prefix=b"",
+                prefix_len=0,
+                expiry=int(time.time()) + CAPABILITY_ANNOUNCE_TTL_S,
+                seq=self._capability_announce_seq,
+            )
+            request = Message(
+                code=POST,
+                _mtype=NON,
+                _mid=self._capability_announce_mid,
+                uri=f"coap://[{new_root}]/.well-known/capability-announce",
+                payload=announcement.to_cose_sign1(),
+            )
+            ipv6_bytes = wrap_coap(
+                yggdrasil_address(self.identity.pubkey),
+                new_root,
+                cast(bytes, request.encode()),
+                src_port=DEFAULT_COAP_PORT,
+                dst_port=DEFAULT_COAP_PORT,
+            )
+            if not await self.send(ipv6_bytes):
+                logger.warning("capability re-announce to new root %s routed to drop", new_root)
 
     async def _transmit_peer_schc(
         self,
