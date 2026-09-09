@@ -1086,15 +1086,76 @@ LICHEN provides an optional public CA service for credential issuance.
 Deployments MAY use the default CA, self-operate a CA, or use any PKI.
 Trust anchor configuration is implementation-defined.
 
+**Signing Model:**
+
+The COSE_Sign1 signature key is determined solely by the unprotected `kid`
+(issuer-iid) and the trust material presented:
+
+- **Without x5chain (issuer-signed credentials):** the signer is the issuing
+  authority (CA, gateway, fleet operator). The verifier resolves the issuer
+  public key by `kid` from its trust store. Payload claims are asserted by
+  that authority. The `subject-iid` (payload key 1) MAY differ from `kid`;
+  it names the node the facts are about.
+- **With x5chain (attestation credentials):** the signer is the presenting
+  node itself, signing with its own node key (alg -65537). The CA signature
+  on the chain attests ONLY the key-to-address binding of the node key
+  (appendix-x509-cert-profile.md); it does NOT attest the payload claims,
+  which are self-asserted by the node. An authority that wants to assert
+  claims MUST sign the credential with its own key using the no-x5chain
+  form (the x5chain path is exclusively node-key attestation; an
+  authority MUST NOT attach its own chain as the credential's x5chain:
+  the x5chain path is self-referential (Key Binding check 4), so an
+  authority chain can only attest the authority about itself and can
+  never assert third-party claims).
+
+**Key Binding (x5chain path):**
+
+A credential carrying `x5chain` is valid only if ALL of the following hold:
+
+1. The leaf certificate's public key is the key that verifies the COSE_Sign1
+   signature. A chain whose leaf key does not verify the signature MUST be
+   rejected.
+2. The IID derived from the leaf public key (03-addressing.md) equals the
+   COSE `kid` (issuer-iid). A credential whose `kid` names a different key
+   than the verified one MUST be rejected.
+3. The leaf certificate's SAN native `/128` has an IID equal to that same
+   `kid`, per the verifier address-binding check
+   (appendix-x509-cert-profile.md §8, step 4).
+4. The payload `subject-iid` equals that same `kid`: a chain-attested
+   credential is self-referential, so the leaf key, the COSE signer, the
+   SAN, and the subject are all one identity. A credential asserting facts
+   about a different subject MUST use the issuer-signed form (no x5chain).
+
+These bindings defeat mix-and-match: a node holding a chain from any
+configured anchor cannot present it under an arbitrary issuer IID, cannot
+attach a foreign subject, and cannot split a chain from one credential onto
+another's claims.
+
 **Verification:**
 
 1. Decode COSE_Sign1; verify algorithm is -65537
-2. If x5chain present: validate chain to trust anchor
-3. Else: lookup issuer pubkey by kid in trust store
-4. Verify signature per RFC 9052
-5. Verify subject-iid matches presenting node
-6. Verify expiry > now
-7. Verify seq > cached seq (if superseding prior credential)
+2. Resolve the verification key:
+   - If x5chain present: validate chain to trust anchor per
+     appendix-x509-cert-profile.md §8 steps 1-3 (validity window, leaf
+     basicConstraints/keyUsage), then apply the Key Binding checks
+     (all four MUST hold); the leaf public key is the verification key
+   - Else: lookup issuer pubkey by kid in trust store
+3. Verify signature per RFC 9052
+4. Verify subject-iid matches presenting node, except for issuer-signed
+   credentials where verifier policy MAY accept a third-party subject.
+   When subject-iid differs from the presenting node, all claims MUST be
+   attributed to the subject-iid (asserted by the issuer under the
+   verification key) and MUST NOT be attributed to the presenting party or its
+   session; a bearer credential obtained by one node MUST NOT confer the
+   subject's rights on the presenter
+5. Verify expiry > now
+6. Verify seq against the cached seq for the tuple (verification-key IID,
+   subject-iid, claim-type) — an issuer may run independent seq series per
+   subject and claim type: accept if there is no cached entry (record seq);
+   reject if seq < cached seq (superseded/revoked
+   credential); accept seq == cached seq (re-presentation of the current
+   credential, safe because step 4 binds claims to their subject); update
+   the cache only when seq > cached seq
 
 **Revocation:**
 
