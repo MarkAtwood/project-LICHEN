@@ -1247,7 +1247,9 @@ absent, or out-of-range role extensions when applying role-based policy.
 
 **Validity and issuer:**
 
-- `notBefore` and `notAfter` MUST use `GeneralizedTime` and be encoded in UTC.
+- `notBefore` and `notAfter` MUST be encoded per RFC 5280 §4.1.2.5: `UTCTime`
+  for dates through 2049, `GeneralizedTime` for dates in 2050 or later; both
+  MUST be expressed in UTC (Zulu).
 - `notBefore` SHOULD be no earlier than the issuance time minus five minutes
   of clock skew.
 - The validity interval MUST NOT exceed 397 days. Shorter intervals are
