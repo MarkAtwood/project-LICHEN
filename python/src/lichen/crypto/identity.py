@@ -220,7 +220,10 @@ def yggdrasil_address(pubkey: bytes) -> IPv6Address:
     Bytes 1-7 (from `h[0:7]`) distribute identities within that prefix.
     Bytes 8-15 (from `h[0:8]`) form the IID, binding the address to the pubkey.
 
-    Matches Rust `ygg_addr_from_pubkey` and test/vectors/yggdrasil-derivation.json.
+    Matches Rust `ygg_addr_from_pubkey` and the QUARANTINED legacy corpus
+    test/vectors/legacy/yggdrasil-derivation.json (rejected SHA-512 native
+    profile per spec/decisions.jsonl upstream-yggdrasil-addressing; retained
+    only until the upstream AddrForKey migration lands).
     """
     if len(pubkey) != 32:
         raise ValueError(f"pubkey must be 32 bytes, got {len(pubkey)}")

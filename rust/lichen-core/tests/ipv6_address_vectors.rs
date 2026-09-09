@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: The contributors to the LICHEN project
 
-//! Canonical `ipv6-addresses.json` and `yggdrasil-derivation.json` consumers.
+//! Canonical `ipv6-addresses.json` and QUARANTINED
+//! `legacy/yggdrasil-derivation.json` consumers.
 //!
 //! Key-derived identities bind `fe80::/10` and native `0200::/8` to the same
 //! SHA-512 IID. EUI-64 and short-address cases are link-interoperability
 //! helpers, not node identities.
+//!
+//! The derivation corpus encodes the REJECTED SHA-512 native profile (see
+//! test/vectors/legacy/README.md; spec/decisions.jsonl
+//! upstream-yggdrasil-addressing). It is consumed here only as a
+//! quarantine-integrity pin of pre-migration behavior, never as a
+//! conformance oracle.
 
 use lichen_core::addr::{iid_from_pubkey_bytes, ygg_addr_from_pubkey, Ipv6Addr, NodeId};
 use lichen_core::short_addr::{short_addr_from_iid, short_addr_to_iid};
@@ -13,7 +20,7 @@ use serde_json::Value;
 
 const IPV6_ADDRESS_VECTORS: &str = include_str!("../../../test/vectors/ipv6-addresses.json");
 const YGG_DERIVATION_VECTORS: &str =
-    include_str!("../../../test/vectors/yggdrasil-derivation.json");
+    include_str!("../../../test/vectors/legacy/yggdrasil-derivation.json");
 
 fn decode_hex<const N: usize>(value: &str) -> [u8; N] {
     assert_eq!(
@@ -127,7 +134,14 @@ fn short_address_rfc4944_iid_vectors() {
 }
 
 #[test]
-fn yggdrasil_derivation_corpus_matches_native_profile() {
+fn legacy_derivation_corpus_quarantine_pin() {
+    // QUARANTINE-INTEGRITY PIN, not a conformance oracle: the corpus encodes
+    // the rejected SHA-512 native profile (test/vectors/legacy/README.md).
+    // The implementation still derives that profile — a known, tracked
+    // migration gap. This test trips if the derivation changes accidentally
+    // before the upstream AddrForKey migration lands; when it lands, this
+    // test MUST be deleted or replaced with pinned upstream byte-equality
+    // vectors.
     let entries: Vec<Value> =
         serde_json::from_str(YGG_DERIVATION_VECTORS).expect("yggdrasil-derivation.json must parse");
 
