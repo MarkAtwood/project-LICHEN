@@ -1129,11 +1129,10 @@ async fn multicast_dio_and_dis_are_received() {
     }
 
     leaf.send_dis(multicast).await.unwrap();
-    let dis_outcome = root.receive(1, 0).await.unwrap();
-    assert!(
-        matches!(dis_outcome, Some(RplReceiveOutcome::Rpl(RplEvent::DisReceived))),
-        "expected DisReceived, got {dis_outcome:?}"
-    );
+    assert!(matches!(
+        root.receive(1, 0).await.unwrap(),
+        Some(RplReceiveOutcome::Rpl(RplEvent::DisReceived))
+    ));
     assert!(leaf.receive(1, 0).await.unwrap().is_none());
     assert!(matches!(
         root.rpl_node().router.poll_trickle(),
