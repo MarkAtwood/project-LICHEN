@@ -193,6 +193,43 @@ lifetime is the primary exposure bound:
   is not permitted: it would reopen the same-day rollback this rule
   exists to close, and there are no sequence numbers to break ties.
 
+**Revocation model.** There is no online revocation: no CRL, OCSP, or
+equivalent service exists in an offline mesh, and certificates carry no
+revocation pointers (Section 1). Revocation is by supersession — a
+replacement chain issued through the provisioning flow displaces the
+cached chain for the same subject key under the freshness-ordering rule
+above, and the displaced chain is thereafter unhonored. Supersession
+takes effect at a verifier only when the replacement chain reaches it;
+until then the prior chain remains honored within its own validity
+window, and a radio adversary that censors the replacement can prolong
+that window at chosen verifiers. A chain outside its validity window
+MUST NOT be honored and MUST NOT displace a valid cached chain. A
+verifier MUST NOT honor a cached chain whose leaf has expired.
+
+The verifier maintains a per-subject-key freshness floor: the greatest
+leaf `notBefore` ever cached. A presented chain for that subject key
+MUST NOT displace the cached chain unless its leaf `notBefore` is
+strictly later than the floor; this generalizes the freshness-ordering
+rule above so that a replayed older-but-still-valid chain cannot roll
+the node back even after the newer chain has expired. The floor gates
+displacement only: the currently cached chain is honored within its own
+validity window regardless of the floor, and before the first
+displacement the floor is the cached chain's own `notBefore`. The floor
+SHOULD persist across restarts; a verifier without persistent storage
+loses it on power loss and reopens the rollback window until the next
+displacement. A floor entry MAY be discarded once every chain it could
+gate is necessarily expired (floor date plus the 825-day maximum
+validity). The body of an expired chain MAY be dropped for storage
+reclamation once the floor is recorded; the current, still-valid chain
+MUST NOT be dropped.
+
+Revoking a compromised subject key is NOT achieved by supersession: a
+re-keyed node is a new identity (its key-derived address changes), so
+the compromised key's chain is not displaced and remains valid until
+its own `notAfter`. The compromised key MUST be retired out-of-band
+(e.g. operator notification to verifiers); short validity (RECOMMENDED
+200 days) bounds the exposure of a key that cannot be retired this way.
+
 ## 7. Signature Algorithm
 
 The CA is free to sign with any widely supported algorithm it keys for,
@@ -214,7 +251,13 @@ A constrained verifier processing a profile-conformant chain:
 
 1. Validates the chain per RFC 5280 to a configured trust anchor
    (06-security.md §8.13 "Trust Anchors").
-2. Checks validity window.
+2. Checks the validity window; a chain outside its window MUST NOT be
+   honored and MUST NOT displace the cached chain. Displacement is
+   gated by the Section 6 freshness floor: a presented chain displaces
+   the cached chain only if its leaf `notBefore` is strictly later than
+   the greatest leaf `notBefore` ever cached for the subject key; the
+   cached chain is honored within its own window regardless of the
+   floor.
 3. Checks `basicConstraints` CA=false and `keyUsage` digitalSignature
    on each end-entity certificate.
 4. **Address binding (the attestation payload):** recomputes the full
