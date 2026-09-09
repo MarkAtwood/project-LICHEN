@@ -1172,7 +1172,10 @@ impl LinkLayer {
         // (mirrors the Python reference: after the signature binds the
         // address-mode bits, before replay, pinning, or any protocol
         // allocation). Unicast frames addressed to third parties are not
-        // processed locally.
+        // processed locally. Merge note: behaviorally identical to
+        // beads-worker-8's inline Short/Extended check; the helper keeps the
+        // admission policy (including the Elided deferral) in one documented
+        // place, and worker-8's NotForUs test exercises this same path.
         if !self.wire_is_for_local(&frame) {
             #[cfg(feature = "log")]
             debug!("link_layer: authenticated frame is not addressed to this node");
@@ -1430,6 +1433,60 @@ mod tests {
                 &mut wire,
             ),
             Err(FrameError::AddrLenMismatch)
+        );
+    }
+
+    #[test]
+    fn receive_rejects_authenticated_frame_for_another_extended_address() {
+        let alice = Identity::from_seed(Seed::new([0x01u8; 32]));
+        let mut bob = make_ll(0x02);
+        bob.add_peer(PeerIdentity::from_pubkey(alice.pubkey));
+        let alice_layer = LinkLayer::new(alice);
+        let mut wire = [0u8; 256];
+
+        let length = alice_layer
+            .build_frame_with_addr_mode(
+                1,
+                seq(1),
+                &[0xaa; 8],
+                b"not for bob",
+                AddrMode::Extended,
+                &mut wire,
+            )
+            .unwrap();
+        assert!(matches!(
+            bob.receive_frame(&wire[..length]),
+            Err(LinkRxError::NotForUs)
+        ));
+
+        let length = alice_layer
+            .build_frame_with_addr_mode(
+                1,
+                seq(1),
+                &[0xbb, 0xcc],
+                b"unknown short address",
+                AddrMode::Short,
+                &mut wire,
+            )
+            .unwrap();
+        assert!(matches!(
+            bob.receive_frame(&wire[..length]),
+            Err(LinkRxError::NotForUs)
+        ));
+
+        let length = alice_layer
+            .build_frame_with_addr_mode(
+                1,
+                seq(1),
+                &bob.local_eui64(),
+                b"for bob",
+                AddrMode::Extended,
+                &mut wire,
+            )
+            .unwrap();
+        assert_eq!(
+            bob.receive_frame(&wire[..length]).unwrap().payload(),
+            b"for bob"
         );
     }
 

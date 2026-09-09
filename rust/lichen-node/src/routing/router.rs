@@ -944,7 +944,7 @@ impl Router {
             1, // Non-Storing, matching build_dio_with_authorization.
         ) {
             Ok(option) => {
-                if !(base + option.len() <= out.len()) {
+                if base + option.len() > out.len() {
                     panic!(
                         "TRACE root-sig: option {} + base {base} > out {}",
                         option.len(),
@@ -1064,7 +1064,7 @@ impl Router {
     /// Get the route path for a destination (root only).
     ///
     /// Non-root nodes always return `None` (routing table is root-only in non-storing RPL mode per spec/05-routing.md). Error handling for invalid dst is delegated to routing_table.lookup.
-    pub fn lookup_route(&self, dst: &[u8; 16]) -> Option<&[[u8; 16]]> {
+    pub fn lookup_route(&self, dst: Ipv6Addr) -> Option<&[Ipv6Addr]> {
         if !self.dodag.is_root() {
             return None;
         }
@@ -1072,13 +1072,13 @@ impl Router {
     }
 
     /// Expire finite routes and look up a destination using monotonic time.
-    pub fn lookup_route_at(&mut self, dst: &[u8; 16], now_ms: u64) -> Option<&[[u8; 16]]> {
+    pub fn lookup_route_at(&mut self, dst: Ipv6Addr, now_ms: u64) -> Option<&[Ipv6Addr]> {
         self.expire_routes_at(now_ms);
         self.lookup_route(dst)
     }
 
     /// Inject a route directly into the routing table (for testing).
-    pub fn inject_route(&mut self, target: [u8; 16], path: &[[u8; 16]]) {
+    pub fn inject_route(&mut self, target: Ipv6Addr, path: &[Ipv6Addr]) {
         self.dao_manager.routing_table_mut().add_route(target, path);
     }
 
@@ -1381,7 +1381,7 @@ mod sf_emission_tests {
             lichen_link::keys::Seed::new([7u8; 32]),
         ));
         let dodag_id = lichen_core::addr::ygg_addr_from_pubkey(link.local_public_key().as_bytes());
-        let mut router = Router::new_root(dodag_id);
+        let router = Router::new_root(dodag_id);
         let mut out = [0u8; 256];
         let len = router.build_authenticated_dio(&mut out, &link);
         assert!(len > 0);

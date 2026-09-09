@@ -299,9 +299,15 @@ int lichen_key_str_to_iid(const char *_Nonnull str,
  * Output format: "SHA256:<base64>"
  *
  * @param[in]  pubkey 32-byte public key
- * @param[out] buf    Output buffer (at least LICHEN_KEY_FINGERPRINT_STR_LEN)
+ * @param[out] buf    Output buffer (at least LICHEN_KEY_FINGERPRINT_STR_LEN);
+ *                    NUL-terminated to an empty string on all error returns
+ *                    after argument validation (-EIO, -ENOMEM, -ENOTSUP);
+ *                    -EINVAL leaves buf untouched when args are invalid
  * @param[in]  buf_len Buffer length
- * @return Number of characters written, -EINVAL on error
+ * @return Number of characters written, -EINVAL on bad args,
+ *         -ENOTSUP when no SHA-256 provider is configured (a degraded
+ *         non-SHA-256 fingerprint is never emitted under the SHA256:
+ *         label), -EIO/-ENOMEM on hash/encoding failure
  */
 int lichen_key_pubkey_fingerprint(const uint8_t pubkey[_Nonnull LICHEN_KEY_PUBKEY_LEN],
 				  char *_Nonnull buf, size_t buf_len);

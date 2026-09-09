@@ -973,6 +973,10 @@ pub fn encode_nodes_senml(registry: &NodeRegistry, max_nodes: usize) -> Vec<u8> 
     // Each record is a map with keys per RFC 8428:
     // "bn" = base name, "n" = name, "v" = value, "t" = time
     let nodes = registry.list_nodes();
+    // Truncation must be deterministic: list_nodes() walks a HashMap, so
+    // sort lowest-address-first before capping (finding bead d1so).
+    let mut nodes = nodes;
+    nodes.sort_unstable();
     let mut records: Vec<Value> = Vec::with_capacity(nodes.len() + 1);
 
     // Base record with base name
@@ -1028,7 +1032,9 @@ pub struct CoapResponse {
     pub code: u8,
     /// Response payload (CBOR encoded).
     pub payload: Zeroizing<Vec<u8>>,
-    /// Content format (60 for CBOR, 112 for SenML+CBOR).
+    /// Content format (60 for CBOR, 112 for SenML+CBOR). 0 means no
+    /// Content-Format option is emitted on the wire (per coap_oscore.h
+    /// "0 for none"); it is not a text/plain label.
     pub content_format: u16,
 }
 
@@ -1074,7 +1080,7 @@ impl CoapResponse {
         Self {
             code: 0x80, // 4.00 Bad Request
             payload: Zeroizing::new(message.as_bytes().to_vec()),
-            content_format: 0, // text/plain
+            content_format: 0, // no Content-Format option on the wire
         }
     }
 
@@ -1889,13 +1895,14 @@ impl GatewayCoordinator {
     /// forwarding of one mesh-ingress datagram against the root-signed
     /// authorization table. Mirrors the C call site in
     /// `lichen/apps/gateway/src/forwarding.c` (`lichen_tunnel_auth_decapsulate`,
-    /// fail-closed on every denial).
+    /// fail-closed on every denial). The table's clock domain is unix seconds
+    /// (`handle_post_tunnel_auth` observes the same), so the caller's
+    /// monotonic runtime clock must never reach it here.
     pub fn authorize_egress(
         &mut self,
         inner_source: [u8; 16],
         destination_is_mesh: bool,
         route: &[[u8; 8]],
-        now: u64,
     ) -> Result<(), tunnel_auth::TunnelAuthError> {
         self.tunnel_auth.authorize_decapsulation(
             tunnel_auth::DecapsulationRequest {
@@ -1905,7 +1912,7 @@ impl GatewayCoordinator {
                 destination_is_mesh,
                 route,
             },
-            now,
+            u64::try_from(unix_now()).unwrap_or(0),
         )
     }
 
@@ -2029,6 +2036,10 @@ impl GatewayCoordinator {
         let Some(peer_pubkey) = peer_pubkey else {
             return CoapResponse::unauthorized();
         };
+
+        if payload.len() > OWN_CLAIM_COSE_MAX {
+            return CoapResponse::empty_success();
+        }
 
         // Spec GCP-6.5: the claim arrives as a COSE_Sign1 envelope (payload
         // integer keys 1-7, all required — from_cose enforces). Malformed
@@ -3258,6 +3269,22 @@ mod tests {
     }
 
     #[test]
+    fn post_slots_silently_discards_oversize_peer_claim() {
+        let mut address = [0u8; 16];
+        address[8..].fill(0x02);
+        let mut coordinator = GatewayCoordinator::new_ephemeral(address, 60, 4).unwrap();
+        let peer_pubkey = [0x43; 32];
+        let response = coordinator.handle_post_slots(
+            &vec![0xa1; OWN_CLAIM_COSE_MAX + 1],
+            true,
+            Some(&peer_pubkey),
+            4,
+        );
+        assert_eq!(response.code, 0x44);
+        assert!(response.payload.is_empty());
+    }
+
+    #[test]
     fn gateway_coordinator_get_channels() {
         let iid = [0u8; 16];
         let coordinator = coordinator(iid);
@@ -3508,6 +3535,159 @@ mod tests {
         };
         assert!(base.iter().any(|(k, v)| *k == Value::Text("bn".to_string())
             && *v == Value::Text("urn:lichen:gw:nodes:".to_string())));
+    }
+
+    /// With >32 registered nodes the capped /nodes response must be
+    /// deterministic: the 32 lowest addresses, ascending (finding bead d1so —
+    /// list_nodes() walks a HashMap, so without the sort the subset would
+    /// depend on hash iteration order).
+    #[test]
+    fn get_nodes_truncation_is_deterministic_lowest_addresses() {
+        use crate::handoff::NodeRegistryEntry;
+
+        let iid = [0u8; 16];
+        let mut coordinator = coordinator(iid);
+        // Register 40 nodes in reverse order; the cap must still surface the
+        // 32 lowest addresses in ascending order.
+        for i in (0..40u8).rev() {
+            let mut addr = [0x02u8; 16];
+            addr[15] = i;
+            coordinator
+                .node_registry
+                .register(NodeRegistryEntry::new(addr));
+        }
+
+        let response = coordinator.handle_get_nodes();
+        let value: Value = ciborium::from_reader(response.payload.as_slice()).unwrap();
+        let Value::Array(records) = value else {
+            panic!("expected SenML pack array");
+        };
+        assert_eq!(records.len(), MAX_GET_RESPONSE_ENTRIES + 1);
+        let mut names: Vec<String> = Vec::new();
+        for record in records.iter().skip(1) {
+            let Value::Map(entries) = record else {
+                panic!("node record must be a map");
+            };
+            let (_, n) = entries
+                .iter()
+                .find(|(k, _)| *k == Value::Text("n".to_string()))
+                .expect("node record carries a name");
+            let Value::Text(name) = n else {
+                panic!("node name must be text");
+            };
+            names.push(name.clone());
+        }
+        let expected: Vec<String> = (0..32u8)
+            .map(|i| {
+                let mut addr = [0x02u8; 16];
+                addr[15] = i;
+                addr.iter().map(|b| format!("{b:02x}")).collect::<String>()
+            })
+            .collect();
+        assert_eq!(names, expected);
+    }
+
+    /// Boundary pinning for the GCP-6.4 cap (finding bead bsaw): exactly-32
+    /// entries must not truncate, empty sets must stay well-formed, and 33
+    /// inputs must truncate by exactly one.
+    #[test]
+    fn get_response_entry_boundaries() {
+        use crate::handoff::NodeRegistryEntry;
+
+        // /channels: empty map -> well-formed empty CBOR array; exactly 32 ->
+        // no truncation; 33 -> truncated by one. The default coordinator
+        // ships 8 built-in channels, so clear them to control the set.
+        let mut coordinator_channels = coordinator([0u8; 16]);
+        coordinator_channels.channel_map.channels.clear();
+        let value: Value = ciborium::from_reader(
+            coordinator_channels
+                .handle_get_channels()
+                .payload
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(value, Value::Array(vec![]));
+
+        for entry in 0..33u8 {
+            coordinator_channels.channel_map.channels.push(ChannelInfo {
+                channel_id: entry,
+                frequency_hz: 868_100_000 + u32::from(entry) * 200_000,
+                owner_iid: None,
+            });
+        }
+        coordinator_channels.channel_map.channels.pop();
+        let value: Value = ciborium::from_reader(
+            coordinator_channels
+                .handle_get_channels()
+                .payload
+                .as_slice(),
+        )
+        .unwrap();
+        let Value::Array(entries) = value else {
+            panic!("expected array response");
+        };
+        assert_eq!(entries.len(), 32);
+
+        coordinator_channels.channel_map.channels.push(ChannelInfo {
+            channel_id: 99,
+            frequency_hz: 869_525_000,
+            owner_iid: None,
+        });
+        let value: Value = ciborium::from_reader(
+            coordinator_channels
+                .handle_get_channels()
+                .payload
+                .as_slice(),
+        )
+        .unwrap();
+        let Value::Array(entries) = value else {
+            panic!("expected array response");
+        };
+        assert_eq!(entries.len(), MAX_GET_RESPONSE_ENTRIES);
+
+        // /slots: exactly 32 owned slots must not truncate. The explicit
+        // owned list bypasses mode arithmetic; validate() accepts it because
+        // every entry is < max_slots (60).
+        let mut coordinator_slots = coordinator([0u8; 16]);
+        coordinator_slots.info.slot_map.owned = Some((0..32u16).collect());
+        let value: Value =
+            ciborium::from_reader(coordinator_slots.handle_get_slots().payload.as_slice()).unwrap();
+        let Value::Map(map) = value else {
+            panic!("expected map response");
+        };
+        let owned = map
+            .iter()
+            .find(|(k, _)| *k == Value::Integer(KEY_MAP_OWNED.into()))
+            .map(|(_, v)| v)
+            .expect("owned key present");
+        let Value::Array(entries) = owned else {
+            panic!("owned value must be an array");
+        };
+        assert_eq!(entries.len(), 32);
+
+        // /nodes: empty registry -> base record only; 33 registered -> base +
+        // 32 (truncated by exactly one).
+        let mut coordinator_nodes = coordinator([0u8; 16]);
+        let value: Value =
+            ciborium::from_reader(coordinator_nodes.handle_get_nodes().payload.as_slice()).unwrap();
+        let Value::Array(records) = value else {
+            panic!("expected SenML pack array");
+        };
+        assert_eq!(records.len(), 1);
+
+        for i in 0..33u8 {
+            let mut addr = [0x02u8; 16];
+            addr[15] = i;
+            coordinator_nodes
+                .node_registry
+                .register(NodeRegistryEntry::new(addr));
+        }
+        let value: Value =
+            ciborium::from_reader(coordinator_nodes.handle_get_nodes().payload.as_slice()).unwrap();
+        let Value::Array(records) = value else {
+            panic!("expected SenML pack array");
+        };
+        assert_eq!(records.len(), MAX_GET_RESPONSE_ENTRIES + 1);
     }
 
     #[test]

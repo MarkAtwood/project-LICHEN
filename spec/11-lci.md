@@ -87,6 +87,11 @@ follow the cross-references to this document.
 The client and node communicate via link-local IPv6. The node acts as a
 router: traffic to mesh addresses is forwarded over LoRa.
 
+Local-link throughput does not confer radio capacity. The node owns mesh TX
+admission, bounded radio queues, backpressure, and deadlines as specified in
+07-transport-app.md §10.2 and appendix-bufferbloat.md. Local queue acceptance
+does not mean a packet has transmitted or that custody or delivery is confirmed.
+
 ### 17.3. Transport Bindings
 
 All transports carry IPv6 packets. Framing adapts to the transport.
@@ -334,6 +339,28 @@ is omitted or zero and the node cannot provide authoritative timestamps. The
 manual, internal-rtc). The `age_s` field shows seconds since the last accepted
 time sample.
 
+For the adopted [Receiver-Aware CCP](02b-ccp-receiver-aware.md) policy,
+`ccp.rx_channel` describes the advertised data-receiver home channel from the
+peer contract, stable for that contract, not the instantaneous tuned channel.
+Periodic CH0 control windows temporarily change tuning without changing the
+advertised home. Status and UIs MUST distinguish home from current tuning;
+if current tuning is not reported, it is unknown, not inferred from home.
+
+`preferred_rx_valid_until_sfn` is scoped to the schedule generation that
+established the peer contract. A generation change invalidates that validity;
+an SFN from another generation MUST NOT extend it. This uses schedule context
+and does not allocate or require a new generation field here.
+
+The legacy `rx_channel` range remains 0..7; it does not encode or enable a
+128-channel plan. The canonical receiver-aware document governs the new
+representation and activation gate: exact versioned encodings and independent
+conformance oracles are required before new wire behavior is enabled. Policy
+adoption and qualified full-band experiments are not production-readiness claims.
+
+Duty usage is interpreted within the applicable regulatory accounting group,
+with per-physical-frequency dwell accounting where required. Changing logical
+channels or retuning MUST NOT be displayed as acquiring a fresh airtime budget.
+
 Status updates pushed via Observe on significant changes.
 
 **Cross-Mesh Log Correlation (GNSS-Enabled):**
@@ -487,6 +514,9 @@ Raw TX requests MAY include implementation-defined radio overrides only when
 the firmware can enforce regional limits. Implementations MUST rate-limit raw
 TX, MUST reject frames or overrides that violate configured PHY/regulatory
 constraints, and SHOULD omit raw TX entirely in production firmware.
+Raw TX is also subject to normal radio eligibility: it MUST NOT preempt
+committed RX, exceed adaptive airtime limits, or overrun a full operation plus
+guard. Diagnostic overrides do not bypass these constraints.
 
 Raw diagnostics MUST require local administrative authorization. BLE transports
 MUST require LE Secure Connections for these resources; deployments that expose
@@ -972,6 +1002,10 @@ Own node health. The dashboard.
 
 Custody store line shows how many messages this node is holding for others
 and the storage used. Relevant for powered relays/BRs.
+The channel display MUST label advertised home and current tuning distinctly
+as described in §17.5.3; a CH0 control visit does not change the data home.
+Duty displays MUST identify the applicable accounting scope, not imply a
+separate budget for every logical channel.
 
 #### 17.8.7. Surface Adaptations
 
@@ -1027,6 +1061,13 @@ the single source of truth. UIs do not maintain independent state.
 
 New messages, position updates, peer changes, and status changes are
 pushed via Observe notifications. The UI reacts; it never polls in a loop.
+
+Under radio backpressure, the node applies deadlines and MAY coalesce unsent
+notifications of replaceable state, such as current position, as specified in
+07-transport-app.md §10.3. This MUST NOT merge or discard distinct messages,
+commands, receipts, or custody records. Clients reflect the node's state and
+admission failures rather than maintaining independent radio queues or
+replaying stale updates to defeat backpressure.
 
 #### 17.8.9. Message Compose
 

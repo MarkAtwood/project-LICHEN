@@ -120,6 +120,41 @@ class TestCapabilityPayload:
                 announcer_iid=bytes(8),
             )
 
+    def test_prefix_zero_padded_accepted(self) -> None:
+        """Zero-padded prefixes are valid (corpus/Rust/C rule, bead 45or)."""
+        payload = CapabilityPayload(
+            capabilities=Capability.EGRESS,
+            prefix=bytes.fromhex("fd000000000000000000000000000000"),  # 16 bytes
+            prefix_len=64,  # 8 significant bytes, zero-padded
+            expiry=int(time.time()) + 3600,
+            seq=1,
+            announcer_iid=bytes(8),
+        )
+        assert len(payload.prefix) == 16
+        assert payload.prefix_len == 64
+
+    def test_prefix_nonzero_padding_rejected(self) -> None:
+        with pytest.raises(ValueError, match="padding beyond prefix_len"):
+            CapabilityPayload(
+                capabilities=Capability.EGRESS,
+                prefix=bytes.fromhex("fd00000000000000ff00000000000000"),
+                prefix_len=64,
+                expiry=int(time.time()) + 3600,
+                seq=1,
+                announcer_iid=bytes(8),
+            )
+
+    def test_prefix_too_long_rejected(self) -> None:
+        with pytest.raises(ValueError, match="at most 16 bytes"):
+            CapabilityPayload(
+                capabilities=Capability.EGRESS,
+                prefix=bytes(17),
+                prefix_len=128,
+                expiry=int(time.time()) + 3600,
+                seq=1,
+                announcer_iid=bytes(8),
+            )
+
     def test_invalid_iid_length(self) -> None:
         with pytest.raises(ValueError, match="announcer_iid must be 8 bytes"):
             CapabilityPayload(
@@ -209,10 +244,7 @@ class TestCreateAndVerify:
     @pytest.fixture
     def identity(self) -> Identity:
         """Create a test identity with deterministic seed."""
-        seed = bytes.fromhex(
-            "000102030405060708090a0b0c0d0e0f"
-            "101112131415161718191a1b1c1d1e1f"
-        )
+        seed = bytes.fromhex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
         return Identity.from_seed(seed)
 
     def test_create_announcement(self, identity: Identity) -> None:
@@ -356,10 +388,7 @@ class TestCoseSign1Encoding:
 
     @pytest.fixture
     def identity(self) -> Identity:
-        seed = bytes.fromhex(
-            "000102030405060708090a0b0c0d0e0f"
-            "101112131415161718191a1b1c1d1e1f"
-        )
+        seed = bytes.fromhex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
         return Identity.from_seed(seed)
 
     def test_cose_sign1_roundtrip(self, identity: Identity) -> None:
@@ -385,6 +414,42 @@ class TestCoseSign1Encoding:
         assert decoded.payload.seq == announcement.payload.seq
         assert decoded.payload.announcer_iid == announcement.payload.announcer_iid
         assert decoded.signature == announcement.signature
+
+    def test_cose_sign1_tag18_wrapped_decode(self, identity: Identity) -> None:
+        """Tag-18 wrapped COSE_Sign1 decodes identically (Rust parity)."""
+        announcement = create_capability_announcement(
+            identity=identity,
+            capabilities=Capability.PREFIX_DELEGATION,
+            prefix=bytes.fromhex("fd000000000000000000000000000000"),
+            prefix_len=64,
+            expiry=1700000000,
+            seq=7,
+        )
+
+        untagged = announcement.to_cose_sign1()
+        wrapped = cbor2.dumps(cbor2.CBORTag(18, cbor2.loads(untagged)))
+
+        decoded = decode_cose_sign1_announcement(wrapped)
+        assert decoded.payload.prefix_len == announcement.payload.prefix_len
+        assert decoded.payload.prefix == announcement.payload.prefix
+        assert decoded.payload.announcer_iid == announcement.payload.announcer_iid
+        assert decoded.signature == announcement.signature
+
+    def test_decode_unexpected_cbor_tag_rejected(self, identity: Identity) -> None:
+        """Tags other than COSE_Sign1 (18) are not unwrapped."""
+        announcement = create_capability_announcement(
+            identity=identity,
+            capabilities=Capability.EGRESS,
+            prefix=b"",
+            prefix_len=0,
+            expiry=1700000000,
+            seq=1,
+        )
+        untagged = announcement.to_cose_sign1()
+        wrong_tag = cbor2.dumps(cbor2.CBORTag(999, cbor2.loads(untagged)))
+
+        with pytest.raises(ValueError, match="4-element array"):
+            decode_cose_sign1_announcement(wrong_tag)
 
     def test_cose_sign1_structure(self, identity: Identity) -> None:
         announcement = create_capability_announcement(
@@ -421,14 +486,16 @@ class TestCoseSign1Encoding:
         # Create a fake COSE_Sign1 with wrong algorithm
         protected = cbor2.dumps({COSE_ALG_LABEL: -8})  # EdDSA instead of Schnorr48
         unprotected = {COSE_KID_LABEL: bytes(8)}
-        payload = cbor2.dumps({
-            1: 1,
-            2: bytes(16),
-            3: 128,
-            4: 1700000000,
-            5: 1,
-            6: bytes(8),
-        })
+        payload = cbor2.dumps(
+            {
+                1: 1,
+                2: bytes(16),
+                3: 128,
+                4: 1700000000,
+                5: 1,
+                6: bytes(8),
+            }
+        )
         signature = bytes(48)
 
         fake_cose = cbor2.dumps([protected, unprotected, payload, signature])
@@ -440,14 +507,16 @@ class TestCoseSign1Encoding:
         """Test rejection when kid doesn't match announcer_iid."""
         protected = _encode_protected_header()
         unprotected = {COSE_KID_LABEL: bytes(8)}  # All zeros
-        payload = cbor2.dumps({
-            1: 1,
-            2: bytes(16),
-            3: 128,
-            4: 1700000000,
-            5: 1,
-            6: bytes.fromhex("0102030405060708"),  # Different IID
-        })
+        payload = cbor2.dumps(
+            {
+                1: 1,
+                2: bytes(16),
+                3: 128,
+                4: 1700000000,
+                5: 1,
+                6: bytes.fromhex("0102030405060708"),  # Different IID
+            }
+        )
         signature = bytes(48)
 
         fake_cose = cbor2.dumps([protected, unprotected, payload, signature])
@@ -518,10 +587,16 @@ class TestCapabilityTableReplayFloor:
         # Flood with EGRESS announcements (capacity 8): the 9th insert
         # LRU-evicts the oldest entry - iid, the victim.
         for i in range(8):
-            assert table.record(
-                b"\x01" + bytes([i]) + b"\x00" * 6, seq=1,
-                expiry=2000, capabilities=1, egress=True,
-            ) is True
+            assert (
+                table.record(
+                    b"\x01" + bytes([i]) + b"\x00" * 6,
+                    seq=1,
+                    expiry=2000,
+                    capabilities=1,
+                    egress=True,
+                )
+                is True
+            )
         assert iid not in table._entries
 
         # The floor survived eviction: the replay gate still sees seq 500.
@@ -529,11 +604,9 @@ class TestCapabilityTableReplayFloor:
 
         # Re-admission with a stale seq keeps the floor and must NOT
         # lower it; a strictly newer seq re-enters the table.
-        assert table.record(iid, seq=499, expiry=2000, capabilities=1,
-                            egress=True) is True
+        assert table.record(iid, seq=499, expiry=2000, capabilities=1, egress=True) is True
         assert table.cached_seq(iid) == 500
-        assert table.record(iid, seq=501, expiry=2000, capabilities=1,
-                            egress=True) is True
+        assert table.record(iid, seq=501, expiry=2000, capabilities=1, egress=True) is True
         assert table.cached_seq(iid) == 501
 
     def test_floor_ledger_stays_bounded(self) -> None:
@@ -543,6 +616,5 @@ class TestCapabilityTableReplayFloor:
         # capture; the ledger never exceeds capacity.
         for i in range(capacity + 8):
             iid = bytes([0x02]) + i.to_bytes(7, "big")
-            assert table.record(iid, seq=i + 1, expiry=2000,
-                                capabilities=1, egress=True) is True
+            assert table.record(iid, seq=i + 1, expiry=2000, capabilities=1, egress=True) is True
             assert len(table._seq_floors) <= capacity

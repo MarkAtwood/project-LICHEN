@@ -1,0 +1,240 @@
+{
+  "$schema": "./schema.json",
+  "format_version": 2,
+  "name": "Density scaling",
+  "description": "Density-adaptive parameter selection (spec 05-routing.md 9.4, 9.10; EstimateDensity per 02a-coordinated-capacity.md 2a.10.3). Given the node's DensityEstimate D (u8, 0..255), selects ANNOUNCE_INTERVAL, MAX_ANNOUNCE_HOPS, GRADIENT_TIMEOUT (= 2x interval), and ANNOUNCE_JITTER (= interval/10 capped at 120 s) per the 9.4 adaptive tier table; computes root num_slots = MAX(8, CEIL(dodag_size/25)) per 9.10.4; and selects the position beacon interval per 12-apps.md 18.2.1 (60 s moving / 300 s stationary baseline) with the dense-deployment rule that density > 20 floors the interval at 300 s. Tier boundaries are inclusive on the upper edge as written in the 9.4 table (moderate 5-20, dense 21-50, very dense 51-100, extreme > 100; sparse < 5, so D=4 is sparse and D=5 is moderate).",
+  "spec": "spec/05-routing.md sections 9.4 and 9.10; spec/02a-coordinated-capacity.md section 2a.10.3; spec/12-apps.md section 18.2.1",
+  "constants": {
+    "DENSITY_PER_BONUS_PERMILLE": 100,
+    "DENSITY_RSSI_BONUS_DBM": -90,
+    "ANNOUNCE_JITTER_CAP_SEC": 120,
+    "NUM_SLOTS_MIN": 8,
+    "NUM_SLOTS_NODES_PER_SLOT": 25,
+    "POSITION_BEACON_MOVING_SEC": 60,
+    "POSITION_BEACON_STATIONARY_SEC": 300,
+    "POSITION_BEACON_DENSE_SEC": 300,
+    "POSITION_BEACON_DENSE_THRESHOLD": 21
+  },
+  "vectors": {
+    "announce_parameters": [
+      {
+        "name": "sparse_tier",
+        "description": "D=4 (< 5) is sparse: 300 s interval, 15 hops, 600 s gradient timeout, 30 s jitter",
+        "density": 4,
+        "expected": {
+          "announce_interval_sec": 300,
+          "max_announce_hops": 15,
+          "gradient_timeout_sec": 600,
+          "announce_jitter_sec": 30
+        }
+      },
+      {
+        "name": "moderate_lower_boundary",
+        "description": "D=5 is the first moderate value (sparse is strictly < 5)",
+        "density": 5,
+        "expected": {
+          "announce_interval_sec": 300,
+          "max_announce_hops": 10,
+          "gradient_timeout_sec": 600,
+          "announce_jitter_sec": 30
+        }
+      },
+      {
+        "name": "moderate_tier",
+        "description": "D=12 is moderate: 300 s interval, 10 hops, 600 s gradient timeout, 30 s jitter",
+        "density": 12,
+        "expected": {
+          "announce_interval_sec": 300,
+          "max_announce_hops": 10,
+          "gradient_timeout_sec": 600,
+          "announce_jitter_sec": 30
+        }
+      },
+      {
+        "name": "moderate_upper_boundary",
+        "description": "D=20 is the last moderate value (moderate is 5-20 inclusive)",
+        "density": 20,
+        "expected": {
+          "announce_interval_sec": 300,
+          "max_announce_hops": 10,
+          "gradient_timeout_sec": 600,
+          "announce_jitter_sec": 30
+        }
+      },
+      {
+        "name": "dense_lower_boundary",
+        "description": "D=21 is the first dense value (dense is 21-50 inclusive)",
+        "density": 21,
+        "expected": {
+          "announce_interval_sec": 600,
+          "max_announce_hops": 5,
+          "gradient_timeout_sec": 1200,
+          "announce_jitter_sec": 60
+        }
+      },
+      {
+        "name": "dense_tier",
+        "description": "D=35 is dense: 600 s interval, 5 hops, 1200 s gradient timeout, 60 s jitter",
+        "density": 35,
+        "expected": {
+          "announce_interval_sec": 600,
+          "max_announce_hops": 5,
+          "gradient_timeout_sec": 1200,
+          "announce_jitter_sec": 60
+        }
+      },
+      {
+        "name": "dense_upper_boundary",
+        "description": "D=50 is the last dense value",
+        "density": 50,
+        "expected": {
+          "announce_interval_sec": 600,
+          "max_announce_hops": 5,
+          "gradient_timeout_sec": 1200,
+          "announce_jitter_sec": 60
+        }
+      },
+      {
+        "name": "very_dense_lower_boundary",
+        "description": "D=51 is the first very-dense value (very dense is 51-100 inclusive)",
+        "density": 51,
+        "expected": {
+          "announce_interval_sec": 1200,
+          "max_announce_hops": 3,
+          "gradient_timeout_sec": 2400,
+          "announce_jitter_sec": 120
+        }
+      },
+      {
+        "name": "very_dense_tier",
+        "description": "D=75 is very dense: 1200 s interval, 3 hops, 2400 s gradient timeout, 120 s jitter",
+        "density": 75,
+        "expected": {
+          "announce_interval_sec": 1200,
+          "max_announce_hops": 3,
+          "gradient_timeout_sec": 2400,
+          "announce_jitter_sec": 120
+        }
+      },
+      {
+        "name": "very_dense_upper_boundary",
+        "description": "D=100 is the last very-dense value",
+        "density": 100,
+        "expected": {
+          "announce_interval_sec": 1200,
+          "max_announce_hops": 3,
+          "gradient_timeout_sec": 2400,
+          "announce_jitter_sec": 120
+        }
+      },
+      {
+        "name": "extreme_lower_boundary",
+        "description": "D=101 is the first extreme value (extreme is > 100): 1800 s interval, 2 hops, 3600 s gradient timeout, jitter capped at 120 s",
+        "density": 101,
+        "expected": {
+          "announce_interval_sec": 1800,
+          "max_announce_hops": 2,
+          "gradient_timeout_sec": 3600,
+          "announce_jitter_sec": 120
+        }
+      },
+      {
+        "name": "extreme_saturated",
+        "description": "D=255 (EstimateDensity saturation ceiling) remains extreme with jitter capped at 120 s (1800/10 = 180 would exceed the cap)",
+        "density": 255,
+        "expected": {
+          "announce_interval_sec": 1800,
+          "max_announce_hops": 2,
+          "gradient_timeout_sec": 3600,
+          "announce_jitter_sec": 120
+        }
+      },
+      {
+        "name": "zero_density",
+        "description": "D=0 is sparse: full-rate announce parameters",
+        "density": 0,
+        "expected": {
+          "announce_interval_sec": 300,
+          "max_announce_hops": 15,
+          "gradient_timeout_sec": 600,
+          "announce_jitter_sec": 30
+        }
+      }
+    ],
+    "num_slots_scaling": [
+      {
+        "name": "tiny_dodag",
+        "description": "dodag_size=1 floors at the 8-slot minimum",
+        "dodag_size": 1,
+        "expected": { "num_slots": 8 }
+      },
+      {
+        "name": "exactly_one_node_per_slot",
+        "description": "dodag_size=200 gives ceil(200/25)=8, at the minimum",
+        "dodag_size": 200,
+        "expected": { "num_slots": 8 }
+      },
+      {
+        "name": "one_past_minimum",
+        "description": "dodag_size=201 gives ceil(201/25)=9",
+        "dodag_size": 201,
+        "expected": { "num_slots": 9 }
+      },
+      {
+        "name": "exact_multiple",
+        "description": "dodag_size=500 gives ceil(500/25)=20",
+        "dodag_size": 500,
+        "expected": { "num_slots": 20 }
+      },
+      {
+        "name": "rounding_up",
+        "description": "dodag_size=501 gives ceil(501/25)=21",
+        "dodag_size": 501,
+        "expected": { "num_slots": 21 }
+      },
+      {
+        "name": "large_dodag",
+        "description": "dodag_size=1000 gives ceil(1000/25)=40 (Burning Man per-BR reference range)",
+        "dodag_size": 1000,
+        "expected": { "num_slots": 40 }
+      }
+    ],
+    "position_beacon_rate": [
+      {
+        "name": "sparse_moving",
+        "description": "D=10 (below dense threshold): 60 s moving-beacon baseline per 18.2.1",
+        "density": 10,
+        "moving": true,
+        "expected": { "position_beacon_interval_sec": 60 }
+      },
+      {
+        "name": "sparse_stationary",
+        "description": "D=10 (below dense threshold): 300 s stationary-beacon baseline per 18.2.1",
+        "density": 10,
+        "moving": false,
+        "expected": { "position_beacon_interval_sec": 300 }
+      },
+      {
+        "name": "dense_threshold_boundary_moving",
+        "description": "D=20 is still below the dense threshold: moving beacons stay at the 60 s baseline",
+        "density": 20,
+        "moving": true,
+        "expected": { "position_beacon_interval_sec": 60 }
+      },
+      {
+        "name": "dense_lower_boundary_moving",
+        "description": "D=21 crosses the dense threshold: moving beacons floor at 300 s",
+        "density": 21,
+        "moving": true,
+        "expected": { "position_beacon_interval_sec": 300 }
+      },
+      {
+        "name": "extreme_stationary",
+        "description": "D=255 at extreme density: stationary beacons remain at 300 s (the dense floor)",
+        "density": 255,
+        "moving": false,
+        "expected": { "position_beacon_interval_sec": 300 }
+      }
+    ]
+  }
+}

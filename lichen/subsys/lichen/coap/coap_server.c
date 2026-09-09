@@ -46,7 +46,6 @@
 /* Plaintext staging for the mutating handlers' authorize helper (the old
  * per-handler unprotect result carried an equivalent on-stack buffer). */
 static uint8_t server_plain_buf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX];
-#include <lichen/l2/ipv6_addr.h>
 #include <lichen/transport/slip_transport.h>
 
 LOG_MODULE_REGISTER(lichen_coap_server, CONFIG_LICHEN_COAP_SERVER_LOG_LEVEL);
@@ -59,62 +58,7 @@ static uint16_t s_coap_port = 5683;
 
 static struct lichen_coap_server_handlers s_handlers;
 
-/*
- * Common response helper for all CoAP resources (including deaddrop_post).
- * Centralizes duplicated logic from coap_*.c files. Matches Python/Rust reference
- * behavior and spec/18-applications for DTN. Type=ACK for CON requests.
- * Uses per-call static buffer to avoid both shared race and stack use-after-return.
- * Zephyr coap_resource_send + pending slab performs synchronous memcpy of packet data.
- */
-int lichen_coap_respond(struct coap_resource *resource,
-			struct coap_packet *request,
-			struct sockaddr *addr, socklen_t addr_len,
-			uint8_t resp_code, uint16_t content_format,
-			const uint8_t *payload, size_t payload_len)
-{
-	static uint8_t buf[CONFIG_COAP_SERVER_MESSAGE_SIZE];
-	struct coap_packet response;
-	uint8_t token[COAP_TOKEN_MAX_LEN];
-	uint16_t id;
-	uint8_t tkl;
-	int ret;
-
-	id = coap_header_get_id(request);
-	tkl = coap_header_get_token(request, token);
-	uint8_t type = (coap_header_get_type(request) == COAP_TYPE_CON)
-		       ? COAP_TYPE_ACK : COAP_TYPE_NON_CON;
-
-	ret = coap_packet_init(&response, buf, sizeof(buf),
-			       COAP_VERSION_1, type, tkl, token, resp_code, id);
-	if (ret < 0) {
-		LOG_ERR("Failed to init response packet: %d", ret);
-		return ret;
-	}
-
-	if (payload != NULL && payload_len > 0) {
-		ret = coap_append_option_int(&response, COAP_OPTION_CONTENT_FORMAT,
-					     content_format);
-		if (ret < 0) {
-			LOG_ERR("Failed to add content-format: %d", ret);
-			return ret;
-		}
-
-		ret = coap_packet_append_payload_marker(&response);
-		if (ret < 0) {
-			LOG_ERR("Failed to add payload marker: %d", ret);
-			return ret;
-		}
-
-		ret = coap_packet_append_payload(&response, payload, (uint16_t)payload_len);
-		if (ret < 0) {
-			LOG_ERR("Failed to add payload: %d", ret);
-			return ret;
-		}
-	}
-
-	ret = coap_resource_send(resource, &response, addr, addr_len, NULL);
-	return ret;
-}
+/* lichen_coap_respond lives in coap_respond.c (shared with modular mode). */
 
 /*
  * /status resource - GET returns node status as CBOR
@@ -620,8 +564,10 @@ COAP_RESOURCE_DEFINE(lichen_sos, lichen_coap_server, {
  * DODAG root, so there is no local-admin plaintext fallback. The verdict's
  * human code (204/403) maps to the wire encoding 2.04 (0x44) / 4.03 (0x83)
  * via lichen_tunnel_auth_coap_code(); BUILD_ASSERTs pin that mapping.
+ * Note: 2.04 is Zephyr's COAP_RESPONSE_CODE_CHANGED (Zephyr's "CREATED"
+ * is RFC 7252's 2.01), hence the CHANGED reference below.
  */
-BUILD_ASSERT(COAP_RESPONSE_CODE_CREATED == 0x44, "2.04 wire encoding drifted");
+BUILD_ASSERT(COAP_RESPONSE_CODE_CHANGED == 0x44, "2.04 wire encoding drifted");
 BUILD_ASSERT(COAP_RESPONSE_CODE_FORBIDDEN == 0x83, "4.03 wire encoding drifted");
 
 static int tunnel_auth_post(struct coap_resource *resource,
@@ -654,14 +600,16 @@ static int tunnel_auth_post(struct coap_resource *resource,
 					   0, NULL, 0);
 	}
 
-	/* Peer identity: same sockaddr -> IID derivation the OSCORE context
-	 * lookup uses (coap_oscore.c). */
+	/* Peer identity: LICHEN key-derived link-locals embed the canonical
+	 * pubkey IID (U/L cleared) in the low 8 bytes; pass it through
+	 * UNFLIPPED. lichen_tunnel_auth_receive() compares in canonical
+	 * pubkey-IID space (the root_iid binding and the COSE kid) - NOT in
+	 * the wire-EUI64 space (U/L set) the OSCORE context lookup keys on,
+	 * so the extract+flip from coap_oscore.c must NOT be applied here.
+	 * An unidentifiable sender stays all-zero and is denied WRONG_ROOT. */
 	uint8_t sender_iid[8] = { 0 };
-	if (addr_len >= sizeof(struct sockaddr_in6) && addr->sa_family == AF_INET6) {
-		const struct sockaddr_in6 *in6 = (const struct sockaddr_in6 *)addr;
-		memcpy(sender_iid, &in6->sin6_addr.s6_addr[8], 8);
-		lichen_eui64_to_iid(sender_iid, sender_iid);
-	}
+	(void)lichen_tunnel_sender_iid_from_sockaddr(addr, (size_t)addr_len,
+						     sender_iid);
 
 	/* Uptime seconds stand in for unix time until wall-clock sync lands;
 	 * expiry enforcement stays dormant, replay floors do not. */

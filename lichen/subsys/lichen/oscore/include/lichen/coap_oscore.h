@@ -104,6 +104,11 @@ int coap_oscore_unprotect_resource_request(struct coap_resource *resource,
  * @return 0 on success (result->payload valid), positive CoAP response code
  *         on error (caller must return it without sending)
  */
+int coap_oscore_authorize_mutating_result(struct coap_resource *_Nonnull resource,
+					  struct coap_packet *_Nonnull request,
+					  struct sockaddr *_Nonnull addr, socklen_t addr_len,
+					  uint8_t expected_method,
+					  struct coap_oscore_unprotect_result *_Nonnull result);
 
 
 /**

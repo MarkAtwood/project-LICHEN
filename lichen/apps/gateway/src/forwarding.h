@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 #include <zephyr/net/net_pkt.h>
 #include <zephyr/net/net_if.h>
@@ -19,7 +20,15 @@ struct lichen_forwarding_stats {
 
 int lichen_forwarding_init(void);
 
-void lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
+/**
+ * Forwarding-path hook: inspect a packet crossing interfaces and update
+ * forwarding/tunnel-auth stats. With CONFIG_LICHEN_TUNNEL_AUTH, mesh-origin
+ * egress requires a valid root-issued grant.
+ *
+ * @return true when the packet may be forwarded, false when it was denied
+ *         (the caller must drop it).
+ */
+bool lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
 			      struct net_if *out_iface);
 
 /**

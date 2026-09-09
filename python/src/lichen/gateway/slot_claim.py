@@ -69,6 +69,40 @@ STALE_CLAIM_TOLERANCE_SEC = 5
 Spec 6.3 step 7 rejects already-expired claims; the tolerance absorbs
 gateway clock skew so a claim issued moments ago is not dropped."""
 
+_MAX_CLAIM_SEQ = 0xFFFF_FFFF
+"""claim_seq is a u32 on the wire and in every peer implementation (Rust
+slot.rs: u32::try_from(seq) at decode -> MalformedClaim above u32::MAX;
+CBOR tag-2 bignums fail its uint() outright). Python must reject the same
+range at BOTH the dataclass and decode boundaries or a signed claim with
+claim_seq > 2**32-1 diverges cross-implementation (accepted and cached by
+Python, malformed to Rust)."""
+
+MAX_SLOTS_PER_SUPERFRAME = 4_096
+"""Rust slot.rs:57 parity: decode-side bound on the slot array length."""
+
+MAX_CLAIM_ENVELOPE_BYTES = 24_576
+# Merged: beads-worker-3's docstring kept — it describes the strict-reader
+# decode path this file now uses; HEAD's "cannot read the head without
+# decoding" rationale is superseded by _read_head/_read_bstr below.
+"""Decode-side envelope cap (prgb): the strict reader slices the payload
+bstr, then cbor2.loads materializes it — including the slots list — before
+the count check can run, so a hostile oversized envelope costs memory/CPU
+ahead of rejection. Rust reads the CBOR array head and rejects count >
+MAX_SLOTS_PER_SUPERFRAME before allocating (slot.rs:576-580). Python caps
+the envelope instead: a maximum legitimate claim is ~20.6 KB (4096 u32
+slots x 5B + 7-key map + protected/kid/signature); 24 KB covers that with
+margin while bounding pre-rejection decode work."""
+
+_MAX_SLOT_INDEX = 0xFFFF_FFFF
+"""Per-slot u32 bound (Rust slot.rs:574 u32::try_from). Also rejects
+negative slot indices, which Rust's uint() never admits."""
+
+_MAX_U64 = 0xFFFF_FFFF_FFFF_FFFF
+"""Upper bound for the u64 wire fields superframe_epoch (key 2), expiry
+(key 4) and ordinal (key 7): Rust decodes each via p.uint() -> u64, so a
+CBOR tag-2 bignum above 2**64-1 is MalformedClaim there. Python bounds the
+same fields at both validation sites to keep the verdicts identical."""
+
 
 class ClaimRejectReason(Enum):
     """Reasons a slot claim may be rejected (GCP-6.3)."""
@@ -79,7 +113,7 @@ class ClaimRejectReason(Enum):
     # Merged: keep both reject causes — HEAD binds the claim to the key,
     # beads-worker-7 gates replays by high-water.
     IDENTITY_MISMATCH = auto()  # kid/gateway_iid not bound to verifying key
-    REPLAY = auto()  # claim_seq/superframe at or below the stored high-water
+    REPLAY = auto()  # claim_seq at or below the stored high-water
     SLOT_CONFLICT = auto()  # Overlapping slots, lower IID wins
     # Merged: HEAD's claim-horizon rejects and worker-7's replay-cache
     # capacity reject are independent causes; keep all three.
@@ -111,6 +145,53 @@ class AllocationMode(Enum):
 
 class ClaimError(Exception):
     """Slot claim processing error."""
+
+
+_STRICT_PROTECTED = b"\xa1\x01\x3a\x00\x01\x00\x00"
+"""Byte-exact protected header {1: -65537} (Rust tunnel_auth::PROTECTED).
+
+Byte-compare at envelope decode instead of re-parsing: long-form heads
+inside the header map, extra header entries, or any other alg variant
+that cbor2.loads would silently normalize are rejected exactly as Rust
+from_cose rejects them (slot.rs:524-545).
+"""
+
+
+def _read_head(data: bytes, pos: int, what: str) -> tuple[int, int, int]:
+    """Read one minimal-length CBOR head (major type, argument, end pos).
+
+    Strict-form reader used by SlotClaim.decode_cose: mirrors Rust's
+    Reader::head (tunnel_auth) which rejects long-form heads whose
+    argument would have fit a shorter encoding, plus indefinite and
+    reserved forms.
+    """
+    if pos >= len(data):
+        raise ClaimError(f"truncated {what} head")
+    initial = data[pos]
+    major, ai = initial >> 5, initial & 0x1F
+    pos += 1
+    if ai < 24:
+        return major, ai, pos
+    width = {24: 1, 25: 2, 26: 4, 27: 8}.get(ai)
+    if width is None:
+        raise ClaimError(f"invalid {what} head (indefinite or reserved)")
+    if pos + width > len(data):
+        raise ClaimError(f"truncated {what} head")
+    value = int.from_bytes(data[pos : pos + width], "big")
+    # Minimality: the argument must not have fit a shorter form.
+    if value <= {24: 23, 25: 0xFF, 26: 0xFFFF, 27: 0xFFFFFFFF}[ai]:
+        raise ClaimError(f"non-minimal {what} head")
+    return major, value, pos + width
+
+
+def _read_bstr(data: bytes, pos: int, what: str) -> tuple[bytes, int]:
+    """Read one byte string with a minimal head; return (value, next pos)."""
+    major, length, pos = _read_head(data, pos, what)
+    if major != 2:
+        raise ClaimError(f"{what} must be a byte string")
+    if pos + length > len(data):
+        raise ClaimError(f"truncated {what}")
+    return data[pos : pos + length], pos + length
 
 
 @dataclass(frozen=True)
@@ -162,6 +243,13 @@ class SlotClaim:
         except ValueError as e:
             raise ClaimError(f"gateway_iid must be valid hex: {e}") from None
 
+        # Slot indices are u32 on the wire (Rust: per-element u32::try_from)
+        # and the array is bounded (Rust: count <= MAX_SLOTS_PER_SUPERFRAME)
+        if not all(type(s) is int and 0 <= s <= _MAX_SLOT_INDEX for s in self.slots):
+            raise ClaimError("slots must be u32 integers")
+        if len(self.slots) > MAX_SLOTS_PER_SUPERFRAME:
+            raise ClaimError("slots exceeds MAX_SLOTS_PER_SUPERFRAME")
+
         # Slots must be sorted ascending
         if list(self.slots) != sorted(self.slots):
             raise ClaimError("slots must be sorted ascending")
@@ -170,17 +258,33 @@ class SlotClaim:
         if len(self.slots) != len(set(self.slots)):
             raise ClaimError("slots must be unique")
 
-        # Superframe ID must be non-negative
-        if self.superframe_id < 0:
+        # Superframe ID is a u64 on the wire (Rust: p.uint() -> u64)
+        if (
+            type(self.superframe_id) is not int
+            or self.superframe_id < 0
+            or self.superframe_id > _MAX_U64
+        ):
             raise ClaimError("superframe_id must be non-negative")
 
-        # Expiry must be a non-negative integer (spec: key 4)
-        if type(self.expiry) is not int or self.expiry < 0:
+        # Expiry is a u64 on the wire (spec: key 4)
+        if type(self.expiry) is not int or self.expiry < 0 or self.expiry > _MAX_U64:
             raise ClaimError("expiry must be a non-negative integer")
 
-        # claim_seq must be a non-negative integer (spec: key 6)
-        if type(self.claim_seq) is not int or self.claim_seq < 0:
-            raise ClaimError("claim_seq must be a non-negative integer")
+        # claim_seq must be a u32 (spec: key 6; Rust decodes as u32, so a
+        # larger value diverges cross-implementation on identical wire input)
+        if type(self.claim_seq) is not int or self.claim_seq < 0 or self.claim_seq > _MAX_CLAIM_SEQ:
+            raise ClaimError("claim_seq must be a u32 integer")
+
+        # Ordinal is a u64 on the wire when present (None = local-only claim)
+        if self.ordinal is not None and (
+            type(self.ordinal) is not int or self.ordinal < 0 or self.ordinal > _MAX_U64
+        ):
+            raise ClaimError("ordinal must be a non-negative integer")
+
+        # allocation_mode must be the enum: a raw int constructs silently and
+        # encode_claim_canonical would invert it (non-INTERLEAVED -> CONTIGUOUS)
+        if not isinstance(self.allocation_mode, AllocationMode):
+            raise ClaimError("allocation_mode must be an AllocationMode")
 
         # Validate signature length if present
         if self.signature is not None and len(self.signature) != 48:
@@ -202,29 +306,46 @@ class SlotClaim:
         payload key/type conformance. Signature verification is the caller's
         (verify_slot_claim) with the resolved gateway pubkey.
         """
-        try:
-            document = cbor2.loads(envelope)
-        except (cbor2.CBORDecodeError, OverflowError) as e:
-            raise ClaimError(f"invalid CBOR envelope: {e}") from None
-        if not isinstance(document, list) or len(document) != 4:
+        # Merged: beads-worker-3's byte-strict framing kept. HEAD's
+        # whole-envelope cbor2.loads parse is superseded — the merged tail
+        # below consumes `pos` via the strict reader, and the strict form
+        # rejects the lenient variants Rust from_cose rejects. HEAD's
+        # envelope-cap intent is preserved (same check, first below).
+        # Byte-strict envelope framing (33vn): cbor2.loads accepts every
+        # lenient variant Rust from_cose rejects (slot.rs:524-545) —
+        # long-form array head (98 04), non-0xa1 unprotected heads, extra
+        # protected-header entries, long-form bstr heads, trailing bytes —
+        # and verify_slot_claim digests a canonical re-encode, so a
+        # signature-valid claim with one malleated head byte split Python
+        # vs Rust verdicts. Read the envelope with the strict reader
+        # instead: exact 0x84 array head, minimal heads, unprotected map
+        # exactly {4: kid}, protected byte-equal to the shared constant,
+        # nothing after the signature.
+        # Cap before any parse: the strict reader slices the payload bstr
+        # and cbor2.loads materializes it before the slot-count check can
+        # run, so bound the envelope first (prgb).
+        if len(envelope) > MAX_CLAIM_ENVELOPE_BYTES:
+            raise ClaimError("slot-claim envelope exceeds maximum size")
+        major, count, pos = _read_head(envelope, 0, "envelope")
+        if major != 4 or envelope[0] != 0x84 or count != 4:
             raise ClaimError("COSE_Sign1 must be a 4-element array")
-        protected, unprotected, payload, signature = document
-        if not isinstance(protected, bytes) or not isinstance(payload, bytes):
-            raise ClaimError("COSE protected header and payload must be bytes")
-        if not isinstance(unprotected, dict):
-            raise ClaimError("COSE unprotected header must be a map")
-        if not isinstance(signature, bytes):
-            raise ClaimError("COSE signature must be bytes")
-        try:
-            header = cbor2.loads(protected)
-        except (cbor2.CBORDecodeError, OverflowError) as e:
-            raise ClaimError(f"invalid protected header: {e}") from None
-        if not isinstance(header, dict) or header.get(1) != -65537:
+        protected, pos = _read_bstr(envelope, pos, "COSE protected header")
+        if protected != _STRICT_PROTECTED:
             # Validation step 4: non-(-65537) algorithms are decoys; reject.
             raise ClaimError("slot-claim alg must be Schnorr48-Ed25519 (-65537)")
-        kid = unprotected.get(_COSE_KID_LABEL)
-        if not isinstance(kid, bytes) or len(kid) != 8:
+        major, pairs, pos = _read_head(envelope, pos, "unprotected header")
+        if major != 5 or pairs != 1:
+            raise ClaimError("COSE unprotected header must be exactly {4: kid}")
+        major, label, pos = _read_head(envelope, pos, "unprotected kid label")
+        if major != 0 or label != _COSE_KID_LABEL:
+            raise ClaimError("COSE unprotected header must be exactly {4: kid}")
+        kid, pos = _read_bstr(envelope, pos, "slot-claim kid")
+        if len(kid) != 8:
             raise ClaimError("slot-claim kid must be an 8-byte gateway IID")
+        payload, pos = _read_bstr(envelope, pos, "COSE payload")
+        signature, pos = _read_bstr(envelope, pos, "COSE signature")
+        if pos != len(envelope):
+            raise ClaimError("trailing bytes after COSE_Sign1")
         try:
             fields = cbor2.loads(payload)
         except (cbor2.CBORDecodeError, OverflowError) as e:
@@ -234,33 +355,38 @@ class SlotClaim:
 
         raw_slots = fields.get(_PAYLOAD_SLOTS)
         if not isinstance(raw_slots, list) or not all(
-            isinstance(s, int) and not isinstance(s, bool) for s in raw_slots
+            isinstance(s, int) and not isinstance(s, bool) and 0 <= s <= _MAX_SLOT_INDEX
+            for s in raw_slots
         ):
-            raise ClaimError("slots must be an array of integers")
+            raise ClaimError("slots must be an array of u32 integers")
+        if len(raw_slots) > MAX_SLOTS_PER_SUPERFRAME:
+            raise ClaimError("slots exceeds MAX_SLOTS_PER_SUPERFRAME")
         superframe_epoch = fields.get(_PAYLOAD_SUPERFRAME_EPOCH)
-        if type(superframe_epoch) is not int or superframe_epoch < 0:
+        if type(superframe_epoch) is not int or superframe_epoch < 0 or superframe_epoch > _MAX_U64:
             raise ClaimError("superframe_epoch must be a non-negative integer")
         mode = fields.get(_PAYLOAD_MODE)
-        if mode == _MODE_INTERLEAVED:
-            allocation_mode = AllocationMode.INTERLEAVED
-        elif mode == _MODE_CONTIGUOUS:
-            allocation_mode = AllocationMode.CONTIGUOUS
-        else:
+        # Type-strict: value equality admits CBOR false/true (bool) and
+        # float 0.0/1.0 as modes, which Rust's p.uint() rejects as
+        # MalformedClaim (slot.rs:580) — a signed-claim divergence.
+        if type(mode) is not int or mode not in (_MODE_INTERLEAVED, _MODE_CONTIGUOUS):
             raise ClaimError("mode must be 0 (interleaved) or 1 (contiguous)")
+        allocation_mode = (
+            AllocationMode.INTERLEAVED if mode == _MODE_INTERLEAVED else AllocationMode.CONTIGUOUS
+        )
         expiry = fields.get(_PAYLOAD_EXPIRY)
-        if type(expiry) is not int or expiry < 0:
+        if type(expiry) is not int or expiry < 0 or expiry > _MAX_U64:
             raise ClaimError("expiry must be a non-negative integer")
         iid_bytes = fields.get(_PAYLOAD_GATEWAY_IID)
         if not isinstance(iid_bytes, bytes) or len(iid_bytes) != 8:
             raise ClaimError("gateway_iid must be bstr(8)")
         claim_seq = fields.get(_PAYLOAD_CLAIM_SEQ)
-        if type(claim_seq) is not int or claim_seq < 0:
-            raise ClaimError("claim_seq must be a non-negative integer")
+        if type(claim_seq) is not int or claim_seq < 0 or claim_seq > _MAX_CLAIM_SEQ:
+            raise ClaimError("claim_seq must be a u32 integer")
         ordinal = fields.get(_PAYLOAD_ORDINAL)
         # Key 7 is required (shared corpus gcp_slot_claim_cose_sign1.json
         # case ordinal_absent: without the ordinal the receiver cannot
         # register the gateway — reject as malformed).
-        if type(ordinal) is not int or ordinal < 0:
+        if type(ordinal) is not int or ordinal < 0 or ordinal > _MAX_U64:
             raise ClaimError("ordinal must be a non-negative integer")
 
         return cls(
@@ -361,16 +487,20 @@ class SlotClaimRateLimiter:
 
 
 class SlotClaimReplayCache:
-    """Per-gateway-IID replay high-water (GCP-6.5 step 8, l1qw.20.2).
+    """Per-gateway-IID claim_seq replay high-water (GCP-6.5 step 8, l1qw.20.5).
 
-    Tracks the highest superframe_id accepted per gateway IID and rejects
-    claims at or below it. State is in-memory only; persistence across
-    restarts is the l1qw.20.1/NVS follow-up (mirrors Rust slot.rs
-    last_seen semantics).
+    Tracks the highest claim_seq accepted per gateway IID and rejects
+    claims whose claim_seq is at or below it, independent of superframe
+    (spec/08 step 8: "reject if claim_seq <= cached value for that
+    gateway"). A re-claim — in any superframe, including the current one —
+    must strictly advance claim_seq, preserving the loser-reclaim flow and
+    blocking seq rollback from a rebooted or NVS-wiped sender. State is
+    in-memory only; persistence across restarts is the l1qw.20.1/NVS
+    follow-up (mirrors Rust slot.rs last_seen semantics).
 
     Capacity is bounded at MAX_GATEWAYS (mirroring Rust slot.rs
     max_gateways/StateFull, bead c5lz): a claim from a gateway with no
-    cached high-water when the cache is full is rejected GATEWAY_FULL, so
+    cached high-water when the cache is full is rejected STATE_FULL, so
     IID churn cannot grow the cache without bound. Already-tracked
     gateways always remain usable.
     """
@@ -382,19 +512,21 @@ class SlotClaimReplayCache:
         self._highwater: dict[str, int] = {}
 
     def check_and_update(
-        self, gateway_iid: str, superframe_id: int
+        self, gateway_iid: str, claim_seq: int
     ) -> tuple[bool, ClaimRejectReason | None]:
-        """Advance the high-water for *gateway_iid*.
+        """Advance the claim_seq high-water for *gateway_iid*.
 
         Returns (True, None) and stores the new high-water when the claim
-        strictly advances it; returns (False, REPLAY) otherwise.
+        strictly advances it; returns (False, REPLAY) when it does not,
+        or (False, STATE_FULL) when the IID is untracked and the cache is
+        at capacity.
         """
         previous = self._highwater.get(gateway_iid)
-        if previous is not None and superframe_id <= previous:
+        if previous is not None and claim_seq <= previous:
             return (False, ClaimRejectReason.REPLAY)
         if gateway_iid not in self._highwater and len(self._highwater) >= self.MAX_GATEWAYS:
             return (False, ClaimRejectReason.STATE_FULL)
-        self._highwater[gateway_iid] = superframe_id
+        self._highwater[gateway_iid] = claim_seq
         return (True, None)
 
 
@@ -486,15 +618,15 @@ def verify_slot_claim(
     Args:
         claim: SlotClaim to verify
         gateway_pubkey: 32-byte Ed25519 public key of claiming gateway
-        replay_cache: Optional per-gateway claim high-water (l1qw.20.2).
+        replay_cache: Optional per-gateway claim_seq high-water (l1qw.20.5).
+            When provided, the claim's claim_seq must strictly advance
+            the stored high-water for its gateway IID. Signature checks run
+            first per GCP-6.3, so the replay state is only consumed by
+            signature-valid claims.
         rate_limiter: Optional GCP-6.5 rate limiter (l1qw.22): a claim
             exceeding the 10/min/peer or 60/min/global window returns
             (False, RATE_LIMITED) for a silent drop, never advancing the
             replay high-water.
-            When provided, the claim's superframe_id must strictly advance
-            the stored high-water for its gateway IID. Signature checks run
-            first per GCP-6.3, so the replay state is only consumed by
-            signature-valid claims.
         now_unix: Current Unix timestamp for the claim-horizon check;
             defaults to the wall clock. Claims with a timestamp further
             than MAX_CLAIM_DURATION_SECONDS ahead are rejected EXPIRY_TOO_FAR.
@@ -563,7 +695,7 @@ def verify_slot_claim(
     # horizon check, so a horizon-rejected claim never advances the
     # high-water.
     if replay_cache is not None:
-        ok, reason = replay_cache.check_and_update(claim.gateway_iid, claim.superframe_id)
+        ok, reason = replay_cache.check_and_update(claim.gateway_iid, claim.claim_seq)
         if not ok:
             return (False, reason)
 

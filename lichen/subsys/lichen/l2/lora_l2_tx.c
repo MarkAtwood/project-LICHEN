@@ -27,13 +27,26 @@ LOG_MODULE_DECLARE(lichen_lora_l2, CONFIG_LICHEN_LORA_L2_LOG_LEVEL);
 
 struct lichen_lora_cad_entry {
     const struct device *dev;
-    lichen_lora_cad_fn callback;
-    /* Async CAD (bead uwip.2): registered driver starter plus the per-arm
-     * completion callback. done != NULL means CAD is in flight. */
+    /* Async CAD: registered driver starter (NULL selects the emulated
+     * clear-channel completion) plus the per-arm completion callback.
+     * done != NULL means CAD is in flight. */
     lichen_lora_cad_start_fn start;
     lichen_lora_cad_done_fn done;
     void *done_user_data;
     struct k_work_delayable emu_work;
+    /* Emulated-path verdict status captured at arm: -ETIMEDOUT when the
+     * caller's window cannot contain the emulated CAD duration, matching
+     * the hardware driver's fail-closed deadline classification. */
+    int emu_status;
+    /* Per-device verdict slot for the CSMA continuation (uwip.3): reset
+     * inside lichen_lora_cad_start's claim section, written by the done
+     * callback (invoked under cad_registry_mutex), collected by the
+     * probing thread with a bounded k_poll. Because both the claim and
+     * the delivery are single mutex sections, a successful arm implies
+     * any prior delivery's raise already ran and is erased by the claim's
+     * reset — a stale verdict can never be consumed by a later probe. */
+    struct k_poll_signal verdict_signal;
+    bool verdict_busy;
 };
 
 static struct lichen_lora_cad_entry cad_registry[LICHEN_LORA_CAD_REGISTRY_SIZE];
@@ -49,8 +62,10 @@ static void lichen_lora_cad_emu_work(struct k_work *work)
     struct k_work_delayable *dwork = k_work_delayable_from_work(work);
     struct lichen_lora_cad_entry *entry =
         CONTAINER_OF(dwork, struct lichen_lora_cad_entry, emu_work);
+    int status = entry->emu_status;
 
-    lichen_lora_cad_done(entry->dev, false, 0);
+    /* A lapsed emulation window is not evidence of a clear channel. */
+    lichen_lora_cad_done(entry->dev, status != 0, status);
 }
 
 /* TX_DONE completion for the async LoRa TX API. The signal is reset before
@@ -65,10 +80,10 @@ static struct k_poll_signal tx_done_signal =
 static uint32_t lora_tx_ebusy_streak;
 #endif
 
-int lichen_lora_cad_register(const struct device *dev,
-                             lichen_lora_cad_fn callback)
+int lichen_lora_cad_start_register(const struct device *dev,
+                                   lichen_lora_cad_start_fn start)
 {
-    if (dev == NULL || callback == NULL) {
+    if (dev == NULL) {
         return -EINVAL;
     }
 
@@ -76,7 +91,7 @@ int lichen_lora_cad_register(const struct device *dev,
     size_t empty = LICHEN_LORA_CAD_REGISTRY_SIZE;
     for (size_t i = 0; i < LICHEN_LORA_CAD_REGISTRY_SIZE; i++) {
         if (cad_registry[i].dev == dev) {
-            int ret = cad_registry[i].callback == callback ? 0 : -EALREADY;
+            int ret = cad_registry[i].start == start ? 0 : -EALREADY;
             k_mutex_unlock(&cad_registry_mutex);
             return ret;
         }
@@ -89,34 +104,13 @@ int lichen_lora_cad_register(const struct device *dev,
         return -ENOSPC;
     }
     cad_registry[empty].dev = dev;
-    cad_registry[empty].callback = callback;
+    cad_registry[empty].start = start;
+    cad_registry[empty].verdict_busy = true;
+    k_poll_signal_init(&cad_registry[empty].verdict_signal);
     k_work_init_delayable(&cad_registry[empty].emu_work,
                           lichen_lora_cad_emu_work);
     k_mutex_unlock(&cad_registry_mutex);
     return 0;
-}
-
-int lichen_lora_cad_start_register(const struct device *dev,
-                                   lichen_lora_cad_start_fn start)
-{
-    if (dev == NULL || start == NULL) {
-        return -EINVAL;
-    }
-
-    k_mutex_lock(&cad_registry_mutex, K_FOREVER);
-    for (size_t i = 0; i < LICHEN_LORA_CAD_REGISTRY_SIZE; i++) {
-        if (cad_registry[i].dev == dev) {
-            int ret = cad_registry[i].start == start ? 0 : -EALREADY;
-            if (ret != 0) {
-                k_mutex_unlock(&cad_registry_mutex);
-                return ret;
-            }
-            k_mutex_unlock(&cad_registry_mutex);
-            return 0;
-        }
-    }
-    k_mutex_unlock(&cad_registry_mutex);
-    return -ENOTSUP;
 }
 
 void lichen_lora_cad_done(const struct device *dev, bool busy, int status)
@@ -128,6 +122,12 @@ void lichen_lora_cad_done(const struct device *dev, bool busy, int status)
         return;
     }
 
+    /* The consumer callback runs INSIDE the mutex section: together with
+     * the claim-section reset in lichen_lora_cad_start this orders every
+     * raise before the next successful claim's reset, so a late verdict
+     * can never be attributed to a later probe (ABA). All in-tree
+     * callbacks are non-blocking (record + k_poll_signal_raise/k_sem_give);
+     * this function is only ever called from thread/work context. */
     k_mutex_lock(&cad_registry_mutex, K_FOREVER);
     for (size_t i = 0; i < LICHEN_LORA_CAD_REGISTRY_SIZE; i++) {
         if (cad_registry[i].dev == dev && cad_registry[i].done != NULL) {
@@ -135,14 +135,11 @@ void lichen_lora_cad_done(const struct device *dev, bool busy, int status)
             done_user_data = cad_registry[i].done_user_data;
             cad_registry[i].done = NULL;
             cad_registry[i].done_user_data = NULL;
+            done(dev, busy, status, done_user_data);
             break;
         }
     }
     k_mutex_unlock(&cad_registry_mutex);
-
-    if (done != NULL) {
-        done(dev, busy, status, done_user_data);
-    }
 }
 
 int lichen_lora_cad_start(const struct device *dev, k_timeout_t timeout,
@@ -173,7 +170,11 @@ int lichen_lora_cad_start(const struct device *dev, k_timeout_t timeout,
     }
     if (have_start) {
         /* Store the completion before arming: the driver may deliver from
-         * its own context as soon as the start call returns. */
+         * its own context as soon as the start call returns. Resetting the
+         * verdict slot in the same mutex section is what orders any prior
+         * (late) delivery's raise strictly before this arm (see the struct
+         * comment). */
+        k_poll_signal_reset(&cad_registry[index].verdict_signal);
         cad_registry[index].done = done;
         cad_registry[index].done_user_data = user_data;
     }
@@ -207,39 +208,103 @@ int lichen_lora_cad_start(const struct device *dev, k_timeout_t timeout,
         k_mutex_unlock(&cad_registry_mutex);
         return -EBUSY;
     }
+    k_poll_signal_reset(&cad_registry[index].verdict_signal);
     cad_registry[index].done = done;
     cad_registry[index].done_user_data = user_data;
+    /* Emulate the hardware deadline semantic exactly as the lr1110 driver
+     * computes it (k_ticks_to_ms_floor64): a window that cannot contain
+     * the emulated CAD duration never produces a verdict. Tick
+     * quantization is intentional — K_MSEC(1) at 100 ticks/s is a 10 ms
+     * floor deadline on hardware too. K_FOREVER (-1 ticks) has no
+     * deadline; K_NO_WAIT (0) always lapses. */
+    cad_registry[index].emu_status =
+        (timeout.ticks >= 0 &&
+         k_ticks_to_ms_floor64(timeout.ticks) < LICHEN_CAD_EMU_DELAY_MS)
+            ? -ETIMEDOUT
+            : 0;
     k_work_reschedule(&cad_registry[index].emu_work,
                       K_MSEC(LICHEN_CAD_EMU_DELAY_MS));
     k_mutex_unlock(&cad_registry_mutex);
     return 0;
 }
 
-int lichen_lora_cad_run(const struct device *dev, k_timeout_t timeout,
-                        bool *busy)
+/* Async CAD continuation (uwip.3): the probing thread arms the driver-level
+ * CAD (or the emulated completion) and collects the verdict from the
+ * device's registry slot with a bounded k_poll. The done callback runs
+ * under cad_registry_mutex inside lichen_lora_cad_done on the driver's
+ * completion context (lr1110 cad_poll work or the emulated sysworkq item);
+ * it only records and raises — never blocks. user_data is the registry
+ * entry itself: static storage, per device, so no stack object is ever
+ * shared with the completion context and concurrent probes on different
+ * radios cannot contaminate each other. */
+static void csma_cad_done(const struct device *dev, bool busy, int status,
+                          void *user_data)
 {
-    lichen_lora_cad_fn callback = NULL;
+    struct lichen_lora_cad_entry *entry = user_data;
 
-    if (dev == NULL || busy == NULL) {
-        return -EINVAL;
-    }
-    *busy = true;
+    ARG_UNUSED(dev);
+
+    /* Write the verdict BEFORE raising the signal: the waiter's k_poll
+     * acquire orders it against this store. */
+    entry->verdict_busy = busy;
+    k_poll_signal_raise(&entry->verdict_signal, status);
+}
+
+/* Look up a device's registry entry. Entries live in static storage, so
+ * the returned pointer stays valid for the registry's lifetime. */
+static struct lichen_lora_cad_entry *csma_cad_entry_find(const struct device *dev)
+{
+    struct lichen_lora_cad_entry *entry = NULL;
+
     k_mutex_lock(&cad_registry_mutex, K_FOREVER);
     for (size_t i = 0; i < LICHEN_LORA_CAD_REGISTRY_SIZE; i++) {
         if (cad_registry[i].dev == dev) {
-            callback = cad_registry[i].callback;
+            entry = &cad_registry[i];
             break;
         }
     }
     k_mutex_unlock(&cad_registry_mutex);
-    if (callback == NULL) {
+    return entry;
+}
+
+/* Drive one async CAD probe: arm the driver-level CAD (or the emulated
+ * completion), then collect the verdict with a bounded wait. Fails closed
+ * (*busy stays true) on every error; -ETIMEDOUT when no verdict arrives
+ * within timeout + margin, matching lichen_csma_cad_complete's retry
+ * classification for a radio that never answered. */
+static int csma_cad_probe(const struct device *dev, uint32_t timeout_ms,
+                          bool *busy)
+{
+    struct lichen_lora_cad_entry *entry;
+    unsigned int signaled = 0U;
+    int result = 0;
+    int ret;
+
+    *busy = true;
+    entry = csma_cad_entry_find(dev);
+    if (entry == NULL) {
         return -ENOTSUP;
     }
-    int ret = callback(dev, timeout, busy);
+
+    struct k_poll_event cad_event = K_POLL_EVENT_STATIC_INITIALIZER(
+        K_POLL_TYPE_SIGNAL, K_POLL_MODE_NOTIFY_ONLY, &entry->verdict_signal, 0);
+
+    ret = lichen_lora_cad_start(dev, K_MSEC(timeout_ms), csma_cad_done, entry);
     if (ret != 0) {
-        *busy = true;
-        return ret < 0 ? ret : -EIO;
+        return ret;
     }
+
+    /* Widen before adding: timeout_ms is caller-controlled via
+     * lichen_lora_perform_cca and must not wrap near UINT32_MAX. */
+    ret = k_poll(&cad_event, 1, K_MSEC((uint64_t)timeout_ms + 100U));
+    k_poll_signal_check(&entry->verdict_signal, &signaled, &result);
+    if (ret != 0 || signaled == 0U) {
+        return -ETIMEDOUT;
+    }
+    if (result != 0) {
+        return result;
+    }
+    *busy = entry->verdict_busy;
     return 0;
 }
 
@@ -259,8 +324,7 @@ static int csma_wait(void *user, uint32_t delay_ms)
 static int csma_cad(void *user, uint8_t timeout_symbols, bool *busy)
 {
     ARG_UNUSED(timeout_symbols);
-    return lichen_lora_cad_run(user,
-                              K_MSEC(CONFIG_LICHEN_LORA_CCA_TIMEOUT_MS), busy);
+    return csma_cad_probe(user, CONFIG_LICHEN_LORA_CCA_TIMEOUT_MS, busy);
 }
 
 bool lichen_lora_perform_cca(uint32_t timeout_ms)
@@ -270,7 +334,7 @@ bool lichen_lora_perform_cca(uint32_t timeout_ms)
     }
 
     bool busy = false;
-    int ret = lichen_lora_cad_run(lora_data.lora_dev, K_MSEC(timeout_ms), &busy);
+    int ret = csma_cad_probe(lora_data.lora_dev, timeout_ms, &busy);
     if (ret < 0) {
         LOG_WRN("lora_l2: CCA failed (%d), suppressing TX", ret);
         return false;
@@ -476,6 +540,16 @@ int lichen_lora_l2_tx(const uint8_t *data, size_t len, uint8_t channel)
         return -EBUSY;
     }
 
+    /* Async RX owns the driver's modem lease until explicitly cancelled. */
+    ret = lora_l2_rx_disarm_locked();
+    if (ret < 0) {
+        k_mutex_unlock(&modem_mutex);
+        atomic_dec(&tx_pending);
+        secure_zero(tx_buf, sizeof(tx_buf));
+        k_mutex_unlock(&tx_buf_mutex);
+        return ret;
+    }
+
     /* CCP-15: bounded CSMA/CA with CAD and exponential backoff. */
     if (lora_data.cca_enabled) {
         ret = lichen_csma_acquire(&lora_data.csma, 0U, csma_rng, NULL,
@@ -485,6 +559,7 @@ int lichen_lora_l2_tx(const uint8_t *data, size_t len, uint8_t channel)
             LOG_INF("lora_l2: CSMA/CA suppressed TX (%d)", ret);
             k_mutex_unlock(&modem_mutex);
             atomic_dec(&tx_pending);
+            lora_l2_rx_arm();
             secure_zero(tx_buf, sizeof(tx_buf));
             k_mutex_unlock(&tx_buf_mutex);
             return ret;
@@ -554,6 +629,7 @@ int lichen_lora_l2_tx(const uint8_t *data, size_t len, uint8_t channel)
 #endif
 
     atomic_dec(&tx_pending);
+    lora_l2_rx_arm();
 
     /*
      * SECURITY: Zero tx_buf after use to prevent leaking previous payload

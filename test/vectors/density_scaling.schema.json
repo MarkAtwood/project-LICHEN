@@ -1,0 +1,134 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Density scaling (spec/05-routing.md 9.4, 9.10; 02a 2a.10.3; 12-apps 18.2.1)",
+  "type": "object",
+  "required": [
+    "$schema",
+    "format_version",
+    "name",
+    "description",
+    "spec",
+    "constants",
+    "vectors"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "format_version": { "const": 2 },
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "spec": { "type": "string" },
+    "constants": {
+      "type": "object",
+      "required": [
+        "DENSITY_PER_BONUS_PERMILLE",
+        "DENSITY_RSSI_BONUS_DBM",
+        "ANNOUNCE_JITTER_CAP_SEC",
+        "NUM_SLOTS_MIN",
+        "NUM_SLOTS_NODES_PER_SLOT",
+        "POSITION_BEACON_MOVING_SEC",
+        "POSITION_BEACON_STATIONARY_SEC",
+        "POSITION_BEACON_DENSE_SEC",
+        "POSITION_BEACON_DENSE_THRESHOLD"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "DENSITY_PER_BONUS_PERMILLE": { "const": 100 },
+        "DENSITY_RSSI_BONUS_DBM": { "const": -90 },
+        "ANNOUNCE_JITTER_CAP_SEC": { "const": 120 },
+        "NUM_SLOTS_MIN": { "const": 8 },
+        "NUM_SLOTS_NODES_PER_SLOT": { "const": 25 },
+        "POSITION_BEACON_MOVING_SEC": { "const": 60 },
+        "POSITION_BEACON_STATIONARY_SEC": { "const": 300 },
+        "POSITION_BEACON_DENSE_SEC": { "const": 300 },
+        "POSITION_BEACON_DENSE_THRESHOLD": { "const": 21 }
+      }
+    },
+    "vectors": {
+      "type": "object",
+      "required": [
+        "announce_parameters",
+        "num_slots_scaling",
+        "position_beacon_rate"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "announce_parameters": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "description", "density", "expected"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+              "description": { "type": "string" },
+              "density": { "type": "integer", "minimum": 0, "maximum": 255 },
+              "expected": {
+                "type": "object",
+                "required": [
+                  "announce_interval_sec",
+                  "max_announce_hops",
+                  "gradient_timeout_sec",
+                  "announce_jitter_sec"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "announce_interval_sec": { "enum": [300, 600, 1200, 1800] },
+                  "max_announce_hops": { "enum": [15, 10, 5, 3, 2] },
+                  "gradient_timeout_sec": { "enum": [600, 1200, 2400, 3600] },
+                  "announce_jitter_sec": { "enum": [30, 60, 120] }
+                }
+              }
+            }
+          }
+        },
+        "num_slots_scaling": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "description", "dodag_size", "expected"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+              "description": { "type": "string" },
+              "dodag_size": { "type": "integer", "minimum": 1 },
+              "expected": {
+                "type": "object",
+                "required": ["num_slots"],
+                "additionalProperties": false,
+                "properties": {
+                  "num_slots": { "type": "integer", "minimum": 8 }
+                }
+              }
+            }
+          }
+        },
+        "position_beacon_rate": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "description", "density", "moving", "expected"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+              "description": { "type": "string" },
+              "density": { "type": "integer", "minimum": 0, "maximum": 255 },
+              "moving": { "type": "boolean" },
+              "expected": {
+                "type": "object",
+                "required": ["position_beacon_interval_sec"],
+                "additionalProperties": false,
+                "properties": {
+                  "position_beacon_interval_sec": { "enum": [60, 300] }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
