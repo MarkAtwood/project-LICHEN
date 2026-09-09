@@ -1395,7 +1395,6 @@ impl Gateway {
     /// route extraction is not wired, so grants issued over longer routes
     /// fail closed here; upgrade path is SRH parsing at the node decap site.
     fn egress_tunnel_authorized(&mut self, received: &lichen_node::stack::ReceivedIpv6) -> bool {
-        eprintln!("DEBUG egress_tunnel_authorized: len={}", received.ipv6.len());
         if received.ipv6.len() < 40 {
             warn!(
                 len = received.ipv6.len(),
@@ -1422,7 +1421,6 @@ impl Gateway {
         let egress_iid: [u8; 8] = self.rpl_stack.local_iid();
         let inner_source: [u8; 16] = received.ipv6[8..24].try_into().expect("len checked");
         let route = [egress_iid];
-        eprintln!("DEBUG egress: src={inner_source:02x?} egress_iid={egress_iid:02x?}");
         match self
             .coordinator
             .authorize_egress(inner_source, false, &route)
