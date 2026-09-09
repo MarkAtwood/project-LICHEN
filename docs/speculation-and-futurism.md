@@ -148,6 +148,43 @@ Power, emissions, location, and duration depend on the actual authorization.
 The earlier 2-4 week lead time is an unverified planning estimate; approval
 and fee-free operation are not assured.
 
+**Grant-scoped auto-enable:** The firmware can enforce experimental license
+boundaries automatically. A Part 5 license is scoped to specific dates,
+coordinates, and device count. The T-Echo's L76K GNSS provides both time and
+position. On boot, the node checks whether it is inside the grant's time and
+geofence — if yes, microfrag is enabled; if no (or no GPS fix), baseline
+single-channel LoRa only. Fail-closed: no fix means no microfrag.
+
+```c
+struct microfrag_grant {
+    int64_t start_epoch;    // license validity start
+    int64_t end_epoch;      // license validity end
+    double lat, lon;        // authorized center
+    double radius_m;        // geofence radius
+    uint32_t grant_id;      // FCC file number reference
+};
+```
+
+This is a strong regulatory posture — the device enforces its own authorization
+limits in firmware rather than relying on operator configuration. The
+experimental license application can cite this enforcement mechanism. If a node
+leaves the authorized area or the license period expires, it reverts
+automatically.
+
+**Candidate events:**
+- **Burning Man** — remote desert (minimal Part 15 congestion, open-sky GPS),
+  70,000 attendees, week-long bounded experiment with clear coordinates and
+  dates. Hand out 500 T-Echos; microfrag is live inside the playa geofence.
+- **Black Hat / DEF CON** — strong demo audience, but indoor GPS may be weak.
+  Fallback: accept a cached fix if obtained within the last N hours and node
+  has not moved significantly, or allow explicit config override for indoor
+  operation within the licensed date range.
+
+**Filing:** Form 442, approximately $85 filing fee, 8-12 weeks before the
+event. Describe device count, frequency range, modulation, power, channel
+plan, dates, and coordinates. Attach the
+[15.247 analysis](microfrag-15247-analysis.md) as supporting material.
+
 ### Phase 3: Production (estimated $10-15K per design, 3-6 months)
 These are preliminary certification-budget guesses, not lab quotes. Under
 [15.247(a)(1)](https://www.ecfr.gov/current/title-47/part-15/section-15.247),
