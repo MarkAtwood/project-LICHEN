@@ -486,6 +486,10 @@ ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
 	if (lichen_lora_l2_is_running() && !lichen_lora_l2_needs_reinit()) {
 		/* Healthy: no recovery cycle — just quiesce straggler sends. */
 		lora_loopback_test_reset(lora_dev);
+		/* Idempotent (-EALREADY tolerated): the UDP TX path must not
+		 * depend on earlier teardown tests remembering to
+		 * reprovision (project-LICHEN-worker6-m4yk). */
+		reprovision_after_reinit();
 		k_sleep(K_MSEC(150));
 	} else {
 		for (int attempt = 0; attempt < 3; attempt++) {

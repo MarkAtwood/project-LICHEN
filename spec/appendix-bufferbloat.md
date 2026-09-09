@@ -23,13 +23,18 @@ A queue that looks small in bytes represents enormous latency in time.
 
 ### LoRa-Specific Factors
 
-**Duty cycle limits**: EU 868 MHz band limits transmissions to 1% duty cycle.
-After a 1-second transmission, the node must wait 99 seconds before the next.
-Queued packets experience not just transmission time but regulatory wait time.
+**Duty cycle limits**: Where a 1% duty-cycle limit applies, a 1-second
+transmission followed by 99 seconds idle illustrates conservative pacing;
+it is not a universal legal wait-after-every-packet rule. The applicable
+regional rules determine the accounting group and window, with dwell
+accounting per physical frequency where required. Channel count or retuning
+does not create a new budget. Queued packets wait for both legal and adaptive
+airtime eligibility, not just transmission time.
 
 **Half-duplex radio**: A node cannot transmit while receiving. Channel access
 requires carrier sense and backoff, adding variable delay before transmission
-even begins.
+even begins. Receiver-aware CCP also reserves committed RX opportunities;
+queued TX cannot take them over merely because no frame has arrived yet.
 
 **Multi-hop mesh**: Each hop adds queuing delay. A 3-hop path through
 congested relays can accumulate tens of seconds of latency.
@@ -45,7 +50,9 @@ LICHEN applies Dave Täht's bufferbloat insights to low-power mesh:
 ### 1. Small, Bounded Queues
 
 Every queue has an explicit, small bound. When full, new packets are rejected
-with an error (backpressure) rather than silently queued.
+rather than silently queued beyond that bound. Local admission returns an
+error (backpressure); mesh failure signaling is limited to existing protocol
+mechanisms as described below.
 
 ```
 TX queue:        4 packets max
@@ -79,6 +86,15 @@ Datagram-service packets are dropped when stale. Message-service packets
 have a short TX queue deadline (time to reach the first custodian) but a
 long absolute TTL that governs the custody chain. Once a custody-capable
 node accepts the message, the TX queue deadline no longer applies.
+Custody remains best effort, subject to the existing storage, eviction, TTL,
+and retry policies; acceptance does not guarantee delivery.
+
+The ACK/NACK deadline above applies only to responses already defined by the
+applicable protocol, not to a new MAC ACK/NACK mechanism. Waiting for an
+eligible radio opportunity MUST NOT extend a packet's deadline. The node MAY
+coalesce unsent, replaceable state updates, such as current position, under
+the owning resource's semantics (07-transport-app.md §10.3). It MUST NOT
+coalesce arbitrary messages, commands, receipts, or custody records.
 
 ### 3. Priority Queuing
 
@@ -93,24 +109,33 @@ priority table and delivery service mapping.
 | 3        | Telemetry, position       | Datagram         |
 | 4 (low)  | Bulk data, firmware       | Datagram         |
 
-Higher-priority packets preempt lower-priority ones. A node struggling to
-maintain routes will not waste airtime on stale bulk transfers.
+Higher-priority packets are selected ahead of lower-priority eligible TX.
+Queue eviction is not radio preemption: priority MUST NOT interrupt committed
+RX, exceed legal or adaptive airtime limits, or start TX unless the full radio
+operation plus guard fits the available opportunity. Receiver eligibility
+comes from the peer contract, not the sender's choice of a free channel; see
+[Receiver-Aware CCP](02b-ccp-receiver-aware.md). A node struggling to maintain
+routes will not waste airtime on stale bulk transfers.
 
 ### 4. Explicit Backpressure
 
-When a queue is full, the sender gets an error:
+When a queue is full, use the signaling already available to the sender:
 - `ENOBUFS` / `QueueFull` for immediate sends
-- Negative acknowledgment for mesh-forwarded packets
+- An existing protocol failure response for mesh-forwarded packets only where
+  that protocol permits it and the response is eligible for TX
 
-Senders must handle this — typically by backing off and retrying later, or
-by dropping the packet and notifying the application.
+Without such a response mechanism, record the forwarding drop locally rather
+than inventing a MAC ACK/NACK or unsolicited mesh error. Senders receiving
+backpressure must handle it by backing off within existing retry and deadline
+policies, or by dropping the packet and notifying the application.
 
-### 5. No Silent Drops
+### 5. Congestion Visibility
 
 Tail-drop (silently discarding packets when full) hides congestion. LICHEN
 prefers explicit signals:
 - Return error to local sender
-- NACK to mesh source (if routable)
+- Use a mesh failure response only where the existing protocol supports it;
+  a route to the source alone is not sufficient
 - Log queue-full events for diagnostics
 
 ## Implementation Guidelines
@@ -131,7 +156,7 @@ struct tx_queue_entry {
 
 int tx_queue_push(const uint8_t *data, uint16_t len, uint8_t priority) {
     // Check deadline of oldest packet, drop if expired
-    // If full and new packet is higher priority, preempt lowest
+    // If full and new packet is higher priority, evict lowest queued priority
     // If full and same/lower priority, return -ENOBUFS
 }
 ```
@@ -145,9 +170,12 @@ chatty node from monopolizing relay capacity:
 #define MAX_FORWARDING_SOURCES 8
 #define MAX_PACKETS_PER_SOURCE 2
 
-// If source has MAX_PACKETS_PER_SOURCE queued, send NACK upstream
+// If source has MAX_PACKETS_PER_SOURCE queued, reject forwarding admission
 // Total forwarding buffer: 16 packets max
 ```
+
+Report the admission failure only through existing protocol mechanisms, as
+specified under Explicit Backpressure; this example adds no wire response.
 
 ### Measuring Queue Latency
 
@@ -191,9 +219,16 @@ Bufferbloat avoidance must be tested under congestion:
 
 1. **Queue-full handling**: Sender gets `ENOBUFS` when queue full
 2. **Deadline expiry**: Old packets dropped before transmission
-3. **Priority preemption**: High-priority packets bypass queue
-4. **Multi-hop latency**: End-to-end delay bounded under load
+3. **Priority eligibility**: Priority orders eligible TX without preempting
+   committed RX, exceeding legal/adaptive airtime, or overrunning operation plus guard
+4. **Multi-hop latency**: Expire stale queued packets under load rather than
+   promising an end-to-end delivery bound
 5. **Fairness**: No single source monopolizes forwarding capacity
+
+Qualified full-band experiments follow the adopted policy and activation gates
+in [Receiver-Aware CCP](02b-ccp-receiver-aware.md). New wire behavior requires
+exact versioned encodings and independent conformance oracles. More channels
+do not grant more airtime, and experiments do not establish production readiness.
 
 ## Further Reading
 

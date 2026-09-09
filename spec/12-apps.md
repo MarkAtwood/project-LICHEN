@@ -11,6 +11,15 @@ This section defines standard application-layer features using IETF protocols.
 All features use CoAP (RFC 7252) with CBOR payloads and leverage existing
 standards wherever possible.
 
+Application-generated mesh traffic, including Observe notifications, is
+subject to radio queue backpressure, deadlines, and eligible-TX priority in
+07-transport-app.md §10.2 and appendix-bufferbloat.md. The node owns resource
+state and notification scheduling as specified in 11-lci.md §17.8.8.
+[Receiver-Aware CCP](02b-ccp-receiver-aware.md) defines the adopted policy and
+qualified full-band experiments; new wire activation remains gated on exact
+versioned encodings and independent conformance oracles, not an assumption of
+production readiness.
+
 ### 18.1. Messaging
 
 Text messaging between nodes, supporting unicast, multicast, and broadcast.
@@ -83,15 +92,16 @@ Content-Format: application/cbor
 }
 ```
 
-New messages trigger Observe notifications.
+New messages trigger Observe notifications. Coalescing replaceable state
+updates MUST NOT merge or discard individual inbox messages or custody records.
 
 **Delivery Service Selection:**
 
 Messages use the **message delivery service** (custody transfer,
 store-and-forward) by default. The sender's node sets the DTN S and C flags
-(see 05-routing.md §9.8) and sends via CoAP CON. This enables planetary-scale
-delivery across multiple meshes and gateways, surviving hours or days of
-recipient unavailability.
+(see 05-routing.md §9.8) and sends via CoAP CON. This enables best-effort
+store-and-forward across multiple meshes and gateways during hours or days of
+recipient unavailability, within the existing TTL and storage policies.
 
 Broadcast messages (`to: "ff02::1"`) use the datagram service (no custody,
 best-effort).
@@ -147,6 +157,9 @@ receipt for all messages with ID <= the `ack_through` value.
 | Custody accepted | Sent | 2.01 from first custodian (or relay/BR) |
 | Delivered | Delivered | Explicit receipt or `ack_through` in reply |
 | Expired | May not have been delivered | TTL expired, no receipt received |
+
+Custody acceptance records forwarding responsibility, not guaranteed delivery.
+A delivery receipt confirms recipient acceptance, not human reading.
 
 The sender does not retry after TTL expiry. The custody chain is the retry
 mechanism -- each custodian keeps attempting the next hop until TTL expires.
@@ -252,10 +265,10 @@ Response: 2.02 Deleted    ; slot reverts to factory default
 
 #### 18.1.4. Store-and-Forward
 
-Messages use custody transfer (05-routing.md §9.8.1) for reliable
+Messages use custody transfer (05-routing.md §9.8.1) for best-effort
 store-and-forward delivery. When the destination is unreachable, each
-custody-capable node in the path persists the message to flash and takes
-responsibility for forwarding it.
+custody-capable node that accepts custody persists the message to flash and
+takes responsibility for attempting forwarding under the existing policies.
 
 The custody chain works as follows:
 
@@ -386,6 +399,10 @@ local density estimate (`EstimateDensity`, 02a-coordinated-capacity.md
 §2a.10.3) exceeds 20, the beacon interval MUST be at least 300 seconds
 regardless of motion state, preventing position broadcast from dominating
 airtime. Parameters take effect on the next beacon cycle.
+
+If radio admission is delayed, the node MAY replace an unsent position update
+with newer state for the same resource and destination. This does not relax
+beacon intervals or freshness deadlines, or permit coalescing distinct messages.
 
 Nodes receiving beacons update their position cache:
 
@@ -681,9 +698,9 @@ Priority alerting for emergencies.
 
 #### 18.4.1. SOS Authentication and Rate Limiting
 
-SOS messages are high-priority and trigger network-wide flooding. Without
-controls, fake SOS floods cause denial of service. All SOS messages MUST
-be authenticated and rate-limited.
+SOS messages are high-priority and trigger controlled flooding within the
+existing forwarding scope and TTL limits. Without controls, fake SOS floods
+cause denial of service. All SOS messages MUST be authenticated and rate-limited.
 
 **Authentication (REQUIRED):**
 
@@ -732,6 +749,9 @@ Nodes SHOULD support operator commands to:
 - Manually blacklist/whitelist nodes
 - Disable rate limiting entirely (trusted network)
 
+These overrides affect application abuse controls only; they do not relax
+radio TX eligibility or regulatory accounting (§18.4.6).
+
 #### 18.4.2. Emergency Alert Format
 
 ```cbor
@@ -774,7 +794,8 @@ Response: 2.04 Changed
 
 Nodes receiving SOS:
 1. Display alert prominently
-2. Re-broadcast once (controlled flooding, TTL-limited)
+2. Re-broadcast once when TX is eligible (controlled flooding, TTL-limited,
+   within the existing forwarding scope)
 3. Log to `/sos/log`
 
 #### 18.4.4. SOS Button Behavior
@@ -828,10 +849,18 @@ Content-Format: application/cbor
 
 When SOS is active:
 
-1. **Priority routing:** SOS packets get priority in TX queue
+1. **Priority routing:** SOS packets get priority among eligible TX
 2. **Beacon boost:** Originating node beacons position every 30s
-3. **Relay duty:** All nodes relay SOS (once per SOS ID)
+3. **Relay duty:** All nodes within the forwarding scope attempt eligible SOS
+   relay (once per SOS ID)
 4. **Persistence:** SOS remains active until cancelled or 4-hour timeout
+
+These are best-effort forwarding obligations, not a delivery guarantee or an
+emergency regulatory bypass. SOS and boosted position beacons MUST NOT preempt
+committed RX, exceed legal or adaptive airtime limits, or start unless the full
+radio operation plus guard fits the opportunity. Existing authentication,
+rate, queue, expiry, and forwarding-scope limits still apply; urgency does not
+create airtime budget by changing channels or retuning.
 
 ### 18.5. Presence and Status
 

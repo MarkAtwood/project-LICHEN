@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-eo73",
+  "title": "rf_health.rs doc comment references nonexistent util_fp_scale parameter",
+  "description": "Pre-existing doc defect flagged by kimi-k3 pass 3 (robustness) during bead 5m15: rust/lichen-core/src/rf_health.rs:633 doc comment for adaptive_sf_select references a 'util_fp_scale' parameter that does not exist in the signature — the code uses the FP_SCALE constant directly. Docs-only fix; correct or delete the stale reference. Out of 5m15's clamp scope, filed per protocol.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "chore",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T00:52:53.089998451Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T00:52:53.089998451Z",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-eo73",
+      "depends_on_id": "project-LICHEN-worker6-5m15",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T00:52:53.202595128Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
