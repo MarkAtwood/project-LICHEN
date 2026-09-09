@@ -1565,7 +1565,14 @@ pub fn decode_rule255(
     }
     let profile_limit = single_frame_limit.min(SCHC_FRAG_MAX_PACKET_SIZE);
     if data.len() > profile_limit {
-        return Err(BufferTooSmall::new(data.len(), profile_limit).into());
+        // Terminal profile ceiling (mirrors the encode side and the Python
+        // reference): the wire input size is fixed, so growing the caller's
+        // out buffer can never satisfy it. Reporting it as the retryable
+        // capacity error would make a grow-and-retry decode loop never
+        // terminate.
+        return Err(SchcError::InvalidPacket(
+            "Rule 255 packet exceeds profile single-frame limit",
+        ));
     }
     let packet = &data[1..];
     validate_full_ipv6_structure(packet)?;
@@ -3289,14 +3296,29 @@ mod tests {
         ));
 
         // Encoded one byte over the ceiling: rejected at ingress. The direct
-        // decode_rule255 API reports the profile overflow as a capacity
-        // error; the public decompress() path rejects it as a profile
+        // decode_rule255 API reports the profile overflow as a terminal
+        // profile violation (mirroring the encode side and Python); the
+        // public decompress() path likewise rejects it as a profile
         // violation before rule dispatch.
         let mut encoded_over = encoded.clone();
         encoded_over.push(0);
         assert!(matches!(
             decode_rule255(&encoded_over, &mut decoded, usize::MAX),
-            Err(SchcError::BufferTooSmall(_))
+            Err(SchcError::InvalidPacket(
+                "Rule 255 packet exceeds profile single-frame limit"
+            ))
+        ));
+        // A single-frame limit below the encoded size is likewise terminal
+        // on decode (the wire input cannot shrink on retry).
+        assert!(matches!(
+            decode_rule255(
+                &encoded[..SCHC_FRAG_MAX_PACKET_SIZE],
+                &mut decoded,
+                raw_exact.len()
+            ),
+            Err(SchcError::InvalidPacket(
+                "Rule 255 packet exceeds profile single-frame limit"
+            ))
         ));
         assert!(matches!(
             decompress(&encoded_over, &mut decoded),
