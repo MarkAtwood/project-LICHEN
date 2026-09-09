@@ -9,6 +9,7 @@ a COSE_Sign1 capability announcement to the new root's
 
 from __future__ import annotations
 
+import asyncio
 from ipaddress import IPv6Address
 
 import pytest
@@ -26,6 +27,7 @@ from lichen.ipv6.udp import UdpDatagram
 from lichen.l2_payload import wrap_schc_payload
 from lichen.link.frames import RxFrame
 from lichen.node import (
+    CAPABILITY_ANNOUNCE_MAX_ATTEMPTS,
     MAX_CAPABILITY_BITMASK,
     Node,
     NodeConfig,
@@ -324,3 +326,177 @@ async def test_send_exception_is_contained_and_logged(
         await node._reannounce_capabilities_to_new_root()  # must not raise
     assert "capability re-announce to new root" in caplog.text
     assert node.dodag.take_root_changes() == []  # still drained
+    # The failed send scheduled a retry on the real delay; cancel it so the
+    # pending task does not outlive the test's event loop.
+    await node._cleanup_started(adapter=False, scheduler=False)
+
+
+def _instant_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make retry delays instant while preserving a real await point."""
+    real_sleep = asyncio.sleep
+
+    async def fake_sleep(_delay: float) -> None:
+        await real_sleep(0)
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+
+async def _drain_retries(node: Node) -> None:
+    tasks = tuple(node._capability_retry_tasks)
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_failed_send_retries_and_recovers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """bead 2kem: a lost first datagram is re-sent by the bounded retry."""
+    node = _node()
+    _instant_sleep(monkeypatch)
+    now = 1_800_000_000
+    monkeypatch.setattr("time.time", lambda: now)
+    assert node.dodag is not None
+    calls = 0
+    sent: list[bytes] = []
+
+    async def flaky_send(ipv6_bytes: bytes) -> bool:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return False  # first datagram lost (routed to drop / jammed)
+        sent.append(ipv6_bytes)
+        return True
+
+    monkeypatch.setattr(node, "send", flaky_send)
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    assert calls == 1  # only the initial attempt so far
+    await _drain_retries(node)
+    assert calls == 2  # one retry delivered
+    assert len(sent) == 1
+    message = _decode_post(sent[0], IPv6Address(DODAG_A))
+    # Each attempt consumes a seq increment; the delivered retry carries seq 2.
+    _assert_valid_announcement(message, capabilities=1, seq=2, now=now)
+
+
+@pytest.mark.asyncio
+async def test_retry_abandons_after_max_attempts(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """bead 2kem: retries are bounded; a persistent failure is abandoned."""
+    node = _node()
+    _instant_sleep(monkeypatch)
+    assert node.dodag is not None
+    calls = 0
+
+    async def always_drop(_ipv6_bytes: bytes) -> bool:
+        nonlocal calls
+        calls += 1
+        return False
+
+    monkeypatch.setattr(node, "send", always_drop)
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    with caplog.at_level("WARNING", logger="lichen.node"):
+        await node._reannounce_capabilities_to_new_root()
+        await _drain_retries(node)
+    # Independent oracle for the bound (test-integrity rule): the exported
+    # constant documents the contract, but the suite must fail if it drifts.
+    assert CAPABILITY_ANNOUNCE_MAX_ATTEMPTS == 3
+    assert calls == 3
+    assert "abandoned" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_cleanup_cancels_pending_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """bead 2kem: stop() cleanup cancels a pending retry (real 5s delay)."""
+    node = _node()
+    assert node.dodag is not None
+
+    async def always_drop(_ipv6_bytes: bytes) -> bool:
+        return False
+
+    monkeypatch.setattr(node, "send", always_drop)
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    assert len(node._capability_retry_tasks) == 1  # sleeping on the real delay
+    await node._cleanup_started(adapter=False, scheduler=False)
+    await asyncio.sleep(0)  # let done callbacks run
+    assert all(t.done() for t in tuple(node._capability_retry_tasks))
+
+
+@pytest.mark.asyncio
+async def test_retry_aborts_when_target_root_goes_stale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """bead 2kem: a retry must not announce to a root the node has left."""
+    node = _node()
+    _instant_sleep(monkeypatch)
+    assert node.dodag is not None
+    calls = 0
+
+    async def always_drop(_ipv6_bytes: bytes) -> bool:
+        nonlocal calls
+        calls += 1
+        return False
+
+    monkeypatch.setattr(node, "send", always_drop)
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    assert calls == 1 and len(node._capability_retry_tasks) == 1
+    # Membership moves to B while the retry sleeps: target A is now stale.
+    node.dodag.process_dio(_dio(DODAG_A, rank=INFINITE_RANK), P1, link_etx=1.0)
+    node.dodag.process_dio(_dio(DODAG_B), P1, link_etx=1.0)
+    await _drain_retries(node)
+    assert calls == 1  # the retry aborted instead of re-sending to A
+
+
+@pytest.mark.asyncio
+async def test_new_retry_supersedes_pending_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """bead 2kem: at most one pending retry; a newer failure replaces it."""
+    node = _node()
+    _instant_sleep(monkeypatch)
+    assert node.dodag is not None
+    calls = 0
+
+    async def always_drop(_ipv6_bytes: bytes) -> bool:
+        nonlocal calls
+        calls += 1
+        return False
+
+    monkeypatch.setattr(node, "send", always_drop)
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    assert calls == 1 and len(node._capability_retry_tasks) == 1
+    # Second failure (root now B): the pending A retry is superseded.
+    node.dodag.process_dio(_dio(DODAG_A, rank=INFINITE_RANK), P1, link_etx=1.0)
+    node.dodag.process_dio(_dio(DODAG_B), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    assert calls == 2
+    assert len(node._capability_retry_tasks) == 1  # only the B retry
+    await _drain_retries(node)
+    # B's retry exhausts its remaining 2 attempts; A's never fires.
+    assert calls == 4
+
+
+@pytest.mark.asyncio
+async def test_retry_delays_are_jittered(monkeypatch: pytest.MonkeyPatch) -> None:
+    """bead 2kem: retries sleep uniform(delay/2, delay), not a fixed delay."""
+    node = _node()
+    assert node.dodag is not None
+    sleeps: list[float] = []
+    real_sleep = asyncio.sleep
+
+    async def recording_sleep(delay: float) -> None:
+        sleeps.append(delay)
+        await real_sleep(0)
+
+    monkeypatch.setattr(asyncio, "sleep", recording_sleep)
+    monkeypatch.setattr("lichen.node.random.uniform", lambda lo, hi: (lo + hi) / 2)
+
+    async def always_drop(_ipv6_bytes: bytes) -> bool:
+        return False
+
+    monkeypatch.setattr(node, "send", always_drop)
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    await _drain_retries(node)
+    assert sleeps == [3.75, 3.75]  # midpoint of [2.5, 5.0] for both retries
