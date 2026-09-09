@@ -195,6 +195,23 @@ def test_direct_construction_non_bytes_payload_bstr_raises_local_fact_error() ->
         )
 
 
+def test_wireless_fact_to_cose_sign1_roundtrip() -> None:
+    """A directly-constructed LocalFact has no retained wire bstrs, so
+    to_cose_sign1 must fall back to cose_protected_header()/claims.to_cbor().
+    That fallback (dark on the production decode/issue paths) must produce an
+    envelope that decodes and verifies (awqd)."""
+    gw = _gateway()
+    issued = issue_local_fact(gw, LocalFactClaims(relay=True, priority=2))
+    wireless = LocalFact(
+        claims=LocalFactClaims(relay=True, priority=2),
+        issuer_iid=issued.issuer_iid,
+        signature=issued.signature,
+    )
+    assert wireless.protected_bytes is None and wireless.payload_bytes is None
+    decoded = LocalFact.from_cose_sign1(wireless.to_cose_sign1())
+    assert verify_local_fact(decoded, gw.pubkey) is True
+
+
 # ─── Envelope decode robustness ───────────────────────────────────────────────
 
 
