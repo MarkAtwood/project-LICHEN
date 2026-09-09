@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-ty12",
+  "title": "egress gate fails open on sub-IPv6-header datagrams",
+  "description": "gateway.rs egress_tunnel_authorized returned true for received.ipv6.len()\u003c40, forwarding malformed datagrams upstream without tunnel authorization — contradicts the gate's fail-closed contract (spec 06-security 8.11). Fixed to drop + warn; found by reviewer pass 2/3 on m9i4.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T03:02:17.122070229Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T03:02:17.122070229Z",
+  "labels": [
+    "gateway",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ty12",
+      "depends_on_id": "project-LICHEN-worker6-m9i4",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T03:02:17.245488251Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

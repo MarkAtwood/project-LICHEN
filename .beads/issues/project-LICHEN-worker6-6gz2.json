@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-6gz2",
+  "title": "LICHEN_COAP_SLOT_COORD never compiled on Zephyr 4.1: 14 errors in never-enabled code (snprintf, K_MUTEX_INITIALIZER, coap_core_metadata drift)",
+  "description": "Discovered-from project-LICHEN-worker6-at2y (edge-cases review P0 follow-through). First-ever Zephyr build with CONFIG_LICHEN_COAP_SLOT_COORD=y (SETTINGS+RPL+EPOCH_PERSIST+CCP16+TIME_SYNC chain enabled, native_sim coap_keys base) fails with 14 errors in coap_slot_coord.c regions untouched by at2y: :1441 implicit snprintf (missing \u003cstdio.h\u003e), :1483 K_MUTEX_INITIALIZER undeclared (host-stub-only macro path), :1711 -Wswitch-enum LICHEN_TIME_SOURCE_NONE unhandled, :1795/1815/1834 struct coap_core_metadata has no member 'attributes' (Zephyr 4.1 coap_service API drift — host test stubs freeze the old API). The host test (tests/coap_slot_claim) compiles this file with stub headers, so nothing ever compiled the Zephyr path. Fix: real includes (stdio.h/kernel.h), exhaustive switch, and update the coap_resource metadata initializers to the 4.1 coap_core_metadata shape (see coap_status.c or other in-tree resources for the current pattern).",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:58:20.338690348Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T03:03:51.537255924Z",
+  "started_at": "2026-09-09T03:03:51.537255924Z",
+  "lease_expires_at": "2026-09-09T03:08:51.537255924Z",
+  "heartbeat_at": "2026-09-09T03:03:51.537255924Z",
+  "labels": [
+    "coap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-6gz2",
+      "depends_on_id": "project-LICHEN-worker6-at2y",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T02:58:20.460636062Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

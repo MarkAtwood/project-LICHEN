@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-rys8",
+  "title": "tunnel_authorization vector generator refuses to run in this workspace: 'atomic JSON parent directory is unsafe' — test_tunnel_authorization_generator_is_fresh fails pre-existing",
+  "description": "Discovered while validating 5rfl. python/tests/gateway/test_tunnel_auth_vectors.py::test_tunnel_authorization_generator_is_fresh fails on a clean tree (verified via git stash): python/test/vectors/generate_tunnel_authorization.py --check exits 2 with 'cannot safely read tunnel_authorization.json: atomic JSON parent directory is unsafe'. The generator's atomic-write safety check rejects this checkout's parent-directory permissions, so the freshness gate cannot pass in this environment. Also noted: the python/.venv was missing declared dev deps (hypothesis, pytest-asyncio, jsonschema, ruff, mypy — installed via uv this session), suggesting tests are usually run elsewhere; either the safety check is too strict for workspace layouts or the test needs a skip/env guard. Investigate the check's criteria and make the generator usable in worker workspaces without weakening its write-safety intent.",
+  "status": "in_progress",
+  "priority": 3,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:58:43.801319532Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T03:06:16.540516344Z",
+  "started_at": "2026-09-09T03:06:16.540516344Z",
+  "lease_expires_at": "2026-09-09T03:11:16.540516344Z",
+  "heartbeat_at": "2026-09-09T03:06:16.540516344Z",
+  "labels": [
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-rys8",
+      "depends_on_id": "project-LICHEN-worker6-5rfl",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T02:58:43.929496791Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

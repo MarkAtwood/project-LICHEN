@@ -17,6 +17,22 @@
       "created_at": "2026-09-09T02:48:42.563656026Z",
       "created_by": "Mark Atwood",
       "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-fplq.7",
+      "depends_on_id": "project-LICHEN-worker6-fplq.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T02:49:04.940803659Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-fplq.7",
+      "depends_on_id": "project-LICHEN-worker6-fplq.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T02:49:05.698717632Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
     }
   ]
 }
