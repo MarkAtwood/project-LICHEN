@@ -136,6 +136,7 @@ Each node tracks broadcasts it relays, per sender:
 Broadcast Relay State:
   sender_iid: <IID of original sender>
   hop_bucket[1-7]: <count in rolling 1-hour window>
+  sos_count: <SOS count in rolling 1-hour window>
   last_seen: <timestamp>
 ```
 
@@ -149,7 +150,30 @@ Higher Hop Limit = larger blast radius = stricter limit:
 | 2 | 100 | Small radius |
 | 3-4 | 30 | Medium radius |
 | 5-7 | 10 | Mesh-wide, expensive |
-| SOS (any) | 3 | Emergency, always relay once |
+| 8-255 (clamped) | 10 | §6.3.2's 255 (flood) and any hl > 7 use the hl=7 row |
+| SOS (any) | 3 | Emergency, per sender per hour across ALL hop buckets (see SOS note) |
+
+`hop_bucket` is indexed 1-7. Two out-of-table values are defined here:
+
+- **hl = 0:** the packet is consume-only at this node (§6.3.2 step 3) — the
+  relay decision returns before any bucket lookup, so hl=0 never indexes
+  `hop_bucket`. No budget row is needed.
+- **hl = 8..255:** clamped to bucket 7 before lookup (`bucket = min(hl, 7)`),
+  so §6.3.2's 255 (flood) and any oversized hl share the most restrictive
+  (hl=7) budget. Senders that want a wider flood accept the tighter budget.
+
+**SOS counting and detection:** SOS traffic uses its own per-sender counter,
+NOT the shared `hop_bucket` — so the "first SOS is never dropped" property
+holds even for a sender with non-SOS broadcasts in the window (count starts
+at 0 < budget 3, and the yellow-zone probabilistic relay applies only at
+count >= 50% of budget, i.e. not on the first). The row value 3 is per
+sender per hour across all hop limits, not 3 per bucket. Relays detect SOS
+by the link-layer dispatch marker (an L2 SOS dispatch type; a wire value
+must be assigned in 02-physical-link.md before this is implementable —
+tracked). The CoAP `/sos` path (12-apps.md §18.4.3) is NOT a usable relay
+signal: OSCORE encrypts Uri-Path end-to-end and SCHC elides it, so relays
+cannot see it. The "always relay once" rationale refers to the first SOS
+counting at 0 and is consistent with drop-at-budget, not an exemption.
 
 **Relay decision:**
 
@@ -158,11 +182,21 @@ on_receive_broadcast(packet):
   sender = packet.source_iid
   hl = packet.hop_limit
 
+  if hl == 0:
+    consume(packet)  # §6.3.2: consume-only, never budgeted or relayed
+    return
+
   if sender not in relay_state:
     relay_state[sender] = new_entry()
 
-  budget = get_budget(hl)
-  count = relay_state[sender].hop_bucket[hl]
+  is_sos = (packet.l2_dispatch == L2_DISPATCH_SOS)  # link-layer marker
+  if is_sos:
+    budget = 3                        # SOS row, per sender per hour, all hops
+    count = relay_state[sender].sos_count
+  else:
+    bucket = min(hl, 7)               # hl 8..255 clamp to bucket 7
+    budget = get_budget(hl)
+    count = relay_state[sender].hop_bucket[bucket]
 
   if count >= budget:
     drop(packet)  # sender exceeded budget
@@ -174,7 +208,10 @@ on_receive_broadcast(packet):
       drop(packet)
       return
 
-  relay_state[sender].hop_bucket[hl] += 1
+  if is_sos:
+    relay_state[sender].sos_count += 1
+  else:
+    relay_state[sender].hop_bucket[bucket] += 1
   decrement_hop_limit(packet)
 
   if packet.hop_limit > 0:
@@ -191,7 +228,7 @@ on_receive_broadcast(packet):
 
 **State size:**
 
-Per-sender entry: ~20 bytes (IID + 7 bucket counters + timestamp)
+Per-sender entry: ~20 bytes (IID + 7 hop-bucket counters + SOS counter + timestamp)
 At 100 active senders: ~2 KB
 
 #### 6.3.4. Border Router Multicast Filtering
