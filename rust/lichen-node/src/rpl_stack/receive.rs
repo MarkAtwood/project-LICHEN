@@ -586,15 +586,19 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 let RplRole::Root(rx) = &mut self.role else {
                     return Ok(RplReceiveOutcome::Dao(DaoHandlingOutcome::RouteRejected));
                 };
-                // Merge resolution (HEAD over beads-worker-2): the DAO source
-                // is the origin's routable 02xx /128 (spec 05-routing §8.6),
-                // which under upstream AddrForKey embeds no IID (i72x.2), so
-                // the pinned key resolves by full-address match — never by
-                // slicing the low 64 bits. Both parents implemented this
-                // exact-match lookup as duplicate announce-table methods
-                // (`pinned_pubkey_for_routable` in HEAD, `pinned_pubkey_for_addr`
-                // in beads-worker-2); the `_routable` form is kept because the
-                // already-merged node.rs DAO-admission path uses it.
+                // Merge resolution (HEAD over beads-worker-2 + beads-worker-7):
+                // the DAO source is the origin's routable 02xx /128 (spec
+                // 05-routing §8.6), which under upstream AddrForKey embeds no
+                // IID (i72x.2), so the pinned key resolves by full-address
+                // match — never by slicing the low 64 bits. All three parents
+                // implement this same lookup: HEAD's and worker-2's duplicate
+                // announce-table methods (`pinned_pubkey_for_routable`,
+                // `pinned_pubkey_for_addr`) and worker-7's inline
+                // `pinned_pubkeys_snapshot` + `ygg_addr_from_pubkey` scan. The
+                // shared `_routable` method is kept because the already-merged
+                // node.rs DAO-admission path uses it; worker-7's inline scan
+                // is the identical comparison, consolidated into the one
+                // shared implementation of the trust-base correlation.
                 let admitted = self
                     .announces
                     .pinned_pubkey_for_routable(&source)

@@ -204,6 +204,47 @@ def native_address_from_pubkey(pubkey: bytes) -> IPv6Address:
     return address
 
 
+def upstream_addr_for_key(pubkey: bytes) -> IPv6Address:
+    """Return the upstream yggdrasil-go ``AddrForKey`` routable address.
+
+    This is the settled LICHEN routable identity (spec/decisions.jsonl
+    ``upstream-yggdrasil-addressing``); it is NOT the SHA-512 native profile
+    returned by :func:`native_address_from_pubkey`. Algorithm (upstream
+    ``src/address/address.go``): bit-invert the Ed25519 public key, count
+    leading 1 bits into ``addr[1]``, drop the first 0 bit, bit-pack the
+    remainder into ``addr[2:16]``. No hashing is involved.
+
+    The independent conformance oracle is the pinned ``upstream_addr_for_key``
+    vector in ``test/vectors/yggdrasil_address.json``.
+    """
+    if type(pubkey) is not bytes:
+        raise AddrError("public key must be immutable bytes")
+    if len(pubkey) != 32:
+        raise AddrError(f"pubkey must be 32 bytes, got {len(pubkey)}")
+    inverted = bytes(b ^ 0xFF for b in pubkey)
+    # Count leading 1 bits, wrapping at 256 (Go byte overflow semantics; only
+    # reachable for a degenerate all-ones inverted key).
+    ones = 0
+    first_zero = 256
+    for idx in range(256):
+        if (inverted[idx // 8] >> (7 - idx % 8)) & 1:
+            ones = (ones + 1) & 0xFF
+        else:
+            first_zero = idx
+            break
+    # Pack bits after the first 0, MSB-first, whole bytes only; a trailing
+    # partial byte is discarded (upstream semantics). A degenerate all-ones
+    # inverted key has no first zero, so nothing packs.
+    packed = bytearray(14)
+    start = first_zero + 1
+    whole_bits = max(0, 256 - start) & ~7
+    for out_bit in range(min(whole_bits, 112)):
+        src = start + out_bit
+        if (inverted[src // 8] >> (7 - src % 8)) & 1:
+            packed[out_bit // 8] |= 1 << (7 - out_bit % 8)
+    return IPv6Address(bytes((0x02, ones)) + bytes(packed))
+
+
 def multicast_scope(addr: IPv6Address | str | bytes) -> int | None:
     """Return the 4-bit multicast scope, or None if the address is unicast.
 

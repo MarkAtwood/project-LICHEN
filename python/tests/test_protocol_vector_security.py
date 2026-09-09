@@ -46,19 +46,13 @@ def _eui64_for_key(public_key: bytes) -> bytes:
     return bytes(eui64)
 
 
-def _addr_for_key(public_key: bytes) -> bytes:
-    digest = hashlib.sha512(public_key).digest()
-    return b"\x02" + digest[:7] + _iid_for_key(public_key)
-
-
 # Upstream AddrForKey comes from reference_schnorr48.upstream_addr_for_key,
 # which is validated against the pinned yggdrasil-go anchor vectors; a
-# duplicate local copy (verified byte-identical) would only drift.
-# Migration split (spec/decisions.jsonl upstream-yggdrasil-addressing):
-# corpora already regenerated to upstream (root_signature.json,
-# authenticated_schc_dio.json) use that oracle; root_authorization.json
-# still on the rejected SHA-512 profile keeps the legacy ``_addr_for_key``
-# until its own regeneration lands.
+# duplicate local copy (verified byte-identical) would only drift, so the
+# local reimplementation the merged branch carried is intentionally dropped.
+# Migration complete (spec/decisions.jsonl upstream-yggdrasil-addressing):
+# root_signature.json, authenticated_schc_dio.json, and root_authorization.json
+# are all regenerated to upstream addressing and share that one oracle.
 
 
 def _ones_complement_sum(data: bytes) -> int:
@@ -445,7 +439,7 @@ def test_timing_dio_envelope_has_independent_integrity_checks() -> None:
         assert source_matches_signer is (case["name"] != "signed-wrong-signer"), case["name"]
 
 
-def test_root_vectors_bind_dodagid_and_use_independent_signatures() -> None:
+def test_root_vectors_use_upstream_addr_for_key_and_independent_signatures() -> None:
     for vector in _load("root_signature.json")["vectors"]:
         public_hex = vector.get("pubkey")
         if public_hex is None or len(public_hex) != 64:
@@ -466,7 +460,7 @@ def test_root_vectors_bind_dodagid_and_use_independent_signatures() -> None:
         if len(public_key) != 32:
             assert vector["expected_valid"] is False
             continue
-        binding = bytes.fromhex(vector["dodagid_hex"]) == _addr_for_key(public_key)
+        binding = bytes.fromhex(vector["dodagid_hex"]) == upstream_addr_for_key(public_key)
         signature = verify(
             public_key,
             bytes.fromhex(vector["message_hex"]),

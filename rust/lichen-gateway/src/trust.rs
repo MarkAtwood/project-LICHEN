@@ -1723,7 +1723,9 @@ mod tests {
         assert_eq!(iid, expected_iid);
 
         let ygg_addr = ygg_addr_from_pubkey(&expected_pubkey);
-        // Upstream AddrForKey (yggdrasil-go@422836ee oracle, i72x.2).
+        // Upstream yggdrasil-go AddrForKey (yggdrasil-go@422836ee oracle,
+        // i72x.2; validated against the pinned upstream byte-equality vector
+        // in test/vectors/yggdrasil_address.json).
         let expected_ygg: [u8; 16] = hex!("020224aec2198a4ade94eae2b97eac87");
         assert_eq!(ygg_addr, expected_ygg);
     }
@@ -1743,7 +1745,7 @@ mod tests {
         assert_eq!(iid, expected_iid);
 
         let ygg_addr = ygg_addr_from_pubkey(&expected_pubkey);
-        // Upstream AddrForKey (yggdrasil-go@422836ee oracle, i72x.2).
+        // Upstream yggdrasil-go AddrForKey (see derivation_zero).
         let expected_ygg: [u8; 16] = hex!("0201cd2950254a181029510cd40cf658");
         assert_eq!(ygg_addr, expected_ygg);
     }
@@ -1763,7 +1765,7 @@ mod tests {
         assert_eq!(iid, expected_iid);
 
         let ygg_addr = ygg_addr_from_pubkey(&expected_pubkey);
-        // Upstream AddrForKey (yggdrasil-go@422836ee oracle, i72x.2).
+        // Upstream yggdrasil-go AddrForKey (see derivation_zero).
         let expected_ygg: [u8; 16] = hex!("02012f7519de299fe5c734eeedd5ad94");
         assert_eq!(ygg_addr, expected_ygg);
     }
@@ -1796,6 +1798,7 @@ mod tests {
         // (upstream AddrForKey value, yggdrasil-go@422836ee oracle, i72x.2).
         let pubkey: [u8; 32] =
             hex!("4cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba29");
+        // Alice's DODAGID = upstream AddrForKey(alice_pubkey) (see derivation_zero).
         let dodagid: [u8; 16] = hex!("0201cd2950254a181029510cd40cf658");
 
         assert!(verify_dodagid_binding(&pubkey, &dodagid));
@@ -1813,7 +1816,7 @@ mod tests {
         // Attacker uses their pubkey but claims victim's DODAGID
         let attacker_pubkey: [u8; 32] =
             hex!("7422b9887598068e32c4448a949adb290d0f4e35b9e01b0ee5f1a1e600fe2674");
-        let victim_dodagid: [u8; 16] = hex!("02fd6b265c858536fd6b265c8585369b"); // Alice's DODAGID
+        let victim_dodagid: [u8; 16] = hex!("0201cd2950254a181029510cd40cf658"); // Alice's DODAGID
 
         assert!(!verify_dodagid_binding(&attacker_pubkey, &victim_dodagid));
     }
@@ -2025,6 +2028,36 @@ mod tests {
         );
 
         assert!(!verify_gateway_message(&pubkey, &tampered, &signature));
+    }
+
+    // ── Binding Invariants (test vectors: binding_invariant_*) ───────────────
+
+    #[test]
+    fn binding_invariant_alice() {
+        let pubkey: [u8; 32] =
+            hex!("4cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba29");
+        let ygg_addr = ygg_addr_from_pubkey(&pubkey);
+
+        // Post-migration invariant: the derived address is the upstream
+        // AddrForKey bytes (see derivation_zero) and binds to this pubkey;
+        // the SHA-512 link-local IID is NOT embedded in the routable address.
+        let expected_ygg: [u8; 16] = hex!("0201cd2950254a181029510cd40cf658");
+        assert_eq!(ygg_addr, expected_ygg);
+        assert!(verify_dodagid_binding(&pubkey, &ygg_addr));
+        assert_ne!(&ygg_addr[8..16], &iid_from_pubkey(&pubkey));
+    }
+
+    #[test]
+    fn binding_invariant_bob() {
+        let pubkey: [u8; 32] =
+            hex!("7422b9887598068e32c4448a949adb290d0f4e35b9e01b0ee5f1a1e600fe2674");
+        let ygg_addr = ygg_addr_from_pubkey(&pubkey);
+
+        // Post-migration invariant: see binding_invariant_alice.
+        let expected_ygg: [u8; 16] = hex!("02012f7519de299fe5c734eeedd5ad94");
+        assert_eq!(ygg_addr, expected_ygg);
+        assert!(verify_dodagid_binding(&pubkey, &ygg_addr));
+        assert_ne!(&ygg_addr[8..16], &iid_from_pubkey(&pubkey));
     }
 
     // ── Trust Store Operations ───────────────────────────────────────────────

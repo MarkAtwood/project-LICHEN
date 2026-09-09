@@ -4680,10 +4680,12 @@ def root_authorization_vectors() -> list[dict]:
 
     Fixture construction uses deterministic production primitives. The committed
     results are independently checked by test_protocol_vector_security.py using
-    reference_schnorr48.py and direct SHA-512 address derivation.
+    reference_schnorr48.py and the upstream yggdrasil-go AddrForKey derivation
+    (rubw; the SHA-512 native profile is rejected).
     """
-    from lichen.crypto.identity import Identity, yggdrasil_address
+    from lichen.crypto.identity import Identity
     from lichen.crypto.schnorr48 import sign
+    from lichen.ipv6.addr import upstream_addr_for_key
 
     vectors = []
 
@@ -4692,7 +4694,7 @@ def root_authorization_vectors() -> list[dict]:
     identity_valid = Identity.from_seed(seed_valid)
     message_valid = b"DIO: DODAG config, RPLInstanceID=0x01, Version=42"
     sig_valid = sign(identity_valid.privkey, identity_valid.pubkey, message_valid)
-    dodagid_valid = yggdrasil_address(identity_valid.pubkey)
+    dodagid_valid = upstream_addr_for_key(identity_valid.pubkey)
 
     vectors.append(
         {
@@ -4728,7 +4730,7 @@ def root_authorization_vectors() -> list[dict]:
     # Vector 3: Valid signature but wrong DODAGID (attacker impersonation)
     attacker_seed = bytes([x ^ 0xFF for x in range(32)])
     attacker = Identity.from_seed(attacker_seed)
-    attacker_dodagid = yggdrasil_address(attacker.pubkey)
+    attacker_dodagid = upstream_addr_for_key(attacker.pubkey)
     # Attacker signs correctly but claims victim's DODAGID
     attacker_sig = sign(attacker.privkey, attacker.pubkey, message_valid)
 
@@ -4786,7 +4788,7 @@ def root_authorization_vectors() -> list[dict]:
     identity_alt = Identity.from_seed(seed_alt)
     message_alt = b"DIO: instance=1, version=1, rank=256"
     sig_alt = sign(identity_alt.privkey, identity_alt.pubkey, message_alt)
-    dodagid_alt = yggdrasil_address(identity_alt.pubkey)
+    dodagid_alt = upstream_addr_for_key(identity_alt.pubkey)
 
     vectors.append(
         {
@@ -5026,7 +5028,7 @@ VECTOR_FILES: tuple[_VectorFile, ...] = (
     ),
     _VectorFile(
         "root_authorization.json",
-        "Root authorization validation vectors (spec 8.2, 8.4). Tests DODAGID == AddrForKey(root_pubkey) binding and Schnorr48 signature verification. Covers valid root, invalid signature, DODAGID mismatch (impersonation), and pubkey validation. Fixed literals are independently checked with reference_schnorr48.py and direct SHA-512 address derivation.",
+        "Root authorization validation vectors (spec 8.2, 8.4). Tests DODAGID == AddrForKey(root_pubkey) binding and Schnorr48 signature verification. Covers valid root, invalid signature, DODAGID mismatch (impersonation), and pubkey validation. Fixed literals are independently checked with reference_schnorr48.py and the upstream yggdrasil-go AddrForKey derivation.",
         builder="root_authorization_vectors",
     ),
     _VectorFile(

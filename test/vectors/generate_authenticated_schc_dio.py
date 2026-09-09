@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import struct
 from ipaddress import IPv6Address
@@ -31,37 +32,51 @@ _PEER_DODAG = IPv6Address("0200::1")
 _OTHER_DODAG = IPv6Address("0200::2")
 
 
-def _addr_for_key(public_key: bytes) -> bytes:
+def _upstream_addr_for_key(pubkey: bytes) -> bytes:
     """Upstream yggdrasil-go ``AddrForKey``: bit-invert the key, count leading
     1 bits into ``addr[1]``, drop them plus the separator 0, then pack the
     remaining bits MSB-first into ``addr[2:16]``.  No hashing.
 
+    Matches Rust lichen-core ``ygg_addr_from_pubkey`` byte-for-byte, including
+    the Go byte-counter wrap at 256 and the trailing partial-byte discard.
     The corpus pins upstream addresses per spec/decisions.jsonl
-    ``upstream-yggdrasil-addressing``; ``ReferenceIdentity.ygg_addr`` on this
-    lineage is still the rejected SHA-512 profile, so the DODAG derivation
-    lives here until the reference module lands its own upstream helper.
-    Mirrors the pinned anchor in yggdrasil_address.json.
+    ``upstream-yggdrasil-addressing``; the local reimplementation is anchored
+    at import time to the pinned upstream vector in yggdrasil_address.json
+    (see ``_upstream_anchor_check``) so it cannot silently diverge.
     """
-    if len(public_key) != 32:
-        raise ValueError("Ed25519 public key must be exactly 32 bytes")
-    inverted = bytes(b ^ 0xFF for b in public_key)
+    if len(pubkey) != 32:
+        raise ValueError(f"pubkey must be 32 bytes, got {len(pubkey)}")
+    buf = bytes(b ^ 0xFF for b in pubkey)
     ones = 0
-    while ones < 256 and (inverted[ones // 8] >> (7 - ones % 8)) & 1:
-        ones += 1
-    payload = bytearray(14)
-    acc = 0
-    nbits = 0
-    pos = 0
-    for i in range(ones + 1, 256):
-        acc = (acc << 1) | ((inverted[i // 8] >> (7 - i % 8)) & 1)
-        nbits += 1
-        if nbits == 8:
-            if pos < 14:
-                payload[pos] = acc
-                pos += 1
-            acc = 0
-            nbits = 0
-    return bytes((0x02, ones & 0xFF)) + bytes(payload)
+    first_zero = 256
+    for idx in range(256):
+        if (buf[idx // 8] >> (7 - idx % 8)) & 1:
+            ones = (ones + 1) & 0xFF
+        else:
+            first_zero = idx
+            break
+    packed = bytearray(14)
+    start = first_zero + 1
+    whole_bits = max(0, 256 - start) & ~7
+    for out_bit in range(min(whole_bits, 112)):
+        src = start + out_bit
+        if (buf[src // 8] >> (7 - src % 8)) & 1:
+            packed[out_bit // 8] |= 1 << (7 - out_bit % 8)
+    return bytes((0x02, ones)) + bytes(packed)
+
+
+def _upstream_anchor_check() -> None:
+    """Pin _upstream_addr_for_key to the upstream conformance vector."""
+    anchor_doc = json.loads((VECTORS_DIR / "yggdrasil_address.json").read_text())
+    anchor = next(v for v in anchor_doc["vectors"] if v["name"] == "upstream_addr_for_key")
+    derived = _upstream_addr_for_key(bytes.fromhex(anchor["public_key"]))
+    if derived.hex() != anchor["address"]:
+        raise SystemExit(
+            f"upstream AddrForKey anchor mismatch: {derived.hex()} != {anchor['address']}"
+        )
+
+
+_upstream_anchor_check()
 
 
 def _internet_checksum(data: bytes) -> int:
@@ -197,8 +212,9 @@ def build_document() -> dict[str, object]:
     root = ReferenceIdentity.from_seed(_ROOT_SEED)
     attacker = ReferenceIdentity.from_seed(_ATTACKER_SEED)
     victim = ReferenceIdentity.from_seed(_VICTIM_SEED)
-    root_dodag = IPv6Address(_addr_for_key(root.pubkey))
-    victim_dodag = IPv6Address(_addr_for_key(victim.pubkey))
+    # DODAGID = upstream AddrForKey(pubkey) (rubw; native profile rejected).
+    root_dodag = IPv6Address(_upstream_addr_for_key(root.pubkey))
+    victim_dodag = IPv6Address(_upstream_addr_for_key(victim.pubkey))
     version_3 = bytes.fromhex("130103")
     cases = [
         _signed_case(

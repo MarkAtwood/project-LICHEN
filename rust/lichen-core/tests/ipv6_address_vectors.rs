@@ -21,6 +21,11 @@
 //! against the same external oracle, not against the rejected profile.)
 //! EUI-64 and short-address cases are link-interoperability helpers, not
 //! node identities.
+//! Merge resolution: beads-worker-7's "corpora are stale until i72x.6"
+//! premise was retired by the i72x.6 regeneration (now committed), so its
+//! divergence-pinning doc text is dropped; its durable intent (pin the
+//! divergence via a test-local rejected-profile transcription, never weaken
+//! assertions) is preserved below via [`native_profile_reference`].
 
 mod native_profile_reference;
 
@@ -182,7 +187,7 @@ fn key_derived_identity_binds_link_local_and_upstream_native() {
         let link_local = link_local_from_iid(&iid);
 
         assert_eq!(iid, expected_iid, "{name}");
-        // Worker-2's independent IID oracle, kept: the IID path (SHA-512,
+        // Worker-7's independent IID oracle, kept: the IID path (SHA-512,
         // U/L cleared) is unchanged by the upstream AddrForKey migration, so
         // the live derivation must still match the test-local transcription.
         assert_eq!(iid, native_sha512_iid(&pubkey), "{name}: live IID derivation must match the quarantined-profile transcription");
@@ -190,6 +195,9 @@ fn key_derived_identity_binds_link_local_and_upstream_native() {
         // external oracle (table above, yggdrasil-go@422836ee). The corpus's
         // native_packed byte equality and iid_in_native flag are already
         // cross-checked against the same oracle at the top of the loop.
+        // Merge resolution: worker-7's assert_ne against the corpus is
+        // dropped — the i72x.6 regeneration made the corpus carry upstream
+        // values, so divergence is no longer the correct expectation.
         let upstream = upstream_addr_for_pubkey(&pubkey);
         assert_eq!(native, upstream, "{name}");
         // The human-readable `native` text form must agree with native_packed.
@@ -222,6 +230,10 @@ fn key_derived_identity_binds_link_local_and_upstream_native() {
             "{name}: quarantined native lower-64 must equal IID (rejected-profile property)"
         );
         assert_eq!(reference_native[0], 0x02, "{name}: 0200::/8 prefix");
+        // Merge resolution: worker-7's `vector["iid_in_native"] == true` on
+        // the LIVE corpus is dropped — post-regeneration the live flag is
+        // false (pinned above); the binding record survives only on the
+        // quarantined legacy corpus.
         assert_eq!(
             legacy_vector["iid_in_native"], true,
             "{name}: quarantined corpus records the binding"
@@ -304,6 +316,10 @@ fn yggdrasil_derivation_corpus_matches_upstream_addr_for_key() {
             negative += 1;
             continue;
         }
+        // Merge resolution: worker-7's `binding_invariant` match arm is
+        // dropped — the quarantined corpus retired that spelling in favor of
+        // `binding_invariant_rejected` (handled below), so the arm could
+        // never fire.
         let pubkey = decode_hex::<32>(entry["pubkey"].as_str().expect("pubkey"));
         let addr = ygg_addr_from_pubkey(&pubkey);
         let iid = iid_from_pubkey_bytes(&pubkey);
@@ -311,6 +327,9 @@ fn yggdrasil_derivation_corpus_matches_upstream_addr_for_key() {
         // oracle; the corpus's regenerated ygg_addr field MUST agree with it.
         assert_eq!(addr, upstream_addr_for_pubkey(&pubkey));
         if let Some(expected) = entry["ygg_addr"].as_str() {
+            // Merge resolution: worker-7's assert_ne is dropped — the
+            // corpus's ygg_addr fields were regenerated to upstream values,
+            // so equality, not divergence, is the correct pin.
             assert_eq!(
                 addr,
                 decode_hex::<16>(expected),
@@ -320,6 +339,11 @@ fn yggdrasil_derivation_corpus_matches_upstream_addr_for_key() {
         if let Some(expected) = entry["iid"].as_str() {
             assert_eq!(iid, decode_hex::<8>(expected));
         }
+        // Merge resolution: worker-7's redundant `assert_ne!(&addr[8..],
+        // &iid[..])` is dropped — the non-embedding property is already
+        // pinned byte-exact in key_derived_identity_binds_link_local_and_
+        // upstream_native (corpus_native vs IID, plus the iid_in_native
+        // flag), and duplicating it here adds no coverage.
         assert_eq!(addr[0], 0x02);
         // Strict match on "binding_invariant_rejected": the corpus retired
         // the plain "binding_invariant" spelling, so worker-2's match on the

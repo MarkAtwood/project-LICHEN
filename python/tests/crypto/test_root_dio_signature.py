@@ -13,6 +13,7 @@ import cbor2
 import pytest
 
 from lichen.crypto import Identity
+from lichen.ipv6.addr import upstream_addr_for_key
 from lichen.crypto.root_dio_signature import (
     COSE_ALG_LABEL,
     COSE_KID_LABEL,
@@ -134,7 +135,7 @@ class TestRootDioSignature:
         """Create a valid Root DIO Signature."""
         return create_root_dio_signature(
             identity=root_identity,
-            dodag_id=root_identity.ygg_addr,
+            dodag_id=upstream_addr_for_key(root_identity.pubkey).packed,
             instance=1,
             version=1,
             rank=256,
@@ -148,7 +149,7 @@ class TestRootDioSignature:
         future_time = int(time.time()) + 3600
         sig = create_root_dio_signature(
             identity=root_identity,
-            dodag_id=root_identity.ygg_addr,
+            dodag_id=upstream_addr_for_key(root_identity.pubkey).packed,
             instance=1,
             version=1,
             rank=256,
@@ -216,7 +217,7 @@ class TestVerification:
         past_time = int(time.time()) - 3600
         sig = create_root_dio_signature(
             identity=root_identity,
-            dodag_id=root_identity.ygg_addr,
+            dodag_id=upstream_addr_for_key(root_identity.pubkey).packed,
             instance=1,
             version=1,
             rank=256,
@@ -238,7 +239,7 @@ class TestVerification:
         future_time = int(time.time()) + 3600
         sig = create_root_dio_signature(
             identity=root_identity,
-            dodag_id=root_identity.ygg_addr,
+            dodag_id=upstream_addr_for_key(root_identity.pubkey).packed,
             instance=1,
             version=1,
             rank=256,
@@ -272,7 +273,7 @@ class TestVerification:
         future_time = int(time.time()) + 3600
         sig = create_root_dio_signature(
             identity=root_identity,
-            dodag_id=root_identity.ygg_addr,
+            dodag_id=upstream_addr_for_key(root_identity.pubkey).packed,
             instance=1,
             version=1,
             rank=256,
@@ -297,7 +298,7 @@ class TestVerification:
         future_time = int(time.time()) + 3600
         sig = create_root_dio_signature(
             identity=root_identity,
-            dodag_id=root_identity.ygg_addr,
+            dodag_id=upstream_addr_for_key(root_identity.pubkey).packed,
             instance=1,
             version=1,
             rank=256,
@@ -331,7 +332,7 @@ class TestVerification:
         future_time = int(time.time()) + 3600
         sig = create_root_dio_signature(
             identity=root_identity,
-            dodag_id=root_identity.ygg_addr,
+            dodag_id=upstream_addr_for_key(root_identity.pubkey).packed,
             instance=1,
             version=1,
             rank=256,
@@ -428,7 +429,7 @@ class TestIPv6AddressSupport:
     def test_verify_with_ipv6_address(self) -> None:
         """Test verification with IPv6Address for DIO cross-check."""
         identity = Identity.from_seed(bytes(range(32)))
-        dodag_id = identity.ygg_addr
+        dodag_id = upstream_addr_for_key(identity.pubkey).packed
 
         sig = create_root_dio_signature(
             identity=identity,

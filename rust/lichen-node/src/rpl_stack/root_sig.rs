@@ -762,6 +762,9 @@ mod full_verify_tests {
     #[test]
     fn tampered_signature_is_rejected_and_does_not_touch_cache() {
         // Vector root_dio_signature_tampered: signature byte 0 flipped.
+        // The shared corpus pins tampered_signature byte 0 to c2 (c3 ^ 0x01),
+        // so this fixture uses c2; the all-bits-flipped variant (3c) does not
+        // match test/vectors/root_dio_signature.json.
         let decoded = DecodedRootSig::from_cose_sign1(&decode_hex("d28447a1013a00010000a10448203df4662ab81f5a5825a70150020030ad221f03322adb901f8b7316880200030104190100051a67748580060107025830c278cb37ffdb7fe365e88a94f40dcf34c462a0d55e15f310beb25b3bfd7e96555857df9f33a50c949fa1203784332502")).unwrap();
         decoded.verify_structural(&VALID_PUBKEY).unwrap();
         assert_eq!(

@@ -71,10 +71,12 @@ impl NodeId {
 ///
 /// Algorithm: `SHA-512(pubkey)[0:8]`, then clear the U/L bit per RFC 4291 S2.5.1.
 ///
-/// Per spec/decisions.jsonl `upstream-yggdrasil-addressing`, this SHA-512 IID
-/// binds ONLY the link-local identity; the routable /128 is the upstream
-/// `AddrForKey` derivation ([`ygg_addr_from_pubkey`]). The two derivations are
-/// independent by design — the address no longer embeds the IID.
+/// Retained SHA-512 derivation per the settled `upstream-yggdrasil-addressing`
+/// decision in spec/decisions.jsonl: link-local and IID contexts keep this
+/// profile; only the routable /128 derivation ([`ygg_addr_from_pubkey`]) moved
+/// to upstream `AddrForKey`. The two derivations are independent by design —
+/// the routable address no longer embeds this IID, so callers MUST NOT assume
+/// `addr[8:16] == iid_from_pubkey_bytes(pubkey)`.
 ///
 /// This is the single canonical implementation; all callers MUST use it
 /// to ensure cross-implementation consistency.
@@ -90,8 +92,9 @@ pub fn iid_from_pubkey_bytes(pubkey: &[u8; 32]) -> [u8; 8] {
 /// Derive the routable 16-byte node address from an Ed25519 pubkey.
 ///
 /// Implements the exact upstream Yggdrasil `AddrForKey` algorithm
-/// (yggdrasil-go `src/address/address.go`), as required by
-/// spec/decisions.jsonl `upstream-yggdrasil-addressing`:
+/// (yggdrasil-go@422836ee `src/address/address.go`), as required by
+/// spec/decisions.jsonl `upstream-yggdrasil-addressing`: every node's
+/// routable /128 MUST equal this derivation (`0200::/8`).
 ///
 ///   1. Bit-invert the 256-bit key.
 ///   2. `addr[0] = 0x02` (upstream `GetPrefix()`).
@@ -148,11 +151,11 @@ pub fn ygg_addr_from_pubkey(pubkey: &[u8; 32]) -> [u8; 16] {
     addr
 }
 
-/// Derive the routable 8-byte subnet prefix from an Ed25519 pubkey.
+/// Derive the routable 8-byte subnet prefix (routed /64) from an Ed25519 pubkey.
 ///
 /// Implements upstream Yggdrasil `SubnetForKey`
 /// (yggdrasil-go `src/address/address.go`): the first 8 bytes of
-/// [`ygg_addr_from_pubkey`] with the last prefix bit set to 1
+/// [`ygg_addr_from_pubkey`] with the low bit of byte 0 set to 1
 /// (`0x02 | 0x01 = 0x03`, i.e. `0300::/8`).
 pub fn subnet_for_key(pubkey: &[u8; 32]) -> [u8; 8] {
     let addr = ygg_addr_from_pubkey(pubkey);
