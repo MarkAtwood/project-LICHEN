@@ -29,6 +29,52 @@ _GROUP_ORDER = 2**252 + 27742317777372353535851937790883648493
 LINK_SIGNATURE_DOMAIN = b"LICHEN-LINK-v1\x00"
 
 
+def upstream_addr_for_key(public_key: bytes) -> bytes:
+    """Return the upstream yggdrasil-go ``AddrForKey`` address for a key.
+
+    Implements the ``upstream_go_addr_for_key`` profile from
+    yggdrasil_address.json: bit-invert the Ed25519 public key, store the
+    count of leading 1 bits in ``addr[1]`` (wrapping u8, matching the Go
+    ``byte`` overflow for the degenerate all-ones inverted key), skip the
+    leading 1s and the first 0 bit, then bit-pack the remainder MSB-first
+    into whole bytes filling ``addr[2:16]`` (trailing partial byte
+    discarded, zero tail). No hashing involved.
+
+    Validated against the pinned ``upstream_addr_for_key`` anchor in
+    yggdrasil_address.json (verbatim upstream address_test.go bytes) and
+    the live yggdrasil-go implementation; never against a LICHEN
+    implementation under test.
+    """
+
+    if len(public_key) != 32:
+        raise ValueError("Ed25519 public key must be exactly 32 bytes")
+    address = bytearray(16)
+    address[0] = 0x02
+    leading_ones = 0
+    done = False
+    packed: list[int] = []
+    accumulator = 0
+    bit_count = 0
+    for index in range(256):
+        inverted_bit = 1 - ((public_key[index // 8] >> (7 - (index % 8))) & 1)
+        if not done and inverted_bit == 1:
+            leading_ones = (leading_ones + 1) % 256
+            continue
+        if not done:
+            done = True
+            continue
+        accumulator = (accumulator << 1) | inverted_bit
+        bit_count += 1
+        if bit_count == 8:
+            packed.append(accumulator)
+            accumulator = 0
+            bit_count = 0
+    address[1] = leading_ones
+    for offset, value in enumerate(packed[:14]):
+        address[2 + offset] = value
+    return bytes(address)
+
+
 def _private_scalar(seed: bytes) -> bytes:
     if len(seed) != 32:
         raise ValueError("Schnorr-48 seed must be exactly 32 bytes")
@@ -67,7 +113,7 @@ class ReferenceIdentity:
         digest = hashlib.sha512(public).digest()
         iid = bytearray(digest[:8])
         iid[0] &= 0xFD
-        address = bytes((0x02,)) + digest[:7] + bytes(iid)
+        address = upstream_addr_for_key(public)
         return cls(bytes(seed), private, public, bytes(iid), address)
 
 
@@ -131,5 +177,6 @@ __all__ = [
     "ReferenceIdentity",
     "sign",
     "signature_transcript",
+    "upstream_addr_for_key",
     "verify",
 ]

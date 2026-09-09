@@ -92,6 +92,11 @@ _ROOT_DIO_ERROR_MAP = {
 }
 
 
+# The root_dio_signature.json corpus was regenerated with upstream
+# AddrForKey DODAGIDs by i72x.6.a (reference_schnorr48.upstream_addr_for_key,
+# validated against the pinned upstream anchor and live yggdrasil-go); the
+# former xfail marker on this class ("xpass signals the corpus has been
+# regenerated") was retired when that landed.
 class TestRootDioSignatureVectorFile:
     @pytest.mark.parametrize("name,vector", _root_dio_cases())
     def test_decoded_payload_fields_match_vector(self, name: str, vector: dict) -> None:
