@@ -119,6 +119,33 @@ def test_cose_envelope_roundtrip() -> None:
     assert verify_local_fact(decoded, gw.pubkey) is True
 
 
+def test_verify_rejects_issuer_iid_mismatch() -> None:
+    """issuer_iid is unprotected (not signature-covered); verify must bind it
+    to the verifying pubkey (rtnr, sibling DELEGATOR_IID_MISMATCH hygiene). A
+    fact issued by gateway A but claiming gateway B's IID must fail against
+    A's key — and vice versa."""
+    gw = _gateway()
+    other = _other()
+    fact = issue_local_fact(gw, LocalFactClaims(relay=True))
+    # Correct binding passes.
+    assert verify_local_fact(fact, gw.pubkey) is True
+    # Same fact, verified against the WRONG gateway's pubkey: the claimed
+    # issuer_iid no longer matches the verifying key -> False (signature would
+    # also fail, but the IID check fires first and independently).
+    assert verify_local_fact(fact, other.pubkey) is False
+    # Spoofed kid: re-issue the envelope with the attacker's IID in the
+    # unprotected header while keeping A's signature over the payload.
+    import cbor2 as _cbor2
+
+    elements = _cbor2.loads(fact.to_cose_sign1())
+    elements[1] = {4: other.iid}  # COSE kid label
+    spoofed = LocalFact.from_cose_sign1(_cbor2.dumps(elements))
+    assert spoofed.issuer_iid == other.iid
+    # Verifying the spoofed-IID fact against the real signer's key fails the
+    # binding even though the payload signature is A's valid signature.
+    assert verify_local_fact(spoofed, gw.pubkey) is False
+
+
 def test_verify_rejects_wrong_key() -> None:
     fact = issue_local_fact(_gateway(), LocalFactClaims(relay=True))
     assert verify_local_fact(fact, _other().pubkey) is False

@@ -35,7 +35,7 @@ from ..crypto.delegation_tokens import (
     cose_protected_header,
     cose_sig_structure,
 )
-from ..crypto.identity import Identity
+from ..crypto.identity import Identity, _pubkey_to_iid
 
 # Local fact claim names (spec 8.13.1 "Local Fact Claims").
 CLAIM_EMERGENCY = "lichen:emergency"
@@ -343,8 +343,16 @@ def verify_local_fact(fact: LocalFact, gateway_pubkey: bytes) -> bool:
         gateway_pubkey: The issuing gateway's 32-byte Ed25519 public key.
 
     Returns:
-        True if the signature verifies, False otherwise.
+        True if the signature verifies and the claimed issuer IID matches the
+        verifying key, False otherwise.
     """
+    # issuer_iid lives in the unprotected header (not signature-covered), so
+    # bind it to the verifying key: a fact claiming gateway A's IID must
+    # verify against A's pubkey. Matches verify_delegation_token's
+    # DELEGATOR_IID_MISMATCH hygiene; matters if downstream trusts issuer_iid
+    # for federation/audit rather than resolving keys strictly by kid.
+    if _pubkey_to_iid(gateway_pubkey) != fact.issuer_iid:
+        return False
     if fact.protected_bytes is not None and fact.payload_bytes is not None:
         protected = fact.protected_bytes
         payload_bytes = fact.payload_bytes
