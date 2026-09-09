@@ -296,13 +296,48 @@ static int floor_find(struct lichen_capability_table *t, const uint8_t iid[8])
 	return -1;
 }
 
+/* While the floor ledger is full, drop the lowest-IID floor whose IID is
+ * no longer a live entry.  Floors for active entries are redundant (their
+ * entry.seq already pins the floor) and always retained; if every floor is
+ * live-pinned the ledger equals the table and cannot free space.  Mirrors
+ * Python CapabilityTable._bound_floors / Rust bound_seq_floors so a dead
+ * announcer's floor cannot permanently starve eviction-captured floors for
+ * newly evicted IIDs.  O(capacity^2) worst case per dropped floor, bounded
+ * by CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY. */
+static void floor_prune(struct lichen_capability_table *t)
+{
+	for (;;) {
+		bool full = true;
+		int victim = -1;
+
+		for (size_t i = 0; i < CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY; i++) {
+			if (!t->floors[i].used) {
+				full = false;
+				break;
+			}
+		}
+		if (!full) return;
+		for (size_t i = 0; i < CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY; i++) {
+			if (entry_find(t, t->floors[i].announcer_iid) >= 0) continue;
+			if (victim < 0 ||
+			    memcmp(t->floors[i].announcer_iid,
+				   t->floors[victim].announcer_iid, 8) < 0) {
+				victim = (int)i;
+			}
+		}
+		if (victim < 0) return;
+		t->floors[victim].used = false;
+	}
+}
+
 static void floor_raise(struct lichen_capability_table *t, const uint8_t iid[8], uint64_t seq)
 {
 	int fi = floor_find(t, iid);
 	if (fi < 0) {
+		floor_prune(t);
 		for (size_t i = 0; i < CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY; i++)
 			if (!t->floors[i].used) { fi = (int)i; break; }
-		if (fi < 0) return; /* ledger full; live entries still pin their own seq */
+		if (fi < 0) return; /* every floor pinned by a live entry */
 		t->floors[fi].used = true;
 		memcpy(t->floors[fi].announcer_iid, iid, 8);
 		t->floors[fi].floor = seq;
