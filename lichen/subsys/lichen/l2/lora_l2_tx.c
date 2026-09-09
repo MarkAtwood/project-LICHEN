@@ -602,7 +602,10 @@ int lichen_lora_l2_tx(const uint8_t *data, size_t len, uint8_t channel)
         ret = (signaled != 0U) ? status : -EIO;
     }
     if (lora_data.cca_enabled) {
-        (void)lichen_csma_tx_complete(&lora_data.csma, ret);
+        int csma_status = lichen_csma_tx_complete(&lora_data.csma, ret < 0 ? ret : 0);
+        if (csma_status < 0) {
+            LOG_WRN("lora_l2: CSMA TX completion failed (%d)", csma_status);
+        }
     }
 #if defined(CONFIG_LICHEN_DIAG)
     /* diag.3 (worker6-ldzz.3): consecutive -EBUSY from lora_send detects
