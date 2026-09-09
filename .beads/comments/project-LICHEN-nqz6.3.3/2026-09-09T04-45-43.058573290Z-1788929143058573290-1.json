@@ -1,0 +1,7 @@
+{
+  "id": "1788929143058573290-1",
+  "issue_id": "project-LICHEN-nqz6.3.3",
+  "author": "Mark Atwood",
+  "text": "Security-review finding from 9hnr (03/04/11/draft reconciliation): in this checkout (beads-worker-6 @ 9508a5bea8), 06-security.md §8.5/§8.7 still mandate the rejected native profile as a security MUST (line 111: lower-64-bits==IID binding; line 145: MUST + substitution-attack framing), while 1k3i's §8.5/§8.7 upstream reconciliation is closed but not merged here. All four files reconciled under 9hnr cite §8.5 alongside spec/decisions.jsonl; the citation trap resolves on 1k3i merge, but your audit of 8.1-8.4/8.8-8.10 should verify no other section repeats the lower-64==IID binding as a MUST (yggdrasil-derivation.json 'binding_invariant' vector still asserts it — fixture side is q6ko's quarantine scope).",
+  "created_at": "2026-09-09T04:45:43.05857329Z"
+}

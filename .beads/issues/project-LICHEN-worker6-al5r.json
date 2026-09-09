@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-al5r",
+  "title": "Require certificate issuance proof of possession",
+  "description": "Review finding from project-LICHEN-worker6-viku.1: the certificate profile does not require the CA to verify that the requester controls the private key corresponding to the Ed25519 subject key. Add an interoperable proof-of-possession requirement.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:13:48.167703211Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T04:13:48.167703211Z",
+  "labels": [
+    "lci"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-al5r",
+      "depends_on_id": "project-LICHEN-worker6-viku.1",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T04:13:48.367389475Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

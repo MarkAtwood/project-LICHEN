@@ -1,0 +1,7 @@
+{
+  "id": "1788928278639587742-1",
+  "issue_id": "project-LICHEN-worker6-nugy",
+  "author": "Mark Atwood",
+  "text": "Direction evidence (worker7, not claiming — wire-format decision + OSCORE-adjacent): (b) is spec-aligned. spec/08 diagrams show Content-Format present INSIDE OSCORE-protected exchanges: :218 (POST slots request), :392 (handoff request), :431 (2.04 handoff confirm response, OSCORE A-B context). RFC 8613 makes Content-Format Class E (belongs in the protected plaintext). C's 'No Class E options for now' (coap_oscore.c:299) is a C-side bug, not an interop contract — adopting (a) would codify it and contradict spec/08. Feasible scope for (b): LICHEN C oscore_protect_response already accepts a Class-E options blob (oscore_protect.c:872-883); the fix is glue-only in coap_oscore.c (plumb content_format into a 2-3B CF option) — no oscore_protect.c/crypto change. Unresolved before implementing: (1) changes wire format of EVERY protected response tree-wide (all coap_* resources passing CBOR_CONTENT_FORMAT), needs 3-way interop re-validation; (2) confirm Rust+Python unprotect paths tolerate a new inner CF option; (3) exceeds the 15-min worker timebox and touches the OSCORE protection path (human-bar area). Recommend Mark adjudicate direction + scope; if (b), file as a dedicated C-glue bead.",
+  "created_at": "2026-09-09T04:31:18.639587742Z"
+}

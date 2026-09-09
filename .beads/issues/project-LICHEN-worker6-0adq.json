@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-0adq",
+  "title": "Broadcast relay rate-limit keyed on sender IID has no extraction path under upstream addressing",
+  "description": "Edge-case review finding from project-LICHEN-worker6-9hnr. spec/04-network.md §6.3.3 keys broadcast relay state on the original sender's IID (line 138 'sender_iid: \u003cIID of original sender\u003e'; line 159 'sender = packet.source_iid'). After the upstream-yggdrasil-addressing reconciliation (§6.2), a relayed broadcast's primary source address bit-packs the inverted Ed25519 key and contains no IID, and the link-layer SIID is an unauthenticated per-hop hint that is never an IPv6 IID (spec/02-physical-link.md:201). No field of a relayed broadcast yields the original sender's IID, so the rate-limit pseudocode has no defined key extraction path. Fix options: key the relay budget on the full 16-byte primary source address (simplest; same binding strength), or define an authenticated field that carries the origin IID end-to-end. Update the pseudocode and relay-state struct accordingly.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:49:43.173094128Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T04:49:43.173094128Z",
+  "labels": [
+    "networking",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-0adq",
+      "depends_on_id": "project-LICHEN-worker6-9hnr",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T04:49:43.332163648Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

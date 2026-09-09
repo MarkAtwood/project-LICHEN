@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-k25q",
+  "title": "Stale mechanism comment in adaptive_sf_step3_uses_spec_density_8 (claims density threshold 8, actual DENSITY_HIGH=10)",
+  "description": "Found during 5m15 edge-cases review (kimi-k3). rust/lichen-core/src/rf_health.rs:717-733 test adaptive_sf_step3_uses_spec_density_8 asserts sf=11 correctly, but its comment describes the wrong mechanism: it claims 'density 9 \u003e 8: step 3 engages (+2) per spec 2a.8 (was \u003e 10), then floor (c) lifts the result to 11'. In this tree DENSITY_HIGH=10 (rf_health.rs:16), so step 3 and floor (c) do not fire at density 9; the assertion actually passes via floor (b) (SNR EMA -2 \u003c SNR_POOR=0 -\u003e max(11)). Assertions are correct; only the described mechanism is wrong. Fix the comment to describe floor (b), and reconsider the test name if the density-8 threshold is no longer what it exercises.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:32:00.28910963Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T04:42:59.820123728Z",
+  "started_at": "2026-09-09T04:34:36.588752667Z",
+  "closed_at": "2026-09-09T04:42:59.820123728Z",
+  "close_reason": "Stale comment and misleading test name corrected: adaptive_sf_step3_uses_spec_density_8 -\u003e adaptive_sf_floor_b_engages_below_density_high. Verified against spec 02a (DENSITY_HIGH=10, constants table :162; 'When Density \u003e DENSITY_HIGH (10)' :560) — the code is spec-conformant; only the comment claimed a density-8 threshold. New comments describe the true mechanisms: floor (b) via SNR EMA -2 \u003c SNR_POOR=0 at density 9 \u003c= 10; benign pass-through at density 8/SNR 10. Assertions unchanged. 48/48 rf_health tests pass. 3x codereview delegated to kimi-k3: correctness PASS (comment claims verified against constants), security PASS (stale comment was a documentation hazard for density-signaling analysis), edge-cases PASS (DENSITY_HIGH=10/11 boundaries independently pinned by adaptive_sf_density_threshold_is_ten and adaptive_sf_floors_apply_in_order — no coverage gap).",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-k25q",
+      "depends_on_id": "project-LICHEN-worker6-5m15",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T04:32:00.42870575Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

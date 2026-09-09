@@ -1,0 +1,19 @@
+{
+  "id": "project-LICHEN-worker6-s8rl",
+  "title": "Kconfig gap: LICHEN_COAP_LOCATION lacks depends on LICHEN_COAP_SERVER",
+  "description": "Pre-existing latent gap (found by reviewer pass-3 while adding LICHEN_COAP_METRICS, which now correctly depends on LICHEN_COAP_SERVER): lichen/subsys/lichen/coap/Kconfig LICHEN_COAP_LOCATION block has no LICHEN_COAP_SERVER dependency, but coap_location.c calls lichen_coap_respond which is only compiled under CONFIG_LICHEN_COAP_SERVER. Combination LICHEN_COAP_SERVER=n + LICHEN_COAP_LOCATION=y fails at link with undefined lichen_coap_respond. Requires deliberate override since COAP_SERVER defaults y. Add the dependency.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:47:32.518956171Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T04:55:28.375022754Z",
+  "started_at": "2026-09-09T04:48:54.920914327Z",
+  "closed_at": "2026-09-09T04:55:28.375022754Z",
+  "close_reason": "Added 'depends on LICHEN_COAP_SERVER' to LICHEN_COAP_LOCATION (Kconfig:292), closing the SERVER=n + LOCATION=y link-gap on undefined lichen_coap_respond and matching all 11 sibling resource modules (STATUS/CONFIG/MSG/RANGETEST/KEYS/DEADDROP/SLOT_COORD/WAYPOINTS/HANDOFF/CODEC/BLOCKWISE). Verified LOCATION was the only server-resource module missing the dep. 3x delegated codereview (kimi-k3): correctness PASS, security PASS (surface neutral-to-reduced), edge PASS (no conf file regressions; t_echo LOCATION=y was already dead via STANDALONE). Two pre-existing gaps filed as new beads: COAP_METRICS dead CMake gate (P3), puck t_echo dead LOCATION=y line (P3).",
+  "labels": [
+    "coap"
+  ]
+}

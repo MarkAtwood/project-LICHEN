@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-t2k8",
+  "title": "Pin local-fact COSE encoding with shared test vectors (spec 8.13.1)",
+  "description": "Noted in project-LICHEN-worker6-lquv: spec 8.13.1 mandates no canonical/deterministic CBOR encoding for local facts and no test/vectors pinning exists. With wire-bytes verification (lquv) implementations tolerate each other's encodings, but a pinned vector set would catch encoder drift early and serve as the cross-language conformance oracle. Add test/vectors/local_facts.json: COSE_Sign1 envelopes (hex) with claims in at least two legal map orders + one with an extra protected-header entry, each with gateway pubkey/kid and expected verify result, generated independently of the Python implementation. Update spec 8.13.1 to point at the vectors and state explicitly that verifiers MUST verify over transported bstrs (RFC 9052 4.4), not re-encodings.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:55:46.539243985Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T04:55:46.539243985Z",
+  "labels": [
+    "python",
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-t2k8",
+      "depends_on_id": "project-LICHEN-worker6-lquv",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T04:55:46.692763211Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
