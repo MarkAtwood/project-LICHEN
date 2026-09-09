@@ -1140,7 +1140,6 @@ mod tests {
         let gradient_table = GradientTable::new(64);
         let mut processor = AnnounceProcessor::with_trust_store(
             gradient_table,
-            
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x4A; 32]).unwrap(),
         );
 
@@ -1192,7 +1191,6 @@ mod tests {
 
         let mut processor = AnnounceProcessor::with_trust_store(
             GradientTable::new(64),
-            
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x5A; 32]).unwrap(),
         );
         processor.max_entries = 2;
@@ -1248,7 +1246,6 @@ mod tests {
         // and floor; the accepted sequence is now the durable floor.
         let mut reopened = AnnounceProcessor::with_trust_store(
             GradientTable::new(64),
-            
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x5A; 32]).unwrap(),
         );
         assert_eq!(
@@ -1279,7 +1276,6 @@ mod tests {
         {
             let mut processor = AnnounceProcessor::with_trust_store(
                 GradientTable::new(64),
-                
                 AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x7C; 32]).unwrap(),
             );
             // Direct delivery pins the origin and raises the floor to 100.
@@ -1293,7 +1289,6 @@ mod tests {
         // Restart: the pin and the seq-100 floor are durable.
         let mut restarted = AnnounceProcessor::with_trust_store(
             GradientTable::new(64),
-            
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x7C; 32]).unwrap(),
         );
         assert_eq!(
@@ -1332,7 +1327,6 @@ mod tests {
 
         let mut processor = AnnounceProcessor::with_trust_store(
             GradientTable::new(64),
-            
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x6B; 32]).unwrap(),
         );
         let mut buf = [0u8; 256];
@@ -1349,7 +1343,6 @@ mod tests {
         // lookups fail closed and admission is refused outright.
         let mut foreign = AnnounceProcessor::with_trust_store(
             GradientTable::new(64),
-            
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x6B ^ 0xFF; 32]).unwrap(),
         );
         assert!(foreign.pinned_pubkey_for(&identity.iid).is_none());
@@ -1387,7 +1380,6 @@ mod tests {
             .join(format!("announce-pin-{hex_iid}"));
         let mut processor = AnnounceProcessor::with_trust_store(
             GradientTable::new(64),
-            
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x7C; 32]).unwrap(),
         );
         let mut buf = [0u8; 256];
@@ -1423,7 +1415,6 @@ mod tests {
         }
         let mut rolled_back = AnnounceProcessor::with_trust_store(
             GradientTable::new(64),
-            
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x7C; 32]).unwrap(),
         );
         assert!(rolled_back.pinned_pubkey_for(&identity.iid).is_none());
