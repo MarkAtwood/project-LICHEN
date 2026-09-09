@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-jkuj",
+  "title": "Python slot claim: claim_seq not upper-bounded at decode/construct — accepts \u003eu32::MAX that Rust rejects (interop divergence)",
+  "description": "Codereview finding (l1qw.20.5 edge pass, verified live with cbor2): python/src/lichen/gateway/slot_claim.py:251-253 (decode_cose) and :176-178 (__post_init__) check only 'type(claim_seq) is not int or claim_seq \u003c 0'. cbor2 decodes major-type-0 uint 2**32 and tag-2 bignums to Python int, passing the guard. Rust bounds the same wire field: rust/lichen-gateway/src/slot.rs:590 u32::try_from(seq) -\u003e MalformedClaim; bignums fail p.uint() outright. A validly-signed wire claim with claim_seq = 2**32 is fully accepted and cached by Python but rejected by Rust — cross-implementation verdict divergence on identical wire input. Now that claim_seq is the operative replay-gate value (l1qw.20.4 Rust / l1qw.20.5 Python), the divergence directly affects replay-state parity. Sender mirror trap: encode_claim_canonical (:310) emits unbounded claim_seq, so a Python gateway whose counter exceeds u32::MAX mints claims every Rust receiver drops as malformed. Fix: reject claim_seq \u003e 0xFFFFFFFF in both __post_init__ and decode_cose; pin with a boundary test (2**32-1 accepted, 2**32 rejected) and a wire-level decode test. Related: project-LICHEN-worker6-1paw (wrap semantics AT u32::MAX, C side — distinct).",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:39:42.517662135Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:41:33.084109517Z",
+  "started_at": "2026-09-09T01:41:33.084109517Z",
+  "lease_expires_at": "2026-09-09T01:46:33.084109517Z",
+  "heartbeat_at": "2026-09-09T01:41:33.084109517Z",
+  "labels": [
+    "python",
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-jkuj",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.20.5",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T01:39:42.659351099Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

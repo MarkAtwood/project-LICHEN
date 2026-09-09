@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-x7hh",
+  "title": "CCP2 rollout and radio qualification",
+  "description": "Deliver the accepted receiver-aware CCP policy through exact wire contracts, independent oracles, Python/Rust/C production integration, joined conformance tests and evidence-based documentation. Include separately gated full-band US915, narrow-band amateur and microfragment/LR-FHSS feasibility work; these experiments do not alter baseline SCHC or activate unqualified RF modes. This is the revision-specific execution branch of existing CCP epic project-LICHEN-kudc, not a replacement for existing helper/gap work.",
+  "acceptance_criteria": "Core rollout complete only after all three production paths and shared conformance gates pass. Deployment/experimental claims require their distinct RF and authorization evidence. Preserve legacy fixtures, upstream Yggdrasil identity, best-effort custody, human-only OSCORE edit boundary and three independent reviews for code changes.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "epic",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:34:46.794652858Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:34:46.794652858Z",
+  "labels": [
+    "ccp",
+    "conformance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh",
+      "depends_on_id": "project-LICHEN-kudc",
+      "type": "parent-child",
+      "created_at": "2026-09-09T01:34:47.354555087Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

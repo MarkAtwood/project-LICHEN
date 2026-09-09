@@ -1,0 +1,7 @@
+{
+  "id": "1788918428628968480-1",
+  "issue_id": "project-LICHEN-worker6-d2tz",
+  "author": "Mark Atwood",
+  "text": "Cross-platform confirmation (worker3, m2r9 review): the same ASan probe false-negative reproduces on Linux gcc 13.3.0 (Ubuntu 24.04), not just Apple clang — two independent codereview passes on the rpl_root_sig conversion observed UBSan-only linkage despite LICHEN_TEST_ASAN=ON, and CMakeConfigureLog.yaml shows the try-compile link step failing on undefined __asan_init. The CMAKE_REQUIRED_LINK_OPTIONS fix in test_common.cmake covers both platforms; affected surface is every host suite using lichen_test_target (9+ suites), so rpl_root_sig's fresh conversion also gains only UBSan until this lands.",
+  "created_at": "2026-09-09T01:47:08.62896848Z"
+}

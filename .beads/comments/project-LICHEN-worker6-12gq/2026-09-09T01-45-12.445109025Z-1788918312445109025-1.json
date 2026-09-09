@@ -1,0 +1,7 @@
+{
+  "id": "1788918312445109025-1",
+  "issue_id": "project-LICHEN-worker6-12gq",
+  "author": "Mark Atwood",
+  "text": "Evidence from bead 3mz9's review (2026-09-09): the description is stale — dispatch_runtime_gcp (gateway.rs:1574-1590) now encodes response.content_format (0xc0/0xc1/0xc2), the discard is gone. Residual divergence found by review: content_format 0 maps to a PRESENT zero-length option 0xc0, which per RFC 7252 shortest-encoding decodes as value 0 = text/plain;charset=utf-8 — NOT an omitted option as C's coap_oscore_protect_response does (coap_oscore.h:138 '0 for none'). This mislabels cf=0 responses (and the 4.09 COSE echo, resources.rs:3232) as text/plain on the wire. Rust-only cf=0 convention needs a decision: omit the option for cf=0, or accept and document the divergence.",
+  "created_at": "2026-09-09T01:45:12.445109025Z"
+}
