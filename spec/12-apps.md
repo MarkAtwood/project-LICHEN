@@ -812,6 +812,14 @@ Content-Format: application/cbor
 Response: 2.04 Changed
 ```
 
+**Link-layer marking (REQUIRED):** the sender MUST emit the alert with the
+link-layer dispatch byte `0x16` (SOS emergency alert, 02-physical-link.md
+§4.1) carrying the §18.4.2 CBOR alert map — NOT as a SCHC-compressed CoAP
+frame. Relays classify SOS for the separate 3/hour SOS budget (04-network.md
+§6.3.3) solely by this dispatch byte; the CoAP `/sos` path is invisible to
+them (OSCORE encrypts Uri-Path end-to-end, SCHC elides it). The CoAP POST
+above is the application interface; the `0x16` dispatch is the wire form.
+
 Nodes receiving SOS:
 1. Display alert prominently
 2. Re-broadcast once when TX is eligible (controlled flooding, TTL-limited,
