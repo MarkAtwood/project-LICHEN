@@ -182,6 +182,7 @@ def test_claim_seq_over_u32_rejected_at_decode() -> None:
         (1, [2**32]),  # slot index above u32
         (1, [-1]),  # negative slot index (Rust uint() never admits)
         (1, [0] * 4097),  # over MAX_SLOTS_PER_SUPERFRAME
+        (1, [True]),  # CBOR 0xf5 -> bool is not a u32 slot
     ],
 )
 def test_oversized_sibling_fields_rejected_at_decode(key: int, value: object) -> None:
@@ -196,3 +197,31 @@ def test_oversized_sibling_fields_rejected_at_decode(key: int, value: object) ->
     body = cbor2.dumps([elements[0], elements[1], cbor2.dumps(payload), elements[3]])
     with pytest.raises(ClaimError):
         SlotClaim.decode_cose(body)
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        (2, 2**64 - 1),  # superframe_epoch at u64::MAX
+        (4, 2**64 - 1),  # expiry at u64::MAX
+        (7, 2**64 - 1),  # ordinal at u64::MAX
+        (1, [2**32 - 1]),  # slot index at u32::MAX
+    ],
+)
+def test_boundary_sibling_fields_accepted_at_decode(key: int, value: object) -> None:
+    # s61e: values AT the Rust-decodable maximum must still decode — the
+    # bound is inclusive, matching u64::try_from/u32::try_from acceptance.
+    case = _case("happy_path_n1")
+    elements = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    payload = cbor2.loads(elements[2])
+    payload[key] = value
+    body = cbor2.dumps([elements[0], elements[1], cbor2.dumps(payload), elements[3]])
+    claim = SlotClaim.decode_cose(body)
+    if key == 1:
+        assert list(claim.slots) == value
+    elif key == 2:
+        assert claim.superframe_id == value
+    elif key == 4:
+        assert claim.expiry == value
+    else:
+        assert claim.ordinal == value

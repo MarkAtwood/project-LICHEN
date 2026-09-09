@@ -178,6 +178,9 @@ class TestSlotClaim:
             SlotClaim(**{**base, "slots": (True,)})
         with pytest.raises(ClaimError, match="MAX_SLOTS_PER_SUPERFRAME"):
             SlotClaim(**{**base, "slots": tuple(range(4097))})
+        # None ordinal (local-only claim) and empty slots remain valid.
+        SlotClaim(**{**base, "ordinal": None})
+        SlotClaim(**{**base, "slots": ()})
 
     def test_invalid_signature_length(self) -> None:
         with pytest.raises(ClaimError, match="signature must be 48 bytes"):
