@@ -2,17 +2,15 @@
   "id": "project-LICHEN-worker6-bflq",
   "title": "C lollipop comments/macro names invert RFC 6550 §7.2 regions (behavior correct)",
   "description": "Comments say '0-127 linear restart; 128-255 circular', LOLLIPOP_CIRCULAR_BIT=128; RFC defines opposite (128+ linear, ≤127 circular). Code verified functionally correct (region-agnostic same-region branch; cross-region arithmetic matches RFC examples 240vs5, 250vs5; increment implements rule 2 exactly). Hazard: maintainer 'fixing' to match comments breaks interop. Rename LOLLIPOP_CIRCULAR_BIT→LOLLIPOP_LINEAR_BASE + correct comments; behavior untouched.",
-  "status": "closed",
+  "status": "open",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T06:46:21.813994Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-09T00:44:59.737857996Z",
+  "updated_at": "2026-08-28T03:43:58.831515Z",
   "started_at": "2026-08-24T06:47:20.099812Z",
-  "closed_at": "2026-09-09T00:44:59.737857996Z",
-  "close_reason": "Verified already implemented at HEAD — no code changes needed (verification-only close). Deliverable was the C rename LOLLIPOP_CIRCULAR_BIT-\u003eLOLLIPOP_LINEAR_BASE + RFC 6550 §7.2-correct region comments in dodag.c; confirmed at HEAD: dodag.c:54 'LOLLIPOP_LINEAR_BASE 128', comments at dodag.c:33-34 'Values in [128..255] are the linear region (restart/bootstrap); values in [0..127] are the circular region' — RFC-correct. LOLLIPOP_CIRCULAR_BIT no longer exists anywhere under lichen/ (only the Rust port rust/lichen-rpl/src/routing.rs:61 + the golden generator's cross-impl mapping note carry the old name — sibling residual filed as project-LICHEN-worker6-4ajs). Behavior verification on heft: rpl_dao_sequence host suite passes 5/5, and the exhaustive comparator sweep over the independent Python-generated golden reports 'sequence_compare mismatches: 0 / lollipop_cmp mismatches: 0 / version_is_newer mismatches: 0' across all 256x256 pairs. Codereview passes not run: no files touched (verification-only close).",
   "labels": [
     "networking"
   ]

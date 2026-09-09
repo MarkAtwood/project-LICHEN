@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-k0fr",
+  "title": "Add L2_DISPATCH_SOS=0x16 constant + classifier arm to C, Rust, Python link layers",
+  "description": "Spec now assigns L2 dispatch 0x16 = SOS emergency alert (02-physical-link.md §4.1, bead oun2) and 12-apps.md §18.4.3 requires senders to emit it. Implementations only define 0x14/0x15: C lichen/subsys/lichen/link/include/lichen/l2_payload.h:32-33 (classifier at :49-52 rejects 0x16, so C nodes would DROP spec-defined SOS frames), Rust rust/lichen-core/src/constants.rs:52-53, Python python/src/lichen/constants.py:42-43 (+ addressing.py:46-53 docstring). Add LICHEN_L2_DISPATCH_SOS / L2_DISPATCH_SOS = 0x16 to all three, extend the C l2_payload classifier to accept it, and wire the SOS sender path to emit dispatch 0x16 (12-apps.md §18.4.3 REQUIRED). Cross-impl parity: all three must classify 0x16 identically.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T08:38:41.801608735Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T09:04:17.653049768Z",
+  "started_at": "2026-09-09T08:49:08.43870877Z",
+  "closed_at": "2026-09-09T09:04:17.653049768Z",
+  "close_reason": "DONE (worker2). Added L2 dispatch 0x16 = SOS across all three implementations, byte-parity: (1) C lichen/subsys/lichen/link/include/lichen/l2_payload.h — LICHEN_L2_DISPATCH_SOS=0x16U + LICHEN_L2_PAYLOAD_SOS=3 classifier arm; (2) Rust lichen-core constants.rs L2_DISPATCH_SOS=0x16 + l2_payload.rs L2PayloadKind::Sos classifier arm; (3) Python constants.py L2_DISPATCH_SOS=0x16 + l2_payload.py L2PayloadKind.SOS classifier arm. Cross-impl vector work: test/vectors/l2_payload.json reserved_0x16(unknown) replaced by sos_0x16(sos) + added malformed_sos_dispatch_only; generator test/vectors/generate.py emits both (independent-oracle: generate.py produces, JSON must match); schema.json kind enum += 'sos'; all four kind-string mappers updated (Python test_l2_payload.py + test_vectors.py, Rust shared_vectors.rs, C gen_vectors.py). Fixed the reserved-value migration everywhere (0x16-\u003e0x17 in C main.c, Rust l2_payload.rs). Handled the Sos-variant exhaustiveness fallout: rust/lichen-node/src/rpl_stack/receive.rs two match sites arm Sos|Unknown -\u003e fail-closed SchcDecompress (SOS is not an RPL/routing or SCHC payload; the RPL stack correctly does not handle it). Tests: C l2_dispatch/standalone.c host test PASSES (gcc, all 256 dispatches incl. SOS arm); Python 1283 passed (test_l2_payload + test_vectors + test_node + link/test_addressing); Rust 56 test binaries all ok (lichen-core/link/node). 3x codereview delegated to kimi-k3: pass1 correctness PASS (byte-parity verified, generator==JSON byte-exact, schema validates, reserved-value migration consistent); pass2 security 2 findings (node.py:895 malformed-drop tuple missing SOS -\u003e a lone 0x16 octet would fall through to the app instead of dropping, FIXED; addressing.py:94 stale 'unknown dispatch' message for 0x16 -\u003e reworded 'carries no IPv6 destination', test updated); pass3 edge-cases PASS (exhaustive loops include SOS arm in all three, single-octet 0x16 fails closed unknown via len\u003c2 rule, malformed vector consistent, enum 0/1/2/3 intact, kind-string 'sos' consistent across all 6 touchpoints). Note for follow-up: SOS SENDER path (emitting dispatch 0x16 from the application per 12-apps.md §18.4.3 REQUIRED) is not yet wired in any impl — that's the producing half, separate from this classification bead.",
+  "labels": [
+    "link"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-k0fr",
+      "depends_on_id": "project-LICHEN-worker6-oun2",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T08:38:41.917936914Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

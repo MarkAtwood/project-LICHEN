@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-cl56",
+  "title": "hop_bucket indexing gaps: hl=0/8-255 unbudgeted, SOS row unreachable via get_budget(hl)",
+  "description": "Pre-existing spec gap exposed by review of project-LICHEN-worker6-0adq (flagged by correctness + edge passes, both confirmed pre-existing). spec/04-network.md §6.3.3: (1) hop_bucket[1-7] is indexed by raw packet.hop_limit, but hl=0 (consume-only, §6.3.2) and hl=8-255 (§6.3.2 lists 255 for flood) index out of range and have no get_budget row; (2) the budget table row 'SOS (any) | 3 | always relay once' is unreachable — get_budget(hl) has no SOS input and the pseudocode never identifies SOS traffic, and 'always relay once' contradicts drop-at-budget and the 50% yellow zone for counted traffic. Fix: define hl clamping/bucketing for out-of-table values, add an SOS detection input to get_budget (e.g., CoAP path or traffic-class marker), and reconcile 'always relay once' with the budget logic.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T05:21:28.638787857Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T08:17:28.816665705Z",
+  "started_at": "2026-09-09T08:13:47.144199942Z",
+  "closed_at": "2026-09-09T08:17:28.816665705Z",
+  "close_reason": "DONE (worker2). spec/04-network.md §6.3.3 fixed: (1) hl=0 now early-returns consume-only BEFORE any bucket lookup or relay_state creation (no out-of-range index, no hl=0 memory growth); (2) hl=8..255 clamped to bucket 7 via bucket=min(hl,7) + matching table row 8-255 -\u003e 10 (§6.3.2's 255 flood and oversized hl share the most restrictive budget); (3) SOS detection input resolved as the link-layer dispatch marker (packet.l2_dispatch == L2_DISPATCH_SOS) — the CoAP /sos path is unusable at relays (OSCORE encrypts Uri-Path E2E, SCHC elides it) and no traffic-class marker existed, so a wire-value follow-up is filed (oun2); (4) 'always relay once' reconciled: SOS uses a SEPARATE per-sender sos_count (not the shared hop_bucket), so the first SOS counts 0 \u003c 3 and is never yellow-zone dropped even for a sender with non-SOS broadcasts in-window; the row is 3 per sender per hour across ALL hops (not 3/bucket). Relay-state shape and ~20-byte size line updated for the new sos_count. 3x codereview delegated to kimi-k3: pass1 correctness 2 findings (SOS-first invariant false under shared hop_bucket; undefined traffic-class marker) — both fixed; pass2 security 2 findings (/sos path unobservable under OSCORE; SOS (any) row implemented as 3-per-bucket) — both fixed; pass3 edge-cases 1 finding (undefined traffic_class encoding; IPv6 TC pinned to 0 by SCHC profile) — fixed. Follow-up: oun2 (assign L2 SOS dispatch wire value in 02-physical-link.md).",
+  "labels": [
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cl56",
+      "depends_on_id": "project-LICHEN-worker6-0adq",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T05:21:28.755074679Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

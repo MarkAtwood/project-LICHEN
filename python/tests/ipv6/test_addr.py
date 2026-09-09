@@ -143,6 +143,12 @@ _UPSTREAM_ADDR_BY_PUBKEY = {
 
 def test_key_derived_ipv6_vectors_match_production_boundaries() -> None:
     document = json.loads(VECTORS.read_text())
+    # The routable primary address is upstream Yggdrasil AddrForKey (see
+    # test_yggdrasil_address_vectors.py for the crypto-layer corpus); the
+    # rejected SHA-512 native profile and its quarantined corpus are no
+    # longer consumed here. The IID/link-local derivations are unchanged by
+    # the migration and are pinned against the corpus; the primary address
+    # is pinned against the hardcoded upstream Go oracle below.
     key_vectors = [
         vector for vector in document["vectors"]
         if vector["profile"] == "key_derived_identity"
@@ -150,9 +156,9 @@ def test_key_derived_ipv6_vectors_match_production_boundaries() -> None:
     assert len(key_vectors) >= 5
     for vector in key_vectors:
         public_key = bytes.fromhex(vector["pubkey"])
-        # The corpus' native_packed/native fields are legacy rejected-profile
-        # fixtures (i72x.6 regenerates them); the primary address is pinned
-        # against the upstream Go oracle instead (7pt2).
+        # The corpus' native_packed/native fields are not the oracle here
+        # (pre-i72x.6 they pinned the rejected SHA-512 native profile); the
+        # primary address is pinned against the upstream Go oracle (7pt2).
         expected = _UPSTREAM_ADDR_BY_PUBKEY[vector["pubkey"]]
         assert native_address_from_pubkey(public_key).packed.hex() == expected
         assert link_local_from_pubkey(public_key).packed.hex() == vector["link_local_packed"]

@@ -1,0 +1,64 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.7.2.4",
+  "title": "Python: restart-safe airtime restrictions",
+  "description": "Connect accounting lifecycle in python/src/lichen/timing/duty_cycle.py to startup/shutdown in python/src/lichen/node.py. Restore valid active restrictions across restart or conservatively wait out the applicable window when elapsed time or saved state cannot be trusted. Reconnect, plan changes and wall-clock corrections must not provide a fresh airtime allowance. Keep persistence failure visible to radio admission.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Use existing lifecycle/storage patterns only where they fit; a correct conservative wait-out satisfies the contract without a speculative new persistence framework. Airtime history is distinct from link replay and schedule generations. Do not alter key export/import, replay persistence, radio-owned identity or audited OSCORE/EDHOC internals. Baseline SCHC, security and best-effort custody policies remain unchanged.",
+  "acceptance_criteria": "Use vectors.09's independent interval ledger and restart traces through the production lifecycle. Cover restart within a restriction, missing/corrupt state, persistence failure, unknown downtime, clock corrections and exact wait-out expiry. Assert no radio transmission becomes eligible merely from restarting and valid elapsed time releases restrictions only at the independently specified boundary. Extend python/tests/timing/test_duty_cycle.py and python/tests/test_node.py; run scoped pytest and ruff.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:25:11.830192087Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:12.815123671Z",
+  "external_ref": "lichen-decomp-hpc8-deep:python.11",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "python.11",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "79bdf8bc06181fdc5a253309e44789536663f14fa7a2eb7aec00eb6bd6c2cd1c"
+  },
+  "labels": [
+    "ccp",
+    "ccp2",
+    "decomp-hpc8-deep",
+    "local-ok",
+    "production",
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.2.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.7.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:25:11.99209516Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.2.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.9",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:37:28.5440572Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.2.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:37:29.57513139Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.2.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.7.2.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:37:30.680966457Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.10.1.8",
+  "title": "Validate CCP2 workload and true-delivery reporting",
+  "description": "Scope: focused workload/result checks under /home/mark/Developer/lichen-workspace/project-LICHEN/python/tests/sim/scenarios/ and the existing simulator reporting/validation path used by /home/mark/Developer/lichen-workspace/project-LICHEN/docs/ccp-conformance.md. Compare single versus multiple receivers at identical offered workloads and declared radio resources. Independently enumerate application deliveries and complete emissions, then verify offered/admitted/delivered/expired counts, latency population, loss and airtime limits. No speculative capacity multiplier, CPU percentage or RF-measurement claim is in scope.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Reuse the existing simulator/report format and add small contract checks, not a new benchmark framework. Capacity conclusions remain conditional software observations with failures visible.",
+  "acceptance_criteria": "Identical workload/topology inputs and resource assumptions are recorded for comparisons. Delivery counts come from recipient acceptance events, not TX completion or CCA-clear; latency is computed only over its declared delivered population and reported with loss/expiry denominators. A zero-delivery scenario remains failed with undefined/no latency improvement. Hand-enumerated outcome ledgers catch report omissions, false success and mismatched airtime totals. Report/result tests run reproducibly against actual scenario outputs.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "estimated_minutes": 150,
+  "created_at": "2026-09-09T06:24:35.694218461Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:16.79659317Z",
+  "external_ref": "lichen-decomp-hpc8-deep:ci.10",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "ci.10",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "e5dab94c3e46503c3924b6dc04dfc47d1fb4134b6a3e6d671d24f526dcc8df56"
+  },
+  "labels": [
+    "ccp",
+    "ci",
+    "decomp-hpc8-deep",
+    "metrics",
+    "simulation"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.10.1.8",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.10.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:35.843391755Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.10.1.8",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.10.1.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:33:07.225547561Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.10.1.8",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.10.1.5",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:33:08.354670795Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.10.1.8",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.10.1.7",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:33:09.37929385Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.10.1.8",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.7",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:33:10.43324848Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

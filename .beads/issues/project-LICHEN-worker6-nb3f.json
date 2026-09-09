@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-nb3f",
+  "title": "Consolidate private _COSE_KID_LABEL duplicates in group_membership.py and gateway/slot_claim.py",
+  "description": "Found during worker6-tm4o (COSE_ALG_LABEL/COSE_KID_LABEL consolidation, closed r/w commit 7f5ef85c4f): two underscore-private copies of _COSE_KID_LABEL = 4 remain at python/src/lichen/group_membership.py:157 and python/src/lichen/gateway/slot_claim.py:440. Values agree today; same drift-risk class as the just-closed public-constant consolidation. Both could import COSE_KID_LABEL from lichen.crypto.schnorr48 (the single definition site) instead. Mechanical change + run the module test files (tests/test_group_membership.py, tests/gateway/test_slot_claim.py). Discovered-from: project-LICHEN-worker6-tm4o",
+  "status": "closed",
+  "priority": 4,
+  "issue_type": "chore",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T05:52:58.345049194Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T06:01:29.169288154Z",
+  "started_at": "2026-09-09T05:53:24.278731523Z",
+  "closed_at": "2026-09-09T06:01:29.169288154Z",
+  "close_reason": "Consolidated private _COSE_KID_LABEL = 4 to the single COSE_KID_LABEL in lichen/crypto/schnorr48.py: group_membership.py (encode_invitation_cose imports from schnorr48 locally; verify_invitation_cose imports from schnorr48 per reviewer pass-3 consistency fix — no longer via delegation_tokens re-export) and gateway/slot_claim.py (module-level import from schnorr48; strict-reader check renamed). Zero _COSE_KID_LABEL copies remain in python/src. Direct encode_invitation_cose+verify_invitation_cose round-trip verified (covers the kid build/check paths the suite missed — the broken intermediate state passed 829 tests, caught by direct call). Tests: tests/crypto 727+ (tofu file excluded = pre-existing k9xb env), tests/test_groups_cose.py 17 passed, slot_claim/local_facts/gcp6 green, full A/B stash comparison shows identical pre-existing coap-suite failures (12/32 subsets) with and without this change — tracked by new P2 triage bead. 3x delegated codereview (kimi-k3): correctness PASS, security PASS, edge P3 consistency finding (verify importing via re-export) — fixed in this commit. Follow-up filed: groups_invite.py:82 hardcoded probe[1][4] kid label (P4). Commit 09cd896339.",
+  "labels": [
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-nb3f",
+      "depends_on_id": "project-LICHEN-worker6-tm4o",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T05:52:58.498202899Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

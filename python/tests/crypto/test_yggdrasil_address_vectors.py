@@ -1,20 +1,22 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
-"""Consume test/vectors/yggdrasil_address.json through the real derivation.
+"""Consume the yggdrasil addressing corpus through the real derivation.
 
-Post-migration (7pt2, settled ``upstream-yggdrasil-addressing`` decision in
-spec/decisions.jsonl), ``yggdrasil_address`` IS upstream ``AddrForKey``
-byte-for-byte (yggdrasil-go@422836ee src/address/address.go), and
-``subnet_for_key`` is upstream ``SubnetForKey``. The corpus' single
-``upstream_addr_for_key`` anchor is now the byte-equality oracle.
+Per spec/decisions.jsonl ``upstream-yggdrasil-addressing``, a node's routable
+address MUST equal upstream Yggdrasil ``AddrForKey(Ed25519PublicKey)`` and a
+routed /64 subnet MUST equal upstream ``SubnetForKey`` in ``0300::/8``. The
+implementation under test IS the upstream algorithm; the corpus carries
+``upstream_addr_for_key`` derivation vectors plus the single upstream
+yggdrasil-go anchor (``upstream_addr_for_key``, kept verbatim), and all MUST
+match byte-for-byte.
 
-The ``lichen_native_sha512`` fixtures in the corpus belong to the REJECTED
-SHA-512 native profile: they pin an address whose lower 64 bits equal the
-SHA-512 IID, an invariant the upstream profile does not have. They are
-legacy fixtures reported to the corpus-regeneration bead i72x.6, which owns
-the shared corpora; this suite no longer consumes them byte-exact. Their
-continued presence in the JSON is asserted only so they cannot be silently
-re-interpreted as upstream vectors before i72x.6 regenerates the corpus.
+The former ``lichen_native_sha512`` profile is REJECTED; its vectors are
+quarantined in ``test/vectors/legacy/yggdrasil_address_native_sha512.json``
+and are NOT consumed here. (Merge note: the other side of this merge said the
+native fixtures still live in the corpus pending bead i72x.6; that is stale —
+the i72x.6 regeneration slice landed in commit 48c64007d1 on the incoming
+branch and neither parent's corpus contains native-profile vectors, so the
+quarantine wording is the factually correct one.)
 """
 
 from __future__ import annotations
@@ -107,11 +109,18 @@ def _error_cases() -> list[tuple[str, dict]]:
 
 
 def test_corpus_shape() -> None:
-    """Guard against regression to the original single-vector corpus."""
+    """Live corpus: upstream derivation vectors + anchor + error cases only.
+
+    Guards both against regression to the original single-vector corpus and
+    against rejected native-profile vectors re-entering the live corpus.
+    """
     vectors = _document()["vectors"]
     assert len(_upstream_cases()) >= 10
     assert len(_error_cases()) >= 2
     assert len(vectors) == len(_upstream_cases()) + len(_error_cases()) + 1
+    assert all(v.get("profile") != "lichen_native_sha512" for v in vectors), (
+        "live corpus must not hold rejected native-profile vectors"
+    )
 
 
 def test_upstream_anchor_is_verbatim_go_reference() -> None:

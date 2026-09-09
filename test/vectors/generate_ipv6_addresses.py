@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
-"""Generate exact native IPv6 address vectors without importing LICHEN."""
+"""Generate exact IPv6 IID, link-local, and native address vectors without
+importing LICHEN.
+
+The native 0200::/8 fields are upstream Yggdrasil ``AddrForKey`` per the
+settled upstream-yggdrasil-addressing decision (spec/decisions.jsonl). The
+rejected SHA-512 native profile is quarantined in
+test/vectors/legacy/ipv6_addresses_native_sha512.json and is never emitted
+here.
+"""
 
 from __future__ import annotations
 
@@ -64,8 +72,16 @@ def _key_vector(name: str, public_key: bytes) -> dict[str, object]:
     digest = hashlib.sha512(public_key).digest()
     iid = bytearray(digest[:8])
     iid[0] &= 0xFD
+    # Merge resolution: keep the beads-worker-3 native fields (upstream
+    # AddrForKey). HEAD's no-native-fields shape is incompatible with the
+    # staged conformance tests, which require native/native_packed here
+    # (test_native_corpora_agree_without_byte_reversal).
     primary = _addr_for_key(public_key)
     link_local = b"\xfe\x80" + bytes(6) + bytes(iid)
+    # The rejected SHA-512 native profile ([0x02] || digest[:7] || iid) is
+    # quarantined in test/vectors/legacy/ipv6_addresses_native_sha512.json
+    # (spec/decisions.jsonl upstream-yggdrasil-addressing). The native fields
+    # emitted here are upstream Yggdrasil AddrForKey, the settled profile.
     return {
         "name": name,
         "profile": "key_derived_identity",
@@ -134,8 +150,13 @@ def document() -> dict[str, object]:
         "format_version": 2,
         "description": (
             "Exact Ed25519 pubkey to SHA-512 IID, link-local, and primary "
-            "0200::/8 native-address derivation. EUI-64 and short-address cases "
-            "are explicitly link-interoperability helpers, not node identities."
+            "0200::/8 native-address derivation; native is upstream "
+            "Yggdrasil AddrForKey (settled upstream-yggdrasil-addressing "
+            "decision, spec/decisions.jsonl). The rejected SHA-512 native "
+            "profile is quarantined in "
+            "test/vectors/legacy/ipv6_addresses_native_sha512.json. EUI-64 "
+            "and short-address cases are explicitly link-interoperability "
+            "helpers, not node identities."
         ),
         "oracle": {
             "basis": (

@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-zeaj",
+  "title": "Constrain tunnel-auth/capability prefix_len to byte multiples",
+  "description": "Security review finding (spec/06-security.md:747-748 and 914-915): tunnel-auth and capability-announce payloads encode prefix as 'prefix_len/8 bytes, zero-padded' with prefix_len admitted over 0-128. Non-byte-aligned lengths (e.g. /33 -\u003e 4 bytes, effectively /32) are undefined/lossy, and egress authorization is keyed on this target prefix, so ambiguous encoding can broaden an authorization beyond what the root signed. Constrain prefix_len to multiples of 8 or define trailing-bit masking semantics.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:25:25.594730092Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T04:53:23.657114995Z",
+  "closed_at": "2026-09-09T04:53:23.657114995Z",
+  "close_reason": "Trailing-bit masking semantics were already defined and enforced in all three tunnel-auth implementations (rust prefix_is_canonical, python tunnel_auth.py:144, C tunnel_auth.c prefix_valid) with bit-exact matches_source — a /33 is a true /33, never broadened (the bead's 'effectively /32' premise does not hold; div_ceil encoding carries /33 as 5 bytes). The genuine gap was the Rust capability-announce decode, which validated NOTHING (prefix_len u8 up to 255 silently accepted, arbitrary prefix length silently truncated in into_entry). Fixed: from_cose_sign1 now enforces prefix_len \u003c= 128 and prefix.len() == ceil(prefix_len/8), exactly mirroring Python CapabilityPayload __post_init__. New test noncanonical_prefix_is_rejected (out-of-range, length-mismatch, canonical /33, prefix_len 0). Two corpus vectors (capability_prefix_delegation 64/16B, capability_both 48/16B) violate ceil and are rejected by Python too — corpus test now skips them as decode-rejects; regeneration filed as follow-up P3. 261/261 lib tests pass. 3x codereview delegated to kimi-k3: correctness pass caught that my initial trailing-bit check EXCEEDED Python's capability validator (would have introduced a new wire-verdict divergence) — removed it, Python parity restored, decision bead tj9l filed for tail-bit masking in both impls; security PASS (no authorization keyed on capability prefix today; tunnel-auth enforcement independently strict); edge-cases PASS (skip gate cannot hide canonical-vector regressions).",
+  "labels": [
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-zeaj",
+      "depends_on_id": "project-LICHEN-worker6-1k3i",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T04:25:25.72844072Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

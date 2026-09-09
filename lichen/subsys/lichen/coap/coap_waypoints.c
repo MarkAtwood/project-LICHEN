@@ -933,7 +933,8 @@ static int send_created(struct coap_resource *resource,
   if (oscore->is_protected && oscore->ctx != NULL && oscore->piv_len > 0U) {
     ret = coap_oscore_protect_response(
         oscore->ctx, oscore->piv, oscore->piv_len, request,
-        COAP_RESPONSE_CODE_CREATED, NULL, 0U, &response, buf, sizeof(buf));
+        COAP_RESPONSE_CODE_CREATED, NULL, 0U, NULL, 0U, &response, buf,
+        sizeof(buf));
   } else
 #endif
   {

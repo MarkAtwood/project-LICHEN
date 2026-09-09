@@ -234,7 +234,8 @@ def yggdrasil_address(pubkey: bytes) -> IPv6Address:
     address binds to the key by self-derivation. The pinned byte-equality
     oracle is the ``upstream_addr_for_key`` vector in
     test/vectors/yggdrasil_address.json (anchored to upstream
-    address_test.go).
+    address_test.go), cross-checked against the independent Rust
+    implementation (``ygg_addr_from_pubkey``, i72x.2).
     """
     if len(pubkey) != 32:
         raise ValueError(f"pubkey must be 32 bytes, got {len(pubkey)}")
@@ -271,8 +272,9 @@ def subnet_for_key(pubkey: bytes) -> bytes:
 
     Upstream Yggdrasil ``SubnetForKey`` byte-for-byte (yggdrasil-go@422836ee
     src/address/address.go): the AddrForKey bytes truncated to 8 with the
-    last prefix bit set (``byte0 |= 0x01``), selecting 0300::/8. Mirrors
-    Rust ``ygg_subnet_from_pubkey`` (i72x.2).
+    last prefix bit set (``byte0 |= 0x01``), selecting 0300::/8 and marking
+    a prefix rather than a node address. Mirrors Rust
+    ``ygg_subnet_from_pubkey`` (i72x.2).
     """
     subnet = bytearray(yggdrasil_address(pubkey).packed[:8])
     subnet[0] |= 0x01

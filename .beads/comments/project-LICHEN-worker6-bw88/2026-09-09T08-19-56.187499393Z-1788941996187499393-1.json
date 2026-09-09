@@ -1,0 +1,7 @@
+{
+  "id": "1788941996187499393-1",
+  "issue_id": "project-LICHEN-worker6-bw88",
+  "author": "Mark Atwood",
+  "text": "jqh2 (worker5) landed the 04-network.md §6.1/§6.2 + 03-addressing.md half: worker2's adjudicated 04-network.md (98kb/cd7ade/2fa4af) restored onto this branch, plus the 03-addressing.md §3.1 sentence rewritten to upstream AddrForKey (no IID embedding). Remaining for this bead: 06-security.md §8.5 step 3 (line 111), §8.7 step 3 (line 145), and appendix-x509-cert-profile.md:80 still carry the live rejected formula.",
+  "created_at": "2026-09-09T08:19:56.187499393Z"
+}

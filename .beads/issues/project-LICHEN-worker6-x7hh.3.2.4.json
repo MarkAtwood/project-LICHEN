@@ -1,0 +1,97 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.3.2.4",
+  "title": "Measure MCU costs of the approved experiment",
+  "description": "Measure the complete approved MCU/driver workload, including signing, verification, peer search, IRQ/SPI, retuning, acquisition, timeouts, FEC, memory and missed deadlines. Reuse rf.08 radio timing and existing lora_ipv6_mesh-shbh verification-cost evidence as starting points, not proof of production performance.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Require affirmative matching microfrag.06, authority.10 and rf.03 approvals before ports or RF. Approval covers only the named session, setup and waveform. Closed prerequisites, dev-mode measurements or prior sessions are not clearance; denial or mismatch leaves execution blocked or deferred.",
+  "acceptance_criteria": "Calibrated timing and memory evidence on the exact build distinguish CPU work, radio occupancy and scheduled waits. Include malformed/injected fragments and maximum approved peer/block loads; measure energy where approved instrumentation exists. Reject unsupported hash-only cycle counts and universal idle-CPU claims.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:26:10.171120072Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:25.931831023Z",
+  "external_ref": "lichen-decomp-hpc8-deep:microfrag.11",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "microfrag.11",
+    "permission": "hardware",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "0abdf5641c8236ba9622b8af3da45c88653a76437ac8165fc5a9883ef10ff847"
+  },
+  "labels": [
+    "authorization-required",
+    "blocked:hardware",
+    "ccp",
+    "decomp-hpc8-deep",
+    "evidence",
+    "experimental",
+    "hardware"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.3.2.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.3.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:26:10.346397541Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.3.2.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.11.1.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:42:34.812313521Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.3.2.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.11.1.8",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:42:35.865995188Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.3.2.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.2.3.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:42:36.945516398Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.3.2.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.3.1.6",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:42:38.042028362Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.3.2.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.3.2.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:42:39.116166794Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.3.2.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.3.2.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:42:40.129625517Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.3.2.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.3.2.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:42:41.15362606Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -41,6 +41,7 @@ pub use self::error::{
     DaoAdmissionError, DaoSendError, RplControlError, RplReceiveError, RplRuntimeReceiveError,
     RplRuntimeTrickleError, RplStackOpenError, RplStackProvisionError,
 };
+pub use self::util::{survey_routing_headers, RoutingHeaderSurvey, SourceRouteView};
 
 /// Outcome of Trickle transmit completion.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -133,6 +134,15 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// owner (for example, a gateway federation proof-of-possession exchange).
     pub fn install_verified_link_peer(&mut self, peer: PeerIdentity) {
         self.stack.add_peer(peer);
+    }
+
+    /// This node's key-derived IID (SHA-512 derivation; link-local identity).
+    ///
+    /// Distinct from the low half of the routable address: upstream
+    /// `AddrForKey` bit-packs the inverted key and does not embed the IID
+    /// (i72x.2).
+    pub fn local_iid(&self) -> [u8; 8] {
+        lichen_link::identity::iid_from_pubkey(&self.stack.local_public_key())
     }
 
     pub fn rpl_node(&self) -> &RplNode {

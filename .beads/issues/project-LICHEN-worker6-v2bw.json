@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-v2bw",
+  "title": "SOS origin-signature requirement unimplementable under hop-by-hop LLSec re-signing",
+  "description": "Exposed by review of project-LICHEN-worker6-lzgc (all 3 passes flagged; pre-existing). spec/12-apps.md:707-709 requires SOS to 'carry a valid link-layer signature from the originating node ... verified at each receiving node before rebroadcast', but LLSec is hop-by-hop: relays create a new link frame, allocate their own replay counter, populate their own SIID and re-sign (spec/06-security.md:64-71 — 'Hop Limit changes never occur under an unchanged link signature'; spec/02-physical-link.md:305-308). No verbatim-forwarding exemption exists, so past hop 1 no receiver can verify an ORIGIN link signature. Decide: (a) add an SOS end-to-end origin signature object (DAO Origin Signature pattern, 06-security.md §8.6) carried in the SOS payload; or (b) re-scope the requirement to first-hop verification plus the (unauthenticated) preserved-source accounting of §6.3.3, stating the residual forgery ceiling. Until resolved, multi-hop SOS has no authenticated origin.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T05:30:23.29183914Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T09:11:33.201475219Z",
+  "started_at": "2026-09-09T08:58:21.72596989Z",
+  "closed_at": "2026-09-09T09:11:33.201475219Z",
+  "close_reason": "Resolved with option (a), forced by settled §8.4 doctrine (end-to-end origin auth is a separate object; hop-by-hop LLSec cannot authenticate origin past hop 1) and by the already-implemented Python sos_origin.py / Rust sos_origin.rs / shared sos_signature.json vectors. Rewrote spec/12-apps.md §18.4.1 Authentication to require a 56-octet SOS Origin Signature (8B BE Origin Sequence + 48B Schnorr48) over SHA-512('LICHEN-SOS-ORIGIN-v1' || origin 02xx || seq || canonical CBOR payload), mirroring the DAO §8.6 pattern, with a per-origin monotonic replay gate; hop-by-hop LLSec still verified/re-signed per hop. Spec-only change (no code touched); verification = field-for-field match against both implementations + independent test-vector oracle. 3x codereview (correctness/security/edge-cases): PASS/PASS/PASS. Delegated reviewer (opencode run kimi-k3) timed out before verdict on 2 attempts (env); passes completed directly with same references.",
+  "labels": [
+    "app-interface",
+    "link"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-v2bw",
+      "depends_on_id": "project-LICHEN-worker6-lzgc",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T05:30:23.441424813Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

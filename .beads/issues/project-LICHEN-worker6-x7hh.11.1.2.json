@@ -1,0 +1,47 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.11.1.2",
+  "title": "Map board RF paths and applicable errata",
+  "description": "Map each selected board's oscillator, RF switches, filters, matching, antennas and chip/modem-firmware errata from primary documents. Distinguish board coverage from silicon tuning range. Assess applicability of published wake/calibration and adjacent-channel-power limitations using exact revisions.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Read-only documentary analysis. Reuse existing project-LICHEN-h7t5.7.5 and its .13 RF-switch/TCXO work when that board is selected, respecting owner-reserved scope. Do not create duplicate bring-up implementation, open ports or change board settings.",
+  "acceptance_criteria": "Schematic/BOM/vendor evidence supports each claimed RF path and erratum applicability, or marks it unknown. Do not assume all LR1110 units share a firmware defect or that all SX1262 boards cover the full band. Produce measurement hypotheses and equipment-specific limitations, not qualification results.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:26:35.134176866Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:23.196982255Z",
+  "external_ref": "lichen-decomp-hpc8-deep:rf.02",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "rf.02",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "63adbfb600d4c6595ecd71f29872ea4b54cc319f1702b59efb372e6ea8c39c3b"
+  },
+  "labels": [
+    "ccp",
+    "decomp-hpc8-deep",
+    "hardware",
+    "qualification",
+    "research"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.11.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.11.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:26:35.293260357Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.11.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.11.1.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:44:09.177713334Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

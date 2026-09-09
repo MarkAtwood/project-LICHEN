@@ -9,10 +9,10 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-04T10:32:18.799991734Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-09-09T00:42:47.862843988Z",
+  "updated_at": "2026-09-09T07:10:13.572586516Z",
   "started_at": "2026-09-04T10:34:42.741614986Z",
-  "closed_at": "2026-09-09T00:42:47.862843988Z",
-  "close_reason": "Verified complete: the deliverable tests were already landed in-tree (merged via worker5 sync, commit 35a15a6245 lineage) but the bead stayed open. All 5 scenario pins pass on heft: stack-level expired_root_signature_admitted_as_baseline_not_rejected (incl. replayed-expired admitted), clockless_root_signature_admitted_as_baseline_not_rejected; gate-level expired_root_signature_gate_degrades_to_baseline_not_reject, clockless_root_signature_gate_degrades_to_baseline_not_reject, valid_root_signature_gate_verifies_then_replay_rejects. Full rpl_stack suite 38/38 green. Production gate receive.rs:709-715 verified against R-06-307 (expired/unassessable -\u003e Baseline before cross-check/replay). No code changes this round; tests were pre-landed. 3x delegated review (correctness/security/edge, Kimi K3) produced 4 findings filed as new beads: gate reject-path pins P1, wall-clock-unwired dead-code P2 (b8ea), root_seq burn P3 (fr9b), stale mod.rs doc P3 (9yh2).",
+  "closed_at": "2026-09-09T07:10:13.572586516Z",
+  "close_reason": "RX-path pins landed green. Root cause of the 2 prior red rounds was NOT the sig gate but the test fixture: Dio::write_to already emits the 3-byte 0x13 rule-version option (SERIALIZED_LEN=27) and the fixture appended a duplicate, which the authenticated-DIO admission parser (codec.rs, options scanned from BASE_LEN=24) rejects as DuplicateRuleVersion. Fixture fixed: no manual 0x13, carrier version 0 (receiver initial DODAG version; payload version irrelevant on Baseline path), link-local source per R-09-005. Pins: expired(now\u003eexpiry), boundary(now==expiry), clockless -\u003e DioReceived as unsigned with root_seq cache EMPTY; gate-level Verified+replay-Reject unchanged. Reviewer (kimi-k3) 3 passes: correctness PASS; security PASS (adopted cache-empty assertion); edge PASS (adopted ==expiry boundary case). Also removed committed debug eprintln PROBE/TRACE debris from router.rs, receive.rs, transmit.rs. cargo test -p lichen-node --lib: 350 pass, 0 fail; clippy clean (pre-existing oscore warning only); fmt clean.",
   "labels": [
     "rust",
     "networking",

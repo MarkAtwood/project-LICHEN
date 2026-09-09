@@ -18,13 +18,13 @@ use lichen_core::constants::{L2_DISPATCH_SCHC, RPL_ICMPV6_TYPE, RPL_INSTANCE_ID}
 use lichen_core::icmpv6;
 use lichen_core::icmpv6::hdr_field;
 use lichen_core::ipv6::{field, next_header, IPV6_HEADER_LEN};
+use lichen_gateway::tunnel_auth::{build_root_post, route_hash, TunnelAuthorization};
 use lichen_gateway::{
     handoff::{HandoffRejectReason, HandoffRequest, HandoffResponse, NodeRegistryEntry},
     resources::{CoapMethod, GatewayCoordinator, SlotClaim},
     trust::{iid_from_pubkey, PskFederation, TrustStore},
     Gateway, GatewayPersistence,
 };
-use lichen_gateway::tunnel_auth::{build_root_post, route_hash, TunnelAuthorization};
 use lichen_hal::loopback::LoopbackRadio;
 use lichen_hal::storage::fs::FileStorage;
 use lichen_hal::Radio;
@@ -489,8 +489,7 @@ async fn gateway_rejects_replayed_authenticated_wire_before_forwarding() {
         gw_iid,
     )
     .unwrap();
-    let post =
-        build_root_post(claim, &route, gw_iid, &identity.privkey, &identity.pubkey).unwrap();
+    let post = build_root_post(claim, &route, gw_iid, &identity.privkey, &identity.pubkey).unwrap();
     let response = gw.coordinator_mut().handle_request(
         CoapMethod::Post,
         "tunnel-auth",
@@ -805,6 +804,7 @@ async fn restart_after_partial_context_install_self_heals() {
         .unwrap();
     let coordinator = GatewayCoordinator::provision_persistent(
         gateway_addr,
+        gateway_identity.iid,
         60,
         64,
         &root.join("gateway-slot-replay.bin"),
@@ -887,6 +887,7 @@ async fn config_removal_revokes_durable_pin_and_context() {
         .unwrap();
     let coordinator = GatewayCoordinator::provision_persistent(
         gateway_addr,
+        gateway_identity.iid,
         60,
         64,
         &root.join("gateway-slot-replay.bin"),
@@ -976,6 +977,7 @@ async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
         .unwrap();
     let coordinator = GatewayCoordinator::provision_persistent(
         gateway_addr,
+        gateway_identity.iid,
         60,
         64,
         &root.join("gateway-slot-replay.bin"),
@@ -1076,10 +1078,12 @@ async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
     // The default slot_map owns every slot and this gateway's IID is the
     // lower one, so the claim [1,2,3] deterministically lands in the we-win
     // conflict arm: GCP-6.5 step 11 responds 4.09 Conflict (spec/08:315).
+    // The conflict carries no Content-Format option: the C peer omits it and
+    // Rust now byte-parity-omits it for content_format 0 (49e460a2).
     assert!(matches!(
         response,
         lichen_node::secure::SecureResponse::Decrypted { code, options, .. }
-            if matches!(code.0, 0x89) && options == [0xc1, 60]
+            if matches!(code.0, 0x89) && options.is_empty()
     ));
     assert_eq!(
         gateway
@@ -1111,6 +1115,7 @@ async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
     .unwrap();
     let coordinator = GatewayCoordinator::load_persistent(
         gateway_addr,
+        gateway_identity.iid,
         60,
         64,
         &root.join("gateway-slot-replay.bin"),
@@ -1196,6 +1201,7 @@ async fn handoff_harness(label: &str) -> HandoffHarness {
         .unwrap();
     let coordinator = GatewayCoordinator::provision_persistent(
         gateway_addr,
+        gateway_identity.iid,
         60,
         64,
         &root.join("gateway-slot-replay.bin"),

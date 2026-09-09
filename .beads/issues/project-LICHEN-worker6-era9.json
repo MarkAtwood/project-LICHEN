@@ -1,0 +1,18 @@
+{
+  "id": "project-LICHEN-worker6-era9",
+  "title": "C capability table: floor ledger not bounded (diverges from Python/Rust)",
+  "description": "Discovered reviewing p7mv. lichen/subsys/lichen/gateway/capability_announce.c floor_raise() appends to a fixed CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY floor ledger and silently drops new floors when full ('ledger full; live entries still pin their own seq'). Python CapabilityTable._bound_floors and Rust bound_seq_floors actively prune the ledger (drop the lowest-IID floor whose IID is no longer a live entry) so it stays bounded by live eviction churn. The C version never prunes, so long-gone IIDs permanently consume floor slots and eventually block anti-replay floors for genuinely-evicted IIDs (rollback-protection gap under sustained churn). Note: Python/Rust RETAIN floors for live entries (cached_seq returns max(entry.seq, floor)); the prune only targets floors for IIDs no longer resident. Implement floor_prune matching that semantic + a host test cycling \u003ecapacity evictions. Host test: lichen/tests/capability_announce (CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY=8 there).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T07:46:28.818291845Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T08:57:02.012539204Z",
+  "closed_at": "2026-09-09T08:57:02.012539204Z",
+  "close_reason": "Implemented floor_prune (pending-raisers-as-candidates) in capability_announce.c: floor_raise now reclaims the lowest-IID floor of non-resident announcers when the fixed ledger is full, with the not-yet-live raiser itself prune-eligible (matching Python record()/_bound_floors and Rust insert()/bound_seq_floors: raise-then-bound means the fresh floor is dropped when it is the lowest candidate); record() raises the new announcer's floor before the entry goes live; purge_expired no longer captures floors (matches Python purge_expired; pre-fix capture was a dead no-op). Reviewer (Kimi K3) passes: pass 1 found the live-before-raise divergence, pass 2 the purge-capture divergence, pass 3 verified both fixes against the executed Python reference and flagged only a stale comment (fixed). Host test capability_announce: new test_floor_ledger_bounds (churn \u003ecapacity: prune lowest-first, no starvation, pending-skip corner) verified to FAIL on pre-fix code (abort, exit 134) and PASS on the fix; full ctest green with ASan/UBSan and -Werror; cppcheck clean. Reviewer's reference-level micro-corner observations (refresh-path bounding, eviction victim ordering) filed as project-LICHEN-worker6-4q7b. Note: opencode reviewer calls timed out at 300s x3 in parallel and one 550s sequential run succeeded; all passes ran via the reviewer model.",
+  "labels": [
+    "gateway",
+    "security"
+  ]
+}

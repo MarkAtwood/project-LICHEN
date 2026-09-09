@@ -1,0 +1,64 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.12.2.2",
+  "title": "Test complete accounting for every TX traffic class",
+  "description": "Scope: complete-emission traffic-class cases in the admission supplement under /home/mark/Developer/lichen-workspace/project-LICHEN/test/vectors/. Enumerate control, data, forwarding, retries, signed headers and applicable experimental parity costs against shared frequency/group and legal/adaptive accounts. Derive full PHY lengths and airtime independently from the frozen arithmetic, not application bytes or production counters. Keep unsupported experimental emission disabled; hypothetical accounting records do not authorize an on-air experiment or alter baseline framing/SCHC.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Reuse vectors.06 airtime and vectors.09 ledger arithmetic; add only a bounded traffic-matrix case group. Distinguish emitted airtime from setup or listening time.",
+  "acceptance_criteria": "Independent frame-length and emission ledgers include every actual wrapper, signature, retry and forwarding emission in the appropriate accounts. No control, priority, fallback or SOS class gains an unconfigured exemption. Hypothetical parity/header traffic is either correctly accounted under an explicitly permitted test configuration or rejected as unsupported; it never enables a baseline mode. All expected totals and denials are exact, schema-validated and assigned to actual path-consumer cases.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "estimated_minutes": 90,
+  "created_at": "2026-09-09T06:24:46.56902895Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:15.202457254Z",
+  "external_ref": "lichen-decomp-hpc8-deep:admission.07",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "admission.07",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "ccb25604b987d6af327c001299ed6ead1b19a597fe04e39468becfc137010f50"
+  },
+  "labels": [
+    "airtime",
+    "ccp",
+    "decomp-hpc8-deep",
+    "forwarding",
+    "testing"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.12.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.12.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:46.716454578Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.12.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.12.1.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:34:23.448662751Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.12.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.12.2.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:34:24.466118893Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.12.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.6",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:34:25.535571531Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

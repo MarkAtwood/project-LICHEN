@@ -1,0 +1,7 @@
+{
+  "id": "1788930689448030841-1",
+  "issue_id": "project-LICHEN-zt3c.7",
+  "author": "Mark Atwood",
+  "text": "Rollup is not complete: independent audit and delegated review fallback found rejected SHA-512 native derivations and ULA behavior remain in C, Rust, Python, firmware bridge, and vectors. Follow-up filed for full upstream migration. Kimi K3 review commands timed out after reading files; local audit supplied evidence.",
+  "created_at": "2026-09-09T05:11:29.448030841Z"
+}

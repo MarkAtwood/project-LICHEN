@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+# LICHEN HMI subsystem Kconfig (spec 19 device UX design language)
+
+menuconfig LICHEN_HMI_LED
+	bool "LED language driver (spec 19 §10 fixed state table)"
+	depends on LICHEN
+	help
+	  Fixed six-state LED table: joined-idle=off, joining=0.5Hz/10%,
+	  message-waiting=0.25Hz/5%, SOS-active=2Hz/50%,
+	  hold-in-progress=4Hz/50%, fault=1Hz/50%.
+	  Board glue drives the LED from lichen_hmi_led_is_on().

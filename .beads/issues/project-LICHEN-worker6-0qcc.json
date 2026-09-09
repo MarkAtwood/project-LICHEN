@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-0qcc",
+  "title": "Migrate tests/coap/test_lci_identity_vectors.py embedded native-profile address corpus to upstream AddrForKey",
+  "description": "Discovered while verifying no4g (flaky edhoc test fix; unrelated to that fix — pre-existing failure, verified present with fix stashed). tests/coap/test_lci_identity_vectors.py::test_full_identity_addresses_match_key_derivation asserts VECTORS['get_full_identity']['input']['addrs']['primary'] == str(native_address_from_pubkey(pubkey)) and fails: vector pins native-profile '206:2f7c:...' but native_address_from_pubkey now derives '2ed:4242:...' post-i72x migration. Same stale-corpus class as root_dio_signature.json (i72x.6), address_collision.json (rqiq), tunnel_authorization.json (osjz): regenerate the lci identity vectors with upstream AddrForKey-derived addresses (oracle: pinned yggdrasil_address.json anchors, not implementation output), then flip the test. Do NOT weaken the assertion.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T11:05:36.179741168Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T11:23:00.179725731Z",
+  "started_at": "2026-09-09T11:23:00.179725731Z",
+  "lease_expires_at": "2026-09-09T11:28:00.179725731Z",
+  "heartbeat_at": "2026-09-09T11:23:00.179725731Z",
+  "labels": [
+    "python",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-0qcc",
+      "depends_on_id": "project-LICHEN-worker6-no4g",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T11:05:36.322099433Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -192,8 +192,12 @@ impl Node {
         {
             let mut dst_bytes = [0u8; 16];
             dst_bytes.copy_from_slice(&ipv6[field::DST_OFFSET..IPV6_HEADER_LEN]);
+            // ULA (0xfd) is not answered: under the single-primary model
+            // (spec/05-routing.md:30) ULA is external, not mesh-local (i72x.4).
+            // The 2000::/3 arm is equally promiscuous; both arms become an
+            // exact check against this node's 0200::/7 AddrForKey identity
+            // once i72x.2 lands the NodeId accessor (tracked in beads).
             if dst_bytes == self.node_id.link_local_addr().0
-                || dst_bytes[0] == 0xfd
                 || (dst_bytes[0] & 0xe0) == 0x20
             {
                 return self.reply_echo_ipv6(ipv6, reply);
@@ -522,8 +526,10 @@ impl RplNode {
                 // Handle ping
                 let mut dst_bytes = [0u8; 16];
                 dst_bytes.copy_from_slice(&pkt[field::DST_OFFSET..IPV6_HEADER_LEN]);
+                // ULA (0xfd) is not answered: ULA is external, not
+                // mesh-local, under the single-primary model (i72x.4).
+                // See the matching note in Node::handle_ipv6 above.
                 if dst_bytes == self.node.node_id.link_local_addr().0
-                    || dst_bytes[0] == 0xfd
                     || (dst_bytes[0] & 0xe0) == 0x20
                 {
                     let mut reply_ipv6 = [0u8; 256];
@@ -609,8 +615,9 @@ impl RplNode {
                         let canonical_link_local_source = sender_addr[..8]
                             == [0xfe, 0x80, 0, 0, 0, 0, 0, 0]
                             && source_matches_sender_iid(&sender_addr, &sender_iid);
-                        if (!canonical_link_local_source && !is_ula_or_global(&sender_addr))
-                            || !is_ula_or_global(&dst)
+                        if (!canonical_link_local_source
+                            && !is_native_or_global(&sender_addr))
+                            || !is_native_or_global(&dst)
                         {
                             return (0, RplEvent::None);
                         }
@@ -747,13 +754,15 @@ fn same_interface(left: &[u8; 16], right: &[u8; 16]) -> bool {
 }
 
 #[cfg(feature = "std")]
-fn is_ula_or_global(address: &[u8; 16]) -> bool {
+fn is_native_or_global(address: &[u8; 16]) -> bool {
     let is_lichen_native = address[0] == 0x02;
     let address = Ipv6Addr(*address);
     // LICHEN native identities occupy 0200::/8. This project-specific
     // globally routable space is outside Rust's conventional 2000::/3 GUA
-    // predicate but is valid for isolated-mesh DAO forwarding.
-    is_lichen_native || address.is_ula() || address.is_gua()
+    // predicate but is valid for isolated-mesh DAO forwarding. ULA is
+    // excluded: under the single-primary model (spec/05-routing.md:30)
+    // ULA is external, not mesh-local (i72x.4).
+    is_lichen_native || address.is_gua()
 }
 
 #[cfg(feature = "std")]
@@ -824,8 +833,10 @@ mod tests {
     }
 
     #[cfg(feature = "std")]
-    fn ula(node_id: NodeId) -> [u8; 16] {
-        node_id.ula_addr([0xfd, 0, 0, 0, 0, 0, 0, 0]).0
+    fn native(node_id: NodeId) -> [u8; 16] {
+        // Test stand-in for an 0200::/8 mesh address carrying the node's
+        // IID (production identities derive via AddrForKey, i72x.2).
+        node_id.ula_addr([0x02, 0, 0, 0, 0, 0, 0, 0]).0
     }
 
     #[cfg(feature = "std")]
@@ -1030,7 +1041,7 @@ mod tests {
         leaf_eui64[0] ^= 0x02;
         let parent_id = NodeId(parent_eui64);
         let leaf_id = NodeId(leaf_eui64);
-        let root_addr = ula(root_id);
+        let root_addr = native(root_id);
         let parent_addr =
             lichen_core::addr::ygg_addr_from_pubkey(parent_identity.pubkey.as_bytes());
         let leaf_addr = lichen_core::addr::ygg_addr_from_pubkey(leaf_identity.pubkey.as_bytes());
@@ -1258,12 +1269,14 @@ mod tests {
         leaf_eui64[0] ^= 0x02;
         let parent_id = NodeId(parent_eui64);
         let leaf_id = NodeId(leaf_eui64);
-        let root_addr = ula(root_id);
+        let root_addr = native(root_id);
         let parent_addr =
             lichen_core::addr::ygg_addr_from_pubkey(parent_identity.pubkey.as_bytes());
         let leaf_addr = lichen_core::addr::ygg_addr_from_pubkey(leaf_identity.pubkey.as_bytes());
         // §8.7.2 delegated prefix advertised alongside the leaf's own /128.
-        let delegated_prefix = [0xfd, 0x00, 0, 0, 0, 0, 0, 0x64, 0, 0, 0, 0, 0, 0, 0, 0];
+        // Routed /64s come from SubnetForKey space (0300::/8), not ULA
+        // (spec/05-routing.md:30, upstream-yggdrasil-addressing).
+        let delegated_prefix = [0x03, 0x00, 0, 0, 0, 0, 0, 0x64, 0, 0, 0, 0, 0, 0, 0, 0];
 
         let mut root_storage = MemStorage::new();
         let (root_router, mut root_rx) =
@@ -1492,7 +1505,7 @@ mod tests {
         use lichen_rpl::routing::DaoAdmissionState;
 
         let root_id = NodeId([0x02, 0, 0, 0, 0, 0, 0, 1]);
-        let root_addr = ula(root_id);
+        let root_addr = native(root_id);
         let identity = Identity::from_seed(Seed::new([0x36; 32]));
         let origin = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
         let mut storage = MemStorage::new();
@@ -1576,8 +1589,8 @@ mod tests {
     fn production_dao_time_is_seconds_and_expires_routes() {
         let root_id = NodeId([0x02, 0, 0, 0, 0, 0, 0, 1]);
         let first_id = NodeId([0x02, 0, 0, 0, 0, 0, 0, 2]);
-        let root_addr = ula(root_id);
-        let first_addr = ula(first_id);
+        let root_addr = native(root_id);
+        let first_addr = native(first_id);
         let mut root = RplNode {
             node: Node::new(root_id),
             router: Router::new_root(root_addr),

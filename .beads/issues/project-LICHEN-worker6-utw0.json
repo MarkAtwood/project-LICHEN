@@ -5,14 +5,12 @@
   "status": "closed",
   "priority": 2,
   "issue_type": "task",
-  "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T20:49:36.339539538Z",
   "created_by": "opencode-worker-6",
-  "updated_at": "2026-09-09T01:20:04.523665012Z",
-  "started_at": "2026-09-09T01:05:32.374152972Z",
-  "closed_at": "2026-09-09T01:20:04.523665012Z",
-  "close_reason": "Verified complete: all three wiring legs landed in ce47b0db12 and verified on this host. (1) /.well-known/tunnel-auth registered in coap_server.c:669-672 (COAP_RESOURCE_DEFINE, POST-only, OSCORE-gated via coap_oscore_authorize_mutating, plaintext -\u003e 4.01, handler-NULL -\u003e 4.04, verdict default {false,403} fail-closed). (2) App egress path wired: forwarding.c lichen_forwarding_handle gates mesh-\u003eexternal via lichen_tunnel_auth_decapsulate (fail-closed on NULL mesh iface / unreadable header / any denial, stats counter), main.c:193 lichen_gateway_tunnel_auth_init + :896 handler binding (gateway_tunnel_auth_coap_adapt). (3) Mapping confirmed at the wiring boundary: BUILD_ASSERT(COAP_RESPONSE_CODE_CREATED==0x44 / FORBIDDEN==0x83) in coap_server.c + host test test_coap_code_mapping (204-\u003e0x44, 403-\u003e0x83). (4) Host tests lichen/tests/tunnel_auth (CMake+gen_vectors.py+main.c) pass 1/1 locally with ASan/UBSan: vectors replay/expiry/wrong-root/wrong-signer/wrong-egress/noncanonical/trailing, policy+direction+clock-regression, revocation/rotation/atomicity, encoder exact vector, code mapping. Suite: cmake+ctest green (gcc 13, cmake 3.28). No code changes this round (verify-and-close; work pre-landed). 3x delegated review (correctness/security/edge, kimi-k3 via opencode run) timed out mid-analysis twice each — self-completed all three passes per the loop fallback. Findings: 1 real defect filed as project-LICHEN-worker6-jzx5 (P1: sender_iid address-flip space vs root_iid pubkey-cleared space can never match at tunnel_auth.c:343 -\u003e all grants deny WRONG_ROOT; fail-closed, host test bypasses the sockaddr path which is why it landed green); minor observations (uptime-as-unix documented in both call sites, single-hop route ponytail documented) already noted in code comments. Zephyr app-level build validation not run locally (host test covers module+mapping; wiring is Zephyr-only) — noted for CI.",
+  "updated_at": "2026-09-09T06:53:06.998913972Z",
+  "closed_at": "2026-09-09T06:53:06.998913972Z",
+  "close_reason": "Already landed by worker-8 (commits ce47b0db12 'wire tunnel_auth coap and egress' + 60eca1c83f 'egress tunnel-auth gate on mesh-to-internet forwarding', merged 199ac8a3fe). Verified on main: (1) coap_server resource registered — coap_server.c:562-620 tunnel_auth_post + COAP_RESOURCE_DEFINE behind CONFIG_LICHEN_TUNNEL_AUTH, with BUILD_ASSERTs pinning 2.04=0x44/4.03=0x83 mapping via lichen_tunnel_auth_coap_code(); (2) gateway app wiring — main.c:202 lichen_gateway_tunnel_auth_init + main.c:789-834 resource/adapter; (3) egress gate — forwarding.c:198 calls lichen_tunnel_auth_decapsulate on the mesh-to-external path (single-hop SRH, fail-closed ponytail note for multi-hop). Host tests lichen/tests/tunnel_auth build+pass (1/1). No code changes needed; bead was stale.",
   "labels": [
     "gateway"
   ],

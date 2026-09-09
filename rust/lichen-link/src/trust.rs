@@ -292,6 +292,13 @@ mod tests {
     }
 
     // ── Key derivation vectors (gcp3_trust_models.json) ───────────────────
+    //
+    // QUARANTINE (spec/decisions.jsonl upstream-yggdrasil-addressing): the
+    // iid/ygg_addr values in gcp3_trust_models.json encode the rejected
+    // SHA-512 native profile (test/vectors/legacy/). They pin internal
+    // consistency only, MUST NOT be treated as addressing conformance
+    // oracles, and must be regenerated as pinned upstream AddrForKey
+    // byte-equality vectors when the migration lands.
 
     #[test]
     fn derivation_zero() {
@@ -529,6 +536,14 @@ mod tests {
     }
 
     // ── Binding invariant vectors (gcp3_trust_models.json) ────────────────
+    //
+    // The ygg_addr literals here mirror the gcp3_trust_models.json corpus,
+    // which uses the rejected SHA-512 native profile (see the QUARANTINE
+    // note above). The invariant tested here (addr[8..16] == IID) is an
+    // artifact of the native profile's construction: upstream AddrForKey
+    // does NOT place the IID in the low 64 bits, so after the migration
+    // these vectors and verify_ygg_iid_binding's usage must be regenerated
+    // against upstream byte-equality values.
 
     #[test]
     fn binding_invariant_alice() {

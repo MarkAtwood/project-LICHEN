@@ -4,8 +4,6 @@
 config LICHEN_ROUTING
 	bool "LICHEN authenticated routing-control payload handling"
 	depends on LICHEN
-	select TINYCRYPT
-	select TINYCRYPT_SHA256
 	select LICHEN_CRYPTO_MONOCYPHER
 	select LICHEN_LINK_SCHNORR if LICHEN_LINK
 	default n

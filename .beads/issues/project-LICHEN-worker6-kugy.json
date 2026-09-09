@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-kugy",
+  "title": "heft native_sim twister drops app prj.conf (kconfig merged without prj.conf)",
+  "description": "Environment bug discovered by worker7 on heft (2026-09-09): running 'west twister -p native_sim/native/64 -T lichen/tests/\u003csuite\u003e' from a worker tree (~/Developer/lichen-workers/workerN) with the lichen-env.sh ZEPHYR_BASE (=~/Developer/lichen-workspace/project-LICHEN/zephyr) silently fails to merge the test's prj.conf: build_info.yml kconfig.files lists only board defconfig + extra fragments, CONFIG_NETWORKING stays unset, then compile fails 'zephyr/ztest.h: No such file or directory'. Reproduced on the EXISTING suite lichen/tests/coap_status_get - not caused by new tests. module resolution also pulls lichen sources from the shared checkout (build_info include-dirs point at lichen-workspace/project-LICHEN/lichen). Workaround verified by worker7: plain 'west build -b native_sim/native/64 \u003ctest\u003e -d \u003cdir\u003e' with ZEPHYR_BASE exported to the worker tree's own zephyr/ picks prj.conf correctly and runs. Fix candidates: (a) have twister runs export ZEPHYR_BASE to the invoking tree's zephyr; (b) fix scripts/heft-twister.sh + scripts/bead-twister.sh which assume a Mac worker rsyncing to heft (they are broken when run ON heft). Evidence: build logs under worker7/twister-out/ (now removed) - rerun 'west twister -p native_sim/native/64 -T lichen/tests/coap_status_get' to reproduce.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T07:32:44.515983946Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T07:32:44.515983946Z",
+  "labels": [
+    "ci",
+    "zephyr"
+  ]
+}

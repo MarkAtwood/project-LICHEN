@@ -37,7 +37,7 @@ from ..crypto.delegation_tokens import (
     cose_protected_header,
     cose_sig_structure,
 )
-from ..crypto.identity import Identity
+from ..crypto.identity import Identity, _pubkey_to_iid
 
 # Local fact claim names (spec 8.13.1 "Local Fact Claims").
 CLAIM_EMERGENCY = "lichen:emergency"
@@ -141,10 +141,13 @@ class LocalFactClaims:
             or not all(type(c) is str for c in self.channel)
         ):
             raise LocalFactError(f"{CLAIM_CHANNEL} must be a list of tstr")
-        # Normalize to tuple: from_cbor produces a tuple, and the wire-bstr
-        # consistency check on LocalFact compares by value — accepting a list
-        # at construction would then falsely reject an otherwise valid fact.
-        if self.channel is not None and isinstance(self.channel, list):
+        # Normalize to tuple: from_cbor decodes CBOR arrays to list but
+        # normalizes to tuple itself, and to_cbor accepts either. Frozen
+        # dataclass equality is by-value, so a list-built claims would never
+        # equal its own decode — the wire-bstr consistency check on LocalFact
+        # would then falsely reject an otherwise valid fact. Single source of
+        # truth here keeps encode/decode symmetric.
+        if self.channel is not None and not isinstance(self.channel, tuple):
             object.__setattr__(self, "channel", tuple(self.channel))
 
     def to_cbor(self) -> bytes:
@@ -257,14 +260,30 @@ class LocalFact:
             raise LocalFactError(f"signature must be 48 bytes, got {len(self.signature)}")
         if (self.protected_bytes is None) != (self.payload_bytes is None):
             raise LocalFactError("wire bstrs must be retained as a pair or not at all")
-        if self.payload_bytes is not None:
-            # The retained wire bstrs are what the signature is verified over
-            # (RFC 9052 section 4.4); they must decode to exactly the claims
-            # carried on the object, or verify would authenticate one claim set
-            # while callers read another (desync via mismatched construction or
-            # dataclasses.replace).
-            if LocalFactClaims.from_cbor(self.payload_bytes) != self.claims:
-                raise LocalFactError("payload_bytes do not decode to the claims on the fact")
+        # Wire bstrs, when present, must actually be bytes (module contract:
+        # bad field types raise LocalFactError, never leak a TypeError from
+        # the CBOR layer).
+        if self.protected_bytes is not None and (
+            not isinstance(self.protected_bytes, bytes)
+            or not isinstance(self.payload_bytes, bytes)
+        ):
+            raise LocalFactError("wire bstrs must be bytes")
+        # The retained wire bstrs are what the signature is verified over
+        # (RFC 9052 section 4.4); they must decode to exactly the claims
+        # carried on the object. On a frozen dataclass the idiomatic mutation
+        # is dataclasses.replace(fact, claims=...), which keeps the old wire
+        # bstrs; without this check a desynced fact would verify over the OLD
+        # signed payload while .claims carries unverified fields, silently
+        # dropping the tamper-resistance property. Compare decoded
+        # (encoding-agnostic) so a peer's valid-but-different CBOR encoding
+        # still passes.
+        if self.payload_bytes is not None and (
+            LocalFactClaims.from_cbor(self.payload_bytes) != self.claims
+        ):
+            raise LocalFactError(
+                "claims do not match the retained payload_bytes: "
+                "payload_bytes do not decode to the claims on the fact"
+            )
 
     def to_cose_sign1(self) -> bytes:
         """Encode as a CBOR COSE_Sign1 array [protected, unprotected, payload, sig].
@@ -382,9 +401,16 @@ def verify_local_fact(
             contact with the issuer (no cache entry yet).
 
     Returns:
-        True if the signature verifies and the freshness checks pass,
-        False otherwise.
+        True if the signature verifies, the claimed issuer IID matches the
+        verifying key, and the freshness checks pass, False otherwise.
     """
+    # issuer_iid lives in the unprotected header (not signature-covered), so
+    # bind it to the verifying key: a fact claiming gateway A's IID must
+    # verify against A's pubkey. Matches verify_delegation_token's
+    # DELEGATOR_IID_MISMATCH hygiene; matters if downstream trusts issuer_iid
+    # for federation/audit rather than resolving keys strictly by kid.
+    if _pubkey_to_iid(gateway_pubkey) != fact.issuer_iid:
+        return False
     if fact.claims.expiry is not None and (
         current_time is None or fact.claims.expiry <= current_time
     ):

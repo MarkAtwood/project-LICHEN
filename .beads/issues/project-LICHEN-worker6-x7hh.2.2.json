@@ -1,0 +1,33 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.2.2",
+  "title": "x7hh.2 roll-up: Operating-basis matrix incl 15.247 classification",
+  "description": "Build per-device allowed/disallowed/unverified configuration matrix distinguishing 15.247 ordinary FHSS vs DTS vs hybrid; verify bandwidth/spacing, hopping, occupancy, and paragraph(h) coordination evidence.",
+  "design": "\n\n[hpc8-deep original]\n{\"acceptance_criteria\": \"Matrix cites exact grant evidence; fixed-CH0/receiver-home operation not assumed FHSS-compliant; gaps marked unverified.\", \"actor\": \"opencode-decomposition\", \"dependencies\": [{\"created_at\": \"2026-09-09T03:37:28.906477564Z\", \"created_by\": \"Mark Atwood\", \"depends_on_id\": \"project-LICHEN-worker6-x7hh.2\", \"issue_id\": \"project-LICHEN-worker6-x7hh.2.2\", \"metadata\": \"{}\", \"type\": \"parent-child\"}, {\"created_at\": \"2026-09-09T03:38:18.814645117Z\", \"created_by\": \"Mark Atwood\", \"depends_on_id\": \"project-LICHEN-worker6-x7hh.2.1\", \"issue_id\": \"project-LICHEN-worker6-x7hh.2.2\", \"metadata\": \"{}\", \"type\": \"blocks\"}], \"description\": \"Build per-device allowed/disallowed/unverified configuration matrix distinguishing 15.247 ordinary FHSS vs DTS vs hybrid; verify bandwidth/spacing, hopping, occupancy, and paragraph(h) coordination evidence.\", \"design\": null, \"id\": \"project-LICHEN-worker6-x7hh.2.2\", \"issue_type\": \"task\", \"notes\": null, \"plan_sha256\": \"c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1\", \"title\": \"x7hh.2 leaf: Operating-basis matrix incl 15.247 classification\"}\n[/hpc8-deep original]\nDecomposition only, not completion or approval. Preserve original requirements through the reviewed child contracts. Prerequisites belong on leaves, not rollups. Child keys: authority.02, authority.04, authority.05, authority.06, authority.07, authority.08, authority.09.\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "acceptance_criteria": "Matrix cites exact grant evidence; fixed-CH0/receiver-home operation not assumed FHSS-compliant; gaps marked unverified.",
+  "notes": "Claim-first decomposition completed and independently reviewed: this record is a roll-up, not completed implementation. Its child definitions and concrete prerequisites are now available to the dependency-aware frontier. Across the 31 roll-ups there are 172 new leaves and 771 blocking edges, with all scoped references resolved and no hierarchy/completion cycles. Human/RF/security authorization remains explicit; external contacts/filings stay deferred. Nine staged definitions received reviewed producer/handoff amendments in their native Beads fields; those current fields, not the initial temporary import inputs, are authoritative. No feature code, project tests, or RF work was executed as part of decomposition. No underlying work item was closed.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "epic",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T03:37:28.732433471Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T07:18:30.731874433Z",
+  "started_at": "2026-09-09T05:42:56.359557595Z",
+  "labels": [
+    "docs",
+    "regulatory",
+    "ccp",
+    "conformance",
+    "qualification"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.2.2",
+      "depends_on_id": "project-LICHEN-kudc",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:27:57.477411542Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

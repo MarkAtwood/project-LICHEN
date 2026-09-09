@@ -1,0 +1,35 @@
+{
+  "id": "project-LICHEN-worker6-1p2r.5",
+  "title": "[blocked on lptm design] dao_origin reds: 33 validator IID_MISMATCH failures post-AddrForKey",
+  "description": "1p2r child, BLOCKED on lptm (Mark's DAO source-IID-binding design decision: re-key on full 16-byte address vs carry IID explicitly vs require link-local). tests/test_vectors.py::test_every_dao_origin_vector_executes_production_validator_and_manager fails 32/33 + test_dao_origin_production_enforces_canonical_source_vectors 1/1 on current main with DaoError IID_MISMATCH from src/lichen/rpl/dao_manager.py:918. Mechanism (lptm class): validator extracts IID from wire source address via packed[8:16]; post-migration 02xx sources no longer embed the SHA-512 IID, so legit origins get IID_MISMATCH. The corpus's fe80 DODAG constants are fine (link-local retains scope); the 02xx source/origin addresses and the validator's extraction need the lptm adjudication FIRST — corpus regen (if option a) follows the decision. DO NOT fix by weakening tests or guessing the design.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T11:28:53.760765856Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T11:28:53.760765856Z",
+  "labels": [
+    "python",
+    "yggdrasil",
+    "vectors"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-1p2r.5",
+      "depends_on_id": "project-LICHEN-worker6-1p2r",
+      "type": "parent-child",
+      "created_at": "2026-09-09T11:28:53.908707184Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-1p2r.5",
+      "depends_on_id": "project-LICHEN-worker6-lptm",
+      "type": "blocks",
+      "created_at": "2026-09-09T11:28:54.016591114Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

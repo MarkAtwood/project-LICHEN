@@ -1821,6 +1821,8 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
     ));
 
     relay.send_dao().await.unwrap();
+    // The relay's solicited-DIS DIO was already drained above (root rejected
+    // it), so the relay's DAO is the next frame root pops.
     let relay_dao_outcome = root.receive(1, 0).await.unwrap();
     assert!(
         matches!(
@@ -2755,6 +2757,14 @@ fn root_seq_cache_is_reachable_from_stack_state() {
 // had two bases and worker-6's side of the file was byte-identical to
 // the older base (an ancestor of HEAD), so it contained nothing new;
 // HEAD's newer evolution above is kept and no worker-6 intent is lost.
+//
+// Merge note (main x beads-worker-5): worker-5's side of this section is
+// the merge-base shape plus two deltas -- a stack-level expiry-boundary
+// test and a version parameter on vector_signed_dio_body. Both are already
+// present below in HEAD's evolved form (expiry_equal_now_... at stack
+// level; clock_equal_to_expiry_boundary_... and gate_fixture/gate_fields
+// at gate level), so HEAD's side is kept wholesale and no worker-5 intent
+// is lost.
 
 const VECTOR_EXPIRY_UNIX: u64 = 1_735_689_600;
 
@@ -2824,6 +2834,67 @@ async fn expired_root_signature_admitted_as_baseline_not_rejected() {
             RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. })
         ),
         "replayed expired signature must stay on baseline, not reject: {outcome:?}"
+    );
+}
+
+#[tokio::test]
+async fn expiry_equal_now_root_signature_admitted_as_baseline_not_rejected() {
+    // THE EQUALITY PIN: receive.rs:719 degrades on `expiry <= now_unix`, so
+    // now == expiry is already Baseline. The stack-level +1 (expired) case is
+    // above; the -1 pre-expiry cases exist only at gate level below (a
+    // stack-level pre-expiry Verified is structurally impossible with the
+    // shared vector, per the block comment at the top of this section). This
+    // pins the exact boundary end-to-end: under a `<` for `<=` regression the
+    // signature passes the expiry gate and is then rejected at the carrier/
+    // payload cross-check (the fixture's carrier diverges by design), so the
+    // DioReceived assertion below is the detector.
+    let (mut sender, mut receiver, packet, relay_identity) =
+        baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX));
+    link_introduce(&mut sender, &mut receiver, &relay_identity).await;
+
+    // Join first (see the expired-clock test): the carrier must be a
+    // steady-state DIO against joined dodag state.
+    sender_ipv6(
+        &mut sender,
+        &dio_packet_from(
+            link_local_from_iid(relay_identity.iid),
+            RPL_ALL_NODES,
+            root_address(&relay_identity),
+            ROOT_RANK,
+        ),
+    )
+    .await;
+    assert!(matches!(
+        receiver.receive(1, 0).await.unwrap(),
+        Some(RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. }))
+    ));
+    assert!(receiver.rpl_node().is_joined());
+
+    sender_ipv6(&mut sender, &packet).await;
+    let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
+    assert!(
+        matches!(
+            outcome,
+            RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. })
+        ),
+        "now == expiry must degrade to baseline, not reject: {outcome:?}"
+    );
+
+    // Baseline (not Verified): nothing entered the root-seq cache at the
+    // boundary. (The boundary detector is the DioReceived assertion above —
+    // a `<` regression dies at the cross-check Reject before it could pin
+    // root_seq; these asserts pin the correct path's cache hygiene.)
+    let decoded = {
+        use crate::rpl_stack::root_sig;
+        root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose()).unwrap()
+    };
+    assert_eq!(
+        receiver.root_seq_cached(decoded.payload.dodag_id, decoded.payload.instance),
+        None
+    );
+    assert_eq!(
+        receiver.root_seq_cached(root_address(&relay_identity), decoded.payload.instance),
+        None
     );
 }
 

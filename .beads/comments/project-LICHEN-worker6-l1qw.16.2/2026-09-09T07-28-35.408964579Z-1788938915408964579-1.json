@@ -1,0 +1,7 @@
+{
+  "id": "1788938915408964579-1",
+  "issue_id": "project-LICHEN-worker6-l1qw.16.2",
+  "author": "Mark Atwood",
+  "text": "Evidence (worker5, m9i4 round): end_to_end::runtime_ingress_dispatches_authenticated_gcp_slot_claim FAILS on unmodified HEAD d0af253858 — client send_secure_request for POST /.well-known/lichen-gw/slots errors CoapEncode at end_to_end.rs:1014 during test setup. Reproduced in clean HEAD worktree; unrelated to m9i4 tunnel-auth wiring.",
+  "created_at": "2026-09-09T07:28:35.408964579Z"
+}

@@ -1,0 +1,64 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.1.2.3",
+  "title": "Specify owned TX grants and conflict resolution",
+  "description": "Scope: assignment/grant encoding in /home/mark/Developer/lichen-workspace/project-LICHEN/spec/02b-ccp-receiver-aware.md. Define owner identity, applicable intervals, receiver/radio exclusions, validity and bounded assignment counts. Specify how standing grants interact with committed RX and half-duplex resources, and identify the selected assignment or collision-repair semantics. Independent event examples must distinguish a hash candidate from an exclusive opportunity. Reuse project-LICHEN-worker6-b7z9.22 mechanics without treating anonymous slot maps as assignments to every listener.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Keep standing coordination rather than introducing per-packet reservation traffic. Preserve useful sorted/bounded slot validation and replace only the obsolete ownership interpretation.",
+  "acceptance_criteria": "Exact grant fields and ownership rules are specified. Independent timelines reject sender-grant-only access, overlapping receiver TX/RX, priority TX preempting committed RX, and ambiguous anonymous ownership. Equal modulo-eight hash residues remain colliding across SFN rotation until the specified assignment/repair resolves them. Unassigned fallback remains explicitly contended; no delivery or collision-free guarantee is invented.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "estimated_minutes": 150,
+  "created_at": "2026-09-09T06:24:06.951475988Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:21.160991225Z",
+  "external_ref": "lichen-decomp-hpc8-deep:wire.06",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "wire.06",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "93e81d12b40ba2412b74dfa51c9fb615e181830714359b9fc1f327448cc7d30c"
+  },
+  "labels": [
+    "ccp",
+    "decomp-hpc8-deep",
+    "scheduling",
+    "spec",
+    "wire"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.2.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:07.104854171Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.2.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.1.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:41.700206854Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.2.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.2.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:43.009964849Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.2.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.2.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:44.307139062Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

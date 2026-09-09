@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-xf1v",
+  "title": "route_hash over hop ADDRESSES (16B): C tunnel_auth.c + lichen/tests/tunnel_auth migration",
+  "description": "Spec changed (5muj): 06-security.md §8.11 route_hash now hashes full 16-byte hop ADDRESSES, not 8-byte IIDs. lichen/subsys/lichen/gateway/tunnel_auth.c: lichen_tunnel_route_hash(crypto, route_iids, route_hops, out) takes route_iids (8-byte hops); the header documents route_iids at tunnel_auth.h:126-143. Migrate the hop parameter to 16-byte addresses (rename route_iids -\u003e route_addrs; hash hop[16]); the host test lichen/tests/tunnel_auth/src/main.c and gen_vectors.py consume the shared corpus. COORDINATE with the shared-vector child (tunnel_authorization.json regen). Discovered-from 5muj.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T08:42:34.080685849Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T08:42:34.080685849Z",
+  "labels": [
+    "zephyr",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-xf1v",
+      "depends_on_id": "project-LICHEN-worker6-5muj",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T08:42:34.225417192Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

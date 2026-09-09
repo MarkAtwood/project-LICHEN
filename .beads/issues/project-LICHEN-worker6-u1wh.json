@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-worker6-u1wh",
+  "title": "[info] worker3 stalled (headless, fresh session)",
+  "description": "5 consecutive rounds with zero 24h closures; session rotated.",
+  "status": "closed",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T05:54:12.683052867Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T06:17:18.02136514Z",
+  "closed_at": "2026-09-09T06:17:18.02136514Z",
+  "close_reason": "worker3 (this session) active and productive: closed q6ko.4 (quarantine labels, commit 4e7fe193e0) and bhaz (constant consolidation, commit 6416484841). Stall report stale."
+}

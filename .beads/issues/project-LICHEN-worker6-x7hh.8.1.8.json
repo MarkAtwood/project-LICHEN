@@ -1,0 +1,88 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.8.1.8",
+  "title": "Rust: directional RF and fixed-profile signaling",
+  "description": "Publish and adopt the wire.12 directional evidence contract through rust/lichen-rpl/src/message.rs, rust/lichen-core/src/sf_assignment.rs and rust/lichen-node/src/scheduler.rs. Retain authenticated receiver/direction/channel/profile/time/coverage/validity. Scheduled profile 0x01 remains fixed SF10; stale/unknown evidence, reverse-link SNR, queue load, end-to-end timeout and CCA exhaustion cannot authorize a PHY transition.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "This is the Rust CCP2 slice of b7z9.74. rust.02 owns the generic wire boundary; reuse it rather than implement another codec. b7z9.71's closure only establishes its C emission slice and is not Rust conformance or permission for load-based SF allocation. Do not add adaptive PHY behavior, key portability, new signature domains or audited OSCORE/EDHOC changes.",
+  "acceptance_criteria": "Use independent vectors.02/.07 through production publication, decoding and profile policy. Verify exact bytes, report ownership, asymmetric directions, expiry, unsupported/unconfirmed transitions and unchanged receiver channel/SF under repeated congestion. Exercise core/RPL/node signaling tests using manifest-supported hosted features and relevant no_std checks. Run fmt and clippy. Preserve legacy SF-assignment tests and never reinterpret an absent legacy field as CCP2 admission.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:25:24.022605238Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:10.88155679Z",
+  "external_ref": "lichen-decomp-hpc8-deep:rust.09",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "rust.09",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "fb9f2f4962cb191afa14f3462e63f8f472e5194ea70b8851bbb2f35363a589fe"
+  },
+  "labels": [
+    "ccp",
+    "ccp2",
+    "decomp-hpc8-deep",
+    "local-ok",
+    "production",
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.8",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:25:24.169228946Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.8",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.3.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:41.378651271Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.8",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:42.449882025Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.8",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.7",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:43.469564824Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.8",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:44.448720589Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.8",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.1.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:45.470406664Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.8",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.1.7",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:46.456902822Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

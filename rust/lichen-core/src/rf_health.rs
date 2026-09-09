@@ -639,15 +639,15 @@ impl RfHealthMetrics {
         utilization: Option<u32>,
         ema_loss_fp: Option<u32>,
     ) -> (u8, bool) {
-        // Step 1-2: assigned SF, or the spec step-2 default of 10. The
+        // Step 1-2: assigned SF, or the spec step-2 default of 10, clamped
+        // to the spec 2a.8 valid range (SF_MIN/SF_MAX = 7/12) — ASSIGNED_SF
+        // is a DIO-signaled byte, so an out-of-range value must never reach
+        // radio configuration (matches python ccp.py step 1-2 clamp). The
         // baseline is NOT the adaptive_sf() table form — that would
         // double-count load/density before steps 3-6 and the floors see
-        // them a second time (b7z9.29.3; matches python ccp.py step 1-2).
-        let mut sf = assigned_sf.unwrap_or(10);
-        // SF_MIN/SF_MAX per spec 2a.8:636; assigned_sf is a DIO-signaled
-        // 1-byte field and must never reach radio configuration out of
-        // range (matches python ccp.py `max(7, min(12, sf))`; 5m15).
-        sf = sf.clamp(7, 12);
+        // them a second time (b7z9.29.3). SF_MIN/SF_MAX per spec
+        // 2a.8:636 (python ccp.py `max(7, min(12, sf))`; 5m15).
+        let mut sf = assigned_sf.unwrap_or(10).clamp(7, 12);
         let util = utilization.unwrap_or(0);
         let loss_fp = ema_loss_fp.unwrap_or(0);
         let snr_ema = self.snr.avg().unwrap_or(0);
@@ -715,22 +715,45 @@ mod tests {
     use serde_json::Value;
 
     #[test]
-    fn adaptive_sf_step3_uses_spec_density_8() {
+    fn adaptive_sf_floor_b_engages_below_density_high() {
         let mut m = RfHealthMetrics::new();
         m.record_density(9);
         m.record_rx(-2);
         let (sf, tx_allowed) = m.adaptive_sf_select(Some(7), None, None);
-        // density 9 > 8: step 3 engages (+2) per spec 2a.8 (was > 10),
-        // then floor (c) lifts the result to 11.
+        // Density 9 <= DENSITY_HIGH (10): step 3 and floor (c) do NOT
+        // engage. SNR EMA -2 < SNR_POOR (0) engages floor (b):
+        // sf = max(11, 7) = 11.
         assert_eq!(sf, 11);
         assert!(tx_allowed);
-        // Density 8 exactly: step 3 does not engage (good SNR avoids the
-        // floor-(b) interaction).
+        // Benign RF (density 8 <= 10, SNR 10 >= 0, no loss/load): no step
+        // and no floor engages (step 4 additionally needs density <
+        // DENSITY_LOW = 5), so the assigned SF passes through unchanged.
         let mut m8 = RfHealthMetrics::new();
         m8.record_density(8);
         m8.record_rx(10);
         let (sf8, _) = m8.adaptive_sf_select(Some(7), None, None);
         assert_eq!(sf8, 7);
+    }
+
+    #[test]
+    fn adaptive_sf_select_clamps_assigned_sf_to_spec_range() {
+        // spec 2a.8 SF_MIN/SF_MAX = 7/12: an out-of-range ASSIGNED_SF byte
+        // must never reach radio configuration (python ccp.py step 1-2
+        // clamp parity). Benign RF (density 8 <= 10, SNR 10 >= 0, no
+        // loss/load) so no step or floor masks the entry clamp.
+        let benign = || {
+            let mut m = RfHealthMetrics::new();
+            m.record_density(8);
+            m.record_rx(10);
+            m
+        };
+        assert_eq!(benign().adaptive_sf_select(Some(0), None, None).0, 7);
+        assert_eq!(benign().adaptive_sf_select(Some(6), None, None).0, 7);
+        assert_eq!(benign().adaptive_sf_select(Some(13), None, None).0, 12);
+        assert_eq!(benign().adaptive_sf_select(Some(200), None, None).0, 12);
+        // In-range values pass through untouched.
+        assert_eq!(benign().adaptive_sf_select(Some(7), None, None).0, 7);
+        assert_eq!(benign().adaptive_sf_select(Some(12), None, None).0, 12);
     }
 
     #[test]
@@ -1070,10 +1093,14 @@ mod tests {
     }
 
     #[test]
-    fn adaptive_sf_select_clamps_assigned_sf_to_spec_range() {
+    fn adaptive_sf_select_clamps_assigned_sf_no_rx_samples() {
         // assigned_sf is a DIO-signaled 1-byte field (spec 2a.8:636):
         // out-of-range values must never reach radio configuration
-        // (5m15; matches python ccp.py `max(7, min(12, sf))`).
+        // (5m15; matches python ccp.py `max(7, min(12, sf))`). Merge
+        // dedup: kept alongside the benign-RF clamp test above because
+        // fresh metrics exercise the empty-SnrStats `avg() -> None`
+        // default (snr_ema unwrap_or(0)); renamed to resolve the
+        // duplicate test name.
         let m = RfHealthMetrics::new();
         // Neutral conditions: no step raises or lowers SF, so the
         // returned value is the clamped baseline itself.

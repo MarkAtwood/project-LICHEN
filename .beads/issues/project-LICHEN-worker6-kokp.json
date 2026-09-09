@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-kokp",
+  "title": "[review] COSE to_cose_sign1 re-derives unprotected kid from mutable fields while emitting retained wire payload",
+  "description": "Edge-review of y2a2 (pass 3), distinct failure mode from the verify-side desync. to_cose_sign1 emits verbatim retained payload_bytes but re-derives the unprotected kid from LIVE mutable fields: capability_announcements.py:210 (kid from self.payload.announcer_iid), delegation_tokens.py:249 + :583 (delegator_iid), key_rotation_attestation.py:187 (old_iid), root_dio_signature.py:217 (root_iid). After a payload/field swap the emitted blob has kid inconsistent with the retained signed payload, so the module's own from_cose_sign1 rejects its own re-encoding (e.g. capability_announcements.py:254 kid==announcer_iid check). Encode-side self-inconsistency. Fix: emit retained bytes fully consistently, or reject re-encode when fields diverge from retained bstrs; resolved by the same freeze/derive fix as 2vp1.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T05:16:40.9358372Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:35:05.422217246Z",
+  "closed_at": "2026-09-09T05:35:05.422217246Z",
+  "close_reason": "Fixed by the 2vp1 change: all COSE envelope+payload dataclasses are now frozen (post-construction mutation impossible) and __post_init__ enforces payload_bytes-decodes-to-payload equality (re-run by dataclasses.replace). The unprotected kid fields (delegator_iid/old_iid/root_iid/announcer_iid) can no longer diverge from the retained signed payload, so to_cose_sign1 can no longer emit a self-inconsistent blob.",
+  "labels": [
+    "python",
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-kokp",
+      "depends_on_id": "project-LICHEN-worker6-y2a2",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T05:16:41.057562675Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

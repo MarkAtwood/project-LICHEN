@@ -128,14 +128,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 }
                 if !rpl_ipv6_multicast_is_allowed(&received.ipv6)
                     || !valid_rpl_ipv6(&received.ipv6)
-                    || !dio_dis_destination_is_allowed(&received.ipv6, self.local_rpl_addr)
+                    || !dio_dis_destination_is_allowed(&received.ipv6, self.local_control_addr)
                 {
-                    std::eprintln!(
-                        "PROBE ingress_gate mc={} valid={} dst={}",
-                        rpl_ipv6_multicast_is_allowed(&received.ipv6),
-                        valid_rpl_ipv6(&received.ipv6),
-                        dio_dis_destination_is_allowed(&received.ipv6, self.local_rpl_addr)
-                    );
                     return Ok(Some(RplBorderIngressOutcome::Control(
                         RplReceiveOutcome::RplRejected,
                     )));
@@ -326,7 +320,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 if !valid_rpl_ipv6(&received.ipv6) {
                     return Ok(Some(RplReceiveOutcome::RplRejected));
                 }
-                if !dio_dis_destination_is_allowed(&received.ipv6, self.local_rpl_addr) {
+                if !dio_dis_destination_is_allowed(&received.ipv6, self.local_control_addr) {
                     return Ok(Some(RplReceiveOutcome::RplRejected));
                 }
                 self.process_rpl(frame, received, now_ms).await.map(Some)
@@ -625,11 +619,13 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 // Solicited DIS response: re-target to the canonical
                 // multicast DIO address (RPL_ALL_NODES, ff02::1a). Per the
                 // R-09-005 admission contract (Python parity, worker6-ehcn
-                // option (A)) a unicast-destination DIO would be
-                // inadmissible at wire_is_for_local before admission even
-                // runs — and the leaf still joins by hearing the multicast
-                // DIO. RFC 6550 8.3's unicast-response SHOULD is overridden
-                // by the profile contract.
+                // option (A)) a unicast-destination DIO is rejected by the
+                // canonical-multicast gate inside the peer's
+                // process_authenticated_dio (lichen-schc codec; the failed
+                // admission also revokes the sender's join state) — and the
+                // leaf still joins by hearing the multicast DIO. RFC 6550
+                // 8.3's unicast-response SHOULD is overridden by the
+                // profile contract.
                 self.send_dio(RPL_ALL_NODES)
                     .await
                     .map_err(RplReceiveError::Transmit)?;

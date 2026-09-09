@@ -96,9 +96,11 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         }
         // Canonical multicast DIO delivery (spec 09 13.3 R-09-005): every
         // DIO — solicited or trickle — targets ff02::1a with broadcast L2.
-        // Unicast-dst DIOs are inadmissible at wire_is_for_local (the
-        // profile's admission contract, Python authenticated_dio.py parity),
-        // so callers naming a neighbor are re-targeted to the all-RPL-nodes
+        // A unicast-destination DIO would be rejected by the receiver's
+        // canonical-multicast gate in process_authenticated_dio
+        // (lichen-schc codec, Python authenticated_dio.py parity; the
+        // failed admission also revokes the sender's join state), so
+        // callers naming a neighbor are re-targeted to the all-RPL-nodes
         // multicast group. RFC 6550 8.3's unicast-response SHOULD is
         // superseded by this profile contract.
         let control_destination = RPL_ALL_NODES;
@@ -109,12 +111,6 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             &body[..len],
         )
         .ok_or(TxError::BufferTooSmall)?;
-        #[cfg(feature = "root-sig")]
-        if self.rpl.router.dodag.is_root() {
-            // Round-trip sizing probe (bead b7z9.88.2): emit the packet
-            // length so the frame-budget accounting can be verified.
-            std::eprintln!("TRACE send_dio: len={} ipv6={}", len, packet.len());
-        }
         let l2_destination = ipv6_l2_destination(control_destination);
         // RPL DIO is control traffic (P1) and is carried uncompressed
         // (Rule 255): the authenticated-DIO admission gate accepts only

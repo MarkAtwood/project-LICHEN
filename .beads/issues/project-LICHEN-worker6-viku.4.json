@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-viku.4",
+  "title": "Local Facts CoAP resource (§8.13.1)",
+  "description": "Implement the gateway-issued local facts resource from spec §8.13.1. POST /.well-known/local-fact: node requests a fact, gateway decides policy and returns COSE_Sign1 credential. Claims: lichen:emergency, lichen:relay, lichen:priority, lichen:channel, lichen:quota, lichen:sponsored. Gateway signs with its own Ed25519 key — no PKI required. Facts valid within mesh lifetime; invalidated on gateway restart or root re-election. OSCORE-protected. Python reference impl.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T03:59:48.558654821Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T04:30:50.109984404Z",
+  "started_at": "2026-09-09T04:13:28.309899046Z",
+  "closed_at": "2026-09-09T04:30:50.109984404Z",
+  "close_reason": "Landed the Python reference impl of the 8.13.1 local-fact credential model (commit c2e3033f34): new module python/src/lichen/gateway/local_facts.py with LocalFactClaims (all 7 spec claims, type+range validated, fail-closed on unknown claims), LocalFact (COSE_Sign1 envelope, alg -65537 pinned, kid=8-byte IID, 48-byte sig), issue_local_fact (gateway sign) and verify_local_fact (node verify), reusing cose_protected_header/cose_sig_structure/schnorr48 from delegation_tokens. Strict CBOR decode (_loads_strict rejects trailing bytes); isinstance-bstr guards; channel container-type validation; signature error contract. 27 tests, ruff+mypy clean. 3x codereview delegated to kimi-k3 (correctness/security/edge): correctness 5 findings (2 input-validation + docstring fixed in-diff; verify-over-wire-bytes + kid-binding deferred as beads lquv/rtnr), security 6 findings (channel TypeError fixed in-diff; bearer-credential/no-freshness/unbounded-tstr deferred as beads grna/b4fu/hytv), edge 3 findings (trailing-bytes + signature-TypeError fixed in-diff; wire-bytes dup of lquv). Scope note: this is the credential MODEL (claims/COSE sign/verify); the CoAP resource wiring (POST /.well-known/local-fact) and OSCORE transport are separate follow-on work not in this bead's landable slice.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-viku.4",
+      "depends_on_id": "project-LICHEN-worker6-viku",
+      "type": "parent-child",
+      "created_at": "2026-09-09T03:59:48.682098229Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

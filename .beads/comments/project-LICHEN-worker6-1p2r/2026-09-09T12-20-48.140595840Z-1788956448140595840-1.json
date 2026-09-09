@@ -1,0 +1,7 @@
+{
+  "id": "1788956448140595840-1",
+  "issue_id": "project-LICHEN-worker6-1p2r",
+  "author": "Mark Atwood",
+  "text": "Additional stale-native corpus inventory (from 1p2r.3 edge-case codereview, report-only per legacy-fixture policy): spec/test-vectors/rpl.json:49,66,136 (same three DIO/DAO-ACK encodings carry old native DODAGID, nothing consumes it), test/vectors/schc_compression.json:24,66, test/vectors/wire_format_v2.json:247-254, spec/test-vectors/schc.json:22,64. All outside the previously-listed corpus set; fold into the reconciliation scope.",
+  "created_at": "2026-09-09T12:20:48.14059584Z"
+}

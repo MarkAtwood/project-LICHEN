@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-h3ub",
+  "title": "[info] worker6 stalled (headless, fresh session)",
+  "description": "5 consecutive rounds with zero 24h closures; session rotated.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T07:20:24.383989167Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T07:20:24.383989167Z"
+}

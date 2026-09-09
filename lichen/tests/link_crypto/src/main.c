@@ -496,15 +496,20 @@ ZTEST(link_crypto, test_derived_node_keys_authenticate_cross_node)
 
 ZTEST(link_crypto, test_lichen_yggdrasil_addr_matches_test_vectors)
 {
-	/* QUARANTINED-PENDING-UPSTREAM-MIGRATION: test/vectors/yggdrasil-derivation.json
-	 * vectors pinned below encode the rejected SHA-512 LICHEN-native profile.
-	 * Per the upstream-yggdrasil-addressing decision in spec/decisions.jsonl
-	 * every routable address MUST equal upstream AddrForKey; these literals are
-	 * pinned only until the C derivation migrates (bead project-LICHEN-worker6-q6ko).
-	 * Matches Rust lichen-core::addr::ygg_addr_from_pubkey,
-	 * C lichen_identity_ygg_addr_from_ed25519 oracle, and Python.
-	 * addr = [0x02] + SHA-512(pubkey)[0:7] + SHA-512(pubkey)[0:8] (U/L cleared)
-	 * Tests the lichen_yggdrasil_addr wrapper (project-LICHEN-gp7u). */
+	/* Upstream Yggdrasil AddrForKey vectors (yggdrasil-go@422836ee
+	 * src/address/address.go): addr[0]=0x02, addr[1]=leading-1 count in
+	 * the inverted pubkey, remaining bits packed MSB-first into whole
+	 * bytes, trailing partial byte discarded. NO hashing; the SHA-512
+	 * IID does not appear in the routable address.
+	 * Oracle: upstream address_test.go anchor (vector 4 below), never
+	 * the impl under test. Tests the lichen_yggdrasil_addr wrapper
+	 * (project-LICHEN-gp7u).
+	 * Merge resolution: kept over beads-worker-3's
+	 * QUARANTINED-PENDING-UPSTREAM-MIGRATION note because the literals
+	 * below are already the migrated upstream AddrForKey vectors
+	 * required by the settled upstream-yggdrasil-addressing decision;
+	 * the quarantine described the pre-migration SHA-512 literals that
+	 * this side replaced (bead project-LICHEN-worker6-q6ko). */
 	static const uint8_t vec1_pubkey[32] = {
 		0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14,
 		0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24,
@@ -512,8 +517,8 @@ ZTEST(link_crypto, test_lichen_yggdrasil_addr_matches_test_vectors)
 		0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55
 	};
 	static const uint8_t vec1_ygg[16] = {
-		0x02, 0x6b, 0x4e, 0x6c, 0x1f, 0xe3, 0x65, 0x04,
-		0x69, 0x4e, 0x6c, 0x1f, 0xe3, 0x65, 0x04, 0xe1
+		0x02, 0x00, 0x38, 0x9e, 0x77, 0x7a, 0xce, 0x07,
+		0xc7, 0xd6, 0xca, 0x08, 0x16, 0x6e, 0xcd, 0x20
 	};
 
 	struct in6_addr addr;
@@ -522,21 +527,23 @@ ZTEST(link_crypto, test_lichen_yggdrasil_addr_matches_test_vectors)
 	ret = lichen_yggdrasil_addr(vec1_pubkey, &addr);
 	zassert_equal(ret, 0, "yggdrasil_addr vec1 failed: %d", ret);
 	zassert_mem_equal(addr.s6_addr, vec1_ygg, sizeof(vec1_ygg),
-			  "vector 1 does not match yggdrasil-derivation.json");
+			  "vector 1 does not match upstream AddrForKey");
 
-	/* Vector 2 from JSON: zero pubkey verifies U/L bit + SHA-512 prefix handling */
+	/* Vector 2: zero pubkey -> inverted key is all 1s, so the leading-1
+	 * count wraps to 0 (upstream byte counter, 256 mod 256) and no
+	 * payload bits remain. */
 	static const uint8_t vec2_pubkey[32] = {0};
 	static const uint8_t vec2_ygg[16] = {
-		0x02, 0x50, 0x46, 0xad, 0xc1, 0xdb, 0xa8, 0x38,
-		0x50, 0x46, 0xad, 0xc1, 0xdb, 0xa8, 0x38, 0x86
+		0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 	};
 
 	ret = lichen_yggdrasil_addr(vec2_pubkey, &addr);
 	zassert_equal(ret, 0, "yggdrasil_addr vec2 failed: %d", ret);
 	zassert_mem_equal(addr.s6_addr, vec2_ygg, sizeof(vec2_ygg),
-			  "vector 2 does not match yggdrasil-derivation.json");
+			  "vector 2 does not match upstream AddrForKey");
 
-	/* Vector 3 from JSON */
+	/* Vector 3 (RFC 8032 test key) */
 	static const uint8_t vec3_pubkey[32] = {
 		0xd7, 0x5a, 0x98, 0x01, 0x82, 0xb1, 0x0a, 0xb7,
 		0xd5, 0x4b, 0xfe, 0xd3, 0xc9, 0x64, 0x07, 0x3a,
@@ -544,14 +551,32 @@ ZTEST(link_crypto, test_lichen_yggdrasil_addr_matches_test_vectors)
 		0xaf, 0x02, 0x1a, 0x68, 0xf7, 0x07, 0x51, 0x1a
 	};
 	static const uint8_t vec3_ygg[16] = {
-		0x02, 0x0e, 0x02, 0xa5, 0x02, 0x25, 0xb4, 0xba,
-		0x0c, 0x02, 0xa5, 0x02, 0x25, 0xb4, 0xba, 0xaa
+		0x02, 0x00, 0x51, 0x4a, 0xcf, 0xfc, 0xfa, 0x9d,
+		0xea, 0x90, 0x55, 0x68, 0x02, 0x58, 0x6d, 0x37
 	};
 
 	ret = lichen_yggdrasil_addr(vec3_pubkey, &addr);
 	zassert_equal(ret, 0, "yggdrasil_addr vec3 failed: %d", ret);
 	zassert_mem_equal(addr.s6_addr, vec3_ygg, sizeof(vec3_ygg),
-			  "vector 3 does not match yggdrasil-derivation.json");
+			  "vector 3 does not match upstream AddrForKey");
+
+	/* Vector 4: upstream address_test.go TestAddress_AddrForKey anchor —
+	 * the external conformance oracle. */
+	static const uint8_t vec4_pubkey[32] = {
+		0xbd, 0xba, 0xcf, 0xd8, 0x22, 0x40, 0xde, 0x3d,
+		0xcd, 0x12, 0x39, 0x24, 0xcb, 0xb5, 0x52, 0x56,
+		0xfb, 0x8d, 0xab, 0x08, 0xaa, 0x98, 0xe3, 0x05,
+		0x52, 0x8a, 0xb8, 0x4f, 0x41, 0x9e, 0x6e, 0xfb
+	};
+	static const uint8_t vec4_ygg[16] = {
+		0x02, 0x00, 0x84, 0x8a, 0x60, 0x4f, 0xbb, 0x7e,
+		0x43, 0x84, 0x65, 0xdb, 0x8d, 0xb6, 0x68, 0x95
+	};
+
+	ret = lichen_yggdrasil_addr(vec4_pubkey, &addr);
+	zassert_equal(ret, 0, "yggdrasil_addr vec4 failed: %d", ret);
+	zassert_mem_equal(addr.s6_addr, vec4_ygg, sizeof(vec4_ygg),
+			  "vector 4 does not match upstream address_test.go anchor");
 
 	/* Error path test (matches other ipv6_addr functions) */
 	ret = lichen_yggdrasil_addr(NULL, &addr);

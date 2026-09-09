@@ -1,0 +1,19 @@
+{
+  "id": "project-LICHEN-worker6-gtdo",
+  "title": "[review] coap_oscore.c: encode_content_format_option unused-function warning when LICHEN_COAP_SERVER_OSCORE=n",
+  "description": "Found by 3x codereview pass 3/3 (edge-cases) on uncommitted coap_oscore.c changes (worker2 round 2026-09-09).\n\nlichen/subsys/lichen/oscore/coap_oscore.c:110 defines encode_content_format_option unconditionally, but its only call site (coap_oscore.c:167) is inside #ifdef CONFIG_LICHEN_COAP_SERVER_OSCORE (coap_oscore.c:133). The file compiles whenever CONFIG_LICHEN_OSCORE=y \u0026\u0026 CONFIG_COAP_SERVER=y (lichen/subsys/lichen/oscore/CMakeLists.txt:23-25), while LICHEN_COAP_SERVER_OSCORE is a plain bool default y that may be set n (lichen/subsys/lichen/coap/Kconfig:84-88). That combo yields GCC/Clang -Wunused-function under Zephyr -Wall (not fatal; project does not set COMPILER_WARNINGS_AS_ERRORS).\n\nFix: wrap the helper in #ifdef CONFIG_LICHEN_COAP_SERVER_OSCORE, or move it inside the protected block of coap_oscore_respond_resource.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T07:02:32.873748233Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T07:38:47.407538611Z",
+  "started_at": "2026-09-09T07:38:00.572491465Z",
+  "closed_at": "2026-09-09T07:38:47.407538611Z",
+  "close_reason": "Already fixed at HEAD by 97396e874a (fix(coap): CF option on OSCORE-protected responses) — the landed commit wraps encode_content_format_option in #ifdef CONFIG_LICHEN_COAP_SERVER_OSCORE (coap_oscore.c:102-128), exactly the remediation this bead proposed. The finding was filed against the pre-commit working tree; by the time it was claimed the owner had committed the guard. Verified HEAD state directly; no further change needed (my duplicate-guard edit was reverted).",
+  "labels": [
+    "coap"
+  ]
+}

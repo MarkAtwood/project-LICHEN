@@ -1,7 +1,7 @@
 {
   "$schema": "./schema.json",
   "format_version": 2,
-  "description": "Exact Ed25519 pubkey to SHA-512 IID, link-local, and primary 0200::/8 native-address derivation. EUI-64 and short-address cases are explicitly link-interoperability helpers, not node identities.",
+  "description": "Exact Ed25519 pubkey to SHA-512 IID, link-local, and primary 0200::/8 native-address derivation; native is upstream Yggdrasil AddrForKey (settled upstream-yggdrasil-addressing decision, spec/decisions.jsonl). The rejected SHA-512 native profile is quarantined in test/vectors/legacy/ipv6_addresses_native_sha512.json. EUI-64 and short-address cases are explicitly link-interoperability helpers, not node identities.",
   "oracle": {
     "basis": "spec/03-addressing.md (link-local IID) and upstream yggdrasil-go@422836ee src/address/address.go (primary, settled upstream-yggdrasil-addressing decision)",
     "derivation": "h=SHA-512(pubkey); iid=h[0:8] with U/L cleared; native=upstream AddrForKey(pubkey) (bit-inverted key, no hashing)",

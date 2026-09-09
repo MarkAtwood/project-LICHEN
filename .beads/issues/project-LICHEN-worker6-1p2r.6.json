@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-1p2r.6",
+  "title": "Add missing test/vectors/density_adaptive.json corpus (schema test red on main)",
+  "description": "tests/test_vectors.py::test_vector_file_schema[density_adaptive.json] fails on current main AND on old main (pre-existing): the schema-manifest list at test_vectors.py:216 includes density_adaptive.json but the file does not exist. Either author the corpus (if the density-adaptive vector family is specced — spec 02a 2a.9.2 adaptive duty cycle) or remove it from the manifest with a note. Pre-existing on main, not caused by any worker merge.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T11:28:54.301439351Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T12:22:34.175091811Z",
+  "started_at": "2026-09-09T12:22:34.175091811Z",
+  "lease_expires_at": "2026-09-09T12:27:34.175091811Z",
+  "heartbeat_at": "2026-09-09T12:22:34.175091811Z",
+  "labels": [
+    "python",
+    "vectors",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-1p2r.6",
+      "depends_on_id": "project-LICHEN-worker6-1p2r",
+      "type": "parent-child",
+      "created_at": "2026-09-09T11:28:54.43972385Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

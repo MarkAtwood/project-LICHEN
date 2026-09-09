@@ -1,0 +1,64 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.7.2.5",
+  "title": "Python: qualified beacon and clock-owner wiring",
+  "description": "Connect qualified CCP2 beacon admission in python/src/lichen/rpl/tdma_beacon.py to python/src/lichen/timing/sfn.py, python/src/lichen/time_provider.py and multi-root state in python/src/lichen/link/slot_coordination.py. Only valid synchronization objects may maintain or recover scheduling. Apply authorized time provenance, epoch floor, current root/generation, freshness and signature checks before adoption, and consume hold-off completion and SFN reset in the actual timer owner.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Reuse b7z9.25 and closed .25.1-.25.6 helper work; closure of arithmetic, reset flags or helper tests is not runtime conformance. Reference b7z9.28 only for existing accepted signer-retirement/invalidation inputs, without changing attestation contracts or adding a backward edge to legacy roll-ups. Follow canonical time-quality ordering. Preserve identity ownership, baseline SCHC/security and deferred key portability; no OSCORE/EDHOC edits.",
+  "acceptance_criteria": "Drive vectors.05 through the production beacon/timer owner, not only returned flags. Test ordinary signed data, malformed/bad-signature/retired-signer beacons, stale generation, invalid time, exactly three missed beacons, interrupted recovery, three consecutive valid recovery beacons, SFN wrap and root/generation changes. Assert actual TX suppression and actual clock/reset effects. Extend python/tests/timing/test_sfn.py, python/tests/link/test_slot_coordination.py and python/tests/test_ccp_sync_vector_consumers.py; run pytest and ruff.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:25:12.729842509Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:12.701035056Z",
+  "external_ref": "lichen-decomp-hpc8-deep:python.12",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "python.12",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "2876712a82fd2c17354c1d5f42f720441ffb470e327c1f73ef0dae87bac794ee"
+  },
+  "labels": [
+    "ccp",
+    "ccp2",
+    "decomp-hpc8-deep",
+    "local-ok",
+    "production",
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.2.5",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.7.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:25:12.891186281Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.2.5",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.5",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:37:31.737792084Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.2.5",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:37:32.83975895Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.2.5",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.7.1.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:37:34.077938818Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

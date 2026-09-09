@@ -7,8 +7,9 @@
  *
  * Standalone IPv6 address construction utilities:
  * - Link-local: fe80::<IID>
- * - Native primary: key-derived 0200::/8 address (/128 per node), via
- *   lichen_yggdrasil_addr() (Yggdrasil AddrForKey profile, spec section 12)
+ * - Primary: upstream Yggdrasil AddrForKey 0200::/8 address (/128 per
+ *   node), via lichen_yggdrasil_addr() (spec 6.1; the rejected SHA-512
+ *   native profile is gone)
  * - GUA for compatibility and prefix delegation
  *
  * IID derivation (spec 6.2):

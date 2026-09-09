@@ -197,7 +197,7 @@ pub(crate) fn rpl_ipv6_multicast_is_allowed(ipv6: &[u8]) -> bool {
         .is_some_and(|destination| destination[0] != 0xff || destination == RPL_ALL_NODES)
 }
 
-pub(crate) fn dio_dis_destination_is_allowed(ipv6: &[u8], local_rpl_addr: [u8; 16]) -> bool {
+pub(crate) fn dio_dis_destination_is_allowed(ipv6: &[u8], local_link_addr: [u8; 16]) -> bool {
     let Some(code) = ipv6.get(IPV6_HEADER_LEN + hdr_field::CODE_OFFSET) else {
         return false;
     };
@@ -211,13 +211,13 @@ pub(crate) fn dio_dis_destination_is_allowed(ipv6: &[u8], local_rpl_addr: [u8; 1
         && ipv6_destination(ipv6).is_some_and(|destination| {
             destination == RPL_ALL_NODES
                 || (destination[..8] == [0xfe, 0x80, 0, 0, 0, 0, 0, 0]
-                    && destination[8..] == local_rpl_addr[8..])
+                    && destination[8..] == local_link_addr[8..])
         })
 }
 
 /// A located, policy-valid RPL source-routing header within a packet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct SourceRouteView {
+pub struct SourceRouteView {
     /// Offset of the Routing header within the packet.
     pub offset: usize,
     /// Total Routing header length in bytes (`(hdr_ext_len + 1) * 8`).
@@ -243,7 +243,7 @@ impl SourceRouteView {
 /// (mirrors the C router's `parse_ipv6_dispatch` policy in
 /// `lichen/subsys/lichen/routing/router.c`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RoutingHeaderSurvey {
+pub enum RoutingHeaderSurvey {
     /// No Routing header in the chain.
     Absent,
     /// Exactly one policy-valid RH3 present (segments consumed or not).
@@ -261,7 +261,7 @@ pub(crate) enum RoutingHeaderSurvey {
 /// equal to the packet source. An in-transit RH3 (`segments_left != 0`)
 /// additionally requires `segments_left < hop_limit` (spec 05-routing 8.4 /
 /// RFC 6554).
-pub(crate) fn survey_routing_headers(ipv6: &[u8]) -> Result<RoutingHeaderSurvey, RxError> {
+pub fn survey_routing_headers(ipv6: &[u8]) -> Result<RoutingHeaderSurvey, RxError> {
     if ipv6.len() < IPV6_HEADER_LEN || ipv6[0] >> 4 != 6 {
         return Err(RxError::InvalidSourceRoute);
     }

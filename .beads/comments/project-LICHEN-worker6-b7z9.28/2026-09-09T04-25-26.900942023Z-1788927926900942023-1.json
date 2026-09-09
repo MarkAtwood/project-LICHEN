@@ -1,0 +1,7 @@
+{
+  "id": "1788927926900942023-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.28",
+  "author": "Mark Atwood",
+  "text": "Additional concrete instance of divergent rotation formats, from security review of spec/06-security.md: §8.7 (lines 280-289) mandates a raw transcript signature over 'LICHEN-KEY-ROTATION-v1' || 0x00 || old_pubkey || old_iid || new_pubkey || seq, while §8.7.4 (lines 334-366) mandates COSE_Sign1 over a CBOR map {1: old_pubkey, 2: new_pubkey, 3: rotation_seq, 4: expiry}. These are not the same signed bytes; only §8.7.4 carries expiry, so two conformant implementations apply different acceptance/staleness rules to node identity rotation.",
+  "created_at": "2026-09-09T04:25:26.900942023Z"
+}

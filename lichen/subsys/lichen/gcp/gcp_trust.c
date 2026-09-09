@@ -14,6 +14,7 @@
  */
 
 #include <lichen/gcp_trust.h>
+#include <lichen/link_ctx.h>
 #include <string.h>
 
 /* ---- Logging ------------------------------------------------------------ */
@@ -50,19 +51,12 @@ void gcp_trust_derive_iid(const uint8_t *pubkey, uint8_t *iid)
 
 void gcp_trust_derive_ygg_addr(const uint8_t *pubkey, uint8_t *ygg_addr)
 {
-    uint8_t hash[64];
-
-    /* 02xx = [0x02] || SHA-512(pubkey)[0:7] || IID */
-    crypto_sha512(hash, pubkey, GCP_TRUST_PUBKEY_LEN);
-
-    ygg_addr[0] = 0x02;
-    memcpy(&ygg_addr[1], hash, 7);
-
-    /* IID with U/L bit cleared */
-    memcpy(&ygg_addr[8], hash, GCP_TRUST_IID_LEN);
-    ygg_addr[8] &= ~0x02;
-
-    crypto_wipe(hash, sizeof(hash));
+    /* Upstream Yggdrasil AddrForKey via the single C derivation site
+     * (spec/decisions.jsonl upstream-yggdrasil-addressing). The rejected
+     * SHA-512 native profile lived here inline; routing through the link
+     * module's implementation keeps every C consumer byte-identical.
+     * Fails only on NULL inputs; both are caller-contract _Nonnull. */
+    (void)lichen_identity_ygg_addr_from_ed25519(pubkey, ygg_addr);
 }
 
 /* ---- Verification ------------------------------------------------------- */

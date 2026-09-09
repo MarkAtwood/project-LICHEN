@@ -1,0 +1,7 @@
+{
+  "id": "1788947273742058540-1",
+  "issue_id": "project-LICHEN-worker6-o5bl",
+  "author": "Mark Atwood",
+  "text": "7pt2 sweep (worker3): dao_origin.py:327 is one of FOUR IID-from-wire-address sites; siblings dao_manager.py:1172 (delegate binding vs signed-token IID), tunnel_auth.py:107, waypoints.py:64, confessions.py:118 filed as a separate design bead (discovered-from 7pt2). Whatever re-keying o5bl chooses for the pin table (full 16-byte address vs explicit IID vs link-local-only) should be consistent with those four.",
+  "created_at": "2026-09-09T09:47:53.74205854Z"
+}

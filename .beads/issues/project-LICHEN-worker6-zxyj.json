@@ -1,0 +1,17 @@
+{
+  "id": "project-LICHEN-worker6-zxyj",
+  "title": "atomic_json dir-safety check fails under umask 002 (group-writable checkout)",
+  "description": "Found during q6ko.1 verification: python/tests/ipv6/test_key_address_cross_impl_vectors.py::test_committed_ipv6_address_vectors_match_stdlib_generator fails on hosts where the checkout is group-writable (umask 002): test/vectors/atomic_json.py _open_owned_directory rejects st_mode \u0026 0o022, so generate_ipv6_addresses.py --check dies with 'atomic JSON parent directory is unsafe'. Reproduces on a pristine HEAD worktree on this Linux host (drwxrwxr-x test/vectors). Unrelated to the q6ko quarantine change. Decide: relax to 0o002-only (owner+group same uid intent), chmod in test setup, or document umask requirement. Labels: python, testing.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:53:35.899986311Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T04:53:35.899986311Z",
+  "labels": [
+    "python",
+    "testing",
+    "human"
+  ]
+}

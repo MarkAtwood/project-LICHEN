@@ -9,10 +9,10 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T23:11:57.439218143Z",
   "created_by": "opencode-worker-7",
-  "updated_at": "2026-09-09T00:53:05.094405739Z",
-  "started_at": "2026-09-09T00:40:01.634273839Z",
-  "closed_at": "2026-09-09T00:53:05.094405739Z",
-  "close_reason": "Clamped assigned_sf to [7,12] (SF_MIN/SF_MAX per spec 2a.8:636) at adaptive_sf_select entry (rf_health.rs:648-651), matching python ccp.py:346 max(7,min(12,sf)) parity — the C gradient.c sf_select already bounds out-of-range stored SF to default (gradient.c:319-321), so C needed no change. New test adaptive_sf_select_clamps_assigned_sf_to_spec_range covers 0/6-\u003e7, 200/13-\u003e12 with tx_allowed asserted on the neutral baseline (verified genuinely neutral: all gates disengage). Verification: 412 lichen-core lib tests pass incl. the new test; all 24 assigned_sf values across ccp15/ccp16 vector JSONs are in [7,12] so the committed oracle corpus is conformance-neutral to the clamp. 3x codereview delegated to kimi-k3 (correctness/security/robustness): all PASS with zero defects; nits only. Findings filed, not fixed inline: project-LICHEN-worker6-kvfd (P2, pre-existing ccp16_desync_vectors.rs+yggdrasil_addr_vectors.rs missing serde_json::Value import blocks the whole crate test target) and a P4 for the stale util_fp_scale doc reference at rf_health.rs:633.",
+  "updated_at": "2026-09-09T04:32:06.335012505Z",
+  "started_at": "2026-09-09T04:24:42.635460815Z",
+  "closed_at": "2026-09-09T04:32:06.335012505Z",
+  "close_reason": "adaptive_sf_select now clamps the DIO-signaled ASSIGNED_SF byte at entry: assigned_sf.unwrap_or(10).clamp(7, 12), mirroring python ccp.py:346 exactly (max(7, min(12, sf))) per spec 2a.8 SF_MIN/SF_MAX. Entry clamp + existing internal bounds provably keep the return in [7,12] for all inputs; schema-valid 7-12 and None paths are behavior-identical. New test adaptive_sf_select_clamps_assigned_sf_to_spec_range pins 0-\u003e7, 6-\u003e7, 13-\u003e12, 200-\u003e12, 7-\u003e7, 12-\u003e12 under benign RF (verified to disengage every step/floor). C gradient.c:318-321 checked per bead: already bounds out-of-range (reject-to-default), no C change needed. 48/48 rf_health lib tests + full lichen-core suite pass. 3x codereview delegated to kimi-k3: correctness PASS, security PASS (clamp-to-boundary confers zero extra attacker capability vs reject-to-default; C/Rust/Python malformed-DIO policy divergence filed as new P3 bead), edge-cases PASS (stale mechanism comment in adaptive_sf_step3_uses_spec_density_8 filed as new P3 bead).",
   "labels": [
     "rust"
   ],

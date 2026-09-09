@@ -1,0 +1,56 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.5.2.1",
+  "title": "Reproduce approved LR-FHSS decoding offline",
+  "description": "Reproduce acquisition, synchronization and packet recovery for one human-approved receiver/tool environment against the provenance-qualified captured corpus. Declare any supplied start time, DR, CFO or profile information rather than presenting configured decoding as blind acquisition.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Offline execution only after affirmative lrfhss.09 clearance for the exact code, dataset and tools. No hardware, contacts, purchases, license acceptance or radio transmissions. A successful offline packet decode is not real-time or embedded RX qualification.",
+  "acceptance_criteria": "Recovered bytes match independent lrfhss.03 transmitter ground truth. Report every attempted capture, failure, unsupported mode and required manual assumption. Record executable/tool revisions and commands. Missing oracle data or a closed permission gate without affirmative approval prevents a pass.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:26:27.504097847Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:23.985666763Z",
+  "external_ref": "lichen-decomp-hpc8-deep:lrfhss.04",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "lrfhss.04",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "e610787ee337e799b061a1e3f7b10b5b8b3a20257a6dd8f2a696610e71c07611"
+  },
+  "labels": [
+    "ccp",
+    "decomp-hpc8-deep",
+    "evidence",
+    "experimental",
+    "lr-fhss",
+    "testing"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.5.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.5.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:26:27.698812621Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.5.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.5.1.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:43:40.192207022Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.5.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.5.1.6",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:43:41.230362254Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

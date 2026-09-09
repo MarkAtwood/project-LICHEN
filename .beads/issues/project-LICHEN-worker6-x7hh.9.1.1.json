@@ -1,0 +1,58 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.9.1.1",
+  "title": "C: regional registry masks and configuration bounds",
+  "description": "Add ordered/versioned channel-plan lookup beside lichen/subsys/lichen/hal/include/lichen/op_class.h and reconcile lichen/subsys/lichen/link/Kconfig, lichen/subsys/lichen/l2/Kconfig and affected public structures. Represent full global indices and canonical masks for 1..255 entries. The current 1..16 channel-count range cannot simply be widened while leaving unchecked frequency arithmetic or u32 wire masks. Unknown or unqualified plans must remain unusable.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Reuse b7z9.23 intersection mechanics but not legacy bit order, u32 clipping or operating-class/plan conflation. A new registry source/header is proposed only as needed beside existing HAL code. Keep source, headers, Kconfig, CMake and corresponding test shims synchronized. No new registry framework, RF activation, identity/security change, SCHC replacement or key portability is required; custody stays best effort.",
+  "acceptance_criteria": "Consume vectors.03 through production C lookup/mask APIs with count, index, sparse-set, wrong-length and nonzero-padding boundaries, including independent 128-entry mask bytes and exact integer-Hz frequencies. Use focused host tests alongside lichen/tests/tdma_beacon and configuration/native compile checks. Run assertions, ASan/UBSan, conversion warnings and scoped C lint. lichen/west.yml currently pins v4.1.0; reverify at execution and qualify native_sim/native/64 on local Linux/heft against that pin, without hardware access.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:25:31.189268478Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:09.802319638Z",
+  "external_ref": "lichen-decomp-hpc8-deep:zephyr.01",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "zephyr.01",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "c919cf1a3c7df2cf0e6c3696cd9bc4af21caf33791dc6128584a29fcdcceae99"
+  },
+  "labels": [
+    "c",
+    "ccp",
+    "ccp2",
+    "decomp-hpc8-deep",
+    "needs-linux",
+    "no-hardware",
+    "production",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.1.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:25:31.352953128Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.1.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:42.705149536Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.1.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:43.791053026Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

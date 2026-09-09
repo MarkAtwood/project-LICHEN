@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-i72x.6.2",
+  "title": "i72x.6.a: reference_schnorr48 upstream AddrForKey + regenerate root_dio_signature.json",
+  "description": "Child of i72x.6 step 3 (root_dio_signature corpus only). (1) Add upstream yggdrasil-go AddrForKey bit-packing to test/vectors/reference_schnorr48.py as an independent reference function (NO hashing: bit-invert pubkey, count leading 1 bits into addr[1], drop first 0 bit, bit-pack remainder into addr[2:16] per yggdrasil_address.json profiles.upstream_go_addr_for_key); rewire ReferenceIdentity.from_seed ygg_addr to it (iid/kid STAYS SHA-512-derived per C test main.c:243 expected_kid). Validate the function against: pinned anchor in test/vectors/yggdrasil_address.json AND live output of ~/GIT/yggdrasil-go (build + tiny Go program or existing CLI) for the vector pubkey e7a96ef0... — never impl-derived. (2) Regenerate test/vectors/root_dio_signature.json via test/vectors/generate_root_dio_signature.py (same seeds/fields; dodag_id=AddrForKey; re-sign; expected anchor for root seed 000102..*4: 020030ad221f03322adb901f8b731688 per C test main.c:39 comment — verify independently). (3) Verify Python root-dio corpus tests stay green; run pytest on affected dirs. Do NOT touch other corpora (separate beads).",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T10:38:14.99725711Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T11:14:54.673703847Z",
+  "started_at": "2026-09-09T10:39:02.672786662Z",
+  "closed_at": "2026-09-09T11:14:54.673703847Z",
+  "close_reason": "Done: (1) reference_schnorr48.py gains upstream yggdrasil-go AddrForKey bit-packing (addr_for_key, validated byte-for-byte against pinned anchor in yggdrasil_address.json AND live ~/GIT/yggdrasil-go at pinned commit 422836ee — never impl-derived; 31/33-byte keys rejected per corpus error cases); ReferenceIdentity.from_seed.ygg_addr rewired, iid/kid (SHA-512) intentionally unchanged per C test main.c:243. (2) root_dio_signature.json regenerated (14 vectors; root DODAGID 020030ad221f03322adb901f8b731688, attacker 02015d47a4cff83862fd36a2b117ba32) — byte-exact per generator --check. (3) Root-dio corpus tests green: test_orphan_vector_consumers.py 13 passed, 26 xpassed (required merging main 5324d4d4ed into beads-worker-6 first: production Python was native on the branch, migrated on main; merge committed 315b4461f4, store resolved via sanctioned BEADS_ALLOW_STORE_COMMIT=1 path). 3x reviewer-model codereview: correctness PASS; security 2 findings (rpl_messages.json stale-native red -\u003e folded into reconciliation bead 1p2r; missing anchor tripwire -\u003e new P3 bead); edge-cases PASS + 1 advisory (degenerate-key anchor vectors -\u003e commented onto P3 bead). Discovery filed: 1p2r (45 merge reds reconciliation, P1). Note: sibling children .6.3/.6.4 duplicate discovered beads f6r4/cbmt — flagged for dedup; .6.1 is a closed duplicate of this bead (retry artifact).",
+  "labels": [
+    "yggdrasil",
+    "python",
+    "vectors"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-i72x.6.2",
+      "depends_on_id": "project-LICHEN-worker6-i72x.6",
+      "type": "parent-child",
+      "created_at": "2026-09-09T10:38:15.132165266Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

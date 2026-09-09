@@ -157,6 +157,19 @@ static int config_put(struct coap_resource *resource,
 		return ret;
 	}
 
+	/* dsrv: gate on the authorize result (same pattern as
+	 * msg_inbox_post and coap_config.c config_put). Without this,
+	 * an unprotected plaintext PUT /config passes the authorize
+	 * helper (ret==0 + payload) and commits with no authentication
+	 * at all under LICHEN_COAP_SERVER_STANDALONE. The request that
+	 * reaches this gate is unprotected by definition, so the 4.01
+	 * goes out as a plain response. */
+	if (!is_protected && !lichen_coap_is_local_admin(addr, addr_len)) {
+		return lichen_coap_respond(resource, request, addr, addr_len,
+					   COAP_RESPONSE_CODE_UNAUTHORIZED,
+					   0, NULL, 0);
+	}
+
 	if (payload == NULL || payload_len == 0) {
 		return coap_oscore_send_protected(resource, request, addr,
 						  addr_len, oscore_ctx, piv,
@@ -318,7 +331,8 @@ static int msg_inbox_post(struct coap_resource *resource,
 		int r = coap_oscore_protect_response(oscore_ctx, piv, piv_len,
 						     request,
 						     COAP_RESPONSE_CODE_CREATED,
-						     NULL, 0, &resp, buf, sizeof(buf));
+						     NULL, 0, NULL, 0, &resp, buf,
+						     sizeof(buf));
 		if (r < 0) {
 			return lichen_coap_respond(resource, request, addr, addr_len,
 						   COAP_RESPONSE_CODE_INTERNAL_ERROR,
