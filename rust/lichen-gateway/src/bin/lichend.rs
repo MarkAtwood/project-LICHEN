@@ -2086,9 +2086,13 @@ mod tests {
         sealing_seed: &[u8; 32],
         claim_seq_path: &Path,
     ) -> u64 {
+        // Identity IID == address low half, matching the caller's documented
+        // intent ("high local IID"): the 0xff-filled tail keeps this gateway
+        // highest so the peer claim wins the tiebreak and is accepted.
+        let identity_iid: [u8; 8] = address[8..].try_into().unwrap();
         let mut coordinator = GatewayCoordinator::provision_persistent(
             address,
-            [0u8; 8],
+            identity_iid,
             60,
             256,
             slot_path,

@@ -3180,7 +3180,7 @@ mod tests {
             slot_count: Some(30),
             owned: None,
         };
-        let (claim, pubkey) = signed_slot_claim([0x55; 32], vec![5], 4, 0);
+        let (claim, pubkey) = signed_slot_claim([0x41; 32], vec![40, 41], 4, 0);
         assert_eq!(
             coordinator
                 .handle_post_slots(&claim, true, Some(&pubkey), 4)
