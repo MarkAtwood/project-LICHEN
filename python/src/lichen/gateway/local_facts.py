@@ -130,9 +130,10 @@ class LocalFactClaims:
         """Encode the claims as a CBOR map (payload of the COSE).
 
         Keys are emitted in a fixed insertion order (deterministic for a given
-        construction), which is all the internal sign/verify roundtrip needs;
-        this is not the CBOR "canonical" (length-first) ordering. See
-        verify_local_fact for the wire-bytes consideration.
+        construction); this is not the CBOR "canonical" (length-first)
+        ordering. Other encoders may legally emit a different order, which is
+        why verification runs over the retained wire bstrs, not a re-encode
+        (see verify_local_fact).
         """
         claims: dict[str, object] = {}
         if self.emergency is not None:
@@ -202,11 +203,23 @@ class LocalFact:
         claims: The asserted ``lichen:`` claims.
         issuer_iid: 8-byte IID of the issuing gateway (COSE kid).
         signature: 48-byte Schnorr48 signature.
+        protected_bytes: Received protected-header bstr, retained verbatim.
+        payload_bytes: Received payload bstr, retained verbatim.
+
+    The wire bstrs are retained because RFC 9052 section 4.4 signs the
+    protected header and payload AS TRANSPORTED: a peer using a different
+    (equally valid) CBOR encoding — other map-key order, non-minimal ints —
+    produces bytes that re-encoding here would not reproduce, breaking
+    Python<->C/Rust interop. Both are populated by :meth:`from_cose_sign1`
+    and :func:`issue_local_fact`; they are None only for a fact constructed
+    directly from its fields.
     """
 
     claims: LocalFactClaims
     issuer_iid: bytes
     signature: bytes = field(repr=False)
+    protected_bytes: bytes | None = field(default=None, repr=False)
+    payload_bytes: bytes | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         if not isinstance(self.issuer_iid, bytes) or len(self.issuer_iid) != 8:
@@ -215,12 +228,22 @@ class LocalFact:
             raise LocalFactError("signature must be bytes")
         if len(self.signature) != 48:
             raise LocalFactError(f"signature must be 48 bytes, got {len(self.signature)}")
+        if (self.protected_bytes is None) != (self.payload_bytes is None):
+            raise LocalFactError("wire bstrs must be retained as a pair or not at all")
 
     def to_cose_sign1(self) -> bytes:
-        """Encode as a CBOR COSE_Sign1 array [protected, unprotected, payload, sig]."""
-        protected = cose_protected_header()
+        """Encode as a CBOR COSE_Sign1 array [protected, unprotected, payload, sig].
+
+        When wire bstrs were retained (decode or issuance), they are emitted
+        verbatim so a forwarded/stored fact stays byte-identical and its
+        signature remains valid for downstream verifiers.
+        """
+        protected = (
+            self.protected_bytes if self.protected_bytes is not None else cose_protected_header()
+        )
+        payload = self.payload_bytes if self.payload_bytes is not None else self.claims.to_cbor()
         unprotected = {COSE_KID_LABEL: self.issuer_iid}
-        return cbor2.dumps([protected, unprotected, self.claims.to_cbor(), self.signature])
+        return cbor2.dumps([protected, unprotected, payload, self.signature])
 
     @classmethod
     def from_cose_sign1(cls, data: bytes) -> LocalFact:
@@ -246,7 +269,13 @@ class LocalFact:
         if not isinstance(signature, bytes) or len(signature) != 48:
             raise LocalFactError("signature must be 48 bytes")
         claims = LocalFactClaims.from_cbor(payload_bytes)
-        return cls(claims=claims, issuer_iid=issuer_iid, signature=signature)
+        return cls(
+            claims=claims,
+            issuer_iid=issuer_iid,
+            signature=signature,
+            protected_bytes=protected_bytes,
+            payload_bytes=payload_bytes,
+        )
 
 
 def issue_local_fact(identity: Identity, claims: LocalFactClaims) -> LocalFact:
@@ -264,11 +293,24 @@ def issue_local_fact(identity: Identity, claims: LocalFactClaims) -> LocalFact:
     sig_structure = cose_sig_structure(protected, payload_bytes)
     to_sign = sha256(sig_structure).digest()
     signature = schnorr48.sign(identity.privkey, identity.pubkey, to_sign)
-    return LocalFact(claims=claims, issuer_iid=identity.iid, signature=signature)
+    return LocalFact(
+        claims=claims,
+        issuer_iid=identity.iid,
+        signature=signature,
+        protected_bytes=protected,
+        payload_bytes=payload_bytes,
+    )
 
 
 def verify_local_fact(fact: LocalFact, gateway_pubkey: bytes) -> bool:
     """Verify a local fact's Schnorr48 signature against the gateway pubkey.
+
+    The Sig_structure is built over the protected-header and payload bstrs
+    AS TRANSPORTED (RFC 9052 section 4.4), retained on the fact by
+    :meth:`LocalFact.from_cose_sign1` / :func:`issue_local_fact`. For a fact
+    constructed directly from fields (no wire bytes), the header and claims
+    are re-encoded instead — correct only against an encoder using this
+    module's exact encoding, which is all a locally built fact can promise.
 
     Args:
         fact: The decoded local fact.
@@ -277,8 +319,12 @@ def verify_local_fact(fact: LocalFact, gateway_pubkey: bytes) -> bool:
     Returns:
         True if the signature verifies, False otherwise.
     """
-    protected = cose_protected_header()
-    payload_bytes = fact.claims.to_cbor()
+    if fact.protected_bytes is not None and fact.payload_bytes is not None:
+        protected = fact.protected_bytes
+        payload_bytes = fact.payload_bytes
+    else:
+        protected = cose_protected_header()
+        payload_bytes = fact.claims.to_cbor()
     sig_structure = cose_sig_structure(protected, payload_bytes)
     digest = sha256(sig_structure).digest()
     return schnorr48.verify(gateway_pubkey, digest, fact.signature)

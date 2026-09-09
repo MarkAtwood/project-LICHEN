@@ -5,9 +5,13 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
+
 import cbor2
 import pytest
 
+from lichen.crypto import schnorr48
+from lichen.crypto.delegation_tokens import SCHNORR48_ED25519_ALG
 from lichen.crypto.identity import Identity
 from lichen.gateway.local_facts import (
     CLAIM_EMERGENCY,
@@ -192,3 +196,58 @@ def test_signature_error_contract_for_non_bytes() -> None:
     # A non-bytes signature must raise LocalFactError, not TypeError (len()).
     with pytest.raises(LocalFactError, match="signature must be bytes"):
         LocalFact(claims=LocalFactClaims(relay=True), issuer_iid=b"\x00" * 8, signature=None)
+
+
+def test_unpaired_wire_bytes_rejected() -> None:
+    fact = issue_local_fact(_gateway(), LocalFactClaims(relay=True))
+    with pytest.raises(LocalFactError, match="retained as a pair"):
+        LocalFact(
+            claims=fact.claims,
+            issuer_iid=fact.issuer_iid,
+            signature=fact.signature,
+            protected_bytes=fact.protected_bytes,
+            payload_bytes=None,
+        )
+
+
+# ─── Wire-bytes verification (RFC 9052 4.4, C/Rust interop) ──────────────────
+
+
+def _foreign_encoded_fact(gw: Identity) -> tuple[bytes, bytes, bytes]:
+    """Build a COSE_Sign1 envelope as a non-Python encoder might: claims map
+    in an order this module never emits, plus an extra protected-header entry.
+    Signed over the transported bstrs with schnorr48 directly (independent of
+    the module's own encoding helpers). Returns (envelope, protected, payload).
+    """
+    payload = cbor2.dumps({"lichen:quota": 7, "lichen:priority": 2, "lichen:relay": True})
+    protected = cbor2.dumps({1: SCHNORR48_ED25519_ALG, 99: b"extra"})
+    sig_structure = cbor2.dumps(["Signature1", protected, b"", payload])
+    signature = schnorr48.sign(gw.privkey, gw.pubkey, sha256(sig_structure).digest())
+    envelope = cbor2.dumps([protected, {4: gw.iid}, payload, signature])
+    return envelope, protected, payload
+
+
+def test_verify_over_received_wire_bytes() -> None:
+    gw = _gateway()
+    envelope, protected, payload = _foreign_encoded_fact(gw)
+    # Guard the differential: this module's own encoding really would differ,
+    # so re-encode verification (the old behavior) could never pass here.
+    assert payload != LocalFactClaims(relay=True, priority=2, quota=7).to_cbor()
+    fact = LocalFact.from_cose_sign1(envelope)
+    assert fact.claims == LocalFactClaims(relay=True, priority=2, quota=7)
+    assert fact.protected_bytes == protected
+    assert fact.payload_bytes == payload
+    assert verify_local_fact(fact, gw.pubkey) is True
+
+
+def test_decoded_fact_reserializes_byte_stably() -> None:
+    # A fact forwarded or stored after decode must keep its signed bstrs:
+    # re-encoding would silently invalidate it for the next verifier.
+    gw = _gateway()
+    envelope, protected, payload = _foreign_encoded_fact(gw)
+    fact = LocalFact.from_cose_sign1(envelope)
+    reencoded = cbor2.loads(fact.to_cose_sign1())
+    assert reencoded[0] == protected
+    assert reencoded[2] == payload
+    relayed = LocalFact.from_cose_sign1(fact.to_cose_sign1())
+    assert verify_local_fact(relayed, gw.pubkey) is True
