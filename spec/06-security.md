@@ -731,6 +731,7 @@ OSCORE: <root-egress pairwise context>
 
 COSE_Sign1 = [
   h'47A1013A00010000',    ; protected: bstr-wrapped {1: -65537} (alg: Schnorr48-Ed25519)
+                          ; wrapper form per spec/08-gateway-coordination.md §6.5
   {4: h'<root-iid>'},     ; unprotected: {kid: root 8-byte IID}
   h'<payload>',           ; see Payload below
   h'<48-byte signature>'  ; Schnorr48 signature
