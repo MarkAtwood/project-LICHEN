@@ -30,7 +30,15 @@ resolve_file() {
     # No --agent: the resolver must be able to EDIT the file (the plan agent
     # is read-only); the prompt scopes it to this one file.
     local file="$1"
-    timeout 1800 opencode run -m "$MODEL" "You are resolving ONE file's GIT MERGE CONFLICT in the LICHEN repo (branch main, merge in progress, merge --no-commit). The file is: $file. It contains conflict markers (<<<<<<< / ======= / >>>>>>>). Read the conflicted regions plus surrounding code and BOTH parents ('git show HEAD:$file' and 'git show MERGE_HEAD:$file'), understand each side's INTENT, and write the reconciled resolution into the file (both intents preserved when compatible; otherwise keep the correct one and say why in a comment). Do not touch any other file. Do not run cmake in-source: use a build/ subdirectory if you must compile. You are done when the file has no conflict markers and is syntactically plausible C/Rust. Finish with the single word RESOLVED on its own line." >> /tmp/lichen-kimi-last.log 2>&1; rc=$?; echo "$(date +%FT%T) kimi budget=1800s exit=$rc (124=timeout)" >> /tmp/lichen-kimi-last.log; return $rc
+    # 30-minute cap plus a 10s kill grace (-k 10, bead j070, mirrors 7mvj):
+    # without -k a session that ignores SIGTERM wedges the janitor forever,
+    # and its surviving grandchildren keep writing the worktree while the
+    # failure path runs. timeout signals the child's process group (no
+    # --foreground), so the grace KILL also reaps same-group grandchildren —
+    # but only while the session leader is still being awaited: a
+    # TERM-compliant leader exits rc=124 immediately and a TERM-ignoring
+    # grandchild survives.
+    timeout -k 10 1800 opencode run -m "$MODEL" "You are resolving ONE file's GIT MERGE CONFLICT in the LICHEN repo (branch main, merge in progress, merge --no-commit). The file is: $file. It contains conflict markers (<<<<<<< / ======= / >>>>>>>). Read the conflicted regions plus surrounding code and BOTH parents ('git show HEAD:$file' and 'git show MERGE_HEAD:$file'), understand each side's INTENT, and write the reconciled resolution into the file (both intents preserved when compatible; otherwise keep the correct one and say why in a comment). Do not touch any other file. Do not run cmake in-source: use a build/ subdirectory if you must compile. You are done when the file has no conflict markers and is syntactically plausible C/Rust. Finish with the single word RESOLVED on its own line." >> /tmp/lichen-kimi-last.log 2>&1; rc=$?; echo "$(date +%FT%T) kimi budget=1800s+10s-kill-grace exit=$rc (124=timeout, 137=TERM ignored then KILLed)" >> /tmp/lichen-kimi-last.log; return $rc
 }
 
 file_clean() {
