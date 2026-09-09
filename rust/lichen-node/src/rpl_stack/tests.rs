@@ -3297,6 +3297,107 @@ fn root_sig_vector_pubkey() -> PublicKey {
     root_sig::tests::vector_pubkey()
 }
 
+#[test]
+fn verified_signed_dio_replay_rejects_after_reopen() {
+    // THE PIN (worker6-eebl): the root-seq high-water mark is durable. A
+    // captured still-unexpired signed DIO replayed against a NEW RplStack
+    // opened on the same storage (the reboot boundary) is Reject, never a
+    // second Verified.
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    assert_eq!(
+        stack.verify_dio_root_signature(&body, &gate_fields()),
+        DioRootSigOutcome::Verified
+    );
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), Some(1));
+
+    // Simulated reboot: snapshot the durable state, drop the stack, and
+    // open a fresh one on the snapshot (same identity, same DODAG).
+    let storage = stack.storage().clone();
+    drop(stack);
+    let node_identity = identity(41);
+    let dodag_id = gate_dodag_id();
+    let (_mesh, [radio, _spare1, _spare2]) =
+        MeshHarness::new([node_identity.iid, [0u8; 8], [0u8; 8]]);
+    let mut reopened = RplStack::open_leaf(
+        Stack::new(radio, node_identity.clone(), 129, 0),
+        address(&node_identity, 1),
+        dodag_id,
+        announces(dodag_id[..8].try_into().unwrap()),
+        storage,
+    )
+    .unwrap();
+    reopened.announces.pin_for_test(root_sig_vector_pubkey());
+    reopened.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    assert_eq!(reopened.root_seq_cached(gate_dodag_id(), 0), Some(1));
+    assert_eq!(
+        reopened.verify_dio_root_signature(&body, &gate_fields()),
+        DioRootSigOutcome::Reject
+    );
+    // The durable mark is not regressed by the rejected replay.
+    assert_eq!(reopened.root_seq_cached(gate_dodag_id(), 0), Some(1));
+}
+
+#[test]
+fn signed_dio_persist_failure_degrades_to_baseline_without_burn() {
+    // A storage fault on the durable accept is a local failure, not a
+    // forgery: degrade to Baseline (never Reject), admit nothing in-memory,
+    // and let a healthy redelivery verify and persist.
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    stack.fail_next_storage_write();
+    assert_eq!(
+        stack.verify_dio_root_signature(&body, &gate_fields()),
+        DioRootSigOutcome::Baseline
+    );
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+    // Healthy retry: verifies, persists, and the duplicate then
+    // replay-rejects — proving the failed first attempt burned nothing.
+    assert_eq!(
+        stack.verify_dio_root_signature(&body, &gate_fields()),
+        DioRootSigOutcome::Verified
+    );
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), Some(1));
+    assert_eq!(
+        stack.verify_dio_root_signature(&body, &gate_fields()),
+        DioRootSigOutcome::Reject
+    );
+}
+
+#[test]
+fn corrupt_root_seq_record_fails_provision_closed() {
+    // A corrupt durable root-seq record fails provisioning closed; the
+    // anti-replay high-water must never be silently reset (that would
+    // reopen the replay window). Slot key strings mirror the lichen-rpl
+    // ROOT_SEQ_KEYS constants (the same hardcoding pattern the DAO routing
+    // tests use for "rpl.tx.a"/"rpl.tx.b").
+    let node_identity = identity(42);
+    let node_addr = address(&node_identity, 1);
+    let dodag_id = [0x21u8; 16];
+    let (_mesh, [radio, _spare1, _spare2]) =
+        MeshHarness::new([node_identity.iid, [0u8; 8], [0u8; 8]]);
+    let mut storage = MemStorage::new();
+    storage.set_raw("rpl.rseq.a", &[0xff; 64]);
+    storage.set_raw("rpl.rseq.b", &[0x00; 10]);
+    let error = RplStack::provision_leaf(
+        Stack::new(radio, node_identity, 129, 0),
+        node_addr,
+        dodag_id,
+        announces(dodag_id[..8].try_into().unwrap()),
+        storage,
+    )
+    .err()
+    .expect("corrupt root-seq record must fail closed");
+    assert!(matches!(
+        error,
+        crate::rpl_stack::RplStackProvisionError::RootSeq(
+            lichen_rpl::root_seq_cache::RootSeqOpenError::Corrupt
+        )
+    ));
+}
+
 fn gate_dodag_id() -> [u8; 16] {
     use crate::rpl_stack::root_sig;
     root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose())

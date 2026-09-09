@@ -751,16 +751,14 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         }
 
         // Replay: root_seq must strictly exceed the cached high-water mark.
-        let cached = self
-            .root_seqs
-            .cached(decoded.payload.dodag_id, decoded.payload.instance);
-        if let Some(cached) = cached {
-            if decoded.payload.root_seq <= cached {
-                return DioRootSigOutcome::Reject;
-            }
-        }
-        if self
-            .root_seqs
+        // The mark is persisted BEFORE the in-memory cache is admitted: an
+        // unpersisted mark must never verify, because the reboot boundary
+        // would reopen the replay window (worker6-eebl). A storage fault is
+        // a local failure, not a forgery: degrade to baseline (treat as
+        // unsigned, L679) rather than rejecting the DIO, and leave the
+        // in-memory cache untouched so a healthy redelivery can verify.
+        let mut proposed = self.root_seqs.clone();
+        if proposed
             .accept(
                 decoded.payload.dodag_id,
                 decoded.payload.instance,
@@ -770,6 +768,11 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         {
             return DioRootSigOutcome::Reject;
         }
+        let Ok(current) = proposed.persist(&mut self.storage, self.root_seq_store) else {
+            return DioRootSigOutcome::Baseline;
+        };
+        self.root_seqs = proposed;
+        self.root_seq_store = current;
 
         DioRootSigOutcome::Verified
     }
