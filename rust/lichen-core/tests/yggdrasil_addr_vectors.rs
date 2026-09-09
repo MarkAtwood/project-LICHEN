@@ -1,27 +1,45 @@
-//! Tests against the shared corpus in test/vectors/yggdrasil_address.json.
+//! Tests against the shared corpora in test/vectors/yggdrasil_address.json
+//! (live) and test/vectors/legacy/yggdrasil_address_native_sha512.json
+//! (QUARANTINED).
 //!
-//! Three entry kinds (see the `profile` discriminator):
-//! 1. `lichen_native_sha512` — driven byte-exact through
-//!    [`ygg_addr_from_pubkey`] / [`iid_from_pubkey_bytes`], including the
-//!    IID binding invariant.
-//! 2. The single upstream yggdrasil-go anchor (`upstream_addr_for_key`).
-//!    Upstream bit-packs the inverted key with no hash, so it is intentionally
-//!    NOT reproducible by the LICHEN native SHA-512 profile; the test asserts
-//!    that documented divergence instead of equality.
-//! 3. `error_case` length rejections — not expressible here because the Rust
-//!    API takes `&[u8; 32]`, which enforces key length at the type level.
+//! Post-migration (i72x.2, spec/decisions.jsonl `upstream-yggdrasil-addressing`):
+//! [`ygg_addr_from_pubkey`] MUST equal upstream yggdrasil-go `AddrForKey`
+//! byte-for-byte; the corpus anchor (`upstream_addr_for_key`) is the pinned
+//! external oracle from upstream `address_test.go` @422836ee, and
+//! [`subnet_for_key`] MUST equal upstream `SubnetForKey` (0300::/8).
+//!
+//! The `lichen_native_sha512` profile is REJECTED. Its vectors are
+//! quarantined in the legacy file and are consumed here ONLY as a
+//! corpus-integrity pin (presence and count, checked by `corpus_shape`),
+//! never as a conformance oracle and never driven through the implementation:
+//! the pre-migration byte-exact pin test and the `assert_ne!` divergence test
+//! were deleted when the upstream AddrForKey migration landed, exactly as
+//! their own comments required (see test/vectors/legacy/README.md).
+//!
+//! `error_case` length rejections (live corpus) are not expressible here
+//! because the Rust API takes `&[u8; 32]`, which enforces key length at the
+//! type level.
 
 use serde_json::Value;
 
 const VECTORS_JSON: &str = include_str!("../../../test/vectors/yggdrasil_address.json");
+const LEGACY_NATIVE_JSON: &str =
+    include_str!("../../../test/vectors/legacy/yggdrasil_address_native_sha512.json");
 
 const ANCHOR_NAME: &str = "upstream_addr_for_key";
 const ANCHOR_ADDRESS: [u8; 16] = [
     0x02, 0x00, 0x84, 0x8a, 0x60, 0x4f, 0xbb, 0x7e, 0x43, 0x84, 0x65, 0xdb, 0x8d, 0xb6, 0x68, 0x95,
 ];
+/// Upstream `SubnetForKey` for the anchor key, from `address_test.go` @422836ee.
+const ANCHOR_SUBNET: [u8; 8] = [0x03, 0x00, 0x84, 0x8a, 0x60, 0x4f, 0xbb, 0x7e];
 
 fn load_document() -> Value {
     serde_json::from_str(VECTORS_JSON).expect("yggdrasil_address.json must parse")
+}
+
+fn load_legacy_document() -> Value {
+    serde_json::from_str(LEGACY_NATIVE_JSON)
+        .expect("legacy/yggdrasil_address_native_sha512.json must parse")
 }
 
 // usize::is_multiple_of stabilized in Rust 1.87; the workspace MSRV is 1.81
@@ -35,7 +53,16 @@ fn decode_hex(value: &str) -> Vec<u8> {
         .collect()
 }
 
-fn native_vectors(document: &Value) -> Vec<&Value> {
+fn anchor(document: &Value) -> &Value {
+    document["vectors"]
+        .as_array()
+        .expect("vectors array")
+        .iter()
+        .find(|v| v["name"] == ANCHOR_NAME)
+        .expect("anchor present")
+}
+
+fn legacy_native_vectors(document: &Value) -> Vec<&Value> {
     document["vectors"]
         .as_array()
         .expect("vectors array")
@@ -48,58 +75,128 @@ fn native_vectors(document: &Value) -> Vec<&Value> {
 fn corpus_shape() {
     let document = load_document();
     let vectors = document["vectors"].as_array().unwrap();
-    assert!(native_vectors(&document).len() >= 10);
     assert_eq!(
         vectors.iter().filter(|v| v["name"] == ANCHOR_NAME).count(),
         1,
         "exactly one upstream anchor expected"
     );
+    let error_cases = vectors
+        .iter()
+        .filter(|v| v["expect_error"] == "pubkey_length")
+        .count();
+    assert!(error_cases >= 2, "length-rejection cases expected");
+    assert_eq!(
+        vectors.len(),
+        error_cases + 1,
+        "live corpus must hold exactly the anchor plus the error cases"
+    );
+    // The rejected native profile must not leak back into the live corpus.
     assert!(
-        vectors.iter().any(|v| v["expect_error"] == "pubkey_length"),
-        "length-rejection cases expected"
+        vectors.iter().all(|v| v["profile"] != "lichen_native_sha512"),
+        "live corpus must not hold rejected native-profile vectors"
+    );
+    let legacy = load_legacy_document();
+    assert!(
+        legacy_native_vectors(&legacy).len() >= 10,
+        "quarantined native corpus must keep its vectors verbatim"
     );
 }
 
 #[test]
-fn lichen_native_vectors_byte_exact() {
-    for vector in native_vectors(&load_document()) {
-        let name = vector["name"].as_str().unwrap();
-        let pubkey_vec = decode_hex(vector["public_key"].as_str().unwrap());
+fn upstream_anchor_matches_byte_exact() {
+    // Conformance oracle per spec/decisions.jsonl upstream-yggdrasil-addressing:
+    // the corpus anchor bytes come verbatim from upstream address_test.go.
+    // (This is the flipped-to-byte-equality successor of the pre-migration
+    // `assert_ne!` divergence pin, which HEAD required to flip on landing.)
+    let document = load_document();
+    let expected = decode_hex(anchor(&document)["address"].as_str().unwrap());
+    assert_eq!(&expected[..], &ANCHOR_ADDRESS[..]);
+
+    let pubkey_vec = decode_hex(anchor(&document)["public_key"].as_str().unwrap());
+    let pubkey: [u8; 32] = pubkey_vec.try_into().expect("32-byte key");
+    let derived = lichen_core::addr::ygg_addr_from_pubkey(&pubkey);
+    assert_eq!(
+        &derived[..],
+        &ANCHOR_ADDRESS[..],
+        "MUST equal upstream AddrForKey byte-for-byte"
+    );
+}
+
+#[test]
+fn upstream_subnet_anchor_matches_byte_exact() {
+    let pubkey_vec = decode_hex(anchor(&load_document())["public_key"].as_str().unwrap());
+    let pubkey: [u8; 32] = pubkey_vec.try_into().expect("32-byte key");
+    assert_eq!(
+        lichen_core::addr::subnet_for_key(&pubkey),
+        ANCHOR_SUBNET,
+        "MUST equal upstream SubnetForKey byte-for-byte (0300::/8)"
+    );
+}
+
+/// Test-local pins produced by running upstream's own `address.go` @422836ee
+/// (external oracle — never this crate) over edge-class keys. These cover the
+/// oracle gaps the anchor alone misses: addr[1] != 0, the degenerate ones-count
+/// wrap, and trailing-partial-byte discard. Shared-corpus enrichment with these
+/// classes is tracked in q6ko/i72x.6.
+#[test]
+fn upstream_edge_classes() {
+    let cases: [(&str, &str); 6] = [
+        // Inverted key starts with 6 leading 1 bits (0x02 -> 0xfd = 11111101..).
+        (
+            "0202020202020202020202020202020202020202020202020202020202020202",
+            "0206fefefefefefefefefefefefefefe",
+        ),
+        // Inverted key starts with 7 leading 1 bits (0x01 -> 0xfe).
+        (
+            "0101010101010101010101010101010101010101010101010101010101010101",
+            "0207fefefefefefefefefefefefefefe",
+        ),
+        // Degenerate: inverted key is 256 one-bits; upstream's byte counter
+        // wraps 256 -> 0 and no payload bits are packed.
+        (
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "02000000000000000000000000000000",
+        ),
+        // Inverted key is all zero bits: ones = 0, first 0 consumed, remaining
+        // 255 zero bits pack to 31 zero bytes with the tail discarded; the
+        // address keeps only 14 zero bytes.
+        (
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "02000000000000000000000000000000",
+        ),
+        // Mixed remainder with a discarded trailing partial byte (255 payload
+        // bits -> 31 whole bytes, last 7 bits dropped).
+        (
+            "deadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabe",
+            "020042a482206a028a8242a482206a02",
+        ),
+        (
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "0200aaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ),
+    ];
+    for (pubkey_hex, expected_hex) in cases {
+        let pubkey_vec = decode_hex(pubkey_hex);
         let pubkey: [u8; 32] = pubkey_vec.try_into().expect("32-byte key");
-        let expected = decode_hex(vector["address"].as_str().unwrap());
-
-        let addr = lichen_core::addr::ygg_addr_from_pubkey(&pubkey);
-        assert_eq!(&addr[..], &expected[..], "{name}");
-
-        let iid = lichen_core::addr::iid_from_pubkey_bytes(&pubkey);
+        let expected = decode_hex(expected_hex);
         assert_eq!(
-            &addr[8..16],
-            &iid[..],
-            "{name}: lower 64 bits must equal IID"
+            lichen_core::addr::ygg_addr_from_pubkey(&pubkey)[..],
+            expected[..],
+            "{pubkey_hex}"
         );
-        assert_eq!(addr[0], 0x02, "{name}: 0200::/8 prefix byte");
-        assert_eq!(iid[0] & 0x02, 0, "{name}: U/L bit must be clear in IID");
     }
 }
 
 #[test]
-fn upstream_anchor_diverges_from_lichen_native_profile() {
-    // Upstream AddrForKey never hashes the key; LICHEN derives from SHA-512.
-    // Pin the difference so neither side is changed by accident. Constants are
-    // from upstream address_test.go @422836ee (external oracle).
+fn iid_remains_sha512_derived_not_address_low_half() {
+    // The link-local IID is unchanged (SHA-512(pubkey)[0:8], U/L cleared).
+    // Upstream addresses bit-pack the inverted key, so the old
+    // addr[8:16] == IID invariant is dead by decision; pin the separation.
     let document = load_document();
-    let anchor = document["vectors"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|v| v["name"] == ANCHOR_NAME)
-        .expect("anchor present");
-    let expected = decode_hex(anchor["address"].as_str().unwrap());
-    assert_eq!(&expected[..], &ANCHOR_ADDRESS[..]);
-
-    let pubkey_vec = decode_hex(anchor["public_key"].as_str().unwrap());
+    let pubkey_vec = decode_hex(anchor(&document)["public_key"].as_str().unwrap());
     let pubkey: [u8; 32] = pubkey_vec.try_into().expect("32-byte key");
-    let derived = lichen_core::addr::ygg_addr_from_pubkey(&pubkey);
-    assert_ne!(&derived[..], &ANCHOR_ADDRESS[..]);
-    assert_eq!(derived[0], ANCHOR_ADDRESS[0], "only the prefix byte agrees");
+    let iid = lichen_core::addr::iid_from_pubkey_bytes(&pubkey);
+    assert_eq!(iid[0] & 0x02, 0, "U/L bit must be clear in IID");
+    let addr = lichen_core::addr::ygg_addr_from_pubkey(&pubkey);
+    assert_eq!(addr[0], 0x02, "0200::/8 prefix byte");
 }

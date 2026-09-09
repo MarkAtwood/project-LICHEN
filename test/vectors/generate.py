@@ -163,7 +163,8 @@ LL_DST = IPv6Address("fe80::2")
 # Global addresses use deterministic LICHEN native 0200::/8 derivation from known seeds:
 #   G_SRC: seed=0x00*32 -> pubkey=3b6a27bc... -> yggdrasil_address(pubkey)
 #   G_DST: seed=0xff*32 -> pubkey=76a15920... -> yggdrasil_address(pubkey)
-# See test/vectors/yggdrasil-derivation.json for canonical derivation test vectors.
+# See test/vectors/legacy/yggdrasil-derivation.json for the QUARANTINED legacy
+# derivation corpus (rejected SHA-512 native profile; not a conformance oracle).
 G_SRC = IPv6Address("27d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342")
 G_DST = IPv6Address("2f7:7a7b:aa12:26b5:f57a:7baa:1226:b50c")
 COAP_PORT = 5683

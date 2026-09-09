@@ -1723,7 +1723,8 @@ mod tests {
         assert_eq!(iid, expected_iid);
 
         let ygg_addr = ygg_addr_from_pubkey(&expected_pubkey);
-        let expected_ygg: [u8; 16] = hex!("027dd5cfc679ab637dd5cfc679ab6342");
+        // Upstream AddrForKey (yggdrasil-go@422836ee oracle, i72x.2).
+        let expected_ygg: [u8; 16] = hex!("020224aec2198a4ade94eae2b97eac87");
         assert_eq!(ygg_addr, expected_ygg);
     }
 
@@ -1742,7 +1743,8 @@ mod tests {
         assert_eq!(iid, expected_iid);
 
         let ygg_addr = ygg_addr_from_pubkey(&expected_pubkey);
-        let expected_ygg: [u8; 16] = hex!("02fd6b265c858536fd6b265c8585369b");
+        // Upstream AddrForKey (yggdrasil-go@422836ee oracle, i72x.2).
+        let expected_ygg: [u8; 16] = hex!("0201cd2950254a181029510cd40cf658");
         assert_eq!(ygg_addr, expected_ygg);
     }
 
@@ -1761,7 +1763,8 @@ mod tests {
         assert_eq!(iid, expected_iid);
 
         let ygg_addr = ygg_addr_from_pubkey(&expected_pubkey);
-        let expected_ygg: [u8; 16] = hex!("02888bcf64cfefa3888bcf64cfefa304");
+        // Upstream AddrForKey (yggdrasil-go@422836ee oracle, i72x.2).
+        let expected_ygg: [u8; 16] = hex!("02012f7519de299fe5c734eeedd5ad94");
         assert_eq!(ygg_addr, expected_ygg);
     }
 
@@ -1790,12 +1793,19 @@ mod tests {
     #[test]
     fn dodagid_binding_valid() {
         // Test vector: verify_dodagid_binding with valid pubkey/DODAGID pair
+        // (upstream AddrForKey value, yggdrasil-go@422836ee oracle, i72x.2).
         let pubkey: [u8; 32] =
             hex!("4cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba29");
-        let dodagid: [u8; 16] = hex!("02fd6b265c858536fd6b265c8585369b");
+        let dodagid: [u8; 16] = hex!("0201cd2950254a181029510cd40cf658");
 
         assert!(verify_dodagid_binding(&pubkey, &dodagid));
     }
+
+    // The binding_invariant_* tests asserted ygg_addr[8:16] == IID, a property
+    // of the rejected SHA-512 native profile. Upstream AddrForKey bit-packs
+    // the inverted pubkey and does not embed the IID
+    // (spec/decisions.jsonl upstream-yggdrasil-addressing, i72x.2), so the
+    // invariant is retired and the tests removed with it.
 
     #[test]
     fn dodagid_binding_mismatch() {
@@ -2015,40 +2025,6 @@ mod tests {
         );
 
         assert!(!verify_gateway_message(&pubkey, &tampered, &signature));
-    }
-
-    // ── Binding Invariants (test vectors: binding_invariant_*) ───────────────
-    //
-    // QUARANTINE (spec/decisions.jsonl upstream-yggdrasil-addressing): the
-    // invariant asserted here (ygg_addr[8:16] == IID) is an artifact of the
-    // REJECTED SHA-512 native profile. Upstream AddrForKey bit-packs the
-    // inverted key and does NOT embed the IID in the low 64 bits, so these
-    // tests hold only while lichen-core ygg_addr_from_pubkey is unmigrated.
-    // Tripwire: they MUST be regenerated as pinned upstream AddrForKey
-    // byte-equality assertions when i72x.2 lands and the gcp3_trust_models.json
-    // corpus flips (its binding_* entries are marked live_conformance:false).
-    // See the matching QUARANTINE note in rust/lichen-link/src/trust.rs.
-
-    #[test]
-    fn binding_invariant_alice() {
-        let pubkey: [u8; 32] =
-            hex!("4cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba29");
-        let ygg_addr = ygg_addr_from_pubkey(&pubkey);
-        let iid = iid_from_pubkey(&pubkey);
-
-        // ygg_addr[8:16] == IID
-        assert_eq!(&ygg_addr[8..16], &iid);
-    }
-
-    #[test]
-    fn binding_invariant_bob() {
-        let pubkey: [u8; 32] =
-            hex!("7422b9887598068e32c4448a949adb290d0f4e35b9e01b0ee5f1a1e600fe2674");
-        let ygg_addr = ygg_addr_from_pubkey(&pubkey);
-        let iid = iid_from_pubkey(&pubkey);
-
-        // ygg_addr[8:16] == IID
-        assert_eq!(&ygg_addr[8..16], &iid);
     }
 
     // ── Trust Store Operations ───────────────────────────────────────────────

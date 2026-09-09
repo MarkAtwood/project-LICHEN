@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import asyncio
 import math
+import os
+import socket
 import time
 from ipaddress import IPv6Address
 
@@ -29,6 +31,7 @@ from lichen.coap.resources.emergency import (
 )
 from lichen.coap.sos_origin import sign_sos_origin
 from lichen.coap.transport import InMemoryNetwork, create_lichen_context
+from lichen.coap.udp_server import bind_coap_udp
 from lichen.crypto.identity import _pubkey_to_iid
 from lichen.crypto.schnorr48 import derive_keypair
 
@@ -37,6 +40,61 @@ from lichen.crypto.schnorr48 import derive_keypair
 _SOS_PRIV, _SOS_PUB = derive_keypair(bytes(range(64, 96)))
 _EUI = _pubkey_to_iid(_SOS_PUB)
 _T0 = 1_700_000_000.0
+
+# Interface override for the real-socket SOS multicast test (R-12-036). When
+# unset, the test auto-detects the first interface that can route ff02::1.
+LICHEN_TEST_MCAST_IFACE_ENV = "LICHEN_TEST_MCAST_IFACE"
+
+
+def _server_bound_port(context: aiocoap.Context) -> int:
+    """Return the UDP port a server :class:`aiocoap.Context` actually bound."""
+    for req_iface in context.request_interfaces:
+        token_iface = getattr(req_iface, "token_interface", None)
+        msg_iface = getattr(token_iface, "message_interface", None)
+        transport = getattr(msg_iface, "transport", None)
+        if transport is not None:
+            sock = transport.get_extra_info("socket")
+            if sock is not None:
+                return sock.getsockname()[1]  # type: ignore[no-any-return]
+    raise AssertionError("server context has no bound UDP transport")
+
+
+def _find_multicast_interface() -> str | None:
+    """Pick a non-loopback interface that can route an ff02::1 datagram.
+
+    Returns the interface name, or None when no multicast-capable interface is
+    available (the caller skips). Loopback is excluded: on Linux, loopback has
+    no ff02::1 route, so a multicast send fails with ENETUNREACH even though
+    IPV6_JOIN_GROUP on 'lo' succeeds.
+    """
+    candidates: list[str] = []
+    override = os.environ.get(LICHEN_TEST_MCAST_IFACE_ENV)
+    if override:
+        candidates.append(override)
+    else:
+        try:
+            candidates.extend(
+                name
+                for _idx, name in socket.if_nameindex()
+                if name != "lo" and not name.startswith(("docker", "veth", "tailscale", "zt"))
+            )
+        except OSError:
+            return None
+    for name in candidates:
+        try:
+            ifindex = socket.if_nametoindex(name)
+        except OSError:
+            continue
+        probe = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        try:
+            probe.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_MULTICAST_IF, ifindex)
+            probe.sendto(b"\x00", ("ff02::1", 9, 0, ifindex))
+        except OSError:
+            continue
+        finally:
+            probe.close()
+        return name
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -545,6 +603,53 @@ class TestSosSignatureEnforcement:
             )
             resp = await client.request(stale).response
             assert resp.code.is_successful() is False
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+
+class TestSosMulticast:
+    """R-12-036: /sos is postable at the all-nodes group coap://[ff02::1]/sos.
+
+    An unpaired node in distress reaches every node in RF range without knowing
+    a unicast address. aiocoap joins ff02::1 on the bound interface and routes
+    requests by Uri-Path (not dst address), so a multicast-dst POST activates
+    SOS identically to a unicast one. This exercises the real socket path; it
+    skips when no multicast-routable interface is available.
+    """
+
+    async def test_post_to_ff02_activates_sos(self) -> None:
+        iface = _find_multicast_interface()
+        if iface is None:
+            pytest.skip(
+                "no multicast-routable interface for ff02::1 "
+                f"(set {LICHEN_TEST_MCAST_IFACE_ENV} to override)"
+            )
+        sos = SosResource(time_func=lambda: _T0)
+        info = StaticNodeInfo(status={"rank": 256})
+        server = await bind_coap_udp(
+            info, port=0, bind="::", sos_resource=sos, multicast_interface=iface
+        )
+        client = await aiocoap.Context.create_client_context()
+        try:
+            port = _server_bound_port(server)
+            # Multicast requests are non-confirmable (no ACK from a group);
+            # Unreliable selects NON without the deprecated mtype= kwarg.
+            resp = await asyncio.wait_for(
+                client.request(
+                    Message(
+                        code=POST,
+                        uri=f"coap://[ff02::1%{iface}]:{port}/sos",
+                        payload=_signed_body(),
+                        content_format=60,
+                        transport_tuning=aiocoap.Unreliable,
+                    )
+                ).response,
+                timeout=10.0,
+            )
+            assert resp.code == aiocoap.CHANGED
+            assert sos._active is True
+            assert sos._from == _EUI.hex()
         finally:
             await client.shutdown()
             await server.shutdown()

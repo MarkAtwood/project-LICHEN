@@ -26,9 +26,9 @@ import cbor2
 
 from lichen.crypto import schnorr48
 from lichen.crypto.identity import Identity, _pubkey_to_iid
+from lichen.crypto.schnorr48 import SCHNORR48_ED25519_ALG
 from lichen.ipv6.packet import IPv6Packet
 
-SCHNORR48_ED25519_ALG = -65537
 TUNNEL_AUTH_RESOURCE = "/.well-known/tunnel-auth"
 TUNNEL_AUTH_CONTENT_FORMAT = 'application/cose; cose-type="cose-sign1"'
 MAX_ROUTE_HOPS = 8

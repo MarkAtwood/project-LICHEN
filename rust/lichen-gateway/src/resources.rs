@@ -2446,9 +2446,7 @@ mod tests {
         let (private, public) = derive_keypair(&Seed::new([9; 32]));
         let pubkey = *public.as_bytes();
         // The announcer IID derives from the signer pubkey (8.12 kid binding).
-        let addr = lichen_link::ygg_addr_from_pubkey(&pubkey);
-        let mut announcer_iid = [0u8; 8];
-        announcer_iid.copy_from_slice(&addr[8..]);
+        let announcer_iid = lichen_link::iid_from_pubkey(&public);
         let payload = CapabilityPayload {
             capabilities: 1, // egress
             prefix: Vec::new(),
@@ -2541,9 +2539,7 @@ mod tests {
         let mut coordinator = coordinator([0x23; 16]);
         let (private, public) = derive_keypair(&Seed::new([10; 32]));
         let pubkey = *public.as_bytes();
-        let addr = lichen_link::ygg_addr_from_pubkey(&pubkey);
-        let mut announcer_iid = [0u8; 8];
-        announcer_iid.copy_from_slice(&addr[8..]);
+        let announcer_iid = lichen_link::iid_from_pubkey(&public);
         let far_future = 4102444800; // 2100-01-01
 
         // Expired announcement (expiry in the past) -> 4.03.
@@ -2621,9 +2617,7 @@ mod tests {
         // rewritten payload field.
         let (private2, public2) = derive_keypair(&Seed::new([11; 32]));
         let pubkey2 = *public2.as_bytes();
-        let addr2 = lichen_link::ygg_addr_from_pubkey(&pubkey2);
-        let mut announcer_iid2 = [0u8; 8];
-        announcer_iid2.copy_from_slice(&addr2[8..]);
+        let announcer_iid2 = lichen_link::iid_from_pubkey(&public2);
         let wire7 = announce_wire(&private2, &public2, announcer_iid2, 1, far_future, 0);
         let response = coordinator.handle_request(
             CoapMethod::Post,

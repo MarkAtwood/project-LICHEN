@@ -704,13 +704,44 @@ cause denial of service. All SOS messages MUST be authenticated and rate-limited
 
 **Authentication (REQUIRED):**
 
-SOS messages MUST carry a valid link-layer signature from the originating
-node. The Ed25519/Schnorr signature is verified at each receiving node
-before rebroadcast. Unsigned or invalid SOS messages are silently dropped.
+SOS messages MUST carry a valid SOS Origin Signature from the originating
+node, and every receiver MUST verify it before rebroadcast. SOS messages with
+a missing, malformed, or invalid origin signature are silently dropped.
+
+The link-layer (LLSec) signature is hop-by-hop: relays create a new link
+frame, allocate their own replay counter, populate their own SIID, and
+re-sign each hop (06-security.md §8.4), so it cannot authenticate the origin
+past hop 1. End-to-end origin authentication is therefore a separate object,
+following the DAO Origin Signature pattern (05-routing.md §8.6): the origin
+signs a domain-separated transcript over relay-immutable content, and relays
+preserve the SOS payload and origin signature verbatim, changing only the
+enclosing hop-by-hop link frame and signature.
 
 ```
-SOS frame = [LLSec header] [SOS payload] [Schnorr signature (48B)]
+SOS message = [LLSec header] [SOS payload (CBOR)] [SOS Origin Signature (56B)]
 ```
+
+The SOS Origin Signature is a 56-octet object: an 8-octet Origin Sequence
+(unsigned 64-bit, network byte order) followed by a 48-octet Schnorr48
+signature computed with the origin key over the 64-octet digest:
+
+```
+SHA-512("LICHEN-SOS-ORIGIN-v1" || origin IPv6 address ||
+        Origin Sequence || canonical CBOR SOS payload)
+```
+
+The domain is exactly the 20 ASCII octets shown, with no terminating NUL. The
+origin IPv6 address is the originator's 16-octet primary `02xx` address
+preserved end to end. The SOS payload is the deterministic (canonical, RFC
+8949 §4.2.1) CBOR encoding of the alert map in §18.4.2; no field is decoded,
+normalized, reordered, or re-encoded for the transcript. Each receiver
+verifies the signature against the origin's pinned public key and enforces a
+per-origin monotonic Origin Sequence gate, accepting a sequence only if it
+strictly exceeds the highest sequence already accepted from that origin; this
+closes replay of stale-but-unseen captures. Independently, the current hop's
+LLSec signature is still verified on receipt and the frame is re-signed on
+rebroadcast per 06-security.md §8.4; unsigned or invalid link frames are
+silently dropped.
 
 **Rate Limiting (REQUIRED):**
 
@@ -720,7 +751,7 @@ Each node enforces per-source SOS rate limits:
 |-----------|-------|-----------|
 | SOS cooldown | 10 minutes | Prevents accidental spam |
 | Max SOS per hour | 3 | Limits intentional abuse |
-| Burst allowance | 2 | Allows rapid updates to same SOS |
+| Burst allowance | 2 | Rate-limiter headroom for the first 2 SOS per window (see note) |
 
 Nodes track (origin IPv6 source address, SOS count, last SOS uptime). The key
 is the full 16-byte IPv6 source, which relays MUST preserve end-to-end
@@ -732,6 +763,26 @@ is also the node identifier carried in the alert payload (§18.4.2). Rate
 limiting uses monotonic uptime rather than wall-clock time to ensure
 enforcement works even when wall-clock is unavailable. An SOS from a node
 that exceeds rate limits is dropped and logged but not relayed.
+
+Two acknowledged limitations of this tuple (tracking gaps, not new
+requirements):
+
+- **No SOS-ID/seq dimension.** The tuple carries (origin, count, uptime) only;
+  the §18.4.2 payload `seq` field is not tracked by the limiter, so updates
+  to an existing SOS and distinct SOSes are indistinguishable to it. The
+  "burst" row above therefore means limiter headroom for the first 2 SOS of
+  any kind per window, not per-incident updates. Tracking `(origin, seq)` is
+  a future refinement; it is NOT required by this section. Consequence:
+  cancel and update messages (§18.4.2 `seq`, §18.4.4) share the same bucket —
+  a node that exhausts its 3/hour budget may be unable to withdraw an active
+  SOS until refill, leaving it visible mesh-wide until the §18.4.6 timeout.
+  Senders SHOULD reserve headroom for a cancel (guidance, not a requirement).
+- **Key rotation resets abuse state.** Rotation (06-security.md §8.7.4)
+  derives and pins a new identity, so the new IID starts with a fresh 3/hour
+  bucket and a clean soft-blacklist score; an abuser can rotate to evade.
+  This evasion window is accepted and documented here rather than closed:
+  rotation attestations carry no abuse-state hand-over. (Acknowledged;
+  see §8.7.4 for the attestation shape.)
 
 **Soft Blacklist (RECOMMENDED):**
 
@@ -797,6 +848,14 @@ Content-Format: application/cbor
 
 Response: 2.04 Changed
 ```
+
+**Link-layer marking (REQUIRED):** the sender MUST emit the alert with the
+link-layer dispatch byte `0x16` (SOS emergency alert, 02-physical-link.md
+§4.1) carrying the §18.4.2 CBOR alert map — NOT as a SCHC-compressed CoAP
+frame. Relays classify SOS for the separate 3/hour SOS budget (04-network.md
+§6.3.3) solely by this dispatch byte; the CoAP `/sos` path is invisible to
+them (OSCORE encrypts Uri-Path end-to-end, SCHC elides it). The CoAP POST
+above is the application interface; the `0x16` dispatch is the wire form.
 
 Nodes receiving SOS:
 1. Display alert prominently
@@ -1678,7 +1737,7 @@ Asynchronous, rate-limited data drops for store-and-forward style communication 
 /deaddrop CoAP messages MUST use the project's SCHC rule set. SenML payloads >~100 bytes after compression trigger fragmentation/reassembly per the SCHC profile. Rules for path `/deaddrop`, content-format 112, and OSCORE options are pre-provisioned (see appendix-schc.md and constants.toml). Implementations MUST match test vector outputs for compressed packets.
 
 **Rate Limits (REQUIRED):**
-Prevents spam and storage exhaustion on constrained nodes. Enforced per-source (IID or OSCORE context). Values aligned with SOS (max 3-6/hour) and store-and-forward budgets (18.1.4).
+Prevents spam and storage exhaustion on constrained nodes. Enforced per-source. Since POSTs are OSCORE-protected (:1692), the key is the sender's OSCORE identity — the sender/recipient ID pair for a pairwise context, or the (group context, Sender ID) pair for a group context. It MUST NOT key on an extracted IID: the routable /128 is upstream `AddrForKey` and embeds no IID (04-network.md §6.2). Values aligned with SOS (max 3-6/hour) and store-and-forward budgets (18.1.4).
 
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
@@ -1811,7 +1870,7 @@ Or `GET /confessions/8a4f2b` for a specific entry. Supports query params such as
 | Total storage | 2 KB (leaf), 8 KB (BR) | RAM-only; smaller than deaddrop budget |
 | Default retention | 12 h (max 48 h) | Ephemeral by design |
 
-Rate limiting keys on the full 16-byte IPv6 source address (preserved end-to-end per 04-network.md §6.3.2) — the same accounting key as the §6.3.3 broadcast relay budget. It MUST NOT key on an extracted IID: the primary /128 embeds no IID (§6.2). Which key applies: when a post is OSCORE-protected, the recipient OSCORE context (sender/recipient ID pair) is the key; otherwise (a post without OSCORE protection, e.g. an anonymous link-local post) the key is the full IPv6 source address. Enforced via monotonic uptime (not wall-clock) to prevent clock-spoof bypass. Source-address keying inherits the §6.3.3 spoofed-source ceiling: an attacker spoofing source addresses can exhaust budget attributed to victims but cannot amplify their own posting rate beyond one identity's worth.
+Which key applies: when a post is OSCORE-protected with a pairwise context, the key is the sender/recipient ID pair; with a group context, the key is the (group context, Sender ID) pair; otherwise the key is the full 16-byte IPv6 source address, preserved end-to-end per 04-network.md §6.3.2. All posts attributable to the same node, however keyed, MUST be charged against a single accounting entry, so alternating pairwise-OSCORE and unprotected posts cannot double the budget. Group-context posts are exempt from that unification: §18.10.5 gives group members sender unlinkability, so the receiver cannot fold a group post into the sender's entry and keys only on the claimed Sender ID — a group member rotating Sender IDs can exceed the per-node budget, an accepted ceiling of the RECOMMENDED group mode. Rate limiting MUST NOT key on an extracted IID: the routable /128 is upstream `AddrForKey` and embeds no IID (04-network.md §6.2). Keying on 128 bits strengthens collision resistance over the 64-bit IID; the source address is not authenticated end-to-end for unprotected posts, so spoofed-source budget exhaustion remains a radio-adversary ceiling — a spoofer can burn budget attributed to other addresses but each fabricated source still costs a real transmission on air. Enforced via monotonic uptime (not wall-clock) to prevent clock-spoof bypass.
 
 Exceeding limits returns `4.29 Too Many Requests` with `Retry-After` header.
 

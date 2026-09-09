@@ -469,7 +469,7 @@ fn cose_sig_digest(payload: &[u8]) -> Result<[u8; 32], SlotError> {
         w.tstr(b"Signature1").map_err(malformed)?;
         w.bstr(PROTECTED).map_err(malformed)?;
         w.bstr(&[]).map_err(malformed)?;
-        w.bstr(&payload).map_err(malformed)?;
+        w.bstr(payload).map_err(malformed)?;
         w.position()
     };
     Ok(Sha256::digest(&input[..len]).into())
@@ -1157,11 +1157,28 @@ impl ClaimSeqStore {
             .next
             .checked_add(1)
             .ok_or(SlotError::ArithmeticOverflow)?;
+        self.persist(value)?;
+        self.next = value;
+        Ok(value)
+    }
+
+    /// Durably persist the current counter without advancing it.
+    ///
+    /// Used at first boot to anchor the on-disk counter so "an initialized
+    /// store implies the file exists" holds for later boots' missing-file
+    /// checks; the in-memory value is unchanged (persisting 0 does not burn
+    /// a sequence).
+    pub fn persist_current(&mut self) -> Result<(), SlotError> {
+        self.persist(self.next)
+    }
+
+    /// Write `value` through the temp-file/fsync/rename/dir-fsync sequence.
+    /// A crash between temp-create and rename leaves the temp behind; if
+    /// the rebooting process lands on the same PID and value, create_new
+    /// would fail forever. A stale temp is garbage from a dead attempt
+    /// whose rename never landed, so remove it and retry once.
+    fn persist(&self, value: u32) -> Result<(), SlotError> {
         let temp_path = slot_claim_seq_temp_path(&self.path, value)?;
-        // A crash between temp-create and rename leaves the temp behind; if
-        // the rebooting process lands on the same PID and value, create_new
-        // would fail forever. A stale temp is garbage from a dead attempt
-        // whose rename never landed, so remove it and retry once.
         let mut open = OpenOptions::new();
         open.write(true).create_new(true);
         let mut file = match open.open(&temp_path) {
@@ -1183,7 +1200,7 @@ impl ClaimSeqStore {
                 .map_err(|error| SlotError::StorageIo(error.to_string()))?;
             // Bare relative paths have an empty parent(); "." is the real
             // parent and skipping its fsync would allow the rename to be lost
-            // after next_seq already returned.
+            // after the persist already returned.
             let parent = self
                 .path
                 .parent()
@@ -1197,9 +1214,7 @@ impl ClaimSeqStore {
         if result.is_err() {
             let _ = fs::remove_file(&temp_path);
         }
-        result?;
-        self.next = value;
-        Ok(value)
+        result
     }
 }
 
@@ -2844,6 +2859,19 @@ mod tests {
         let mut store = ClaimSeqStore::load(&path).unwrap();
         assert_eq!(store.next_seq().unwrap(), 1);
         assert_eq!(store.next_seq().unwrap(), 2);
+    }
+
+    #[test]
+    fn claim_seq_persist_current_anchors_file_without_burning_a_sequence() {
+        let path = test_claim_seq_path("anchor");
+        let mut store = ClaimSeqStore::load(&path).unwrap();
+        // No file until something persists it.
+        assert!(!path.exists());
+        store.persist_current().unwrap();
+        assert!(path.exists());
+        // Anchoring 0 does not burn a sequence: the first claim is still 1.
+        let mut reloaded = ClaimSeqStore::load(&path).unwrap();
+        assert_eq!(reloaded.next_seq().unwrap(), 1);
     }
 
     #[test]

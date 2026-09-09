@@ -234,6 +234,16 @@ The first byte of the authenticated inner payload is a dispatch value:
 |----------|------|
 | `0x14` | SCHC packet: SCHC rule ID followed by residue/tail |
 | `0x15` | LICHEN routing/control message: message type followed by message body |
+| `0x16` | SOS emergency alert: the 12-apps.md §18.4.2 CBOR alert payload |
+
+Dispatch `0x16` marks an SOS emergency alert at the link layer so that relays
+can identify SOS traffic for the separate per-sender 3/hour SOS budget in
+04-network.md §6.3.3 (the CoAP `/sos` path is unusable at relays: OSCORE
+encrypts Uri-Path end-to-end and SCHC elides it). The `0x16` body is the
+§18.4.2 CBOR alert map; it is NOT SCHC-compressed (SOS is small and
+latency-critical). A sender sets dispatch `0x16` only for a genuine §18.4
+alert; receivers use it solely for the §6.3.3 SOS budget classification and
+MUST still apply the §18.4.1 origin-signature verification before relaying.
 
 Receivers MUST NOT infer the payload namespace from the first body byte. This
 is required because SCHC rule `0x01` is global CoAP and LICHEN routing
