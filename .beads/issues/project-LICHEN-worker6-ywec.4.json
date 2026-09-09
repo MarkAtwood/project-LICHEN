@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-ywec.4",
+  "title": "ywec.d: node.rs:387 DAO origin pin lookup derives IID from routable origin",
+  "description": "Child of project-LICHEN-worker6-ywec. lichen-node/src/node.rs:387 handle_dao does iid = origin[8..] then announces.pinned_pubkey_for(\u0026iid). Post-AddrForKey the DAO origin is a routable /128 whose low 64 bits are NOT the SHA-512 IID, so the indexed pin lookup misses and pinned-key verification degrades to the bounded-snapshot fallback (or fails). Pin store itself is correctly keyed by SHA-512 IID (identity handle). Fix needs an origin-\u003epubkey resolution path that does not assume IID embedding: e.g. scan bounded known_originators snapshot matching ygg_addr_from_pubkey(candidate) == origin. RELATED but distinct: plqy (spec decision on DAO transit-parent naming) and 7ecb (lichen-core iid_from_pubkey correlation). Entangled with i72x.6 vector regen (dao_origin_signature.json) - coordinate before changing observable DAO admission behavior.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T17:22:09.529375198Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T17:22:09.529375198Z",
+  "labels": [
+    "rust",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ywec.4",
+      "depends_on_id": "project-LICHEN-worker6-ywec",
+      "type": "parent-child",
+      "created_at": "2026-09-09T17:22:09.657062049Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

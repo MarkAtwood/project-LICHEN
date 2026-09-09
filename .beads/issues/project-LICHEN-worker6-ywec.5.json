@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-ywec.5",
+  "title": "ywec.e: secure datagram sender identity from routable source (secure.rs:1933, rpl_stack/secure.rs:143)",
+  "description": "Child of project-LICHEN-worker6-ywec. secure.rs:1933 derives sender_iid = header.src.0[8..] for ReceivedSecureDatagram - wrong when src is a routable AddrForKey /128 (that 8-byte tail is not the link-auth SHA-512 IID used as peer key). Downstream rpl_stack/secure.rs:143 peer_matches_destination = dst.0[8..] == peer_iid is likewise dead for routable response destinations. Fix: when the address is link-local keep IID correlation (valid); when routable, correlate via full ygg_addr_from_pubkey(peer pubkey from link layer). Check all consumers of ReceivedSecureDatagram.sender_iid before changing the field semantics.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T17:22:13.769215607Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T17:22:13.769215607Z",
+  "labels": [
+    "rust",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ywec.5",
+      "depends_on_id": "project-LICHEN-worker6-ywec",
+      "type": "parent-child",
+      "created_at": "2026-09-09T17:22:13.891380683Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
