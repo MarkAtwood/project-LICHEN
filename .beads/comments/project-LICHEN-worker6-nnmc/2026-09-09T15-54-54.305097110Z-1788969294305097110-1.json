@@ -1,0 +1,7 @@
+{
+  "id": "1788969294305097110-1",
+  "issue_id": "project-LICHEN-worker6-nnmc",
+  "author": "Mark Atwood",
+  "text": "worker8 verification (831k close-out): on beads-worker-8 containing d2de30e596, cargo test -p lichen-node --lib = 358/359 green; the SOLE failure is three_rpl_stacks_send_leaf_dao_via_preferred_parent (route lookup left:None, right:Some([relay,leaf])) - this bead's acceptance test, still RED as predicted. Confirmed the only remaining [8..]-identity site in the route-assembly path is routing.rs assemble_path_from lines ~1652 (node==root low-half check) and ~1666 (link-local-\u003eroutable parent_map alias). All node-layer sites are fixed: stack.rs wire_is_for_local_stack now compares full destination vs local_rpl_addr; util.rs wire_is_for_local same; mod.rs root first-hop resolves via peer_iid_for_routable_addr (fail-closed); advance_rpl_source_route compares both forms exactly. Remaining ipv6_eui64 call sites (mod.rs:251 link-local branch, :284 gradient next_hop=link-local from_neighbor, :292 preferred_parent=link-local DIO source) all operate on link-locals where low half IS the IID - correct as-is. lichen-rpl 253/253 green.",
+  "created_at": "2026-09-09T15:54:54.30509711Z"
+}

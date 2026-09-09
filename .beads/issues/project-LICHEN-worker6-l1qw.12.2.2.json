@@ -1,7 +1,7 @@
 {
   "id": "project-LICHEN-worker6-l1qw.12.2.2",
   "title": "Block transfer with OSCORE",
-  "notes": "Unblocked by Mark. Blocker l1qw.9.11.3 resolved, vectors landed. Each block must be independently OSCORE-protected with its own PIV/tag. Agent-implementable.",
+  "notes": "## Reassembly Race Risks\n\nThe blockwise + OSCORE integration has several defect-attractor surfaces:\n\n1. **Block ordering under concurrent senders**: BlockReceiver expects sequential num values. If two peers share any receiver state (context, token namespace), interleaved blocks from different senders could corrupt assembly or advance the wrong session.\n\n2. **PIV/replay window interaction**: Each block gets its own OSCORE Partial IV. If a block is legitimately retransmitted (e.g. ACK lost) after the replay window has advanced past that PIV, the receiver rejects a valid retransmit as replay. The window must not advance until the block is confirmed accepted by the blockwise layer, not just decrypted.\n\n3. **Timeout/cleanup races**: If a blockwise session times out mid-transfer while a new block is being decrypted/verified, the context state (assembled payload, expected block num, replay window) could be torn. Cleanup must be atomic with respect to block acceptance.\n\n4. **Injected/forged blocks**: An attacker sending blocks with valid-looking OSCORE but wrong PIV ordering, duplicate block nums, or blocks for a session that was already completed/timed-out. Bounded reassembly buffer must not leak memory or CPU under sustained injection.\n\n5. **Block size renegotiation mid-transfer**: RFC 7959 allows SZX renegotiation. If OSCORE protection is bound to a specific block size and the peer renegotiates, the plaintext boundaries shift — verify the OSCORE AAD/nonce construction remains correct across size changes.\n\nThese should be covered by the adversarial fuzzing child bead.",
   "status": "open",
   "priority": 1,
   "issue_type": "task",
@@ -9,7 +9,7 @@
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-25T03:42:36.515692Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-04T03:00:24.292287986Z",
+  "updated_at": "2026-09-09T15:52:34.787340634Z",
   "started_at": "2026-08-27T21:39:59.975018Z",
   "labels": [
     "oscore"
