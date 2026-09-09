@@ -66,21 +66,50 @@ the LoRa mesh (Yggdrasil addresses) and the WireGuard backhaul.
 traffic volume, mesh statistics (only what the gateway itself can see —
 neighbor count, packet rates), and OTA status.
 
-### Address Translation
+### Address Translation and Cross-Mesh Routing
 
 LICHEN nodes use Yggdrasil `AddrForKey(Ed25519PublicKey)` addresses (`0200::/8`
-`/128`s). These addresses are stable and globally unique. The gateway
-coordination service preserves them end-to-end:
+`/128`s). These addresses are stable and globally unique but are derived from
+public keys — they're scattered randomly across the address space and cannot
+be aggregated into prefixes. There is no "Gateway B owns `0200:abcd::/64`"
+because that's not how the addresses work.
+
+This means cross-mesh routing requires *someone* to know the mapping from a
+destination `/128` to the gateway that can reach it. A routing table IS a
+node-to-gateway map. This is a fundamental tension between routing efficiency
+and privacy.
+
+**Solution: Yggdrasil routing over the WireGuard backhaul.** Gateways run
+Yggdrasil peering sessions with each other through the WireGuard tunnels that
+Headscale provides. Yggdrasil's spanning-tree routing protocol finds paths to
+`/128` addresses using greedy DHT-based routing — no single node holds a
+global routing table. Each gateway knows:
+
+- Its own local nodes (unavoidable — it's the RPL DODAG root, it learned
+  them via DAO messages)
+- Its immediate Yggdrasil peers (other gateways it's connected to)
+- A tree coordinate for greedy forwarding
+
+A packet from Mesh A to a node in Mesh B traverses:
 
 1. Node sends IPv6 packet with Yggdrasil source/destination addresses
-2. Gateway receives over LoRa, decapsulates from SCHC
-3. Gateway routes via WireGuard tunnel to the destination gateway
-4. Destination gateway encapsulates in SCHC, transmits over LoRa
-5. Destination node receives with original Yggdrasil addresses intact
+2. Gateway A receives over LoRa, decapsulates from SCHC
+3. Gateway A doesn't have a local route for the destination `/128`
+4. Yggdrasil's greedy routing forwards through the gateway overlay to
+   Gateway B (which does have that node in its local DODAG)
+5. Gateway B encapsulates in SCHC, transmits over LoRa
+6. Destination node receives with original Yggdrasil addresses intact
 
-The WireGuard tunnel carries Yggdrasil-addressed IPv6 packets. No NAT, no
-address rewriting. A node's address is the same whether it's on the local
-mesh, across a gateway, or across ten gateways.
+No NAT, no address rewriting. A node's address is the same whether it's on
+the local mesh, across a gateway, or across ten gateways. The WireGuard
+tunnels carry Yggdrasil-routed IPv6 packets.
+
+**Privacy consequence:** No single point holds the complete node-to-gateway
+map. Each gateway knows only its own local nodes. The coordination service
+(Headscale) provides WireGuard tunnels but never sees Yggdrasil routing state.
+Yggdrasil's tree-based forwarding means intermediate gateways that relay
+traffic only see the next hop, not the full path. Compel one gateway and you
+get its local DODAG — not the whole network.
 
 ---
 
@@ -107,12 +136,32 @@ fulfill, not merely refused.
 
 | Data | Why not |
 |------|---------|
-| Which nodes are behind a gateway | Gateway doesn't report this |
-| Mesh topology | Only visible to participating nodes |
-| Message content | OSCORE end-to-end encrypted; gateway relays ciphertext |
-| Node identities | Never leave the mesh; gateway sees Yggdrasil addresses transiently in memory, does not report them |
-| Node-to-node communication patterns | Not visible above the WireGuard tunnel (which carries aggregate traffic) |
+| Which nodes are behind a gateway | Never reported; routing is Yggdrasil peer-to-peer between gateways |
+| Global node-to-gateway map | No single point holds it; Yggdrasil tree routing is distributed |
+| Mesh topology | Only visible to participating nodes via RPL |
+| Message content | OSCORE end-to-end encrypted; gateways relay ciphertext |
+| Node identities | Never leave the mesh or the gateway's local memory |
+| Node-to-node communication patterns | Not visible above the WireGuard tunnel (aggregate traffic) |
 | OSCORE keys | Negotiated per-pair via EDHOC, never touch the coordination service |
+
+### What individual gateways DO know (honest accounting)
+
+A gateway is a DODAG root. It necessarily knows every node in its local
+mesh — nodes register via RPL DAO messages. This is unavoidable: you
+cannot route to a node without knowing it exists.
+
+| Data | Known to the gateway | Known to the coordination service |
+|------|---------------------|----------------------------------|
+| Local node Yggdrasil `/128` addresses | Yes (RPL DAO) | No |
+| Local mesh topology (hop counts, relay paths) | Yes (RPL routing table) | No |
+| Traffic volume per local node | Yes (it relays the traffic) | No (only aggregate per-gateway) |
+| Nodes behind OTHER gateways | No (Yggdrasil greedy routing) | No |
+| Message content | No (OSCORE encrypted) | No |
+
+**Compel one gateway → get one mesh's node list.** This is the irreducible
+minimum. You cannot route without routing state. The architectural defense
+is that no single point holds the *global* map — only the local mesh's
+nodes. And the coordination service holds none of it.
 
 ### DERP relay privacy
 
@@ -225,17 +274,20 @@ The coordination service distributes firmware updates to enrolled gateways.
 ## Multi-Mesh Routing
 
 When gateways from different meshes are enrolled in the coordination
-service, traffic can route between meshes:
+service, traffic can route between meshes via Yggdrasil peering over the
+WireGuard tunnels. See "Address Translation and Cross-Mesh Routing" above
+for the full packet flow.
 
-1. Node in Mesh A sends to a Yggdrasil address in Mesh B
-2. Gateway A doesn't have a local route; forwards via WireGuard to
-   Gateway B (Headscale ACLs permit this)
-3. Gateway B delivers to the destination node in Mesh B
+The coordination service does not make routing decisions and does not see
+routing state. It provides WireGuard tunnels (connectivity); Yggdrasil
+running between gateways handles path selection (routing). Headscale ACLs
+control which gateways can peer, but the routing within those peerings is
+Yggdrasil's spanning-tree protocol, not a centralized decision.
 
-The coordination service does not make routing decisions. It provides the
-WireGuard tunnels; the gateways make routing decisions based on their RPL
-DODAG and Yggdrasil routing tables. The coordination service's role is
-connectivity (tunnels exist), not policy (which traffic goes where).
+No gateway needs a global view of all nodes across all meshes. Yggdrasil's
+greedy tree routing forwards packets hop-by-hop through the gateway overlay
+using tree coordinates, not destination lookup tables. A gateway only needs
+to know its local nodes (RPL) and its Yggdrasil peers (other gateways).
 
 ---
 
