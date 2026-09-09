@@ -63,6 +63,21 @@ cd "$REPO_ROOT"
 echo ""
 echo "=== Merging worker branches to main ==="
 
+# Restore the pre-session rr-cache snapshot unconditionally. Called after the
+# LLM session on every path: the session may record an ungated postimage (via
+# its own commit, a direct file write, or a legit bare 'git rerere'), and the
+# next sync's clean-merge path replays rr-cache past every gate. Restoring on
+# every path — not just on detected tamper — both neutralizes poisoning and
+# avoids a false positive from a compliant session's 'git rerere' (which
+# writes rr-cache without moving HEAD). Reads rr_had/rr_snap_b64 from the
+# enclosing function (bash dynamic scoping).
+rr_restore() {
+    rm -rf "$GIT_DIR/rr-cache"
+    if [ "$rr_had" = 1 ] && [ -n "$rr_snap_b64" ]; then
+        printf '%s' "$rr_snap_b64" | base64 -d | tar -C "$GIT_DIR" -xf -
+    fi
+}
+
 # LLM semantic merge (AgentSpawn-style, arXiv:2602.07072): reconcile both
 # sides of a conflicted merge with an LLM. Returns 0 only when the session
 # reported RESOLVED, no conflict markers remain in the content being
@@ -95,17 +110,38 @@ llm_semantic_merge() {
     expected=$( { git diff --cached --name-only; printf '%s\n' $files; } | sort -u )
     unstaged_before=$(git diff --name-only | grep -v '^\.beads/' | sort -u)
 
-    # HEAD pin (bead d42k): the session has shell/git access; if it runs
-    # 'git commit' itself the merge completes UNGATED (MERGE_HEAD consumed,
-    # rerere records the resolution), the missing-gate below then fails on
-    # the emptied index, and the caller's 'git merge --abort' silently
-    # no-ops — main advanced while the branch is reported manual-resolution.
-    # Snapshot HEAD now (commit AND symbolic ref — 'git checkout -b' keeps the
-    # commit id but would strand the caller's commit on the wrong branch);
-    # any session-caused move is rewound before any gate.
-    local head_before symref_before
-    head_before=$(git rev-parse HEAD)
+    # Repo-state pin (bead d42k + review findings): the session has shell/git
+    # access; if it runs 'git commit' itself the merge completes UNGATED
+    # (MERGE_HEAD consumed, rerere records the resolution), the missing-gate
+    # below then fails on the emptied index, and the caller's
+    # 'git merge --abort' silently no-ops — main advanced while the branch is
+    # reported manual-resolution. Pin commit id AND symbolic ref (a session
+    # branch-switch keeps the id but strands the caller's commit on the wrong
+    # branch) AND the replace-ref list (a session replace ref would rewrite
+    # the pin check and the rewind target itself). rr-cache is integrity-
+    # checked too: the merge already wrote its preimage, so a session can
+    # record an ungated postimage — via its own commit or a direct file
+    # write — that the next sync's clean-merge path replays past every gate.
+    # Manifest and content snapshot live in shell variables, NOT /tmp files:
+    # /tmp is same-UID-writable by the session, parent-shell memory is not.
+    # Accepted residuals beyond this pin (hooks/config persistence, push-to-
+    # remote, worker-branch ref moves, kill-parent, background delayed movers,
+    # .git identity swap, no flock): bead project-LICHEN-worker6-nm0h — they
+    # need a sandboxing design decision, not more pin lines.
+    local head_before symref_before replace_before rr_had=0 rr_snap_b64=""
+    head_before=$(GIT_NO_REPLACE_OBJECTS=1 git rev-parse HEAD)
     symref_before=$(git symbolic-ref -q HEAD 2>/dev/null || true)
+    replace_before=$(git replace -l 2>/dev/null | sort)
+    if [ -d "$GIT_DIR/rr-cache" ]; then
+        rr_had=1
+        rr_snap_b64=$(tar -C "$GIT_DIR" -cf - rr-cache 2>/dev/null | base64)
+    fi
+    # Detached HEAD at entry: the rewind would move whatever ref the session
+    # left current; refuse fail-closed (the caller aborts the merge).
+    if [ -z "$symref_before" ]; then
+        echo "  detached HEAD at entry — refusing LLM merge"
+        return 1
+    fi
 
     echo "  LLM merge session ($model) on: $files"
     # 15-minute cap so a hung session cannot wedge the sync loop.
@@ -115,49 +151,64 @@ llm_semantic_merge() {
     # satisfiable by a bare RESOLVED appended to the shared last.log by a
     # concurrent janitor session or a sibling worker's copy of this script.
     session_log=$(mktemp) || { echo "  mktemp failed — aborting merge"; return 1; }
-    # rr-cache snapshot: rerere.enabled is set at the top of this script, so a
-    # session-run 'git commit' RECORDS its ungated resolution; rewinding HEAD
-    # alone would let the next sync's merge replay it past every gate
-    # (rerere pre-resolves the conflict the LLM then validates). Restore the
-    # pre-session rr-cache on the rewind path. Snapshot failures abort the
-    # merge rather than run the session unprotected.
-    local rr_had=0 rr_snap
-    rr_snap=$(mktemp) || { rm -f "$session_log"; echo "  mktemp failed — aborting merge"; return 1; }
-    if [ -d "$GIT_DIR/rr-cache" ]; then
-        rr_had=1
-        tar -C "$GIT_DIR" -cf "$rr_snap" rr-cache 2>/dev/null ||
-            { rm -f "$session_log" "$rr_snap"; echo "  rr-cache snapshot failed — aborting merge"; return 1; }
-    fi
     timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Finish with the single word RESOLVED on its own line." > "$session_log" 2>&1; rc=$?
     cat "$session_log" >> "$log" 2>/dev/null || true
     echo "$(date +%FT%T) kimi budget=900s exit=$rc (124=timeout)" >> "$log"
-    # HEAD-move check FIRST: a session that committed and then hung/failed
-    # would otherwise escape via the rc early-return below, leaving the
-    # ungated merge commit on main. Symbolic-ref moves are caught too: a
-    # session 'git checkout -b tmp' keeps the commit id but would strand the
-    # caller's commit (and the rest of the merge loop) on the wrong branch.
-    if [ "$(git rev-parse HEAD)" != "$head_before" ] ||
-       [ "$(git symbolic-ref -q HEAD 2>/dev/null || true)" != "$symref_before" ]; then
-        echo "  LLM session moved HEAD (${head_before:0:7}@$(basename "${symref_before:-detached}") -> $(git rev-parse --short HEAD 2>/dev/null)@$(git symbolic-ref -q --short HEAD 2>/dev/null || echo detached)) — rewinding"
-        snapshot_store "$branch-headmoved"
+
+    # Purge session-created replace refs on EVERY path: they rewrite object
+    # reads repo-wide (including the caller's commit and future syncs).
+    local replace_now replace_new
+    replace_now=$(git replace -l 2>/dev/null | sort)
+    replace_new=$(comm -13 <(printf '%s\n' "$replace_before") <(printf '%s\n' "$replace_now"))
+    if [ -n "$replace_new" ]; then
+        echo "  removing session-created replace refs: $(echo $replace_new | tr '\n' ' ')"
+        printf '%s\n' "$replace_new" | while IFS= read -r r; do
+            git replace -d "$r" >/dev/null 2>&1 || true
+        done
+    fi
+
+    # Tamper check FIRST: a session that committed (or switched branches) and
+    # then hung/failed would otherwise escape via the rc early-return below.
+    # GIT_NO_REPLACE_OBJECTS on every pin read: the purge above already ran,
+    # but never let replacement rewrite the rewind target.
+    local head_now symref_now
+    head_now=$(GIT_NO_REPLACE_OBJECTS=1 git rev-parse HEAD)
+    symref_now=$(git symbolic-ref -q HEAD 2>/dev/null || true)
+    if [ "$head_now" != "$head_before" ] ||
+       [ "$symref_now" != "$symref_before" ]; then
+        local sym_now_disp=${symref_now:-detached}
+        echo "  LLM session tampered with repo state (HEAD ${head_before:0:7}@${symref_before##*/} -> ${head_now:0:7}@${sym_now_disp##*/}) — rewinding"
+        snapshot_store "$branch-tamper"
         # Restore the checked-out branch BEFORE the reset so main — not
         # whatever ref the session left current — is what gets rewound.
-        if [ -n "$symref_before" ] &&
-           [ "$(git symbolic-ref -q HEAD 2>/dev/null || true)" != "$symref_before" ]; then
+        if [ "$symref_now" != "$symref_before" ]; then
             git symbolic-ref HEAD "$symref_before"
         fi
-        git reset --hard "$head_before" >/dev/null
-        # Rewind rerere: the session's commit recorded its ungated resolution
-        # into rr-cache; replaying it next sync would bypass every gate.
-        rm -rf "$GIT_DIR/rr-cache"
-        if [ "$rr_had" = 1 ]; then
-            tar -C "$GIT_DIR" -xf "$rr_snap"
+        GIT_NO_REPLACE_OBJECTS=1 git reset --hard "$head_before" >/dev/null
+        rr_restore
+        # Fail-stop if the rewind itself failed: continuing the merge loop on
+        # unverified repo state risks exactly the ungated landing this guards.
+        # Clear stale MERGE_HEAD/MSG/MODE first: exiting with a merge still
+        # in flight lets the NEXT run's pre-loop .beads checkpoint complete a
+        # phantom merge and silently strand the branch (review finding).
+        if [ "$(GIT_NO_REPLACE_OBJECTS=1 git rev-parse HEAD 2>/dev/null)" != "$head_before" ] ||
+           [ "$(git symbolic-ref -q HEAD 2>/dev/null || true)" != "$symref_before" ]; then
+            echo "  FATAL: rewind verification failed — stopping sync"
+            rm -f "$GIT_DIR/MERGE_HEAD" "$GIT_DIR/MERGE_MSG" "$GIT_DIR/MERGE_MODE"
+            rm -f "$session_log"
+            exit 1
         fi
-        rm -f "$session_log" "$rr_snap"
+        rm -f "$session_log"
         return 1
     fi
+
+    # Restore the pre-session rr-cache on every non-tamper path: a compliant
+    # session's bare 'git rerere' (or a malicious direct postimage write)
+    # changes rr-cache without moving HEAD, so it never trips the tamper
+    # check — but it must still be discarded before the gates/commit.
+    rr_restore
     if [ "$rc" -ne 0 ]; then
-        rm -f "$session_log" "$rr_snap"
+        rm -f "$session_log"
         return "$rc"
     fi
 
@@ -165,11 +216,19 @@ llm_semantic_merge() {
     # 0 alone is emitted for any finished session — a session that never
     # resolved must be treated as a failure, not a success.
     if ! grep -qx 'RESOLVED' "$session_log"; then
-        rm -f "$session_log" "$rr_snap"
+        rm -f "$session_log"
         echo "  LLM session did not report RESOLVED — treating as failure"
         return 1
     fi
-    rm -f "$session_log" "$rr_snap"
+    rm -f "$session_log"
+
+    # MERGE_HEAD must still name exactly the branch being merged: the gates
+    # below bound the committed TREE, not its ancestry — a session-appended
+    # parent would ride the caller's commit into main (review finding).
+    if [ "$(cat "$GIT_DIR/MERGE_HEAD" 2>/dev/null)" != "$(GIT_NO_REPLACE_OBJECTS=1 git rev-parse "$branch" 2>/dev/null)" ]; then
+        echo "  MERGE_HEAD no longer names exactly $branch — aborting"
+        return 1
+    fi
 
     # Stage the resolved files; fail if anything is still conflicted. git add
     # resolves an unmerged index entry regardless of content, so the marker
