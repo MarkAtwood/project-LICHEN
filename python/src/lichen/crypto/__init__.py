@@ -14,8 +14,8 @@
 - key_rotation_attestation: COSE_Sign1 key rotation attestations (spec 8.7.4)
 """
 
+from .schnorr48 import SCHNORR48_ED25519_ALG
 from .capability_announcements import (
-    SCHNORR48_ED25519_ALG,
     Capability,
     CapabilityAnnouncement,
     CapabilityPayload,

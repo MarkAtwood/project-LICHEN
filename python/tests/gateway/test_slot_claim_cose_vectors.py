@@ -352,3 +352,171 @@ def test_boundary_sibling_fields_accepted_at_decode(key: int, value: object) -> 
         assert claim.expiry == value
     else:
         assert claim.ordinal == value
+
+
+# ─── Deterministic-CBOR payload gate (5rfl / cb10) ────────────────────────────
+
+
+def _rebuild_envelope(case: dict, payload_bytes: bytes) -> bytes:
+    """Reassemble the COSE_Sign1 with *payload_bytes* as the payload bstr,
+    keeping the signer's original signature."""
+    elements = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    return b"\x84" + (
+        cbor2.dumps(elements[0])
+        + cbor2.dumps(elements[1])
+        + cbor2.dumps(payload_bytes)
+        + cbor2.dumps(elements[3])
+    )
+
+
+def _payload_bytes_with_raw(case: dict, key: int, raw_value: bytes) -> bytes:
+    """Encode the canonical payload map, substituting *raw_value* (unparsed
+    CBOR) for key *key* — the envelope keeps the signer's original signature."""
+    case_envelope = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    fields = cbor2.loads(case_envelope[2])
+    assert len(fields) == 7
+    body = bytearray([0xA7])
+    for k in range(1, 8):
+        body += cbor2.dumps(k)
+        body += raw_value if k == key else cbor2.dumps(fields[k])
+    return bytes(body)
+
+
+@pytest.mark.parametrize(
+    "key,raw_value",
+    [
+        (3, b"\xc2\x41\x00"),  # tag-2 bignum 0 at mode (signer's value)
+        (3, b"\xc2\x41\x01"),  # tag-2 bignum 1 at mode
+        (6, b"\x18\x00"),  # long-form uint at claim_seq (signer's value)
+        (6, b"\xc2\x41\x05"),  # tag-2 bignum at claim_seq
+        (2, b"\x18\x0c"),  # long-form uint at superframe_epoch (signer's value)
+        (1, b"\x81\x18\x07"),  # long-form uint in slots
+    ],
+)
+def test_non_canonical_uint_encodings_rejected_at_decode(key: int, raw_value: bytes) -> None:
+    # 5rfl: cbor2 decodes tag-2 bignums (c2 41 00) and non-minimal long-form
+    # uints (18 00) to plain int, so every type gate accepts them — while
+    # Rust's p.uint()/head(0) rejects the identical wire bytes as
+    # MalformedClaim before any signature check. Three cases (bignum 0 at
+    # mode, 18 00 at claim_seq, 18 0c at epoch) decode to the signer's own
+    # values, so the signature still verifies over the canonical re-encode:
+    # without the canonical-form gate, signature-valid wire input splits
+    # Python's verdict from every Rust peer. The other three change the
+    # signed semantic value (the signature would fail too), but Rust still
+    # rejects them at decode — decode must agree.
+    case = _case("happy_path_n1")
+    payload = _payload_bytes_with_raw(case, key, raw_value)
+    with pytest.raises(ClaimError, match="canonically encoded"):
+        SlotClaim.decode_cose(_rebuild_envelope(case, payload))
+
+
+def test_reordered_payload_keys_rejected_at_decode() -> None:
+    # cb10: the wire contract is deterministic-CBOR with keys 1-7 ascending
+    # (spec/decisions.jsonl slot-claim-cose-sign1). Emitting the same seven
+    # key/value pairs out of order decodes to an identical field set (and
+    # the signature verifies over the canonical re-encode). Rust rejects it
+    # because its sig digest covers the RECEIVED payload bytes (slot.rs:633)
+    # → signature failure; C digests the received bytes likewise. Python's
+    # canonical-form gate rejects it at decode.
+    case = _case("happy_path_n1")
+    case_envelope = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    fields = cbor2.loads(case_envelope[2])
+    body = bytearray([0xA7])
+    for k in (2, 1, 3, 4, 5, 6, 7):  # keys 1 and 2 swapped
+        body += cbor2.dumps(k)
+        body += cbor2.dumps(fields[k])
+    with pytest.raises(ClaimError, match="canonically encoded"):
+        SlotClaim.decode_cose(_rebuild_envelope(case, bytes(body)))
+
+
+def test_duplicate_payload_key_rejected_at_decode() -> None:
+    # cb10: a duplicate key (wire {6:5, 6:5}) decodes via cbor2 last-wins to
+    # the signer's claim_seq, so the signature verifies over the canonical
+    # re-encode — but the 8-pair map is not the canonical 7-pair form. The
+    # gate rejects it; Rust/C reject duplicates via a seen-bitmask.
+    case = _case("happy_path_n1")
+    case_envelope = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    fields = cbor2.loads(case_envelope[2])
+    body = bytearray([0xA8])  # 8-pair map
+    for k in range(1, 8):
+        body += cbor2.dumps(k)
+        body += cbor2.dumps(fields[k])
+        if k == 6:  # duplicate key 6 with the same value
+            body += cbor2.dumps(6)
+            body += cbor2.dumps(fields[6])
+    with pytest.raises(ClaimError, match="canonically encoded"):
+        SlotClaim.decode_cose(_rebuild_envelope(case, bytes(body)))
+
+
+def test_unknown_payload_key_rejected_at_decode() -> None:
+    # cb10: an unknown key (8) is ignored by cbor2's dict decode (the field
+    # set is unchanged, signature verifies over the re-encode), but the
+    # 8-pair map is not the canonical form. The gate rejects it; Rust/C
+    # reject unknown keys (key range 1-7).
+    case = _case("happy_path_n1")
+    case_envelope = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    fields = cbor2.loads(case_envelope[2])
+    body = bytearray([0xA8])  # 8-pair map
+    for k in range(1, 8):
+        body += cbor2.dumps(k)
+        body += cbor2.dumps(fields[k])
+    body += cbor2.dumps(8)  # unknown key
+    body += cbor2.dumps(0)
+    with pytest.raises(ClaimError, match="canonically encoded"):
+        SlotClaim.decode_cose(_rebuild_envelope(case, bytes(body)))
+
+
+@pytest.mark.parametrize(
+    "raw_mode",
+    [
+        b"\xf4",  # false
+        b"\xf5",  # true
+        b"\xf9\x00\x00",  # float16 0.0
+        b"\xfa\x00\x00\x00\x00",  # float32 0.0
+        b"\xfa\x3f\x80\x00\x00",  # float32 1.0
+        b"\xfb\x00\x00\x00\x00\x00\x00\x00\x00",  # float64 0.0
+    ],
+)
+def test_non_integer_mode_raw_cbor_rejected_at_decode(raw_mode: bytes) -> None:
+    # (Merge resolution: renamed from test_non_integer_mode_rejected_at_decode
+    # so it does not shadow the ft5w test of the same name above — that test
+    # drives the type-strict mode check through cbor2-decoded Python values;
+    # this one drives it with raw wire bytes, additionally covering the
+    # float16/float32 encodings that cbor2.dumps never emits.)
+    # ft5w: CBOR false (f4), true (f5), and float 0.0/1.0 (f9/fa/fb ...)
+    # decode via cbor2 to Python False/True/0.0/1.0, which value-equality
+    # ('mode == 0') would accept as INTERLEAVED — Rust's p.uint() rejects
+    # non-uint major types as MalformedClaim. The type-strict check
+    # (type(mode) is not int) must reject these with the mode error, not
+    # the canonical-gate error (the gate would catch them too, but the
+    # type check is the targeted fix and produces the precise diagnostic).
+    case = _case("happy_path_n1")
+    payload = _payload_bytes_with_raw(case, 3, raw_mode)
+    with pytest.raises(ClaimError, match="mode must be 0"):
+        SlotClaim.decode_cose(_rebuild_envelope(case, payload))
+
+
+def test_trailing_payload_bytes_rejected_at_decode() -> None:
+    # cb10: the pinned cbor2.loads ACCEPTS trailing bytes after the payload
+    # map, so the canonical-form gate is the sole enforcement point here —
+    # a payload with a trailing byte must be rejected by the gate.
+    case = _case("happy_path_n1")
+    case_envelope = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    payload = case_envelope[2] + b"\x00"
+    with pytest.raises(ClaimError):
+        SlotClaim.decode_cose(_rebuild_envelope(case, payload))
+
+
+def test_canonical_payload_accepted_and_verifies() -> None:
+    # Positive control for the canonical gate: a hand-built map with
+    # canonical (minimal) value encodings must still decode AND verify —
+    # the gate rejects encodings, not the hand-built construction itself.
+    case = _case("happy_path_n1")
+    envelope_elements = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    fields = cbor2.loads(envelope_elements[2])
+    payload_bytes = _payload_bytes_with_raw(case, 3, cbor2.dumps(fields[3]))
+    claim = SlotClaim.decode_cose(_rebuild_envelope(case, payload_bytes))
+    assert claim.allocation_mode == (
+        AllocationMode.INTERLEAVED if fields[3] == 0 else AllocationMode.CONTIGUOUS
+    )
+    assert verify_slot_claim(claim, _pubkey(case), now_unix=EVAL_TIME) == (True, None)
