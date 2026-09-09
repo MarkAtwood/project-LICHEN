@@ -14,7 +14,7 @@
 #include <monocypher.h>
 #include <monocypher-ed25519.h>
 
-#ifdef CONFIG_LICHEN_IPV6
+#ifdef CONFIG_MBEDTLS_SHA256
 #include "lichen_util.h"
 #endif
 
@@ -222,7 +222,7 @@ int lichen_key_pubkey_fingerprint(const uint8_t pubkey[_Nonnull LICHEN_KEY_PUBKE
 		return -EINVAL;
 	}
 
-#ifdef CONFIG_LICHEN_IPV6
+#ifdef CONFIG_MBEDTLS_SHA256
 	uint8_t hash[32];
 
 	/* lichen_sha256: mbedTLS on Zephyr (TinyCrypt deprecated in 4.1),

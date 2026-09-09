@@ -8,10 +8,11 @@ config LICHEN_IPV6
 	depends on LICHEN
 	select LICHEN_CRYPTO_MONOCYPHER
 	# The l2 library always compiles lichen_util.c (EUI-64 derivation),
-	# which needs TinyCrypt SHA-256 — select it here, not only from
-	# LICHEN_LORA_L2, so radio-less builds (native_sim) link too.
-	select TINYCRYPT
-	select TINYCRYPT_SHA256
+	# which needs SHA-256 — select mbedTLS here (TinyCrypt is DEPRECATED
+	# in Zephyr 4.1), not only from LICHEN_LORA_L2, so radio-less builds
+	# (native_sim) link too.
+	select MBEDTLS
+	select MBEDTLS_SHA256
 	default y
 	help
 	  Enable LICHEN IPv6 address utilities. Monocypher supplies the
@@ -53,8 +54,8 @@ config LICHEN_LORA_L2
 	depends on LICHEN_IPV6
 	select LICHEN_LINK
 	select HWINFO
-	select TINYCRYPT
-	select TINYCRYPT_SHA256
+	select MBEDTLS
+	select MBEDTLS_SHA256
 	default y
 	help
 	  Enable the LICHEN LoRa L2 driver. This provides low-level LoRa

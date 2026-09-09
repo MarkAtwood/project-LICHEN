@@ -17,3 +17,9 @@ target_sources(app PRIVATE
   # which this test does not enable; compile it in directly.
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/hash32.c
 )
+
+# lichen_util.c's SHA-256 provider is mbedTLS under Zephyr (TinyCrypt is
+# deprecated in 4.1): pick up the module include dirs for the app copy.
+if(CONFIG_MBEDTLS)
+  target_link_libraries(app PRIVATE mbedTLS)
+endif()

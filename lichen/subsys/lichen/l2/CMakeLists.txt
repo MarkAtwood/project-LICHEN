@@ -8,6 +8,12 @@ zephyr_library_sources(
   lichen_util.c
 )
 
+# lichen_util.c SHA-256 provider is mbedTLS under Zephyr 4.1 (TinyCrypt is
+# deprecated): propagate the module's include dirs and link interface.
+if(CONFIG_MBEDTLS)
+  zephyr_library_link_libraries(mbedTLS)
+endif()
+
 zephyr_library_sources_ifdef(CONFIG_LICHEN_IPV6
   dad.c
   ipv6_addr.c

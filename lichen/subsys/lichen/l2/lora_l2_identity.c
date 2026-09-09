@@ -71,7 +71,8 @@ int generate_eui64(uint8_t *eui64)
     int ret = 0;
     uint8_t hwid[LICHEN_HWID_MAX_LEN];
     ssize_t hwid_len;
-    uint8_t hash[TC_SHA256_DIGEST_SIZE];
+    /* SHA-256 digest (provider-independent; lichen_sha256 guarantees 32). */
+    uint8_t hash[32];
     uint8_t hash_input[EUI64_DOMAIN_PREFIX_LEN + sizeof(hwid)];
     BUILD_ASSERT(sizeof(hwid) == LICHEN_HWID_MAX_LEN,
                  "hwid buffer must match declared max hardware ID length");

@@ -5,8 +5,8 @@ config LICHEN_TUNNEL_AUTH
 	bool "Fail-closed egress tunnel authorization"
 	depends on LICHEN_LINK_SCHNORR
 	select LICHEN_CRYPTO_MONOCYPHER
-	select TINYCRYPT
-	select TINYCRYPT_SHA256
+	select MBEDTLS
+	select MBEDTLS_SHA256
 	help
 	  Verify root-issued COSE_Sign1 tunnel grants and enforce them before
 	  forwarding inner IPv6 packets to an external interface.
