@@ -400,6 +400,19 @@ fn expired_longest_prefix_denies_without_falling_back_to_shorter_live_grant() {
     );
 }
 
+// Merge resolution (beads-worker-5): the branch's wired-path suite was
+// dropped with its API. It exercised Gateway::handle_tunnel_auth_request /
+// Gateway::authorize_tunnel_egress backed by a Gateway-owned authorization
+// table; the staged gateway.rs resolution removed that table in favor of the
+// durable GatewayCoordinator-owned one (see the merge comment in gateway.rs:
+// two tables would diverge, grants written to one and the gate consulting
+// the other). The branch's spec 06-security 8.11 intents are covered below
+// through the surviving surface: POST accept/replay/fail-closed cases go
+// through GatewayCoordinator::handle_request, and the egress data-plane gate
+// is exercised end-to-end through Gateway::ingest_mesh_frame. Wrong-route,
+// scoped source/destination, and expiry denials stay pinned by the corpus
+// post/decapsulation cases above.
+
 // ---- Wired CoAP dispatch (spec 06-security 8.11, POST /.well-known/tunnel-auth) ----
 
 use lichen_gateway::resources::{CoapMethod, GatewayCoordinator};
