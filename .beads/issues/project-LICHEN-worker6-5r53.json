@@ -2,13 +2,17 @@
   "id": "project-LICHEN-worker6-5r53",
   "title": "Manual merge needed: beads-worker-2 (janitor failed 3 cycles)",
   "description": "The merge janitor could not resolve beads-worker-2 after 3 consecutive kimi sessions. Branch is . Human or implementer-agent resolution required; the sync loop keeps skipping it. Discovered-from: project-LICHEN-worker6-ba39",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "task",
+  "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-09T09:48:08.597965852Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-09T09:48:08.597965852Z",
+  "updated_at": "2026-09-09T10:01:43.160869447Z",
+  "started_at": "2026-09-09T10:01:43.160869447Z",
+  "lease_expires_at": "2026-09-09T10:06:43.160869447Z",
+  "heartbeat_at": "2026-09-09T10:01:43.160869447Z",
   "labels": [
     "fleet-implementable"
   ]
