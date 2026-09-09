@@ -92,10 +92,10 @@
       "max_addresses": 1,
       "max_keys_per_address": 2,
       "operations": [
-        {"op": "observe_bound_native", "address": "020e:02a5:0225:b4ba:0c02:a502:25b4:baaa", "public_key_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", "source": "link_signature", "now_s": 0, "expected_status": "new", "expected_collision": false, "expected_key_count": 1, "expected_expires_at_s": 1200, "expected_size": 1},
-        {"op": "observe_bound_native", "address": "20e:2a5:225:b4ba:c02:a502:25b4:baaa", "public_key_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", "source": "oscore", "now_s": 10, "expected_status": "idempotent", "expected_collision": false, "expected_key_count": 1, "expected_expires_at_s": 1210, "expected_size": 1},
-        {"op": "query", "address": "020e:02a5:0225:b4ba:0c02:a502:25b4:baaa", "now_s": 1209, "expected_collision": false, "expected_key_count": 1, "expected_size": 1},
-        {"op": "query", "address": "020e:02a5:0225:b4ba:0c02:a502:25b4:baaa", "now_s": 1210, "expected_collision": false, "expected_key_count": 0, "expected_size": 0}
+        {"op": "observe_bound_native", "address": "0200:514a:cffc:fa9d:ea90:5568:0258:6d37", "public_key_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", "source": "link_signature", "now_s": 0, "expected_status": "new", "expected_collision": false, "expected_key_count": 1, "expected_expires_at_s": 1200, "expected_size": 1},
+        {"op": "observe_bound_native", "address": "200:514a:cffc:fa9d:ea90:5568:258:6d37", "public_key_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", "source": "oscore", "now_s": 10, "expected_status": "idempotent", "expected_collision": false, "expected_key_count": 1, "expected_expires_at_s": 1210, "expected_size": 1},
+        {"op": "query", "address": "0200:514a:cffc:fa9d:ea90:5568:0258:6d37", "now_s": 1209, "expected_collision": false, "expected_key_count": 1, "expected_size": 1},
+        {"op": "query", "address": "0200:514a:cffc:fa9d:ea90:5568:0258:6d37", "now_s": 1210, "expected_collision": false, "expected_key_count": 0, "expected_size": 0}
       ]
     },
     {
@@ -103,12 +103,12 @@
       "max_addresses": 1,
       "max_keys_per_address": 2,
       "operations": [
-        {"op": "observe_bound_native", "address": "020e:02a5:0225:b4ba:0c02:a502:25b4:baaa", "public_key_hex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c", "source": "link_signature", "now_s": 0, "expected_error": "binding_mismatch", "expected_size": 0},
+        {"op": "observe_bound_native", "address": "0200:514a:cffc:fa9d:ea90:5568:0258:6d37", "public_key_hex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c", "source": "link_signature", "now_s": 0, "expected_error": "binding_mismatch", "expected_size": 0},
         {"op": "observe_bound_native", "address": "fe80::1", "public_key_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", "source": "link_signature", "now_s": 0, "expected_error": "invalid_native_address", "expected_size": 0},
-        {"op": "observe_bound_native", "address": "030e:02a5:0225:b4ba:0c02:a502:25b4:baaa", "public_key_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", "source": "link_signature", "now_s": 0, "expected_error": "invalid_native_address", "expected_size": 0},
-        {"op": "observe_bound_native", "address": "020e:02a5:0225:b4ba:0c02:a502:25b4:baaa", "public_key_hex": "00000000000000000000000000000000000000000000000000000000000000", "source": "link_signature", "now_s": 0, "expected_error": "invalid_key_length", "expected_size": 0},
-        {"op": "observe_bound_native", "address": "0200:d5ba:e23a:afa6:00d5:bae2:3aaf:a698", "public_key_hex": "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a", "source": "link_signature", "now_s": 0, "expected_error": "invalid_key_point", "expected_size": 0},
-        {"op": "observe_bound_native", "address": "0237:8472:8ae7:309e:3584:728a:e730:9eab", "public_key_hex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c", "source": "tofu", "now_s": 0, "expected_status": "new", "expected_collision": false, "expected_key_count": 1, "expected_expires_at_s": 1200, "expected_size": 1}
+        {"op": "observe_bound_native", "address": "0300:514a:cffc:fa9d:ea90:5568:0258:6d37", "public_key_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", "source": "link_signature", "now_s": 0, "expected_error": "invalid_native_address", "expected_size": 0},
+        {"op": "observe_bound_native", "address": "0200:514a:cffc:fa9d:ea90:5568:0258:6d37", "public_key_hex": "00000000000000000000000000000000000000000000000000000000000000", "source": "link_signature", "now_s": 0, "expected_error": "invalid_key_length", "expected_size": 0},
+        {"op": "observe_bound_native", "address": "0200:71d1:2b1f:8564:4f60:8b87:e913:e5df", "public_key_hex": "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a", "source": "link_signature", "now_s": 0, "expected_error": "invalid_key_point", "expected_size": 0},
+        {"op": "observe_bound_native", "address": "0200:eaee:3845:17ec:1cd4:055a:49a5:868b", "public_key_hex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c", "source": "tofu", "now_s": 0, "expected_status": "new", "expected_collision": false, "expected_key_count": 1, "expected_expires_at_s": 1200, "expected_size": 1}
       ]
     }
   ]

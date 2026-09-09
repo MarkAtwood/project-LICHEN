@@ -31,6 +31,39 @@ _PEER_DODAG = IPv6Address("0200::1")
 _OTHER_DODAG = IPv6Address("0200::2")
 
 
+def _addr_for_key(public_key: bytes) -> bytes:
+    """Upstream yggdrasil-go ``AddrForKey``: bit-invert the key, count leading
+    1 bits into ``addr[1]``, drop them plus the separator 0, then pack the
+    remaining bits MSB-first into ``addr[2:16]``.  No hashing.
+
+    The corpus pins upstream addresses per spec/decisions.jsonl
+    ``upstream-yggdrasil-addressing``; ``ReferenceIdentity.ygg_addr`` on this
+    lineage is still the rejected SHA-512 profile, so the DODAG derivation
+    lives here until the reference module lands its own upstream helper.
+    Mirrors the pinned anchor in yggdrasil_address.json.
+    """
+    if len(public_key) != 32:
+        raise ValueError("Ed25519 public key must be exactly 32 bytes")
+    inverted = bytes(b ^ 0xFF for b in public_key)
+    ones = 0
+    while ones < 256 and (inverted[ones // 8] >> (7 - ones % 8)) & 1:
+        ones += 1
+    payload = bytearray(14)
+    acc = 0
+    nbits = 0
+    pos = 0
+    for i in range(ones + 1, 256):
+        acc = (acc << 1) | ((inverted[i // 8] >> (7 - i % 8)) & 1)
+        nbits += 1
+        if nbits == 8:
+            if pos < 14:
+                payload[pos] = acc
+                pos += 1
+            acc = 0
+            nbits = 0
+    return bytes((0x02, ones & 0xFF)) + bytes(payload)
+
+
 def _internet_checksum(data: bytes) -> int:
     if len(data) & 1:
         data += b"\x00"
@@ -164,8 +197,8 @@ def build_document() -> dict[str, object]:
     root = ReferenceIdentity.from_seed(_ROOT_SEED)
     attacker = ReferenceIdentity.from_seed(_ATTACKER_SEED)
     victim = ReferenceIdentity.from_seed(_VICTIM_SEED)
-    root_dodag = IPv6Address(root.ygg_addr)
-    victim_dodag = IPv6Address(victim.ygg_addr)
+    root_dodag = IPv6Address(_addr_for_key(root.pubkey))
+    victim_dodag = IPv6Address(_addr_for_key(victim.pubkey))
     version_3 = bytes.fromhex("130103")
     cases = [
         _signed_case(
