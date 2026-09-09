@@ -171,3 +171,28 @@ def test_claim_seq_over_u32_rejected_at_decode() -> None:
         body = cbor2.dumps([elements[0], elements[1], cbor2.dumps(payload), elements[3]])
         with pytest.raises(ClaimError, match="claim_seq must be a u32 integer"):
             SlotClaim.decode_cose(body)
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        (2, 2**64),  # superframe_epoch: above u64 (tag-2 bignum on wire)
+        (4, 2**64),  # expiry: above u64
+        (7, 2**64),  # ordinal: above u64
+        (1, [2**32]),  # slot index above u32
+        (1, [-1]),  # negative slot index (Rust uint() never admits)
+        (1, [0] * 4097),  # over MAX_SLOTS_PER_SUPERFRAME
+    ],
+)
+def test_oversized_sibling_fields_rejected_at_decode(key: int, value: object) -> None:
+    # s61e: the sibling payload fields get the same Rust-parity bounds as
+    # claim_seq — a key holder signing oversized values must not produce a
+    # claim Python accepts (advancing the replay high-water) while every
+    # Rust peer discards the identical bytes as malformed.
+    case = _case("happy_path_n1")
+    elements = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    payload = cbor2.loads(elements[2])
+    payload[key] = value
+    body = cbor2.dumps([elements[0], elements[1], cbor2.dumps(payload), elements[3]])
+    with pytest.raises(ClaimError):
+        SlotClaim.decode_cose(body)

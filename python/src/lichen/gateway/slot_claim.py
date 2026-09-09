@@ -77,6 +77,19 @@ range at BOTH the dataclass and decode boundaries or a signed claim with
 claim_seq > 2**32-1 diverges cross-implementation (accepted and cached by
 Python, malformed to Rust)."""
 
+MAX_SLOTS_PER_SUPERFRAME = 4_096
+"""Rust slot.rs:57 parity: decode-side bound on the slot array length."""
+
+_MAX_SLOT_INDEX = 0xFFFF_FFFF
+"""Per-slot u32 bound (Rust slot.rs:574 u32::try_from). Also rejects
+negative slot indices, which Rust's uint() never admits."""
+
+_MAX_U64 = 0xFFFF_FFFF_FFFF_FFFF
+"""Upper bound for the u64 wire fields superframe_epoch (key 2), expiry
+(key 4) and ordinal (key 7): Rust decodes each via p.uint() -> u64, so a
+CBOR tag-2 bignum above 2**64-1 is MalformedClaim there. Python bounds the
+same fields at both validation sites to keep the verdicts identical."""
+
 
 class ClaimRejectReason(Enum):
     """Reasons a slot claim may be rejected (GCP-6.3)."""
@@ -170,6 +183,13 @@ class SlotClaim:
         except ValueError as e:
             raise ClaimError(f"gateway_iid must be valid hex: {e}") from None
 
+        # Slot indices are u32 on the wire (Rust: per-element u32::try_from)
+        # and the array is bounded (Rust: count <= MAX_SLOTS_PER_SUPERFRAME)
+        if not all(type(s) is int and 0 <= s <= _MAX_SLOT_INDEX for s in self.slots):
+            raise ClaimError("slots must be u32 integers")
+        if len(self.slots) > MAX_SLOTS_PER_SUPERFRAME:
+            raise ClaimError("slots exceeds MAX_SLOTS_PER_SUPERFRAME")
+
         # Slots must be sorted ascending
         if list(self.slots) != sorted(self.slots):
             raise ClaimError("slots must be sorted ascending")
@@ -178,18 +198,28 @@ class SlotClaim:
         if len(self.slots) != len(set(self.slots)):
             raise ClaimError("slots must be unique")
 
-        # Superframe ID must be non-negative
-        if self.superframe_id < 0:
+        # Superframe ID is a u64 on the wire (Rust: p.uint() -> u64)
+        if (
+            type(self.superframe_id) is not int
+            or self.superframe_id < 0
+            or self.superframe_id > _MAX_U64
+        ):
             raise ClaimError("superframe_id must be non-negative")
 
-        # Expiry must be a non-negative integer (spec: key 4)
-        if type(self.expiry) is not int or self.expiry < 0:
+        # Expiry is a u64 on the wire (spec: key 4)
+        if type(self.expiry) is not int or self.expiry < 0 or self.expiry > _MAX_U64:
             raise ClaimError("expiry must be a non-negative integer")
 
         # claim_seq must be a u32 (spec: key 6; Rust decodes as u32, so a
         # larger value diverges cross-implementation on identical wire input)
         if type(self.claim_seq) is not int or self.claim_seq < 0 or self.claim_seq > _MAX_CLAIM_SEQ:
             raise ClaimError("claim_seq must be a u32 integer")
+
+        # Ordinal is a u64 on the wire when present (None = local-only claim)
+        if self.ordinal is not None and (
+            type(self.ordinal) is not int or self.ordinal < 0 or self.ordinal > _MAX_U64
+        ):
+            raise ClaimError("ordinal must be a non-negative integer")
 
         # Validate signature length if present
         if self.signature is not None and len(self.signature) != 48:
@@ -243,11 +273,14 @@ class SlotClaim:
 
         raw_slots = fields.get(_PAYLOAD_SLOTS)
         if not isinstance(raw_slots, list) or not all(
-            isinstance(s, int) and not isinstance(s, bool) for s in raw_slots
+            isinstance(s, int) and not isinstance(s, bool) and 0 <= s <= _MAX_SLOT_INDEX
+            for s in raw_slots
         ):
-            raise ClaimError("slots must be an array of integers")
+            raise ClaimError("slots must be an array of u32 integers")
+        if len(raw_slots) > MAX_SLOTS_PER_SUPERFRAME:
+            raise ClaimError("slots exceeds MAX_SLOTS_PER_SUPERFRAME")
         superframe_epoch = fields.get(_PAYLOAD_SUPERFRAME_EPOCH)
-        if type(superframe_epoch) is not int or superframe_epoch < 0:
+        if type(superframe_epoch) is not int or superframe_epoch < 0 or superframe_epoch > _MAX_U64:
             raise ClaimError("superframe_epoch must be a non-negative integer")
         mode = fields.get(_PAYLOAD_MODE)
         if mode == _MODE_INTERLEAVED:
@@ -257,7 +290,7 @@ class SlotClaim:
         else:
             raise ClaimError("mode must be 0 (interleaved) or 1 (contiguous)")
         expiry = fields.get(_PAYLOAD_EXPIRY)
-        if type(expiry) is not int or expiry < 0:
+        if type(expiry) is not int or expiry < 0 or expiry > _MAX_U64:
             raise ClaimError("expiry must be a non-negative integer")
         iid_bytes = fields.get(_PAYLOAD_GATEWAY_IID)
         if not isinstance(iid_bytes, bytes) or len(iid_bytes) != 8:
@@ -269,7 +302,7 @@ class SlotClaim:
         # Key 7 is required (shared corpus gcp_slot_claim_cose_sign1.json
         # case ordinal_absent: without the ordinal the receiver cannot
         # register the gateway — reject as malformed).
-        if type(ordinal) is not int or ordinal < 0:
+        if type(ordinal) is not int or ordinal < 0 or ordinal > _MAX_U64:
             raise ClaimError("ordinal must be a non-negative integer")
 
         return cls(
