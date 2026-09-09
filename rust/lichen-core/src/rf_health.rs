@@ -714,17 +714,19 @@ mod tests {
     use serde_json::Value;
 
     #[test]
-    fn adaptive_sf_step3_uses_spec_density_8() {
+    fn adaptive_sf_floor_b_engages_below_density_high() {
         let mut m = RfHealthMetrics::new();
         m.record_density(9);
         m.record_rx(-2);
         let (sf, tx_allowed) = m.adaptive_sf_select(Some(7), None, None);
-        // density 9 > 8: step 3 engages (+2) per spec 2a.8 (was > 10),
-        // then floor (c) lifts the result to 11.
+        // Density 9 <= DENSITY_HIGH (10): step 3 and floor (c) do NOT
+        // engage. SNR EMA -2 < SNR_POOR (0) engages floor (b):
+        // sf = max(11, 7) = 11.
         assert_eq!(sf, 11);
         assert!(tx_allowed);
-        // Density 8 exactly: step 3 does not engage (good SNR avoids the
-        // floor-(b) interaction).
+        // Benign RF (density 8 <= 10, SNR 10 >= 0, no loss/load): no step
+        // and no floor engages (step 4 additionally needs density <
+        // DENSITY_LOW = 5), so the assigned SF passes through unchanged.
         let mut m8 = RfHealthMetrics::new();
         m8.record_density(8);
         m8.record_rx(10);
