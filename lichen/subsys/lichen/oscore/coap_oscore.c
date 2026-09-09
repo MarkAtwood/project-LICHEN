@@ -88,6 +88,42 @@ int coap_oscore_unprotect_resource_request(struct coap_resource *resource,
 	return 0;
 }
 
+int coap_oscore_authorize_mutating_result(struct coap_resource *resource,
+					  struct coap_packet *request,
+					  struct sockaddr *addr, socklen_t addr_len,
+					  uint8_t expected_method,
+					  struct coap_oscore_unprotect_result *result)
+{
+	return coap_oscore_unprotect_resource_request(resource, request, addr, addr_len,
+						      expected_method, result);
+}
+
+
+#ifdef CONFIG_LICHEN_COAP_SERVER_OSCORE
+/*
+ * Encode the Content-Format option (option 12, delta 12) as raw CoAP option
+ * bytes for the protected (Class E) inner message. Byte-identical to the
+ * Rust gateway's encode_content_format_option (gateway.rs): 0 means "no
+ * content format" and omits the option entirely (a zero-length 0xc0 option
+ * would decode as value 0 = text/plain;charset=utf-8); CoAP uint values use
+ * their shortest big-endian representation (RFC 7252 Section 3.2).
+ */
+static size_t encode_content_format_option(uint16_t content_format, uint8_t buf[3])
+{
+	if (content_format == 0) {
+		return 0;
+	}
+	if (content_format <= UINT8_MAX) {
+		buf[0] = 0xc1;
+		buf[1] = (uint8_t)content_format;
+		return 2;
+	}
+	buf[0] = 0xc2;
+	buf[1] = (uint8_t)(content_format >> 8);
+	buf[2] = (uint8_t)content_format;
+	return 3;
+}
+#endif
 
 int coap_oscore_respond_resource(struct coap_resource *resource,
 				 struct coap_packet *request,
@@ -123,9 +159,19 @@ int coap_oscore_respond_resource(struct coap_resource *resource,
 			return OSCORE_ERR_CONTEXT_STALE;
 		}
 
+		/* Content-Format is Class E under OSCORE: it must travel
+		 * inside the encrypted inner message, not on the outer one.
+		 * The cleartext branch below passes content_format to
+		 * lichen_coap_respond; the protected branch mirrors that by
+		 * encrypting the encoded option (parity with the Rust
+		 * gateway, which emits it whenever nonzero). */
+		uint8_t cf_opt[3];
+		size_t cf_opt_len = encode_content_format_option(content_format, cf_opt);
+
 		ret = coap_oscore_protect_response(result->ctx, result->piv,
 						   result->piv_len, request,
-						   resp_code, payload, payload_len,
+						   resp_code, cf_opt, cf_opt_len,
+						   payload, payload_len,
 						   &resp, buf, sizeof(buf));
 		if (ret < 0) {
 			/*
@@ -140,7 +186,8 @@ int coap_oscore_respond_resource(struct coap_resource *resource,
 			ret = coap_oscore_protect_response(result->ctx, result->piv,
 							   result->piv_len, request,
 							   COAP_RESPONSE_CODE_INTERNAL_ERROR,
-							   NULL, 0, &resp, buf, sizeof(buf));
+							   NULL, 0, NULL, 0,
+							   &resp, buf, sizeof(buf));
 			if (ret < 0) {
 				LOG_ERR("OSCORE empty 5.00 protect failed (%d), dropping response",
 					ret);
@@ -268,6 +315,7 @@ int coap_oscore_protect_response(struct oscore_ctx *ctx,
 				 const uint8_t *request_piv, size_t request_piv_len,
 				 const struct coap_packet *original_request,
 				 uint8_t response_code,
+				 const uint8_t *options, size_t options_len,
 				 const uint8_t *payload, size_t payload_len,
 				 struct coap_packet *response,
 				 uint8_t *resp_buf, size_t resp_buf_len)
@@ -286,7 +334,7 @@ int coap_oscore_protect_response(struct oscore_ctx *ctx,
 	ret = oscore_protect_response(ctx,
 				      request_piv, request_piv_len,
 				      response_code,
-				      NULL, 0,  /* No Class E options for now */
+				      options, options_len,
 				      payload, payload_len,
 				      ciphertext, &ciphertext_len,
 				      oscore_opt, &oscore_opt_len);
@@ -340,7 +388,8 @@ int lichen_coap_oscore_respond(struct coap_resource *resource,
 	uint8_t buf[CONFIG_COAP_SERVER_MESSAGE_SIZE];
 	struct coap_packet resp;
 	int ret = coap_oscore_protect_response(ctx, piv, piv_len, request, code,
-					       NULL, 0, &resp, buf, sizeof(buf));
+					       NULL, 0, NULL, 0,
+					       &resp, buf, sizeof(buf));
 	if (ret < 0) {
 		/*
 		 * Protect failed. Never fall back to cleartext on a protected
@@ -353,7 +402,8 @@ int lichen_coap_oscore_respond(struct coap_resource *resource,
 		LOG_ERR("OSCORE protect_response failed (%d), retrying empty 5.00", ret);
 		ret = coap_oscore_protect_response(ctx, piv, piv_len, request,
 						   COAP_RESPONSE_CODE_INTERNAL_ERROR,
-						   NULL, 0, &resp, buf, sizeof(buf));
+						   NULL, 0, NULL, 0,
+						   &resp, buf, sizeof(buf));
 		if (ret < 0) {
 			LOG_ERR("OSCORE empty 5.00 protect failed (%d), dropping response", ret);
 			return OSCORE_ERR_CONTEXT_STALE;
@@ -380,7 +430,7 @@ int coap_oscore_send_protected(struct coap_resource *resource,
 					   code, 0, NULL, 0);
 	}
 	ret = coap_oscore_protect_response(ctx, piv, piv_len, request, code,
-					   NULL, 0, &resp, buf, sizeof(buf));
+					   NULL, 0, NULL, 0, &resp, buf, sizeof(buf));
 	if (ret < 0) {
 		/* A protected request must never receive a cleartext reply
 		 * (project invariant, coap_oscore.c:104-113).  Retry once
@@ -389,7 +439,7 @@ int coap_oscore_send_protected(struct coap_resource *resource,
 		 * coap_oscore_respond_resource's protect-failure path. */
 		ret = coap_oscore_protect_response(ctx, piv, piv_len, request,
 						   COAP_RESPONSE_CODE_INTERNAL_ERROR,
-						   NULL, 0, &resp, buf,
+						   NULL, 0, NULL, 0, &resp, buf,
 						   sizeof(buf));
 		if (ret < 0) {
 			LOG_ERR("OSCORE empty 5.00 protect failed (%d), dropping response", ret);

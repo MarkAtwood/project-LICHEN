@@ -438,7 +438,7 @@ impl RequestCorrelation {
 /// OSCORE-protected stack.
 #[cfg(feature = "std")]
 pub struct SecureStack<R: Radio> {
-    stack: Stack<R>,
+    pub(crate) stack: Stack<R>,
     /// OSCORE contexts keyed by peer IID.
     contexts: HashMap<[u8; 8], Context>,
     pending_requests: Vec<PendingRequest>,

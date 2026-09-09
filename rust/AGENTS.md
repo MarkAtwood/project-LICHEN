@@ -130,12 +130,16 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Build & Test
 
-_Add your build and test commands here_
+`rust/.cargo/config.toml` redirects the cargo target dir to the macOS Attic
+volume (`/Volumes/Attic/Cache/Cargo`). On Linux hosts that path does not
+exist, so override it per the config's own comment:
 
 ```bash
-# Example:
-# npm install
-# npm test
+# Linux workers (rust/.cargo/config.toml target-dir is macOS-only):
+export CARGO_TARGET_DIR=/home/mark/Cache/cargo-target
+
+# Tests for a single crate, from rust/:
+cargo test -p lichen-gateway
 ```
 
 ## Architecture Overview

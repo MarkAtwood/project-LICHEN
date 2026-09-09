@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: The contributors to the LICHEN project
 
+use core::net::Ipv6Addr;
+
 use lichen_rpl::message::OPT_TRANSIT_INFO;
 use lichen_rpl::routing::{
     DaoDiagnosticLimits, DaoManager, DaoProcessTiming, RouteTarget, RoutingTable, MAX_ROUTES,
 };
 
-fn address(last: u8) -> [u8; 16] {
+fn address(last: u8) -> Ipv6Addr {
+    Ipv6Addr::from([0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0, 0, 0, 0, last])
+}
+
+fn raw_address(last: u8) -> [u8; 16] {
     [0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0, 0, 0, 0, last]
 }
 
@@ -45,11 +51,15 @@ fn route_target_canonicalizes_every_profile_boundary() {
     prefix127[15] = 0xfe;
     let target127 = RouteTarget::new(all, 127).unwrap();
     assert_eq!(*target127.prefix(), prefix127);
-    assert!(target127.contains(&all));
-    assert!(target127.contains(&prefix127));
+    assert!(target127.contains(Ipv6Addr::from(all)));
+    assert!(target127.contains(Ipv6Addr::from(prefix127)));
 
-    assert_eq!(RouteTarget::new(all, 128), Some(RouteTarget::host(all)));
+    assert_eq!(
+        RouteTarget::new(all, 128),
+        Some(RouteTarget::host(Ipv6Addr::from(all)))
+    );
     assert_eq!(RouteTarget::new(all, 129), None);
+
     assert_eq!(RouteTarget::new(all, u8::MAX), None);
 
     let mut equivalent = [0xff; 16];
@@ -70,29 +80,35 @@ fn lookup_is_deterministic_lpm_with_expired_fallback_and_exact_host_mutation() {
     let prefix127 = RouteTarget::new(pair, 127).unwrap();
     let mut host = pair;
     host[15] = 3;
-
-    assert!(!table.add_prefix_route(prefix64, *prefix64.prefix(), &[*prefix64.prefix()]));
+    let pair = Ipv6Addr::from(pair);
+    let host = Ipv6Addr::from(host);
+    assert!(!table.add_prefix_route(
+        prefix64,
+        Ipv6Addr::from(*prefix64.prefix()),
+        &[Ipv6Addr::from(*prefix64.prefix())]
+    ));
     assert!(!table.add_prefix_route(prefix64, address(11), &[address(99)]));
     assert!(table.add_prefix_route(default, address(10), &[address(10)]));
     assert!(table.add_prefix_route(prefix64, address(11), &[address(11)]));
     assert!(table.add_prefix_route(prefix127, address(12), &[address(12)]));
     assert!(table.add_route(host, &[address(13)]));
 
-    assert_eq!(table.lookup(&host), Some([address(13)].as_slice()));
-    assert_eq!(table.lookup(&pair), Some([address(12)].as_slice()));
+    assert_eq!(table.lookup(host), Some([address(13)].as_slice()));
+    assert_eq!(table.lookup(pair), Some([address(12)].as_slice()));
     let mut network_host = network;
     network_host[15] = 99;
-    assert_eq!(table.lookup(&network_host), Some([address(11)].as_slice()));
-    assert_eq!(table.lookup(&address(99)), Some([address(10)].as_slice()));
+    let network_host = Ipv6Addr::from(network_host);
+    assert_eq!(table.lookup(network_host), Some([address(11)].as_slice()));
+    assert_eq!(table.lookup(address(99)), Some([address(10)].as_slice()));
 
-    table.mark_expired(&host).unwrap().unwrap();
-    assert_eq!(table.lookup(&host), Some([address(12)].as_slice()));
-    table.remove_route(&host);
-    assert_eq!(table.lookup(&host), Some([address(12)].as_slice()));
+    table.mark_expired(host).unwrap().unwrap();
+    assert_eq!(table.lookup(host), Some([address(12)].as_slice()));
+    table.remove_route(host);
+    assert_eq!(table.lookup(host), Some([address(12)].as_slice()));
     table.mark_prefix_expired(prefix127).unwrap().unwrap();
-    assert_eq!(table.lookup(&host), Some([address(11)].as_slice()));
+    assert_eq!(table.lookup(host), Some([address(11)].as_slice()));
     table.remove_prefix_route(prefix127);
-    assert_eq!(table.lookup(&network_host), Some([address(11)].as_slice()));
+    assert_eq!(table.lookup(network_host), Some([address(11)].as_slice()));
 }
 
 #[test]
@@ -105,7 +121,7 @@ fn dao_rebuild_and_expiry_preserve_static_prefix_while_default_route_fails_close
     let prefix = RouteTarget::new(prefix, 64).unwrap();
     let mut destination = *prefix.prefix();
     destination[15] = 99;
-    let mut manager = DaoManager::diagnostic_root(root.into(), 0, root.into());
+    let mut manager = DaoManager::diagnostic_root(root, 0, root);
     assert!(manager
         .routing_table_mut()
         .add_prefix_route(prefix, root, &[root]));
@@ -117,36 +133,36 @@ fn dao_rebuild_and_expiry_preserve_static_prefix_while_default_route_fails_close
 
     manager
         .process_route_state_diagnostic(
-            &route_dao(1, 1, 1, host, root),
-            authority.into(),
+            &route_dao(1, 1, 1, raw_address(2), raw_address(1)),
+            authority,
             timing,
             limits(),
         )
         .unwrap();
     assert_eq!(
-        manager.routing_table().lookup(&destination),
+        manager.routing_table().lookup(Ipv6Addr::from(destination)),
         Some([root].as_slice())
     );
-    assert!(manager.routing_table().lookup(&host).is_some());
+    assert!(manager.routing_table().lookup(host).is_some());
 
     assert!(manager.expire_routes(12));
-    assert_eq!(manager.routing_table().lookup(&host), None);
+    assert_eq!(manager.routing_table().lookup(host), None);
     assert_eq!(
-        manager.routing_table().lookup(&destination),
+        manager.routing_table().lookup(Ipv6Addr::from(destination)),
         Some([root].as_slice())
     );
 
-    let before = manager.route_state_diagnostic(authority.into(), 2);
+    let before = manager.route_state_diagnostic(authority, 2);
     // A ::/0 Target fails closed at extraction (the diagnostic path has no
     // delegation gate), so route state is untouched.
-    let mut default_route = route_dao(2, 2, 255, host, root);
+    let mut default_route = route_dao(2, 2, 255, raw_address(2), raw_address(1));
     default_route[7] = 0;
     assert!(manager
-        .process_route_state_diagnostic(&default_route, authority.into(), timing, limits())
+        .process_route_state_diagnostic(&default_route, authority, timing, limits())
         .is_err());
-    assert_eq!(manager.route_state_diagnostic(authority.into(), 2), before);
+    assert_eq!(manager.route_state_diagnostic(authority, 2), before);
     assert_eq!(
-        manager.routing_table().lookup(&destination),
+        manager.routing_table().lookup(Ipv6Addr::from(destination)),
         Some([root].as_slice())
     );
 }
@@ -156,7 +172,7 @@ fn prefix_and_dao_host_routes_share_one_atomic_capacity_budget() {
     let root = address(1);
     let host = address(2);
     let authority = address(3);
-    let mut manager = DaoManager::diagnostic_root(root.into(), 0, root.into());
+    let mut manager = DaoManager::diagnostic_root(root, 0, root);
     for index in 0..MAX_ROUTES {
         let mut prefix = [0xfd; 16];
         prefix[13..15].copy_from_slice(&(index as u16).to_be_bytes());
@@ -168,8 +184,8 @@ fn prefix_and_dao_host_routes_share_one_atomic_capacity_budget() {
     assert_eq!(manager.routing_table().len(), MAX_ROUTES);
 
     let result = manager.process_route_state_diagnostic(
-        &route_dao(1, 1, 255, host, root),
-        authority.into(),
+        &route_dao(1, 1, 255, raw_address(2), raw_address(1)),
+        authority,
         DaoProcessTiming {
             now_seconds: 0,
             lifetime_unit_seconds: 1,
@@ -179,8 +195,8 @@ fn prefix_and_dao_host_routes_share_one_atomic_capacity_budget() {
     );
     assert!(result.is_err());
     assert_eq!(manager.routing_table().len(), MAX_ROUTES);
-    assert_eq!(manager.routing_table().lookup(&host), None);
+    assert_eq!(manager.routing_table().lookup(host), None);
     assert!(manager
-        .route_state_diagnostic(authority.into(), 1)
+        .route_state_diagnostic(authority, 1)
         .is_empty());
 }

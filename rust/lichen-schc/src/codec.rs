@@ -2233,10 +2233,9 @@ fn authenticated_dio_destination_is_canonical_multicast(
     // Python reference admission path (authenticated_dio.py:312-316,357-363),
     // which also never inspects the link frame's address mode. Unicast-
     // destination DIOs are rejected by the dst check (see worker6-dqeg).
-    // Residual end-to-end divergence: Python's link receive drops
-    // not-addressed-to-me frames (NOT_FOR_US) before admission, while Rust's
-    // receive_frame has no destination filter, so Rust admits a superset
-    // (Extended-to-anyone / Short frames) — see worker6-cpbe.
+    // LinkLayer filters foreign extended and unsupported short destinations
+    // before this admission path; higher layers resolve elided destinations
+    // from the SCHC payload.
     const ALL_RPL_NODES: [u8; 16] = [0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1a];
 
     let mut ipv6 = [0u8; SCHC_MAX_DECOMPRESSED];

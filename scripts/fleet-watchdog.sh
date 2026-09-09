@@ -9,31 +9,38 @@ REPO="/home/mark/Developer/lichen-workspace/project-LICHEN"
 SESSION="lichen-workers"
 cd "$REPO" || exit 1
 
-ensure_window() {  # $1=index $2=name $3=command — create only if missing
+ensure_window() {  # $1=name $2=command — create only if missing (append at
+    # end; never target indices — they drift as windows die and rebuild)
     if ! tmux has-session -t "$SESSION" 2>/dev/null; then
-        tmux new-session -d -s "$SESSION" -n "$2" "cd $REPO && exec bash"
+        tmux new-session -d -s "$SESSION" -n "$1" "cd $REPO && exec bash"
     fi
-    if ! tmux list-windows -t "$SESSION" -F '#{window_name}' 2>/dev/null | grep -qx "$2"; then
-        tmux new-window -d -t "$SESSION:$1" -n "$2" "cd $REPO && $3"
-        echo "$(date '+%F %T') watchdog: recreated $2" >> "$REPO/.beads-sync.log"
+    if ! tmux list-windows -t "$SESSION" -F '#{window_name}' 2>/dev/null | grep -qx "$1"; then
+        tmux new-window -d -t "$SESSION" -n "$1" "cd $REPO && $2"
+        tmux set-window-option -t "$SESSION:$1" automatic-rename off 2>/dev/null
+        echo "$(date '+%F %T') watchdog: recreated $1" >> "$REPO/.beads-sync.log"
     fi
 }
 
-# The four controllers (worker windows 0-6 are the driver's responsibility)
-ensure_window 7 sync  "exec ./scripts/sync-beads-loop.sh 15"
-ensure_window 8 driver "exec ./scripts/fleet-driver.sh 10 0"
-ensure_window 10 janitor "exec ./scripts/merge-janitor.sh"
-
-# sweep-all: only if discovery is still pending (any of the section stems
-# missing) — a completed sweep must NOT be resurrected.
-PENDING=0
-for s in 09-packets-timing 02a-coordinated-capacity 03-adaptation 06-security \
-         02-physical-link 12-apps 01-architecture 04-network 07-transport-app \
-         08-gateway-coordination 08-nodes 10-implementation 11-lci \
-         appendix-border-router appendix-bufferbloat appendix-c-safety \
-         draft-lichen-schnorr-00; do
-    [ -f "docs/spec-coverage/$s.md" ] || PENDING=1
+# Worker worktrees: if a worktree vanished (the week-long outage root cause),
+# rebuild it from its branch + .beads symlink BEFORE the driver looks at it.
+for n in 1 2 3 4 5 6 7 8; do
+    if [ ! -d "$HOME/Developer/lichen-workers/worker$n" ]; then
+        if git show-ref --verify -q "refs/heads/beads-worker-$n"; then
+            git worktree add "$HOME/Developer/lichen-workers/worker$n" "beads-worker-$n" >/dev/null 2>&1
+        else
+            git worktree add -b "beads-worker-$n" "$HOME/Developer/lichen-workers/worker$n" main >/dev/null 2>&1
+        fi
+        [ -e "$HOME/Developer/lichen-workers/worker$n/.beads" ] || \
+            ln -s "$REPO/.beads" "$HOME/Developer/lichen-workers/worker$n/.beads"
+        echo "$(date '+%F %T') watchdog: rebuilt worktree worker$n" >> "$REPO/.beads-sync.log"
+    fi
 done
-if [ "$PENDING" -eq 1 ] && ! pgrep -f 'Spec Coverage Sweep' >/dev/null 2>&1; then
-    ensure_window 9 sweep-all "exec ./scripts/spec-sweep-all.sh"
-fi
+
+# Controllers (worker rounds are headless loops, one window per worker)
+ensure_window sync "exec ./scripts/sync-beads-loop.sh 15"
+ensure_window janitor "exec ./scripts/merge-janitor.sh"
+for n in 1 2 3 4 5 6 7 8; do
+    ensure_window "hw$n" "exec ./scripts/fleet-headless.sh $n"
+done
+
+# (sweep-all retired: all 17 sections swept, discovery closed)

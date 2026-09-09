@@ -41,6 +41,7 @@ use crate::handoff::{HandoffRequest, NodeRegistry};
 use crate::slot;
 use crate::trust::SIGNATURE_LEN;
 use crate::tunnel_auth;
+use crate::tunnel_auth::{AuthenticatedRoot, TunnelAuthorizationTable};
 
 // ─── CBOR map keys (short integers for constrained links) ────────────────────
 
@@ -757,6 +758,8 @@ pub struct SlotClaim {
     pub superframe_id: u64,
     /// Monotonic per-gateway sequence within a superframe.
     pub claim_sequence: u32,
+    /// Allocation mode advertised by the claim.
+    pub mode: AllocationMode,
     /// Unix timestamp of claim (for replay protection).
     pub timestamp: Option<i64>,
     /// Total gateways in federation (for interleaved mode).
@@ -780,6 +783,7 @@ impl SlotClaim {
             slots,
             superframe_id,
             claim_sequence,
+            mode: AllocationMode::Interleaved,
             timestamp: None,
             gateway_count: None,
             ordinal: None,
@@ -803,6 +807,12 @@ impl SlotClaim {
         self
     }
 
+    /// Set the allocation mode advertised in the COSE payload.
+    pub fn with_mode(mut self, mode: AllocationMode) -> Self {
+        self.mode = mode;
+        self
+    }
+
     /// Encode and sign as a spec GCP-6.5 COSE_Sign1 envelope (l1qw.16.2.3).
     ///
     /// Mirrors Python `sign_slot_claim` (l1qw.16.1): payload integer keys
@@ -813,9 +823,8 @@ impl SlotClaim {
     /// than MAX_CLAIM_DURATION_SECONDS past now — stamp an in-window
     /// expiry yourself (e.g. `now + 100`), not the bare issue second.
     /// `gateway_count` is a local allocation
-    /// parameter and is never serialized (GCP-6.5). Rust `SlotClaim` has no
-    /// allocation-mode field, so the payload is emitted interleaved (mode
-    /// 0); the ordinal (key 7) is REQUIRED on the wire (corpus vector
+    /// parameter and is never serialized (GCP-6.5). The allocation mode and
+    /// ordinal are signed in the payload; the ordinal (key 7) is REQUIRED on the wire (corpus vector
     /// "ordinal_absent") — build with [`SlotClaim::with_federation`].
     pub fn encode_cose(
         &self,
@@ -842,7 +851,7 @@ impl SlotClaim {
         let payload = slot::SlotClaimPayload {
             slots: self.slots.clone(),
             superframe_epoch: self.superframe_id,
-            mode: slot::AllocationMode::Interleaved,
+            mode: self.mode,
             expiry,
             gateway_iid: self.gateway_iid,
             claim_seq: self.claim_sequence,
@@ -1023,7 +1032,9 @@ pub struct CoapResponse {
     pub code: u8,
     /// Response payload (CBOR encoded).
     pub payload: Zeroizing<Vec<u8>>,
-    /// Content format (60 for CBOR, 112 for SenML+CBOR).
+    /// Content format (60 for CBOR, 112 for SenML+CBOR). 0 means no
+    /// Content-Format option is emitted on the wire (per coap_oscore.h
+    /// "0 for none"); it is not a text/plain label.
     pub content_format: u16,
 }
 
@@ -1046,6 +1057,15 @@ impl CoapResponse {
         }
     }
 
+    /// 4.09 Conflict (GCP-6.5 step 11: unresolved slot conflict, spec/08:315).
+    pub fn conflict(payload: Vec<u8>, content_format: u16) -> Self {
+        Self {
+            code: 0x89, // 4.09 Conflict = (4<<5)|9
+            payload: Zeroizing::new(payload),
+            content_format,
+        }
+    }
+
     /// 2.04 Changed response.
     pub fn changed(payload: Vec<u8>) -> Self {
         Self {
@@ -1060,7 +1080,7 @@ impl CoapResponse {
         Self {
             code: 0x80, // 4.00 Bad Request
             payload: Zeroizing::new(message.as_bytes().to_vec()),
-            content_format: 0, // text/plain
+            content_format: 0, // no Content-Format option on the wire
         }
     }
 
@@ -1082,15 +1102,11 @@ impl CoapResponse {
         }
     }
 
-    /// 4.09 Conflict (GCP-6.5 step 11: unresolved slot conflict).
-    pub fn conflict(payload: Vec<u8>) -> Self {
-        Self {
-            code: 0x89, // 4.09 Conflict = (4 << 5) | 9
-            payload: Zeroizing::new(payload),
-            content_format: CONTENT_FORMAT_CBOR,
-        }
-    }
-
+    // Merge note: beads-worker-5 (and again beads-worker-3) added a one-arg
+    // `conflict(payload)` here hardcoding CONTENT_FORMAT_CBOR. Dropped in
+    // favor of the two-arg `conflict(payload, content_format)` above, which
+    // is strictly more general and matches the only call site; keeping both
+    // would be a duplicate method definition.
     /// 4.04 Not Found.
     pub fn not_found() -> Self {
         Self {
@@ -1149,11 +1165,24 @@ pub struct GatewayCoordinator {
     pub channel_map: ChannelMap,
     /// Peer slot claims (for conflict detection).
     peer_claims: Vec<slot::VerifiedSlotClaim>,
+    /// This gateway's own accepted COSE_Sign1 claim envelope, echoed as the
+    /// 4.09 Conflict payload per GCP-6.5 step 11 (C `claim_store_cose`
+    /// parity). RAM-only like the C coordination table; the claim sender
+    /// records it whenever it (re)claims slots.
+    own_claim_cose: Option<Vec<u8>>,
     slot_verifier: slot::SlotClaimVerifier,
     slot_rate_limiter: slot::SlotClaimRateLimiter,
     slots_per_superframe: u32,
     replay_persistence: Option<SlotReplayPersistence>,
+    /// Egress tunnel authorizations (spec 06-security 8.11): OSCORE-delivered
+    /// root COSE_Sign1 grants, keyed by (prefix, route_hash), fail-closed.
+    tunnel_auth: TunnelAuthorizationTable,
 }
+
+/// Bound mirroring C `LICHEN_SLOT_CLAIM_COSE_MAX`
+/// (lichen/subsys/lichen/coap/include/lichen/coap_slot_coord.h): an echoable
+/// COSE_Sign1 claim envelope never exceeds 255 bytes.
+const OWN_CLAIM_COSE_MAX: usize = 255;
 
 #[derive(Debug)]
 struct SlotReplayPersistence {
@@ -1163,7 +1192,7 @@ struct SlotReplayPersistence {
 }
 
 const COORDINATOR_STATE_MAGIC: &[u8; 8] = b"LCHNGCS1";
-const COORDINATOR_STATE_VERSION: u16 = 1;
+const COORDINATOR_STATE_VERSION: u16 = 2;
 const COORDINATOR_STATE_SEAL_DOMAIN: &[u8] = b"LICHEN-GCP-COORDINATOR-STATE-v1";
 
 struct PersistedCoordinatorState {
@@ -1187,7 +1216,7 @@ fn coordinator_state_max_len(
         .ok_or(slot::SlotError::ArithmeticOverflow)?;
     let peer_entry = slots
         .checked_mul(4)
-        .and_then(|value| value.checked_add(8 + 8 + 4 + 4))
+        .and_then(|value| value.checked_add(8 + 8 + 4 + 1 + 1 + 8 + 4))
         .ok_or(slot::SlotError::ArithmeticOverflow)?;
     let peers = max_gateways
         .checked_mul(peer_entry)
@@ -1282,6 +1311,14 @@ fn encode_coordinator_state(
         payload.extend_from_slice(claim.gateway_iid());
         payload.extend_from_slice(&claim.superframe_id().to_be_bytes());
         payload.extend_from_slice(&claim.claim_sequence().to_be_bytes());
+        payload.push(allocation_mode_to_wire(claim.mode()));
+        match claim.ordinal() {
+            Some(ordinal) => {
+                payload.push(1);
+                payload.extend_from_slice(&ordinal.to_be_bytes());
+            }
+            None => payload.push(0),
+        }
         payload.extend_from_slice(&(claim.slots().len() as u32).to_be_bytes());
         for claimed_slot in claim.slots() {
             payload.extend_from_slice(&claimed_slot.to_be_bytes());
@@ -1454,11 +1491,14 @@ fn load_coordinator_state(
     }
 
     let mut cursor = CoordinatorStateCursor::new(payload);
-    if cursor.take(8)? != COORDINATOR_STATE_MAGIC
-        || cursor.u16()? != COORDINATOR_STATE_VERSION
-        || cursor.array::<16>()? != *expected_local_iid
-        || cursor.u32()? != slots_per_superframe
-    {
+    if cursor.take(8)? != COORDINATOR_STATE_MAGIC {
+        return Err(slot::SlotError::CorruptState);
+    }
+    let state_version = cursor.u16()?;
+    if state_version != 1 && state_version != COORDINATOR_STATE_VERSION {
+        return Err(slot::SlotError::CorruptState);
+    }
+    if cursor.array::<16>()? != *expected_local_iid || cursor.u32()? != slots_per_superframe {
         return Err(slot::SlotError::CorruptState);
     }
     let generation = cursor.u64()?;
@@ -1505,6 +1545,21 @@ fn load_coordinator_state(
         let iid = cursor.array()?;
         let superframe = cursor.u64()?;
         let sequence = cursor.u32()?;
+        let (mode, ordinal) = if state_version == 1 {
+            (AllocationMode::Interleaved, None)
+        } else {
+            let mode = match cursor.u8()? {
+                0 => AllocationMode::Interleaved,
+                1 => AllocationMode::Contiguous,
+                _ => return Err(slot::SlotError::CorruptState),
+            };
+            let ordinal = match cursor.u8()? {
+                0 => None,
+                1 => Some(cursor.u64()?),
+                _ => return Err(slot::SlotError::CorruptState),
+            };
+            (mode, ordinal)
+        };
         let slot_count = cursor.u32()? as usize;
         if slot_count > slots_per_superframe as usize {
             return Err(slot::SlotError::CorruptState);
@@ -1518,6 +1573,8 @@ fn load_coordinator_state(
             claimed_slots,
             superframe,
             sequence,
+            mode,
+            ordinal,
             slots_per_superframe,
         )?);
     }
@@ -1736,15 +1793,42 @@ impl GatewayCoordinator {
             channel_map: ChannelMap { channels },
             capability_table: crate::capability::CapabilityTable::new(),
             peer_claims: Vec::new(),
+            own_claim_cose: None,
             slot_verifier: verifier,
             slot_rate_limiter: slot::SlotClaimRateLimiter::new(),
             slots_per_superframe,
             replay_persistence,
+            tunnel_auth: TunnelAuthorizationTable::default(),
         })
     }
 
     pub fn slot_replay_generation(&self) -> u64 {
         self.slot_verifier.generation()
+    }
+
+    /// Record this gateway's own accepted COSE_Sign1 claim envelope for
+    /// echo in 4.09 Conflict payloads (GCP-6.5 step 11).
+    ///
+    /// C `claim_store_cose` parity (coap_slot_coord.c): the coordination
+    /// table keeps the accepted envelope per gateway entry, RAM-only, and
+    /// the conflict path echoes the winner's bytes verbatim. The claim
+    /// sender calls this whenever it (re)claims slots; the envelope is
+    /// retained until replaced or the process restarts. Mirroring the C
+    /// store-from-verified-parts invariant, the envelope must decode as a
+    /// well-formed COSE_Sign1 claim whose kid binds THIS gateway's IID —
+    /// the echo is sent to a peer, so unverified bytes are never echoed.
+    pub fn record_own_claim_envelope(&mut self, envelope: &[u8]) -> Result<(), ResourceError> {
+        if envelope.len() > OWN_CLAIM_COSE_MAX {
+            return Err(ResourceError::InvalidCbor);
+        }
+        let claim = slot::RawSlotClaim::from_cose(envelope, self.slots_per_superframe)
+            .map_err(|_| ResourceError::InvalidCbor)?;
+        let own_iid: [u8; 8] = self.info.iid[8..16].try_into().expect("iid is 16 bytes");
+        if *claim.gateway_iid() != own_iid {
+            return Err(ResourceError::InvalidFieldType("gateway_iid"));
+        }
+        self.own_claim_cose = Some(envelope.to_vec());
+        Ok(())
     }
 
     /// Handle POST /.well-known/lichen-gw/capability-announce (spec 8.12):
@@ -1791,6 +1875,75 @@ impl GatewayCoordinator {
                     CoapResponse::service_unavailable()
                 }
             }
+            Err(_) => CoapResponse::forbidden(),
+        }
+    }
+
+    /// Bind the tunnel-auth table to the current DODAG root (spec 06-security
+    /// 8.11 step 3: the POST kid must match the current root IID). A root
+    /// change atomically revokes every cached authorization.
+    pub fn set_tunnel_auth_root(&mut self, root_iid: [u8; 8]) {
+        self.tunnel_auth.set_root(root_iid);
+    }
+
+    /// The tunnel-auth table's bound root IID, if provisioned.
+    pub fn tunnel_auth_root(&self) -> Option<[u8; 8]> {
+        self.tunnel_auth.root_iid()
+    }
+
+    /// Data-path egress gate (spec 06-security 8.11): authorize upstream
+    /// forwarding of one mesh-ingress datagram against the root-signed
+    /// authorization table. Mirrors the C call site in
+    /// `lichen/apps/gateway/src/forwarding.c` (`lichen_tunnel_auth_decapsulate`,
+    /// fail-closed on every denial). The table's clock domain is unix seconds
+    /// (`handle_post_tunnel_auth` observes the same), so the caller's
+    /// monotonic runtime clock must never reach it here.
+    pub fn authorize_egress(
+        &mut self,
+        inner_source: [u8; 16],
+        destination_is_mesh: bool,
+        route: &[[u8; 8]],
+    ) -> Result<(), tunnel_auth::TunnelAuthError> {
+        self.tunnel_auth.authorize_decapsulation(
+            tunnel_auth::DecapsulationRequest {
+                direction: tunnel_auth::TunnelDirection::MeshToExternal,
+                inner_source,
+                source_is_mesh: true,
+                destination_is_mesh,
+                route,
+            },
+            u64::try_from(unix_now()).unwrap_or(0),
+        )
+    }
+
+    /// Handle POST /.well-known/tunnel-auth (spec 06-security 8.11): an
+    /// OSCORE-authenticated root delivers a COSE_Sign1 (alg -65537) egress
+    /// authorization for caching. Fail-closed: every validation failure maps
+    /// to 4.03 Forbidden without revealing which check failed (C
+    /// `tunnel_auth.c` `deny()` parity), and nothing is cached on failure.
+    pub fn handle_post_tunnel_auth(
+        &mut self,
+        payload: &[u8],
+        oscore_verified: bool,
+        peer_pubkey: Option<&[u8; 32]>,
+    ) -> CoapResponse {
+        let Some(pubkey) = peer_pubkey else {
+            return CoapResponse::forbidden();
+        };
+        let authenticated = AuthenticatedRoot {
+            iid: lichen_core::addr::iid_from_pubkey_bytes(pubkey),
+            public_key: &PublicKey::new(*pubkey),
+            oscore_authenticated: oscore_verified,
+        };
+        // Egress identity: the low 8 bytes of the gateway's key-derived
+        // native address (same derivation as record_own_claim_envelope).
+        let own_iid: [u8; 8] = self.info.iid[8..16].try_into().expect("iid is 16 bytes");
+        let now = u64::try_from(unix_now()).unwrap_or(0);
+        match self
+            .tunnel_auth
+            .accept_post(payload, authenticated, own_iid, now)
+        {
+            Ok(_) => CoapResponse::changed(Vec::new()),
             Err(_) => CoapResponse::forbidden(),
         }
     }
@@ -1884,6 +2037,10 @@ impl GatewayCoordinator {
             return CoapResponse::unauthorized();
         };
 
+        if payload.len() > OWN_CLAIM_COSE_MAX {
+            return CoapResponse::empty_success();
+        }
+
         // Spec GCP-6.5: the claim arrives as a COSE_Sign1 envelope (payload
         // integer keys 1-7, all required — from_cose enforces). Malformed
         // envelopes are silently discarded (GCP-6.3): an indistinguishable
@@ -1972,34 +2129,30 @@ impl GatewayCoordinator {
                 {
                     return CoapResponse::internal_error("slot state persistence failed");
                 }
-                // We win, reject their claim
-                let reject = Value::Map(vec![
-                    (
-                        Value::Text("status".to_string()),
-                        Value::Text("rejected".to_string()),
-                    ),
-                    (
-                        Value::Text("reason".to_string()),
-                        Value::Text("slot_conflict".to_string()),
-                    ),
-                    (
-                        Value::Text("conflicting_slots".to_string()),
-                        Value::Array(
-                            overlap
-                                .iter()
-                                .map(|&s| Value::Integer((s as i64).into()))
-                                .collect(),
-                        ),
-                    ),
-                ]);
-                let mut payload = Vec::new();
-                ciborium::into_writer(&reject, &mut payload).unwrap();
-                // GCP-6.5 step 11 (spec/08:315): an unresolved slot
-                // conflict responds 4.09 Conflict. The spec payload is the
-                // winning gateway's claim; this gateway cannot mint a signed
-                // COSE claim (no sender-side claim_seq machinery, l1qw.20),
-                // so the descriptor map below stands in until that lands.
-                return CoapResponse::conflict(payload);
+                // We win, reject their claim. GCP-6.5 step 11
+                // (spec/08:226-236, response at spec/08:315): an unresolved
+                // slot conflict responds 4.09 Conflict, not 2.05 Content, so
+                // the loser knows to re-claim and broadcast an updated
+                // schedule (GCP-6.3 step 3). The conflict response carries
+                // the WINNING gateway's claim as payload — the C peer
+                // (coap_slot_coord.c conflict arm) echoes the winner's stored
+                // COSE_Sign1 bytes with the Content-Format option omitted;
+                // the Rust serializer (gateway.rs
+                // encode_content_format_option) also omits the option when
+                // content_format is 0, so the wire is byte-identical to C.
+                // The spec payload is the winning gateway's claim; this
+                // gateway cannot mint a signed COSE claim on the responder
+                // path (no sender-side claim_seq machinery, l1qw.20), so
+                // when no envelope was recorded the 4.09 carries an empty
+                // payload. There is no C behavior to mirror here: C always
+                // has the winner's COSE recorded (claim_store_cose,
+                // coap_slot_coord.c:557-571), so this empty-payload fallback
+                // is Rust-only — but 4.09 per spec/08:315 is the right code,
+                // and the legacy rejection map was spec-divergent.
+                if let Some(own_cose) = self.own_claim_cose.clone() {
+                    return CoapResponse::conflict(own_cose, 0);
+                }
+                return CoapResponse::conflict(Vec::new(), 0);
             }
             // They win. Relinquish every overlapping slot before returning
             // success, then replace it from slots not occupied by any current
@@ -2182,6 +2335,9 @@ impl GatewayCoordinator {
             (CoapMethod::Post, "capability-announce") => {
                 self.handle_post_capability_announce(payload, oscore_verified, peer_pubkey)
             }
+            (CoapMethod::Post, "tunnel-auth") => {
+                self.handle_post_tunnel_auth(payload, oscore_verified, peer_pubkey)
+            }
             (CoapMethod::Get, _) | (CoapMethod::Post, _) => CoapResponse::not_found(),
             _ => CoapResponse::method_not_allowed(),
         }
@@ -2241,7 +2397,8 @@ mod tests {
         let iid = crate::trust::iid_from_pubkey(&pubkey);
         let claim = SlotClaim::new(iid, vec![4, 8, 15], 42, 1)
             .with_timestamp()
-            .with_federation(3, 0);
+            .with_federation(3, 0)
+            .with_mode(AllocationMode::Contiguous);
         let envelope = claim.encode_cose(&private, &public).unwrap();
 
         // Field-level round-trip through the strict decoder (16.2.1).
@@ -2252,6 +2409,7 @@ mod tests {
         assert_eq!(decoded.claim_sequence(), 1);
         assert_eq!(decoded.expiry(), claim.timestamp.unwrap() as u64);
         assert_eq!(decoded.ordinal(), Some(0));
+        assert_eq!(decoded.mode(), AllocationMode::Contiguous);
 
         // End-to-end: the envelope verifies under the COSE signature form.
         let mut verifier = slot::SlotClaimVerifier::new_ephemeral(16).unwrap();
@@ -2288,9 +2446,7 @@ mod tests {
         let (private, public) = derive_keypair(&Seed::new([9; 32]));
         let pubkey = *public.as_bytes();
         // The announcer IID derives from the signer pubkey (8.12 kid binding).
-        let addr = lichen_link::ygg_addr_from_pubkey(&pubkey);
-        let mut announcer_iid = [0u8; 8];
-        announcer_iid.copy_from_slice(&addr[8..]);
+        let announcer_iid = lichen_link::iid_from_pubkey(&public);
         let payload = CapabilityPayload {
             capabilities: 1, // egress
             prefix: Vec::new(),
@@ -2383,9 +2539,7 @@ mod tests {
         let mut coordinator = coordinator([0x23; 16]);
         let (private, public) = derive_keypair(&Seed::new([10; 32]));
         let pubkey = *public.as_bytes();
-        let addr = lichen_link::ygg_addr_from_pubkey(&pubkey);
-        let mut announcer_iid = [0u8; 8];
-        announcer_iid.copy_from_slice(&addr[8..]);
+        let announcer_iid = lichen_link::iid_from_pubkey(&public);
         let far_future = 4102444800; // 2100-01-01
 
         // Expired announcement (expiry in the past) -> 4.03.
@@ -2463,9 +2617,7 @@ mod tests {
         // rewritten payload field.
         let (private2, public2) = derive_keypair(&Seed::new([11; 32]));
         let pubkey2 = *public2.as_bytes();
-        let addr2 = lichen_link::ygg_addr_from_pubkey(&pubkey2);
-        let mut announcer_iid2 = [0u8; 8];
-        announcer_iid2.copy_from_slice(&addr2[8..]);
+        let announcer_iid2 = lichen_link::iid_from_pubkey(&public2);
         let wire7 = announce_wire(&private2, &public2, announcer_iid2, 1, far_future, 0);
         let response = coordinator.handle_request(
             CoapMethod::Post,
@@ -2769,24 +2921,16 @@ mod tests {
 
         let response = coordinator.handle_post_slots(&payload, true, Some(&pubkey), 1);
         // We have lower IID, so we should reject their claim: GCP-6.5 step 11
-        // responds 4.09 Conflict for an unresolved slot conflict.
+        // responds 4.09 Conflict for an unresolved slot conflict (spec/08:315).
         assert_eq!(response.code, 0x89); // 4.09 Conflict
 
-        // Decode response to verify rejection
-        let value: Value = ciborium::from_reader(response.payload.as_slice()).unwrap();
-        if let Value::Map(m) = value {
-            let status = m.iter().find_map(|(k, v)| {
-                if let (Value::Text(key), Value::Text(val)) = (k, v) {
-                    if key == "status" {
-                        return Some(val.clone());
-                    }
-                }
-                None
-            });
-            assert_eq!(status, Some("rejected".to_string()));
-        } else {
-            panic!("expected map response");
-        }
+        // No envelope recorded via record_own_claim_envelope in this setup,
+        // so the 4.09 carries an empty payload (spec/08:315 mandates the
+        // winning claim as payload; the empty fallback is Rust-only — see
+        // the win-arm comment). The spec-shaped echo of a recorded envelope
+        // is covered by conflict_response_echoes_own_recorded_envelope.
+        assert!(response.payload.is_empty());
+        assert_eq!(response.content_format, 0);
     }
 
     #[test]
@@ -2962,10 +3106,11 @@ mod tests {
         assert_eq!(coordinator.info.slot_map.owned, original_owned);
 
         coordinator.replay_persistence.as_mut().unwrap().path = original_path;
-        // Retry with persistence restored: the default slot_map is
-        // interleaved with gateway_count 1 / ordinal 0, so this coordinator
-        // owns EVERY slot including 40 — the claim genuinely conflicts, we
-        // win the IID tiebreak, and GCP-6.5 step 11 responds 4.09 Conflict.
+        // The retry commits and reaches the conflict arm: the provisioned
+        // default slot_map is Interleaved (gateway_count=1, ordinal=0), so
+        // owned_slots() spans all 60 slots and claim [40] overlaps; the
+        // all-zero local IID wins the tiebreak (GCP-6.3). GCP-6.5 step 11
+        // responds 4.09 Conflict (spec/08:315).
         assert_eq!(
             coordinator
                 .handle_post_slots(&claim, true, Some(&pubkey), 9)
@@ -3048,6 +3193,91 @@ mod tests {
 
         fs::remove_file(state_path).unwrap();
         fs::remove_file(floor_path).unwrap();
+    }
+
+    #[test]
+    fn conflict_response_echoes_own_recorded_envelope() {
+        // GCP-6.5 step 11: the 4.09 payload is the winning gateway's claim
+        // — byte-for-byte the envelope recorded via
+        // record_own_claim_envelope (C claim_store_cose parity: the
+        // winner's stored COSE_Sign1 with no Content-Format option).
+        let (a_priv, a_pub) = derive_keypair(&Seed::new([0x77; 32]));
+        let (b_priv, b_pub) = derive_keypair(&Seed::new([0x41; 32]));
+        let a_pubkey = *a_pub.as_bytes();
+        let b_pubkey = *b_pub.as_bytes();
+        let a_iid = crate::trust::iid_from_pubkey(&a_pubkey);
+        let b_iid = crate::trust::iid_from_pubkey(&b_pubkey);
+        // Lowest IID wins the conflict arm; assign roles deterministically
+        // from the derived (hash) IIDs rather than assuming an ordering.
+        let (own_priv, own_pub, own_iid, peer_pubkey, peer_seed) =
+            if slot::compare_iids(&a_iid, &b_iid) == std::cmp::Ordering::Less {
+                (a_priv, a_pub, a_iid, b_pubkey, [0x41; 32])
+            } else {
+                (b_priv, b_pub, b_iid, a_pubkey, [0x77; 32])
+            };
+        let mut address = [0u8; 16];
+        address[8..].copy_from_slice(&own_iid);
+        let mut coordinator = GatewayCoordinator::new_ephemeral(address, 60, 4).unwrap();
+        coordinator.info.slot_map = SlotMap {
+            mode: AllocationMode::Contiguous,
+            gateway_count: 2,
+            ordinal: 0,
+            start_slot: Some(0),
+            slot_count: Some(30),
+            owned: None,
+        };
+        let mut own_claim = SlotClaim::new(own_iid, vec![0, 1, 2], 4, 0).with_federation(2, 0);
+        own_claim.timestamp = Some(unix_now() + 100);
+        let envelope = own_claim.encode_cose(&own_priv, &own_pub).unwrap();
+        coordinator.record_own_claim_envelope(&envelope).unwrap();
+
+        let (conflict, conflict_pubkey) = signed_slot_claim(peer_seed, vec![5], 4, 0);
+        assert_eq!(conflict_pubkey, peer_pubkey);
+        let response = coordinator.handle_post_slots(&conflict, true, Some(&peer_pubkey), 4);
+        assert_eq!(response.code, 0x89); // 4.09 Conflict
+                                         // The Rust serializer (gateway.rs
+                                         // encode_content_format_option) omits
+                                         // the Content-Format option when
+                                         // content_format is 0, byte-identical
+                                         // to C.
+        assert_eq!(response.content_format, 0);
+        assert_eq!(response.payload.as_slice(), envelope.as_slice());
+    }
+
+    #[test]
+    fn record_own_claim_envelope_rejects_foreign_iid_and_oversize() {
+        let mut address = [0u8; 16];
+        address[8..].fill(0x02);
+        let mut coordinator = GatewayCoordinator::new_ephemeral(address, 60, 4).unwrap();
+        // Well-formed envelope whose kid is not this gateway's IID: never
+        // echoed (the echo goes to a peer, so unbound bytes are refused).
+        let (foreign, _pubkey) = signed_slot_claim([0x41; 32], vec![1], 4, 0);
+        assert!(matches!(
+            coordinator.record_own_claim_envelope(&foreign),
+            Err(ResourceError::InvalidFieldType("gateway_iid"))
+        ));
+        // Oversize never echoes (C LICHEN_SLOT_CLAIM_COSE_MAX = 255).
+        assert!(matches!(
+            coordinator.record_own_claim_envelope(&vec![0xa1; 256]),
+            Err(ResourceError::InvalidCbor)
+        ));
+        assert!(coordinator.own_claim_cose.is_none());
+    }
+
+    #[test]
+    fn post_slots_silently_discards_oversize_peer_claim() {
+        let mut address = [0u8; 16];
+        address[8..].fill(0x02);
+        let mut coordinator = GatewayCoordinator::new_ephemeral(address, 60, 4).unwrap();
+        let peer_pubkey = [0x43; 32];
+        let response = coordinator.handle_post_slots(
+            &vec![0xa1; OWN_CLAIM_COSE_MAX + 1],
+            true,
+            Some(&peer_pubkey),
+            4,
+        );
+        assert_eq!(response.code, 0x44);
+        assert!(response.payload.is_empty());
     }
 
     #[test]

@@ -157,8 +157,8 @@ bool zcbor_float32_put(zcbor_state_t *state, float value)
 bool zcbor_float64_put(zcbor_state_t *state, double value)
 {
 	/* CBOR float64: major type 7, additional info 27 (0xfb) */
-	union { double f; uint64_t u; } conv;
-	conv.f = value;
+	union { double d; uint64_t u; } conv;
+	conv.d = value;
 	uint8_t buf[9] = {
 		0xfb,
 		(uint8_t)(conv.u >> 56), (uint8_t)(conv.u >> 48),

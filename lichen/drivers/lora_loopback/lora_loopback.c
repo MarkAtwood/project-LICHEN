@@ -196,20 +196,6 @@ static int lora_loopback_recv(const struct device *dev,
 	return pkt.len;
 }
 
-#if IS_ENABLED(CONFIG_LICHEN_LORA_L2)
-static int lora_loopback_cad(const struct device *dev, k_timeout_t timeout,
-			     bool *busy)
-{
-	ARG_UNUSED(dev);
-	ARG_UNUSED(timeout);
-	if (busy == NULL) {
-		return -EINVAL;
-	}
-	*busy = false;
-	return 0;
-}
-#endif
-
 /* Deliver queued packets to the registered async callback. Runs in system
  * workqueue context; the callback may cancel (recv_async(NULL)) — cancel-then
  * re-arm also works — both handled by re-reading recv_cb each packet. The
@@ -322,7 +308,8 @@ static int lora_loopback_init(const struct device *dev)
 		LOOPBACK_QUEUE_DEPTH);
 
 #if IS_ENABLED(CONFIG_LICHEN_LORA_L2)
-	return lichen_lora_cad_register(dev, lora_loopback_cad);
+	/* No hardware CAD: emulated clear-channel completion (lora_cad). */
+	return lichen_lora_cad_start_register(dev, NULL);
 #endif
 	return 0;
 }

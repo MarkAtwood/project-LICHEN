@@ -27,10 +27,7 @@ from lichen.gateway.slot_claim import (
 
 VECTORS = json.loads(
     (
-        Path(__file__).resolve().parents[3]
-        / "test"
-        / "vectors"
-        / "gcp_slot_claim_cose_sign1.json"
+        Path(__file__).resolve().parents[3] / "test" / "vectors" / "gcp_slot_claim_cose_sign1.json"
     ).read_text()
 )
 
@@ -75,9 +72,7 @@ def test_valid_claims_verify() -> None:
         claim = _decode(case)
         _assert_fields(claim, case, name)
         pubkey = _pubkey(case)
-        is_valid, reason = verify_slot_claim(
-            claim, pubkey, now_unix=EVAL_TIME
-        )
+        is_valid, reason = verify_slot_claim(claim, pubkey, now_unix=EVAL_TIME)
         assert is_valid and reason is None, f"{name}: {reason}"
 
 
@@ -85,9 +80,7 @@ def test_slots_array_mutation_rejected() -> None:
     case = _case("slots_array_mutation")
     claim = _decode(case)
     pubkey = _pubkey(case)
-    is_valid, reason = verify_slot_claim(
-        claim, pubkey, now_unix=EVAL_TIME
-    )
+    is_valid, reason = verify_slot_claim(claim, pubkey, now_unix=EVAL_TIME)
     assert not is_valid
     assert reason == ClaimRejectReason.INVALID_SIGNATURE
 
@@ -98,17 +91,13 @@ def test_claim_seq_replay_equal_and_lower_rejected() -> None:
     seed = _decode(_case("claim_seq_cache_seed"))
     cache = SlotClaimReplayCache()
     seed_pubkey = _pubkey(_case("claim_seq_cache_seed"))
-    is_valid, _ = verify_slot_claim(
-        seed, seed_pubkey, replay_cache=cache, now_unix=EVAL_TIME
-    )
+    is_valid, _ = verify_slot_claim(seed, seed_pubkey, replay_cache=cache, now_unix=EVAL_TIME)
     assert is_valid
 
     for name in ("claim_seq_replay_equal", "claim_seq_replay_lower"):
         claim = _decode(_case(name))
         pubkey = _pubkey(_case(name))
-        is_valid, reason = verify_slot_claim(
-            claim, pubkey, replay_cache=cache, now_unix=EVAL_TIME
-        )
+        is_valid, reason = verify_slot_claim(claim, pubkey, replay_cache=cache, now_unix=EVAL_TIME)
         assert not is_valid
         assert reason == ClaimRejectReason.REPLAY, name
 
@@ -129,9 +118,7 @@ def test_expiry_boundary_future_passes_verify() -> None:
     case = _case("expiry_boundary_future")
     claim = _decode(case)
     pubkey = _pubkey(case)
-    is_valid, _ = verify_slot_claim(
-        claim, pubkey, now_unix=EVAL_TIME
-    )
+    is_valid, _ = verify_slot_claim(claim, pubkey, now_unix=EVAL_TIME)
     assert is_valid
 
 
@@ -227,13 +214,112 @@ def test_integer_modes_accepted_at_decode(mode: int, expected: AllocationMode) -
     assert SlotClaim.decode_cose(body).allocation_mode == expected
 
 
+# ─── Byte-strict envelope framing (33vn) ──────────────────────────────────────
+
+
+def _long_bstr_head(value: bytes) -> bytes:
+    # Long-form bstr head: argument 0x59 with a 2-byte length.
+    return b"\x59" + len(value).to_bytes(2, "big") + value
+
+
+def _elements(name: str) -> tuple[bytes, bytes, bytes, bytes]:
+    # (protected, unprotected map, payload, signature) of a signature-valid
+    # envelope; the signature stays byte-identical in every malleation
+    # below, so the Schnorr digest still verifies — only the strict envelope
+    # reader can reject these forms.
+    elements = cbor2.loads(_hex(_case(name)["cose_sign1_hex"]))
+    return elements[0], elements[1], elements[2], elements[3]
+
+
+def _build(
+    prot: bytes,
+    unprot_head: bytes = b"\xa1",
+    label_head: bytes = b"\x04",
+    kid_head: bytes | None = None,
+    payload_head: bytes | None = None,
+    sig_head: bytes | None = None,
+    array_head: bytes = b"\x84",
+    trailing: bytes = b"",
+    prot_head: bytes | None = None,
+) -> bytes:
+    _, unprot, payload, sig = _elements("happy_path_n1")
+    kid = unprot.get(4)
+    kid_head = kid_head if kid_head is not None else b"\x48"
+    payload_head = payload_head if payload_head is not None else b"\x58" + bytes([len(payload)])
+    sig_head = sig_head if sig_head is not None else b"\x58\x30"
+    if prot_head is None:
+        prot_head = b"\x47" if prot == _elements("happy_path_n1")[0] else _long_bstr_head(prot)
+    return (
+        array_head
+        + prot_head
+        + prot
+        + unprot_head
+        + label_head
+        + kid_head
+        + kid
+        + payload_head
+        + payload
+        + sig_head
+        + sig
+        + trailing
+    )
+
+
+@pytest.mark.parametrize(
+    "description,kwargs",
+    [
+        ("long-form array head 98 04", {"array_head": b"\x98\x04"}),
+        (
+            "long-form protected bstr head",
+            # Head 0x59 00 07 on the correct 7-byte value: rejected for the
+            # head form alone (value is exactly _STRICT_PROTECTED).
+            {"prot_head": b"\x59\x00\x07"},
+        ),
+        ("long-form payload bstr head", {"payload_head": b"\x59\x00\x1c"}),
+        ("long-form signature bstr head", {"sig_head": b"\x59\x00\x30"}),
+        ("two-entry unprotected map", {"unprot_head": b"\xa2", "trailing": b"\x45x"}),
+        ("non-minimal kid label uint", {"label_head": b"\x18\x04"}),
+        ("non-minimal bstr head for kid", {"kid_head": b"\x59\x00\x08"}),
+        ("trailing bytes after signature", {"trailing": b"\x00"}),
+    ],
+)
+def test_lenient_envelope_framing_rejected(description: str, kwargs: dict) -> None:
+    # 33vn: a lenient framing form of a signature-valid envelope must fail
+    # decode exactly as Rust from_cose fails the identical bytes (long-form
+    # array/bstr heads, non-minimal uint, extra unprotected entries,
+    # trailing bytes).
+    prot = kwargs.pop("prot", _elements("happy_path_n1")[0])
+    malleated = _build(prot, **kwargs)
+    with pytest.raises(ClaimError):
+        SlotClaim.decode_cose(malleated)
+
+
+def test_strict_body_roundtrip_decodes() -> None:
+    # Sanity: the hand-built strict envelope decodes to the vector fields
+    # (guards _build's minimal heads against drift).
+    prot, unprot, payload, sig = _elements("happy_path_n1")
+    claim = SlotClaim.decode_cose(_build(prot))
+    assert claim.slots == tuple(_case("happy_path_n1")["slots"])
+    assert len(_build(prot)) == 9 + 3 + 8 + 30 + 50  # framing + heads + kid + payload + sig
+
+
 def test_oversized_envelope_rejected_before_decode() -> None:
-    # prgb: the envelope cap fires before cbor2.loads materializes anything —
-    # a max-legit claim is ~21.1 KB; 24 KB bounds pre-rejection decode work.
+    # prgb: the envelope cap fires before the strict reader slices the
+    # payload bstr and cbor2.loads materializes it — a max-legit claim is
+    # ~20.6 KB; 24 KB bounds pre-rejection decode work. Pin both sides of
+    # the boundary: exactly-at-cap parses (fails later for alg), one over
+    # is size-rejected. (Merge resolution: the beads-worker-3 boundary-
+    # pinning form subsumes HEAD's single over-cap check.)
     from lichen.gateway.slot_claim import MAX_CLAIM_ENVELOPE_BYTES
 
+    # Exactly at the cap: parses past the size gate, rejected downstream
+    # (protected head byte 0x00 is a uint, not a bstr). A size-gate
+    # rejection here would instead read "exceeds maximum size".
+    with pytest.raises(ClaimError, match="protected header must be a byte string"):
+        SlotClaim.decode_cose(b"\x84" + b"\x00" * (MAX_CLAIM_ENVELOPE_BYTES - 1))
+    # One over the cap: rejected by the size gate.
     with pytest.raises(ClaimError, match="envelope exceeds maximum size"):
-        SlotClaim.decode_cose(b"\x84" + b"\x00" * (MAX_CLAIM_ENVELOPE_BYTES + 1))
+        SlotClaim.decode_cose(b"\x84" + b"\x00" * MAX_CLAIM_ENVELOPE_BYTES)
     # A real envelope is far under the cap.
     case = _case("happy_path_n60")
     assert len(_hex(case["cose_sign1_hex"])) < MAX_CLAIM_ENVELOPE_BYTES
@@ -268,8 +354,12 @@ def test_boundary_sibling_fields_accepted_at_decode(key: int, value: object) -> 
         assert claim.ordinal == value
 
 
+# ─── Deterministic-CBOR payload gate (5rfl / cb10) ────────────────────────────
+
+
 def _rebuild_envelope(case: dict, payload_bytes: bytes) -> bytes:
-    """Reassemble the COSE_Sign1 with *payload_bytes* as the payload bstr."""
+    """Reassemble the COSE_Sign1 with *payload_bytes* as the payload bstr,
+    keeping the signer's original signature."""
     elements = cbor2.loads(_hex(case["cose_sign1_hex"]))
     return b"\x84" + (
         cbor2.dumps(elements[0])
@@ -317,16 +407,124 @@ def test_non_canonical_uint_encodings_rejected_at_decode(
     # three change the signed semantic value (the signature would fail too),
     # but Rust still rejects them at decode — decode must agree. The gate
     # rejects all such forms uniformly.
+    # (Merge resolution: kept worker-5's label parametrization — the label
+    # feeds pytest's case IDs — and its signature-valid enumeration, which
+    # matches the pinned vectors (happy_path_n1: mode=0, epoch=12,
+    # slots=[7], claim_seq=1). HEAD's inline "(signer's value)" annotations
+    # were dropped: 18 00 at claim_seq decodes to 0, but the signer claimed
+    # claim_seq=1, so that case is signature-invalid, not signer's-value.)
     case = _case("happy_path_n1")
     payload = _payload_bytes_with_raw(case, key, raw_value)
     with pytest.raises(ClaimError, match="canonically encoded"):
         SlotClaim.decode_cose(_rebuild_envelope(case, payload))
 
 
-def test_canonical_uint_encodings_accepted_at_decode() -> None:
-    # Positive control for the 5rfl gate: the same hand-built map with
-    # canonical (minimal) value encodings must still decode — the gate
-    # rejects encodings, not the hand-built construction itself.
+def test_reordered_payload_keys_rejected_at_decode() -> None:
+    # cb10: the wire contract is deterministic-CBOR with keys 1-7 ascending
+    # (spec/decisions.jsonl slot-claim-cose-sign1). Emitting the same seven
+    # key/value pairs out of order decodes to an identical field set (and
+    # the signature verifies over the canonical re-encode). Rust rejects it
+    # because its sig digest covers the RECEIVED payload bytes (slot.rs:633)
+    # → signature failure; C digests the received bytes likewise. Python's
+    # canonical-form gate rejects it at decode.
+    case = _case("happy_path_n1")
+    case_envelope = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    fields = cbor2.loads(case_envelope[2])
+    body = bytearray([0xA7])
+    for k in (2, 1, 3, 4, 5, 6, 7):  # keys 1 and 2 swapped
+        body += cbor2.dumps(k)
+        body += cbor2.dumps(fields[k])
+    with pytest.raises(ClaimError, match="canonically encoded"):
+        SlotClaim.decode_cose(_rebuild_envelope(case, bytes(body)))
+
+
+def test_duplicate_payload_key_rejected_at_decode() -> None:
+    # cb10: a duplicate key (wire {6:5, 6:5}) decodes via cbor2 last-wins to
+    # the signer's claim_seq, so the signature verifies over the canonical
+    # re-encode — but the 8-pair map is not the canonical 7-pair form. The
+    # gate rejects it; Rust/C reject duplicates via a seen-bitmask.
+    case = _case("happy_path_n1")
+    case_envelope = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    fields = cbor2.loads(case_envelope[2])
+    body = bytearray([0xA8])  # 8-pair map
+    for k in range(1, 8):
+        body += cbor2.dumps(k)
+        body += cbor2.dumps(fields[k])
+        if k == 6:  # duplicate key 6 with the same value
+            body += cbor2.dumps(6)
+            body += cbor2.dumps(fields[6])
+    with pytest.raises(ClaimError, match="canonically encoded"):
+        SlotClaim.decode_cose(_rebuild_envelope(case, bytes(body)))
+
+
+def test_unknown_payload_key_rejected_at_decode() -> None:
+    # cb10: an unknown key (8) is ignored by cbor2's dict decode (the field
+    # set is unchanged, signature verifies over the re-encode), but the
+    # 8-pair map is not the canonical form. The gate rejects it; Rust/C
+    # reject unknown keys (key range 1-7).
+    case = _case("happy_path_n1")
+    case_envelope = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    fields = cbor2.loads(case_envelope[2])
+    body = bytearray([0xA8])  # 8-pair map
+    for k in range(1, 8):
+        body += cbor2.dumps(k)
+        body += cbor2.dumps(fields[k])
+    body += cbor2.dumps(8)  # unknown key
+    body += cbor2.dumps(0)
+    with pytest.raises(ClaimError, match="canonically encoded"):
+        SlotClaim.decode_cose(_rebuild_envelope(case, bytes(body)))
+
+
+@pytest.mark.parametrize(
+    "raw_mode",
+    [
+        b"\xf4",  # false
+        b"\xf5",  # true
+        b"\xf9\x00\x00",  # float16 0.0
+        b"\xfa\x00\x00\x00\x00",  # float32 0.0
+        b"\xfa\x3f\x80\x00\x00",  # float32 1.0
+        b"\xfb\x00\x00\x00\x00\x00\x00\x00\x00",  # float64 0.0
+    ],
+)
+def test_non_integer_mode_raw_cbor_rejected_at_decode(raw_mode: bytes) -> None:
+    # (Merge resolution: renamed from test_non_integer_mode_rejected_at_decode
+    # so it does not shadow the ft5w test of the same name above — that test
+    # drives the type-strict mode check through cbor2-decoded Python values;
+    # this one drives it with raw wire bytes, additionally covering the
+    # float16/float32 encodings that cbor2.dumps never emits.)
+    # ft5w: CBOR false (f4), true (f5), and float 0.0/1.0 (f9/fa/fb ...)
+    # decode via cbor2 to Python False/True/0.0/1.0, which value-equality
+    # ('mode == 0') would accept as INTERLEAVED — Rust's p.uint() rejects
+    # non-uint major types as MalformedClaim. The type-strict check
+    # (type(mode) is not int) must reject these with the mode error, not
+    # the canonical-gate error (the gate would catch them too, but the
+    # type check is the targeted fix and produces the precise diagnostic).
+    case = _case("happy_path_n1")
+    payload = _payload_bytes_with_raw(case, 3, raw_mode)
+    with pytest.raises(ClaimError, match="mode must be 0"):
+        SlotClaim.decode_cose(_rebuild_envelope(case, payload))
+
+
+def test_trailing_payload_bytes_rejected_at_decode() -> None:
+    # cb10: the pinned cbor2.loads ACCEPTS trailing bytes after the payload
+    # map, so the canonical-form gate is the sole enforcement point here —
+    # a payload with a trailing byte must be rejected by the gate.
+    case = _case("happy_path_n1")
+    case_envelope = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    payload = case_envelope[2] + b"\x00"
+    with pytest.raises(ClaimError):
+        SlotClaim.decode_cose(_rebuild_envelope(case, payload))
+
+
+def test_canonical_payload_accepted_and_verifies() -> None:
+    # Positive control for the canonical gate: a hand-built map with
+    # canonical (minimal) value encodings must still decode AND verify —
+    # the gate rejects encodings, not the hand-built construction itself.
+    # (Merge resolution: subsumes worker-5's
+    # test_canonical_uint_encodings_accepted_at_decode — byte-identical
+    # body; this name/comment matches the verify assertion in the shared
+    # tail, so worker-5's name/comment is dropped while its positive-
+    # control coverage is fully kept.)
     case = _case("happy_path_n1")
     envelope_elements = cbor2.loads(_hex(case["cose_sign1_hex"]))
     fields = cbor2.loads(envelope_elements[2])

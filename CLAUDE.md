@@ -5,6 +5,35 @@
 
 This file provides instructions and context for AI coding agents working on this project.
 
+## Settled Protocol Decisions
+
+The `upstream-yggdrasil-addressing` and `custody-best-effort` decisions in
+`spec/decisions.jsonl` take precedence over conflicting historical prose,
+issue descriptions, implementation behavior, and fixture expectations.
+
+- **Yggdrasil addressing everywhere:** Every node's routable IPv6 identity
+  MUST equal upstream Yggdrasil `AddrForKey(Ed25519PublicKey)`, both in isolated
+  meshes and across backhauls. Routing, SCHC, identity checks, LCI, and gateways
+  MUST preserve upstream-compatible addressing; connectivity limitations do
+  not authorize a different address derivation.
+- `0200::/7` is the aggregate: node `/128`s are in `0200::/8`; routed `/64`s,
+  when used, MUST come from upstream `SubnetForKey` in `0300::/8`. Do not
+  mechanically replace every `/8` with `/7`. Standard link-local and multicast
+  control addresses retain their scope.
+- The SHA-512-based "LICHEN native" address profile is rejected. Do not alter
+  an upstream address to preserve a local IID-equality invariant. Use pinned
+  upstream byte-equality vectors as the independent conformance oracle;
+  agreement among LICHEN implementations is not a substitute. Report conflicting
+  legacy fixtures instead of weakening tests or generating expected results
+  from the implementation under test. Upstream compatibility is settled, not
+  a design question to reopen. Existing migration work remains incomplete.
+- **Custody is best effort:** `MUST` requirements define the obligations of
+  conforming custodians, not an enforceable guarantee that other nodes comply
+  or that delivery succeeds. Acceptance records responsibility, not delivery;
+  a delivery receipt confirms recipient acceptance, not human reading. Do not
+  invent mechanisms to force cooperation or change eviction/TTL/retry policy
+  merely to claim guaranteed delivery.
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:b380caf6 -->
 ## Beads Issue Tracker
 
@@ -86,7 +115,7 @@ See `AGENTS.md` for full technical details. Quick reference:
 Application:  CoAP / MQTT-SN / Raw UDP
 Security:     OSCORE (E2E) + Schnorr link signatures (48B)
 Transport:    UDP (compressed via SCHC)
-Network:      IPv6 (link-local control + native Yggdrasil /128)
+Network:      IPv6 (link-local control + upstream Yggdrasil /128)
 Routing:      RPL (BR traffic) + Announce (peers) + LOADng (fallback)
 Adaptation:   SCHC (RFC 8724) — NOT 6LoWPAN
 Link:         LICHEN frame format with replay protection

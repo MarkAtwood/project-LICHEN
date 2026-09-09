@@ -12,9 +12,12 @@ Drives the real lichen.crypto implementations through every vector case in:
   ``node_address.json``) via :class:`lichen.crypto.identity.PeerIdentity` and
   :func:`lichen.crypto.identity.iid_to_human_address`
 
-The vector corpora embed RFC 9052 tag-18 COSE_Sign1 structures; the lichen
-decoders accept only the untagged 4-element array, so the helper unwraps the
-tag first (interop quirk noted in the f4z7 disposition).
+The ``root_dio_signature.json`` corpus embeds RFC 9052 tag-18 COSE_Sign1
+structures; the root-DIO decoder accepts only the untagged 4-element array,
+so the helper unwraps the tag first (interop quirk noted in the f4z7
+disposition). The capability-announcement decoder tolerates the tag-18
+wrapper directly (Rust parity, bead project-LICHEN-worker6-45or), so its
+tests feed the raw corpus ``cose_sign1`` bytes.
 
 Vector ``expected.error`` names are spec-level labels; the mapping to the
 Python verifier error strings is asserted explicitly per case (e.g.
@@ -144,9 +147,7 @@ class TestRootDioSignatureVectorFile:
             sig,
             bytes.fromhex(vector["public_key"]),
             current_time=vector.get("expiry", 1) - 1,
-            dio_dodag_id=(
-                bytes.fromhex(vector["dodag_id"]) if "dodag_id" in vector else None
-            ),
+            dio_dodag_id=(bytes.fromhex(vector["dodag_id"]) if "dodag_id" in vector else None),
             dio_instance=vector.get("instance"),
             dio_version=vector.get("version"),
             dio_rank=vector.get("rank"),
@@ -192,11 +193,11 @@ class TestRootDioSignatureVectorFile:
 
 # Vectors whose pinned intent is honored by Python at decode (fail-closed)
 # rather than at verify level; match regexes document each refusal reason.
+# capability_prefix_delegation / capability_both are valid zero-padded
+# vectors: Python must decode them (corpus rule, bead 45or), not reject.
 _DECODE_REJECT = {
     "capability_invalid_reserved_bits": "[Rr]eserved",
     "capability_iid_mismatch": "kid",
-    "capability_prefix_delegation": "prefix",
-    "capability_both": "prefix",
 }
 
 
@@ -215,12 +216,14 @@ class TestCapabilityAnnouncementVectorFile:
         )
         assert sig_valid is expected["signature_valid"], name
 
+        # Raw corpus wire: tag-18 wrapped, consumed directly by the decoder.
+        wire = bytes.fromhex(vector["cose_sign1"])
         if name in _DECODE_REJECT:
             with pytest.raises(ValueError, match=_DECODE_REJECT[name]):
-                decode_cose_sign1_announcement(_untagged_cose_sign1(vector["cose_sign1"]))
+                decode_cose_sign1_announcement(wire)
             return
 
-        ann = decode_cose_sign1_announcement(_untagged_cose_sign1(vector["cose_sign1"]))
+        ann = decode_cose_sign1_announcement(wire)
         payload = ann.payload
         if "announcer_iid" in vector:
             assert payload.announcer_iid == bytes.fromhex(vector["announcer_iid"])

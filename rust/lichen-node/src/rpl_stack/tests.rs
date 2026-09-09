@@ -6,6 +6,8 @@
 use std::vec;
 
 use super::*;
+use core::net::Ipv6Addr;
+
 use crate::announce::MAX_TRACKED_ORIGINATORS;
 use crate::routing::{Router, ROOT_RANK};
 use crate::runtime::{RplRuntimeAction, RplRuntimeActionError, RplRuntimeConfig};
@@ -21,6 +23,7 @@ use lichen_hal::{ChannelConfig, Radio, RadioConfig, RxPacket, TxResult};
 use lichen_ipv6::{next_header, Addr, Ipv6Header, UdpHeader, UDP_HEADER_LEN};
 use lichen_link::frame::{AddrMode, LichenFrame};
 use lichen_link::identity::{Identity, PeerIdentity};
+use lichen_link::keys::PublicKey;
 use lichen_link::keys::Seed;
 use lichen_link::link_layer::{LinkLayer, LinkRxError};
 use lichen_link::schnorr;
@@ -42,6 +45,7 @@ use crate::secure::{SecureResponse, SecureResponseData};
 
 use super::error::{RplReceiveError, RplRuntimeReceiveError};
 use super::provisioning::provision_or_resume_root_state;
+use super::receive::DioRootSigOutcome;
 use super::util::{
     advance_rpl_source_route, dao_ipv6_packet, dao_parts, decapsulate_ipv6, eui64_link_local,
     ipv6_eui64, link_local_from_iid, multicast_dis_jitter, rpl_ipv6_packet, RPL_ALL_NODES,
@@ -1760,7 +1764,7 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
     // root pops. Drain until the announce lands (bounded) in case future
     // relay re-emission paths interpose frames.
     let mut root_outcome = None;
-    for _ in 0..6 {
+    for _ in 0..12 {
         let outcome = root.receive(1, 0).await.unwrap();
         if matches!(
             &outcome,
@@ -1817,6 +1821,8 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
     ));
 
     relay.send_dao().await.unwrap();
+    // The relay's solicited-DIS DIO was already drained above (root rejected
+    // it), so the relay's DAO is the next frame root pops.
     let relay_dao_outcome = root.receive(1, 0).await.unwrap();
     assert!(
         matches!(
@@ -1854,8 +1860,8 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
         "{leaf_dao_outcome:?}"
     );
     assert_eq!(
-        root.rpl_node().router.lookup_route(&leaf_addr),
-        Some([relay_addr, leaf_addr].as_slice())
+        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        Some([Ipv6Addr::from(relay_addr), Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
     let secret = [0x42; 16];
@@ -1995,7 +2001,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::DaoOriginNotAdmitted)
     ));
     assert!(root.rpl.router.dao_origin_keys().is_empty());
-    assert!(root.rpl_node().router.lookup_route(&leaf_addr).is_none());
+    assert!(root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)).is_none());
 
     root.admit_dao_origin(leaf_identity.iid).unwrap();
     leaf.send_ipv6_to(
@@ -2010,8 +2016,8 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Applied))
     ));
     assert_eq!(
-        root.rpl_node().router.lookup_route(&leaf_addr),
-        Some([leaf_addr].as_slice())
+        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
     let persisted = root.storage().clone();
     let mut replay_only = MemStorage::new();
@@ -2066,17 +2072,17 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::IidMismatch))
     ));
     assert_eq!(
-        root.rpl_node().router.lookup_route(&substituted_source),
+        root.rpl_node().router.lookup_route(Ipv6Addr::from(substituted_source)),
         None,
         "a rejected prefix alias must not resolve through an IID-only fallback"
     );
     assert_eq!(
-        root.rpl_node().router.lookup_route(&leaf_addr),
-        Some([leaf_addr].as_slice()),
+        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        Some([Ipv6Addr::from(leaf_addr)].as_slice()),
         "the rejected DAO must not mutate the canonical host route"
     );
 
-    let before = root.rpl_node().router.lookup_route(&unknown_addr);
+    let before = root.rpl_node().router.lookup_route(Ipv6Addr::from(unknown_addr));
     assert!(before.is_none());
     let mut unknown_storage = MemStorage::new();
     let mut unknown_tx = DaoTxState::provision(
@@ -2109,7 +2115,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         root.receive(1, 0).await.unwrap(),
         Some(RplReceiveOutcome::DaoOriginNotAdmitted)
     ));
-    assert!(root.rpl_node().router.lookup_route(&unknown_addr).is_none());
+    assert!(root.rpl_node().router.lookup_route(Ipv6Addr::from(unknown_addr)).is_none());
 
     let mut second = leaf_router
         .build_signed_dao(leaf_addr, &mut leaf_tx, &mut leaf_storage, &leaf_link)
@@ -2127,8 +2133,8 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::BadSignature))
     ));
     assert_eq!(
-        root.rpl_node().router.lookup_route(&leaf_addr),
-        Some([leaf_addr].as_slice())
+        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
     let third = leaf_router
@@ -2147,8 +2153,8 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Persistence))
     ));
     assert_eq!(
-        root.rpl_node().router.lookup_route(&leaf_addr),
-        Some([leaf_addr].as_slice())
+        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
     leaf.send_ipv6_to(
@@ -2204,8 +2210,8 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Duplicate))
     ));
     assert_eq!(
-        reopened.rpl_node().router.lookup_route(&leaf_addr),
-        Some([leaf_addr].as_slice())
+        reopened.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
     // First replay: valid DAO with old sequence should be detected as Replay
@@ -2235,8 +2241,8 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Replay))
     ));
     assert_eq!(
-        reopened.rpl_node().router.lookup_route(&leaf_addr),
-        Some([leaf_addr].as_slice())
+        reopened.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
     leaf.send_ipv6_to(
@@ -2251,8 +2257,8 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Persistence))
     ));
     assert_eq!(
-        reopened.rpl_node().router.lookup_route(&leaf_addr),
-        Some([leaf_addr].as_slice())
+        reopened.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 }
 
@@ -2706,124 +2712,83 @@ fn root_seq_cache_is_reachable_from_stack_state() {
     assert_eq!(stack.root_seq_cached(dodag_a, 1), None);
 }
 
-// ── Root DIO signature: R-06-307 expired-signature -> Baseline (b7z9.88.3) ──
+// ── Root DIO signature: R-06-307 expired-signature -> Baseline gate (b7z9.88.3) ──
 //
-// The vector COSE (VALID_COSE_SIGN1, expiry VECTOR_EXPIRY_UNIX) is the
-// root-signed option. Its payload pins rank 256 / MOP 2, so a payload-
-// matching carrier DIO is Root-role at the SCHC admission gate and can
-// only be processed end-to-end when sent by the true DODAG root (key-
-// derived address == DODAGID) — the vector's private key is unavailable
-// by construction. The contract is therefore pinned at two layers:
+// Two complementary pins for the receiver expiry gate in receive.rs
+// (verify_dio_root_signature), merged from both branches:
 //
-// - gate level: verify_dio_root_signature on the payload-matched carrier:
-//   Verified (fresh root_seq admitted) then Reject (replay) under a live
-//   clock — no router policy in the way.
-// - stack level: a router-admissible carrier (Peer rank, non-storing MOP)
-//   carrying the expired signature is ADMITTED as unsigned with a past-
-//   expiry or absent clock (R-06-307: expired -> Baseline, never Reject).
+// Stack-level (end-to-end via receive()): the receiver pins the root key
+// via the test-only hook (the shared vector fixture's private key is not
+// available for a real announce) and joins the relay-rooted DODAG first
+// (bare-DIO join, the join_leaf shape), then receives a carrier DIO
+// carrying the signed 0x17 option under two clocks: past expiry and the
+// clockless default — both must be admitted as Baseline (treated as
+// unsigned per spec L679), never rejected.
+//
+// The relay is provisioned as the DODAG root so the carrier's L2 signer
+// IS the DODAG root (sender == dodag_id): every root-role gate validates
+// on the link key. The vector-signed 0x17 rides as a plain option —
+// legal on the Baseline path, which returns BEFORE the payload/carrier
+// cross-check, so the COSE signer != L2 signer and a payload dodag_id
+// != carrier dodag_id are both fine. A VALID-signature positive control
+// is structurally impossible at stack level with the shared vector (no
+// private key); the cross_check itself is covered by root_sig.rs unit
+// tests.
+//
+// Gate-level (verify_dio_root_signature called directly): an expired
+// payload expiry or an unassessable clock degrades to BASELINE (treat as
+// unsigned, admit), never Reject; a valid pre-expiry signature is
+// Verified and its root_seq admitted, with the duplicate then
+// replay-rejected. The gate-level positive control covers the
+// valid-signature path that is structurally impossible to exercise
+// end-to-end with the shared vector (see above).
+//
+// Merge note (main x beads-worker-6): worker-6's stack-level fixture
+// shape is kept (relay provisioned as the DODAG root, receiver joined
+// before the carrier is delivered) because it is green against the
+// current SCHC authenticated-DIO admission gate. The carrier therefore
+// claims the vector payload's rank (256 = ROOT_RANK): HEAD's rank-512
+// carrier belonged to its discarded non-root-relay fixture, and a
+// non-root rank from the root trips the role gate. Preserved from HEAD:
+// the gate-level pins below (gate_fixture / gate_fields and the three
+// verify_dio_root_signature tests) and the NON_STORING_MOP name.
+//
+// Merge note (main x beads-worker-6, criss-cross re-merge): this merge
+// had two bases and worker-6's side of the file was byte-identical to
+// the older base (an ancestor of HEAD), so it contained nothing new;
+// HEAD's newer evolution above is kept and no worker-6 intent is lost.
 
 const VECTOR_EXPIRY_UNIX: u64 = 1_735_689_600;
 
 const NON_STORING_MOP: u8 = 1;
 
-use crate::rpl_stack::root_sig;
-
-/// DIO body (header + options) with the carrier rank/MOP/version chosen by
-/// the caller; all other header fields come from the signed payload.
-/// `Dio::write_to` already appends the mandatory SCHC rule-version
-/// advertisement (0x13); the 0x17 root signature carrying the vector COSE
-/// is appended after it.
-fn vector_signed_dio_body(version: u8, rank: u16, mop: u8) -> Vec<u8> {
-    let cose = root_sig::tests::vector_cose();
-    let decoded = root_sig::DecodedRootSig::from_cose_sign1(&cose).unwrap();
-    let dio = lichen_rpl::message::Dio {
-        rpl_instance_id: decoded.payload.instance,
-        version,
-        rank,
-        grounded: true,
-        mode_of_operation: mop,
-        preference: 0,
-        dtsn: 0,
-        flags: 0,
-        dodag_id: decoded.payload.dodag_id,
-    };
-    let mut body = vec![0u8; lichen_rpl::message::Dio::SERIALIZED_LEN + 2 + 255];
-    let dio_len = dio.write_to(&mut body).unwrap();
-    let opt_len =
-        lichen_rpl::message::RootDioSignature::write_to(&cose, &mut body[dio_len..]).unwrap();
-    body.truncate(dio_len + opt_len);
-    body
-}
-
-/// Receiver provisioned for the vector DODAG, pinned to the vector root
-/// key, with the caller's wall clock (None = unassessable).
-fn pinned_receiver(clock: Option<fn() -> u64>) -> RplStack<MeshRadio, MemStorage> {
-    let decoded =
-        root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose()).unwrap();
-    let recv_identity = identity(22);
-    let mut recv_eui64 = recv_identity.iid;
-    recv_eui64[0] ^= 0x02;
-    let (_mesh, [recv_radio, _spare_a, _spare_b]) =
-        MeshHarness::new([recv_eui64, [0u8; 8], [0u8; 8]]);
-    let mut receiver = RplStack::provision_leaf(
-        Stack::new(recv_radio, recv_identity.clone(), 129, 0),
-        address(&recv_identity, 1),
-        decoded.payload.dodag_id,
-        announces(decoded.payload.dodag_id[8..16].try_into().unwrap()),
-        MemStorage::new(),
-    )
-    .unwrap();
-    receiver
-        .announces
-        .pin_for_test(root_sig::tests::vector_pubkey());
-    if let Some(clock) = clock {
-        receiver.set_wall_clock_unix(clock);
-    }
-    receiver
-}
-
-#[test]
-fn valid_root_signature_is_verified_and_replay_rejected() {
-    use super::receive::DioRootSigOutcome;
-
-    let mut receiver = pinned_receiver(Some(|| VECTOR_EXPIRY_UNIX - 1));
-    let decoded =
-        root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose()).unwrap();
-    // Carrier exactly matches the signed payload (version 1, rank 256, MOP 2).
-    let body = vector_signed_dio_body(decoded.payload.version, 256, 2);
-    let fields = root_sig::DioFields {
-        dodag_id: Some(decoded.payload.dodag_id),
-        instance: Some(decoded.payload.instance),
-        version: Some(decoded.payload.version),
-        rank: Some(decoded.payload.rank),
-        mop: Some(decoded.payload.mop),
-    };
-
-    // Live clock before expiry -> Verified: root_seq 1 admitted to cache.
-    assert!(matches!(
-        receiver.verify_dio_root_signature(&body, &fields),
-        DioRootSigOutcome::Verified
-    ));
-    // Replay: the same root_seq is rejected from the cache.
-    assert!(matches!(
-        receiver.verify_dio_root_signature(&body, &fields),
-        DioRootSigOutcome::Reject
-    ));
-}
-
 #[tokio::test]
 async fn expired_root_signature_admitted_as_baseline_not_rejected() {
-    // THE PIN (R-06-307): clock past expiry -> Baseline BEFORE cross_check
-    // -> the signed DIO is processed as unsigned and admitted, not
-    // rejected. Carrier is router-admissible (Peer rank, non-storing MOP).
-    let (mut sender, mut receiver, packet) = baseline_fixture(
-        Some(|| VECTOR_EXPIRY_UNIX + 1),
-        512,
-        NON_STORING_MOP,
+    // THE PIN (R-06-307): clock past expiry -> Baseline BEFORE the replay
+    // gate, so even a REPLAYED expired DIO is admitted (treated as
+    // unsigned), never rejected.
+    let (mut sender, mut receiver, packet, relay_identity) =
+        baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX + 1));
+    link_introduce(&mut sender, &mut receiver, &relay_identity).await;
+
+    // Join the receiver to the relay-rooted DODAG (bare-DIO join, the
+    // join_leaf shape) so the carrier is processed as a steady-state DIO
+    // from the joined parent, not against an unjoined leaf's fresh state.
+    sender_ipv6(
+        &mut sender,
+        &dio_packet_from(
+            link_local_from_iid(relay_identity.iid),
+            RPL_ALL_NODES,
+            root_address(&relay_identity),
+            ROOT_RANK,
+        ),
     )
     .await;
-    let decoded = root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose())
-        .unwrap();
+    assert!(matches!(
+        receiver.receive(1, 0).await.unwrap(),
+        Some(RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. }))
+    ));
+    assert!(receiver.rpl_node().is_joined());
 
     sender_ipv6(&mut sender, &packet).await;
     let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
@@ -2834,22 +2799,68 @@ async fn expired_root_signature_admitted_as_baseline_not_rejected() {
         ),
         "expired signature must degrade to baseline, not reject: {outcome:?}"
     );
-    // Baseline means "treat as unsigned": the signed payload's root_seq
-    // must NOT be admitted to the cache (no cache burn by an expired sig).
+
+    // Baseline (not Verified): nothing entered the root-seq cache —
+    // neither under the vector payload's DODAG id nor the carrier's.
+    let decoded = {
+        use crate::rpl_stack::root_sig;
+        root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose()).unwrap()
+    };
     assert_eq!(
         receiver.root_seq_cached(decoded.payload.dodag_id, decoded.payload.instance),
         None
     );
+    assert_eq!(
+        receiver.root_seq_cached(root_address(&relay_identity), decoded.payload.instance),
+        None
+    );
+
+    // The identical expired DIO re-delivered is still admitted — the
+    // replay gate is only reached for Verified signatures, so a replayed
+    // expired signature must NOT reject.
+    sender_ipv6(&mut sender, &packet).await;
+    let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
+    assert!(
+        matches!(
+            outcome,
+            RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. })
+        ),
+        "replayed expired signature must stay on baseline, not reject: {outcome:?}"
+    );
 }
 
 #[tokio::test]
-async fn expiry_boundary_root_signature_admitted_as_baseline_not_rejected() {
-    // Expiry boundary: now == expiry is already elapsed (`<=` in
-    // receive.rs) -> Baseline, admitted as unsigned, no cache admission.
-    let (mut sender, mut receiver, packet) =
-        baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX), 512, NON_STORING_MOP).await;
-    let decoded = root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose())
-        .unwrap();
+async fn expiry_equal_now_root_signature_admitted_as_baseline_not_rejected() {
+    // THE EQUALITY PIN: receive.rs:719 degrades on `expiry <= now_unix`, so
+    // now == expiry is already Baseline. The stack-level +1 (expired) case is
+    // above; the -1 pre-expiry cases exist only at gate level below (a
+    // stack-level pre-expiry Verified is structurally impossible with the
+    // shared vector, per the block comment at the top of this section). This
+    // pins the exact boundary end-to-end: under a `<` for `<=` regression the
+    // signature passes the expiry gate and is then rejected at the carrier/
+    // payload cross-check (the fixture's carrier diverges by design), so the
+    // DioReceived assertion below is the detector.
+    let (mut sender, mut receiver, packet, relay_identity) =
+        baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX));
+    link_introduce(&mut sender, &mut receiver, &relay_identity).await;
+
+    // Join first (see the expired-clock test): the carrier must be a
+    // steady-state DIO against joined dodag state.
+    sender_ipv6(
+        &mut sender,
+        &dio_packet_from(
+            link_local_from_iid(relay_identity.iid),
+            RPL_ALL_NODES,
+            root_address(&relay_identity),
+            ROOT_RANK,
+        ),
+    )
+    .await;
+    assert!(matches!(
+        receiver.receive(1, 0).await.unwrap(),
+        Some(RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. }))
+    ));
+    assert!(receiver.rpl_node().is_joined());
 
     sender_ipv6(&mut sender, &packet).await;
     let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
@@ -2858,21 +2869,50 @@ async fn expiry_boundary_root_signature_admitted_as_baseline_not_rejected() {
             outcome,
             RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. })
         ),
-        "signature at exact expiry must degrade to baseline, not reject: {outcome:?}"
+        "now == expiry must degrade to baseline, not reject: {outcome:?}"
     );
+
+    // Baseline (not Verified): nothing entered the root-seq cache at the
+    // boundary. (The boundary detector is the DioReceived assertion above —
+    // a `<` regression dies at the cross-check Reject before it could pin
+    // root_seq; these asserts pin the correct path's cache hygiene.)
+    let decoded = {
+        use crate::rpl_stack::root_sig;
+        root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose()).unwrap()
+    };
     assert_eq!(
         receiver.root_seq_cached(decoded.payload.dodag_id, decoded.payload.instance),
+        None
+    );
+    assert_eq!(
+        receiver.root_seq_cached(root_address(&relay_identity), decoded.payload.instance),
         None
     );
 }
 
 #[tokio::test]
 async fn clockless_root_signature_admitted_as_baseline_not_rejected() {
-    // Unassessable clock (no wall clock wired) -> Baseline: the DIO is
-    // admitted as unsigned, not rejected.
-    let (mut sender, mut receiver, packet) = baseline_fixture(None, 512, NON_STORING_MOP).await;
-    let decoded = root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose())
-        .unwrap();
+    // Unassessable clock (no set_wall_clock_unix call) -> Baseline.
+    let (mut sender, mut receiver, packet, relay_identity) = baseline_fixture(None);
+    link_introduce(&mut sender, &mut receiver, &relay_identity).await;
+
+    // Join first (see the expired-clock test): the carrier must be a
+    // steady-state DIO against joined dodag state.
+    sender_ipv6(
+        &mut sender,
+        &dio_packet_from(
+            link_local_from_iid(relay_identity.iid),
+            RPL_ALL_NODES,
+            root_address(&relay_identity),
+            ROOT_RANK,
+        ),
+    )
+    .await;
+    assert!(matches!(
+        receiver.receive(1, 0).await.unwrap(),
+        Some(RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. }))
+    ));
+    assert!(receiver.rpl_node().is_joined());
 
     sender_ipv6(&mut sender, &packet).await;
     let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
@@ -2883,26 +2923,49 @@ async fn clockless_root_signature_admitted_as_baseline_not_rejected() {
         ),
         "unassessable clock must degrade to baseline, not reject: {outcome:?}"
     );
-    // Same "treat as unsigned" contract: no root_seq cache admission.
+
+    // Baseline (not Verified): nothing entered the root-seq cache.
+    let decoded = {
+        use crate::rpl_stack::root_sig;
+        root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose()).unwrap()
+    };
     assert_eq!(
         receiver.root_seq_cached(decoded.payload.dodag_id, decoded.payload.instance),
         None
     );
+    assert_eq!(
+        receiver.root_seq_cached(root_address(&relay_identity), decoded.payload.instance),
+        None
+    );
+}
+
+/// Link-layer TOFU introduction: the relay announces, the receiver pins
+/// its link key. Without this the receiver drops the DIO at the link
+/// layer (Link(UnknownSender)) before the RPL layer is ever reached.
+async fn link_introduce(
+    sender: &mut RplStack<MeshRadio, MemStorage>,
+    receiver: &mut RplStack<MeshRadio, MemStorage>,
+    relay_identity: &Identity,
+) {
+    // RplStack.stack is a SecureStack; announces are link-layer frames and
+    // must bypass OSCORE, so pass the wrapped inner Stack.
+    send_announce(&mut sender.stack.stack, relay_identity, 1).await;
+    assert!(matches!(
+        receiver.receive(1, 0).await.unwrap(),
+        Some(RplReceiveOutcome::AnnouncementAccepted { .. })
+    ));
 }
 
 /// Sender + receiver on an adjacent two-node mesh, the receiver pinned to
-/// the vector root key, and a root-signed DIO packet (Dio + 0x17 option
-/// carrying VALID_COSE_SIGN1) with the caller's carrier rank/MOP.
-/// `clock` wires the receiver's wall clock. Link-layer trust is
-/// established with a signed announce from the sender.
-async fn baseline_fixture(
+/// the vector root key, and the root-signed DIO packet (Dio + 0x17 option
+/// carrying VALID_COSE_SIGN1). `clock` wires the receiver's wall clock.
+fn baseline_fixture(
     clock: Option<fn() -> u64>,
-    carrier_rank: u16,
-    carrier_mop: u8,
 ) -> (
     RplStack<MeshRadio, MemStorage>,
     RplStack<MeshRadio, MemStorage>,
     Vec<u8>,
+    Identity,
 ) {
     let relay_identity = identity(21);
     let recv_identity = identity(22);
@@ -2913,35 +2976,61 @@ async fn baseline_fixture(
     let (_mesh, [relay_radio, recv_radio, _spare]) =
         MeshHarness::new([relay_eui64, recv_eui64, [0u8; 8]]);
 
-    let decoded =
-        root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose()).unwrap();
-    // Carrier version 0 (the receiver's initial DODAG version) so the
-    // Baseline-admitted DIO also passes the version gate; the signed
-    // payload's version is irrelevant on the Baseline path (no
-    // cross-check runs). Source is the sender's link-local control
-    // address (spec 09 13.3 R-09-005) and dst is ff02::1a.
-    let body = vector_signed_dio_body(0, carrier_rank, carrier_mop);
+    use crate::rpl_stack::root_sig;
+    let cose = root_sig::tests::vector_cose();
+    let decoded = root_sig::DecodedRootSig::from_cose_sign1(&cose).unwrap();
+
+    // The relay is the provisioned DODAG root (see module comment): the
+    // carrier's L2 signer is the root, and the receiver joins the relay's
+    // DODAG before the carrier is delivered (join happens in the tests,
+    // after link_introduce).
+    let relay_addr = root_address(&relay_identity);
+
+    let dio = lichen_rpl::message::Dio {
+        // Carrier fields match the receiver's provisioned state (the
+        // relay-rooted DODAG on the standard instance), not the COSE
+        // payload: the Baseline path returns before the payload/carrier
+        // cross-check, so the divergence is never evaluated.
+        rpl_instance_id: lichen_core::constants::RPL_INSTANCE_ID,
+        version: 0,
+        // The relay IS the DODAG root here, so the carrier claims the
+        // root's rank (the vector payload's 256 = ROOT_RANK): a non-root
+        // rank from the root trips the authenticated-DIO role gate.
+        rank: decoded.payload.rank,
+        grounded: true,
+        mode_of_operation: NON_STORING_MOP,
+        preference: 0,
+        dtsn: 0,
+        flags: 0,
+        dodag_id: relay_addr,
+    };
+    let mut body = [0u8; lichen_rpl::message::Dio::SERIALIZED_LEN + 2 + 255];
+    let dio_len = dio.write_to(&mut body).unwrap();
+    let opt_len =
+        lichen_rpl::message::RootDioSignature::write_to(&cose, &mut body[dio_len..]).unwrap();
     let packet = rpl_ipv6_packet(
+        // Canonical control source (fe80:: + IID, as send_dio emits): the
+        // DIO/DIS destination gate rejects a native 02xx source.
         link_local_from_iid(relay_identity.iid),
         RPL_ALL_NODES,
         rpl_code::DIO,
-        &body,
+        &body[..dio_len + opt_len],
     )
     .unwrap();
 
-    let mut sender = RplStack::provision_leaf(
-        Stack::new(relay_radio, relay_identity.clone(), 129, 0),
-        address(&relay_identity, 1),
-        decoded.payload.dodag_id,
-        announces(decoded.payload.dodag_id[8..16].try_into().unwrap()),
+    let mut sender = RplStack::provision_root(
+        Stack::new(relay_radio, relay_identity.clone(), 128, 0),
+        relay_addr,
+        relay_addr,
+        announces(relay_addr[8..16].try_into().unwrap()),
         MemStorage::new(),
     )
     .unwrap();
     let mut receiver = RplStack::provision_leaf(
         Stack::new(recv_radio, recv_identity.clone(), 129, 0),
         address(&recv_identity, 1),
-        decoded.payload.dodag_id,
-        announces(decoded.payload.dodag_id[8..16].try_into().unwrap()),
+        relay_addr,
+        announces(relay_addr[8..16].try_into().unwrap()),
         MemStorage::new(),
     )
     .unwrap();
@@ -2951,19 +3040,7 @@ async fn baseline_fixture(
     if let Some(clock) = clock {
         receiver.set_wall_clock_unix(clock);
     }
-
-    // Link-layer trust: the receiver must TOFU the sender's link key from a
-    // signed announce, or every frame from the sender is UnknownSender.
-    sender
-        .send_announce(&signed_announce(&relay_identity, 1), 0)
-        .await
-        .unwrap();
-    assert!(matches!(
-        receiver.receive(1, 0).await.unwrap(),
-        Some(RplReceiveOutcome::AnnouncementAccepted { .. })
-    ));
-
-    (sender, receiver, packet)
+    (sender, receiver, packet, relay_identity)
 }
 
 async fn sender_ipv6(stack: &mut RplStack<MeshRadio, MemStorage>, packet: &[u8]) {
@@ -2974,6 +3051,210 @@ async fn sender_ipv6(stack: &mut RplStack<MeshRadio, MemStorage>, packet: &[u8])
         .send_ipv6_uncompressed_to(packet, &[])
         .await
         .unwrap();
+}
+
+/// Single-node fixture for the gate-level pins: a leaf provisioned to the
+/// vector DODAG, plus the signed DIO body (Dio + 0x17 option carrying
+/// VALID_COSE_SIGN1). Unlike baseline_fixture above, the carrier DIO
+/// fields here match the COSE payload because the gate cross-checks them.
+fn gate_fixture() -> (
+    RplStack<MeshRadio, MemStorage>,
+    Vec<u8>, // signed DIO body (Dio + 0x17 option with VALID_COSE_SIGN1)
+) {
+    use crate::rpl_stack::root_sig;
+    let cose = root_sig::tests::vector_cose();
+    let decoded = root_sig::DecodedRootSig::from_cose_sign1(&cose).unwrap();
+    let dio = lichen_rpl::message::Dio {
+        rpl_instance_id: decoded.payload.instance,
+        version: decoded.payload.version,
+        rank: decoded.payload.rank,
+        grounded: true,
+        mode_of_operation: decoded.payload.mop,
+        preference: 0,
+        dtsn: 0,
+        flags: 0,
+        dodag_id: decoded.payload.dodag_id,
+    };
+    let mut body = [0u8; lichen_rpl::message::Dio::SERIALIZED_LEN + 2 + 255];
+    let dio_len = dio.write_to(&mut body).unwrap();
+    let opt_len =
+        lichen_rpl::message::RootDioSignature::write_to(&cose, &mut body[dio_len..]).unwrap();
+    let body = body[..dio_len + opt_len].to_vec();
+
+    let node_identity = identity(41);
+    let dodag_id = decoded.payload.dodag_id;
+    let (_mesh, [radio, _spare1, _spare2]) =
+        MeshHarness::new([node_identity.iid, [0u8; 8], [0u8; 8]]);
+    let stack = RplStack::provision_leaf(
+        Stack::new(radio, node_identity, 129, 0),
+        address(&identity(41), 1),
+        dodag_id,
+        announces(dodag_id[..8].try_into().unwrap()),
+        MemStorage::new(),
+    )
+    .unwrap();
+    (stack, body)
+}
+
+fn gate_fields() -> crate::rpl_stack::root_sig::DioFields {
+    use crate::rpl_stack::root_sig;
+    let decoded =
+        root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose()).unwrap();
+    root_sig::DioFields {
+        dodag_id: Some(decoded.payload.dodag_id),
+        instance: Some(decoded.payload.instance),
+        version: Some(decoded.payload.version),
+        rank: Some(decoded.payload.rank),
+        mop: Some(decoded.payload.mop),
+    }
+}
+
+#[test]
+fn expired_root_signature_gate_degrades_to_baseline_not_reject() {
+    // THE PIN (R-06-307): clock past expiry -> Baseline BEFORE the replay
+    // gate. The vector expiry (1735689600) is already past any current
+    // clock; an explicit later clock makes the intent unambiguous.
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX + 1);
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Baseline);
+    // The baseline DIO is processed, not rejected: no seq was admitted.
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
+#[test]
+fn clockless_root_signature_gate_degrades_to_baseline_not_reject() {
+    // Unassessable clock (no set_wall_clock_unix) -> Baseline, never Reject.
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Baseline);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
+#[test]
+fn valid_root_signature_gate_verifies_then_replay_rejects() {
+    // Positive control: clock BEFORE expiry -> Verified and the root_seq
+    // cache admits; the identical signature is then replay-rejected.
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Verified);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), Some(1));
+    let replay = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(replay, DioRootSigOutcome::Reject);
+}
+
+#[test]
+fn tampered_root_signature_rejects_even_when_expired() {
+    // THE PIN (a): verify_signature runs BEFORE the expiry check, so a
+    // forged signature cannot ride the expired->Baseline degrade: tampered
+    // sig + clock past expiry => Reject, never Baseline.
+    let (mut stack, mut body) = gate_fixture();
+    let last = body.len() - 1;
+    body[last] ^= 0x01; // flip a signature byte (the COSE sig is the body tail)
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX + 1);
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Reject);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
+#[test]
+fn tampered_root_signature_rejects_without_clock() {
+    // THE PIN (b): verify_signature runs BEFORE the clockless degrade, so
+    // tampered sig + no wall clock => Reject, never Baseline.
+    let (mut stack, mut body) = gate_fixture();
+    let last = body.len() - 1;
+    body[last] ^= 0x01;
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Reject);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
+#[test]
+fn valid_signature_on_mismatched_carrier_rejects() {
+    // THE PIN (c): the cross-check arm executes for a VALID, unexpired
+    // signature when the carrier DIO fields do not bind to the COSE
+    // payload => Reject, and the seq cache is not touched.
+    let (mut stack, body) = gate_fixture();
+    let mut fields = gate_fields();
+    fields.rank = Some(fields.rank.unwrap() + 1);
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    let outcome = stack.verify_dio_root_signature(&body, &fields);
+    assert_eq!(outcome, DioRootSigOutcome::Reject);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
+#[test]
+fn unpinned_root_signature_gate_degrades_to_baseline() {
+    // THE PIN (d): no trust pin for the signer IID (announces.pin_for_test
+    // absent) => Baseline even with a valid clock, never Reject, and no
+    // seq is admitted.
+    let (mut stack, body) = gate_fixture();
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Baseline);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
+#[test]
+fn duplicate_root_signature_option_rejects() {
+    // THE PIN (e): a second well-formed 0x17 option => Reject (duplicate
+    // detection precedes decode), even with the pin and a valid clock.
+    let (mut stack, mut body) = gate_fixture();
+    let option = body[lichen_rpl::message::Dio::SERIALIZED_LEN..].to_vec();
+    body.extend_from_slice(&option);
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Reject);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
+#[test]
+fn truncated_root_signature_option_rejects() {
+    // THE PIN (f): an option whose length prefix overruns the body
+    // (truncated mid-COSE) => Reject via the OptionIter error arm, even
+    // with the pin and a valid clock.
+    let (mut stack, body) = gate_fixture();
+    let body = &body[..body.len() - 64];
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    let outcome = stack.verify_dio_root_signature(body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Reject);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
+#[test]
+fn clock_equal_to_expiry_boundary_degrades_to_baseline() {
+    // THE PIN (g): expiry == now exercises the gate's own `<=`
+    // (payload.expiry <= now_unix) => Baseline, not Verified and not
+    // Reject; no seq is admitted. (The root_sig.rs oracle pin exercises
+    // the same rule on the component path, not this gate arm.)
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX);
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Baseline);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
+fn root_sig_vector_pubkey() -> PublicKey {
+    use crate::rpl_stack::root_sig;
+    root_sig::tests::vector_pubkey()
+}
+
+fn gate_dodag_id() -> [u8; 16] {
+    use crate::rpl_stack::root_sig;
+    root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose())
+        .unwrap()
+        .payload
+        .dodag_id
 }
 
 // ── Root-side 0x17 producer round-trip (b7z9.88.2, feature "root-sig") ──────

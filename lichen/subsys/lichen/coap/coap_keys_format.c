@@ -14,9 +14,8 @@
 #include <monocypher.h>
 #include <monocypher-ed25519.h>
 
-#ifdef CONFIG_TINYCRYPT_SHA256
-#include <tinycrypt/sha256.h>
-#include <tinycrypt/constants.h>
+#ifdef CONFIG_MBEDTLS_SHA256
+#include "lichen_util.h"
 #endif
 
 /* --------------------------------------------------------------------------
@@ -223,17 +222,17 @@ int lichen_key_pubkey_fingerprint(const uint8_t pubkey[_Nonnull LICHEN_KEY_PUBKE
 		return -EINVAL;
 	}
 
-#ifdef CONFIG_TINYCRYPT_SHA256
-	struct tc_sha256_state_struct sha_state;
+	/* NUL-terminate on entry so every error return below leaves buf a
+	 * valid empty string: the key-list CBOR caller ignores the return
+	 * code and would otherwise strlen() an uninitialized stack array. */
+	buf[0] = '\0';
+
+#ifdef CONFIG_MBEDTLS_SHA256
 	uint8_t hash[32];
 
-	if (tc_sha256_init(&sha_state) != TC_CRYPTO_SUCCESS) {
-		return -EIO;
-	}
-	if (tc_sha256_update(&sha_state, pubkey, LICHEN_KEY_PUBKEY_LEN) != TC_CRYPTO_SUCCESS) {
-		return -EIO;
-	}
-	if (tc_sha256_final(hash, &sha_state) != TC_CRYPTO_SUCCESS) {
+	/* lichen_sha256: mbedTLS on Zephyr (TinyCrypt deprecated in 4.1),
+	 * TinyCrypt on host test builds. */
+	if (lichen_sha256(pubkey, LICHEN_KEY_PUBKEY_LEN, hash, sizeof(hash)) != 0) {
 		return -EIO;
 	}
 
@@ -249,18 +248,16 @@ int lichen_key_pubkey_fingerprint(const uint8_t pubkey[_Nonnull LICHEN_KEY_PUBKE
 	memset(hash, 0, sizeof(hash));
 	return 7 + (int)b64_len;
 #else
-	memcpy(buf, "SHA256:", 7);
-	size_t pos = 7;
-
-	for (int i = 0; i < 8 && pos + 2 < buf_len; i++) {
-		buf[pos++] = hex_chars[(pubkey[i] >> 4) & 0x0f];
-		buf[pos++] = hex_chars[pubkey[i] & 0x0f];
-	}
-	buf[pos++] = '.';
-	buf[pos++] = '.';
-	buf[pos++] = '.';
-	buf[pos] = '\0';
-	return (int)pos;
+	/* Fail closed (uqib): presenting a 64-bit truncated-pubkey hex
+	 * string under a "SHA256:" scheme label silently downgrades the
+	 * spec 17.5.5 TOFU out-of-band comparison. KEYS implies
+	 * MBEDTLS_SHA256 for default configs; a KEYS=y + provider=n
+	 * build reaches this branch and must not emit a mislabeled
+	 * fingerprint. buf was NUL-terminated at entry, so the key-list
+	 * CBOR caller (which ignores the return code) encodes an empty
+	 * string rather than reading an uninitialized stack array. */
+	(void)pubkey;
+	return -ENOTSUP;
 #endif
 }
 

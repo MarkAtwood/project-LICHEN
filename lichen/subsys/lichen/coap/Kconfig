@@ -115,7 +115,11 @@ config LICHEN_COAP_CONFIG
 	bool "LCI /config resource handlers"
 	depends on LICHEN_COAP_SERVER
 	imply ZCBOR
-	select LICHEN_COAP_KEYS
+	# LICHEN_COAP_KEYS genuinely requires LICHEN_SLIP_TRANSPORT + ZCBOR
+	# (bd a2a2); selecting it unconditionally produces an unsatisfied-deps
+	# Kconfig warning (fatal under WARN_TO_ERROR) on builds without the
+	# SLIP transport, e.g. the native_sim gateway (jy0a).
+	select LICHEN_COAP_KEYS if LICHEN_SLIP_TRANSPORT && ZCBOR
 	help
 	  Enable CoAP server resources for node configuration per LCI spec
 	  section 17.5.2:
@@ -237,7 +241,10 @@ config LICHEN_COAP_KEYS
 	depends on LICHEN_SLIP_TRANSPORT
 	depends on ZCBOR
 	select COAP_URI_WILDCARD
-	imply TINYCRYPT_SHA256
+	# Real fingerprints need SHA-256 (mbedTLS under Zephyr 4.1). imply, not
+	# select: the degraded hex fallback in coap_keys_format.c is intentional
+	# for provider-less builds, mirroring the old TINYCRYPT_SHA256 imply.
+	imply MBEDTLS_SHA256
 	help
 	  Enable CoAP server resources for key store management per LCI spec
 	  section 17.5.5:
@@ -286,6 +293,7 @@ config LICHEN_COAP_KEYS_TEST_HOOKS
 
 config LICHEN_COAP_LOCATION
 	bool "CoAP /sensors/location resource (SenML position)"
+	depends on LICHEN_COAP_SERVER
 	depends on !LICHEN_COAP_SERVER_STANDALONE
 	depends on LICHEN_SENML
 	depends on LICHEN_HAL
@@ -304,6 +312,36 @@ config LICHEN_COAP_LOCATION_LOG_LEVEL
 	range 0 4
 	help
 	  Log level for the LICHEN CoAP location handler:
+	  0=off, 1=error, 2=warning, 3=info, 4=debug
+
+config LICHEN_COAP_METRICS
+	bool "CoAP /metrics resource (SenML radio metrics)"
+	depends on LICHEN_COAP_SERVER
+
+config LICHEN_COAP_METRICS
+	bool "CoAP /metrics resource (SenML RF/airtime counters)"
+	depends on LICHEN_COAP_SERVER
+	depends on !LICHEN_COAP_SERVER_STANDALONE
+	depends on LICHEN_SENML
+	depends on LICHEN_LORA_L2
+	default n
+	help
+	  Serve GET /metrics as a SenML pack (application/senml+cbor) of
+	  radio transmit/receive/error counters (pkt_tx, pkt_rx, tx_fail).
+	  Requires the SenML encoder and the LoRa L2 counters. Prerequisite
+	  for the CCP-15 metrics layer (b7z9.29).
+	  Serve GET /metrics as a SenML pack (application/senml+cbor)
+	  with LoRa L2 TX/RX counters (attempts, errors, accepted frames),
+	  matching spec 02a RF metrics windows. Requires the SenML encoder
+	  and the LoRa L2 (for the node EUI-64 base name and stats).
+
+config LICHEN_COAP_METRICS_LOG_LEVEL
+	int "CoAP metrics log level"
+	depends on LICHEN_COAP_METRICS
+	default 3
+	range 0 4
+	help
+	  Log level for the LICHEN CoAP metrics handler:
 	  0=off, 1=error, 2=warning, 3=info, 4=debug
 
 config LICHEN_COAP_DEADDROP
@@ -370,7 +408,9 @@ config LICHEN_COAP_SLOT_COORD
 	# (lichen_wall_clock_get) from time_sync.c; depends, not select, per the
 	# a2a2 comment above.
 	depends on LICHEN_CCP_TIME_SYNC
-	select TINYCRYPT_SHA256
+	# SHA-256 provider is mbedTLS via LICHEN_IPV6 (default y); a build
+	# with LICHEN_IPV6=n and no host shim fails to compile, loudly.
+	select MBEDTLS_SHA256
 	default n
 	help
 	  Enable GCP-6 Slot Coordination protocol per spec/08-gateway-coordination.md

@@ -59,6 +59,9 @@ class RxFrame:
     _authenticated_clock_domain: object = field(repr=False)
     _authenticated_key_generation: object = field(repr=False)
     _authenticated_receiving_link_identity: object = field(repr=False)
+    # ponytail: class-level default 0 keeps hand-constructed test fixtures
+    # valid; real frames always get an explicit id from LinkLayer.receive.
+    _authenticated_pkt_id: int = field(default=0, repr=False)
 
     def __new__(cls) -> RxFrame:
         raise TypeError("RxFrame values are issued only by LinkLayer.receive")
@@ -128,6 +131,11 @@ class RxFrame:
     def receiving_link_identity(self) -> object:
         """Opaque identity for the exact LinkLayer that accepted this frame."""
         return self._authenticated_receiving_link_identity
+
+    @property
+    def pkt_id(self) -> int:
+        """Link-assigned monotonic packet correlation id (u32, wrapping)."""
+        return self._authenticated_pkt_id
 
 
 class ReceiveError(IntEnum):

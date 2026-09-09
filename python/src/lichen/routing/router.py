@@ -407,16 +407,12 @@ class Router:
     # the identity-preserving global/Yggdrasil fallback.
     _NATIVE_PREFIX = IPv6Network("0200::/8")
 
-    # Legacy compatibility for callers that still configure pre-single-primary
-    # mesh prefixes.  Native 0200::/8 handling above does not depend on this.
-    _ULA_PREFIX = IPv6Network("fd00::/8")
-
     def classify_address(self, addr: IPv6Address) -> AddressClass:
         """Classify an IPv6 destination address (spec 7.2 table).
 
         Why this order:
         1. Link-local check first: Most specific, cheap to check
-        2. Mesh-local next: ULA or configured GUA prefixes
+        2. Mesh-local next: native 0200::/8 or operator-configured prefixes
         3. External fallback: Everything else
 
         Args:
@@ -435,10 +431,11 @@ class Router:
         if addr in self._NATIVE_PREFIX:
             return AddressClass.MESH_LOCAL
 
-        # Retained for compatibility with explicitly configured legacy meshes.
-        if addr in self._ULA_PREFIX:
-            return AddressClass.MESH_LOCAL
-
+        # ULA is NOT implicitly mesh-local under the single-primary model
+        # (spec/05-routing.md:30, zt3c.7): fd00::/8 falls through to EXTERNAL
+        # unless an operator configures a matching mesh prefix below (same
+        # change as Rust hybrid.rs i72x.3, landing concurrently on another
+        # branch).
         for prefix in list(self.mesh_prefixes):
             if addr in prefix:
                 return AddressClass.MESH_LOCAL

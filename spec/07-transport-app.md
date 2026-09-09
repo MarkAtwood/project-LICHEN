@@ -524,12 +524,16 @@ Use CON only when delivery confirmation is critical:
 
 #### 10.2.4. Duty Cycle Awareness
 
-Nodes MUST track duty cycle usage and throttle transmissions accordingly.
+Nodes MUST track duty cycle usage by the applicable regulatory accounting
+group and, where dwell limits apply, occupancy per physical frequency. A
+logical channel change or retune MUST NOT reset accounting or create a new
+airtime budget. TX admission MUST satisfy both legal limits and any stricter
+adaptive airtime budget.
 
 **Duty Cycle Tracking:**
 
 ```
-Per-channel state:
+Per-accounting-group state (one-hour duty-window example):
   last_tx_end: <monotonic uptime>
   tx_time_window: <rolling 1-hour sum of airtime>
   duty_limit: <region-specific, e.g., 0.01 for EU 868 sub-band>
@@ -538,6 +542,8 @@ Per-channel state:
 Note: `last_tx_end` uses monotonic uptime (not wall-clock time) because duty
 cycle accounting must work even when wall-clock time is unavailable. The
 rolling window is tracked via uptime deltas.
+The applicable regional rules determine the accounting groups and windows;
+the one-hour example is not a universal regulatory rule.
 
 **Congestion Levels:**
 
@@ -550,7 +556,8 @@ rolling window is tracked via uptime deltas.
 
 **Load Shedding:**
 
-When congested, respond to new requests with:
+When congested, a CoAP endpoint or proxy handling a new request responds as
+below where the existing CoAP exchange permits a response:
 
 ```
 5.03 Service Unavailable
@@ -564,20 +571,57 @@ Content-Format: application/cbor
 ```
 
 Senders receiving 5.03 MUST back off for the indicated duration.
+Forwarding alone does not authorize a router to synthesize a CoAP response.
+Mesh failure signaling MUST use only mechanisms already defined by the
+applicable protocol; this section defines no MAC ACK/NACK. Responses are
+themselves subject to TX eligibility.
+
+**Delivery Services:**
+
+LICHEN provides two delivery services, selected per-message by the application:
+
+| | Datagram Service | Message Service |
+|---|---|---|
+| Model | Best-effort, fire-and-forget | Best-effort custody-transfer, store-and-forward |
+| Stale after | Seconds (configurable deadline) | Hours to days (absolute TTL) |
+| On no route | Drop | Buffer at custody-capable nodes |
+| On relay | Forward immediately, do not persist | Persist to flash, forward when possible |
+| Scope | Local mesh + immediate Yggdrasil | Planetary (multi-gateway, multi-mesh) |
+| CoAP type | NON | CON |
+| DTN S-flag | Not set | Set |
+| Use cases | Position, telemetry, sensor data | IM, SOS, tactical chat |
+
+Telemetry and position use the datagram service. IMs and SOS use the message
+service. The application selects the service; the network layer distinguishes
+them via the DTN S-flag (see 05-routing.md §9.8).
+Custody acceptance records responsibility, not guaranteed delivery. A delivery
+receipt confirms recipient acceptance, not human reading.
 
 **Priority Queue:**
 
-TX queue ordered by priority:
+Among eligible transmissions, the TX queue is ordered by priority:
 
-| Priority | Traffic Type |
-|----------|--------------|
-| 0 (highest) | SOS, emergency |
-| 1 | RPL control (DIO, DAO) |
-| 2 | CoAP CON, tactical chat |
-| 3 | CoAP NON, telemetry, position |
-| 4 (lowest) | Bulk transfer, firmware |
+| Priority | Traffic Type | Delivery Service |
+|----------|--------------|------------------|
+| 0 (highest) | SOS, emergency | Message |
+| 1 | RPL control (DIO, DAO) | Datagram |
+| 2 | CoAP CON, tactical chat, custody handshakes | Message |
+| 3 | CoAP NON, telemetry, position | Datagram |
+| 4 (lowest) | Bulk transfer, firmware | Datagram |
 
 During congestion, low-priority traffic is dropped first.
+
+For receiver-aware CCP, unicast eligibility uses the receiver's current peer
+contract, including its advertised data home channel and receive opportunity.
+Priority MUST NOT preempt committed RX, exceed legal or adaptive airtime
+limits, or admit TX unless the full radio operation plus guard fits the
+available opportunity. Waiting packets remain subject to bounded radio queues,
+backpressure, and deadlines (see [Bufferbloat Avoidance](appendix-bufferbloat.md)).
+
+The adopted receiver-aware policy and qualified full-band experiments are
+specified in [Receiver-Aware CCP](02b-ccp-receiver-aware.md). New wire behavior
+remains gated on exact versioned encodings and independent conformance oracles;
+policy adoption and experimental results do not establish production readiness.
 
 **Application-to-Priority Mapping:**
 
@@ -619,6 +663,32 @@ Observe: 0
 
 Observe reduces polling overhead but requires state on both endpoints.
 Use for slowly-changing resources where push notification saves bandwidth.
+
+The node owns resource state and Observe notification scheduling. Under radio
+queue backpressure, it MAY coalesce unsent updates for the same replaceable
+state, such as current position, to the latest value without extending its
+freshness deadline. Coalescing MUST NOT merge or discard distinct messages,
+commands, receipts, or custody records, or rewrite an in-flight CoAP exchange.
+Observe and retransmission semantics remain unchanged; clients consume the
+node's state rather than maintaining a separate radio scheduler (see
+[LCI Data Binding](11-lci.md#1788-data-binding)).
+
+**Absolute Cache Deadlines (GNSS-Enabled):**
+
+Because all nodes have GNSS wall-clock time, CoAP proxy caches SHOULD
+convert the relative Max-Age option to an absolute deadline internally:
+
+```
+cache_deadline = received_at + max_age_seconds
+```
+
+On a multi-hop cache chain, each proxy independently knows the absolute
+instant when the response expires. This eliminates clock-drift accumulation
+that occurs when each hop starts its own relative Max-Age countdown at
+its own receive time. A response with Max-Age=60 generated at T=100 expires
+at T=160 everywhere in the mesh, regardless of propagation delay.
+
+Proxies MUST NOT serve a cached response after `now() > cache_deadline`.
 
 **Subscription Limits:**
 

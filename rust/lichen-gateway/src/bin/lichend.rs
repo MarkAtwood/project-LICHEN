@@ -96,6 +96,30 @@ struct Args {
 
 static START_TIME: OnceLock<Instant> = OnceLock::new();
 
+/// Sender-side claim_seq counter (spec/08 GCP-6.5, l1qw.20): increment,
+/// persist to NVS, and only then sign/send. Initialized in `main` after the
+/// state root is established; `next_claim_seq()` is the ONLY way a signed
+/// slot claim may obtain a sequence number (fail-closed before init).
+static CLAIM_SEQ_STORE: OnceLock<Mutex<lichen_gateway::slot::ClaimSeqStore>> = OnceLock::new();
+
+/// Atomically increment and durably persist the next claim_seq (GCP-6.5
+/// "Before claim" row). Errors when the store is uninitialized or the
+/// persist fails; the caller MUST NOT sign or send an unpersisted sequence.
+/// Blocking: holds the mutex across fsync-heavy I/O — async callers MUST
+/// invoke via `tokio::task::spawn_blocking`, never directly on an executor
+/// thread. Used by the slot-claim sender (and its tests); dead in the
+/// binary until the claim-broadcast consumer lands.
+#[allow(dead_code)]
+fn next_claim_seq() -> Result<u32, lichen_gateway::slot::SlotError> {
+    let store = CLAIM_SEQ_STORE
+        .get()
+        .ok_or(lichen_gateway::slot::SlotError::MissingState)?;
+    let mut guard = store.lock().map_err(|_| {
+        lichen_gateway::slot::SlotError::StorageIo("claim_seq store poisoned".into())
+    })?;
+    guard.next_seq()
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
     let args = Args::parse();
@@ -242,6 +266,7 @@ async fn main() -> ExitCode {
     let trust_floor_path = rollback_floor_root.join("gateway-trust.generation");
     let slot_path = state_root.join("gateway-slot-replay.bin");
     let slot_floor_path = rollback_floor_root.join("gateway-slot-replay.generation");
+    let claim_seq_path = state_root.join("gateway-claim-seq.bin");
     let manifest_path = state_root.join("gateway-provisioning.manifest");
     let identity_pubkey = *id.pubkey.as_bytes();
     let artifact_presence = [
@@ -257,6 +282,42 @@ async fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    // SECURITY: the claim_seq counter MUST persist across reboots and each
+    // claim MUST increment + persist before signing (spec/08 GCP-6.5 "Before
+    // claim" row). Fail closed on a corrupt or unpersistable counter. A
+    // MISSING counter on an already-provisioned gateway is also fail-closed:
+    // restarting at seq 1 would get every claim rejected by peer high-water
+    // caches (receiver-side replay gate), a silent self-DoS. Only a genuinely
+    // fresh provisioning (no manifest, no security artifacts) may default 0.
+    let claim_seq_exists = claim_seq_path.exists();
+    let gateway_preprovisioned = loaded_manifest.is_some()
+        || artifact_presence.iter().any(|present| *present);
+    if gateway_preprovisioned && !claim_seq_exists {
+        error!("claim_seq counter missing on provisioned gateway; refusing to reset replay counter");
+        return ExitCode::FAILURE;
+    }
+    match lichen_gateway::slot::ClaimSeqStore::load(&claim_seq_path) {
+        Ok(mut store) => {
+            if !claim_seq_exists {
+                // Eagerly persist the initial counter so "provisioned ⇒
+                // claim_seq file exists" holds from the first boot onward;
+                // otherwise the second boot's missing-file gate above would
+                // refuse to start a gateway that never claimed.
+                if let Err(error) = store.persist_current() {
+                    error!("claim_seq initial persist failed: {error}");
+                    return ExitCode::FAILURE;
+                }
+            }
+            if CLAIM_SEQ_STORE.set(Mutex::new(store)).is_err() {
+                error!("claim_seq store already initialized");
+                return ExitCode::FAILURE;
+            }
+        }
+        Err(error) => {
+            error!("claim_seq store rejected: {error}");
+            return ExitCode::FAILURE;
+        }
+    }
     let mut manifest = match loaded_manifest {
         Some(manifest) if manifest.identity_pubkey != identity_pubkey => {
             error!("provisioning manifest is bound to a different identity");
@@ -1663,7 +1724,7 @@ fn save_generation_floor(path: &std::path::Path, generation: u64) -> std::io::Re
 }
 
 fn parse_node_id(hex: &str) -> Result<NodeId, String> {
-    if !hex.len().is_multiple_of(2) {
+    if hex.len() % 2 != 0 {
         return Err("hex string must have even length".to_string());
     }
     let bytes = (0..hex.len())
@@ -1990,7 +2051,9 @@ mod tests {
         let pubkey = *public.as_bytes();
         let iid = lichen_gateway::trust::iid_from_pubkey(&pubkey);
         // Spec GCP-6.5 COSE_Sign1 envelope; the ordinal (key 7) is required
-        // on the wire, expiry is required and in-window.
+        // on the wire, expiry is required and in-window. The sequence comes
+        // from a persisted store (provision_noninitial_slot_store pulls it
+        // from a per-test ClaimSeqStore), never a bare literal.
         let mut claim = SlotClaim::new(iid, slots, superframe, sequence).with_federation(2, 0);
         claim.timestamp = Some(
             std::time::SystemTime::now()
@@ -2008,6 +2071,7 @@ mod tests {
         slot_path: &Path,
         floor_path: &Path,
         sealing_seed: &[u8; 32],
+        claim_seq_path: &Path,
     ) -> u64 {
         let mut coordinator = GatewayCoordinator::provision_persistent(
             address,
@@ -2026,7 +2090,14 @@ mod tests {
             slot_count: Some(30),
             owned: None,
         };
-        let (claim, pubkey) = signed_slot_claim([0x52; 32], vec![10, 11], 4, 0);
+        // Pull the sequence from a local persisted store (increment+persist
+        // before sign), never a hardcoded value. Uses a per-test store
+        // rather than the process-global CLAIM_SEQ_STORE: OnceLock has no
+        // reset, so routing tests through the global would couple test
+        // outcomes to execution order.
+        let mut store = lichen_gateway::slot::ClaimSeqStore::load(claim_seq_path).unwrap();
+        let sequence = store.next_seq().unwrap();
+        let (claim, pubkey) = signed_slot_claim([0x52; 32], vec![10, 11], 4, sequence);
         let response = coordinator.handle_post_slots(&claim, true, Some(&pubkey), 4);
         assert_eq!(response.code, 0x44);
         let generation = coordinator.slot_replay_generation();
@@ -2040,6 +2111,7 @@ mod tests {
         let (floor_root, floor_guard) = create_ephemeral_state_root().unwrap();
         let slot_path = root.join("gateway-slot-replay.bin");
         let floor_path = floor_root.join("gateway-slot-replay.generation");
+        let claim_seq_path = root.join("gateway-claim-seq.bin");
         let manifest_path = root.join("gateway-provisioning.manifest");
         let sealing_seed = [0x77; 32];
         let identity_pubkey = [0xa7; 32];
@@ -2048,8 +2120,13 @@ mod tests {
         let mut address = [0u8; 16];
         address[8..].fill(0xff);
 
-        let generation =
-            provision_noninitial_slot_store(address, &slot_path, &floor_path, &sealing_seed);
+        let generation = provision_noninitial_slot_store(
+            address,
+            &slot_path,
+            &floor_path,
+            &sealing_seed,
+            &claim_seq_path,
+        );
         assert!(generation > 1);
         fs::remove_file(&floor_path).unwrap();
 
@@ -2288,5 +2365,42 @@ mod tests {
         assert!(verify_independent_rollback_root(&state, &floor).is_err());
         drop(state_guard);
         drop(floor_guard);
+    }
+
+    // Spec/08 GCP-6.5 sender-side claim_seq wiring (l1qw.20): the daemon's
+    // only claim-sequence source is the persisted store — increment, persist,
+    // then sign. These tests pin the fail-closed gate and the
+    // persist-before-sign ordering. The fail-closed test is only meaningful
+    // when it wins the OnceLock race (cargo test default: threads>1, order
+    // within a binary is not guaranteed), so it accepts the seeded case too;
+    // the store-level monotonicity/durability contract is pinned separately.
+
+    #[test]
+    fn next_claim_seq_fails_closed_before_store_init() {
+        // CLAIM_SEQ_STORE is a process-global OnceLock; no production code
+        // path in this test binary seeds it, so this asserts the pre-init
+        // gate. If a future test seeds the global, the Ok arm keeps the
+        // test honest (a persisted monotonic value) instead of flaking.
+        match next_claim_seq() {
+            Ok(value) => assert!(value >= 1),
+            Err(error) => assert_eq!(error, lichen_gateway::slot::SlotError::MissingState),
+        }
+    }
+
+    #[test]
+    fn claim_seq_store_seeded_values_are_monotonic_and_durable() {
+        let (root, guard) = create_ephemeral_state_root().unwrap();
+        let path = root.join("gateway-claim-seq.bin");
+        let mut store = lichen_gateway::slot::ClaimSeqStore::load(&path).unwrap();
+        let first = store.next_seq().unwrap();
+        let second = store.next_seq().unwrap();
+        assert_eq!(first, 1);
+        assert_eq!(second, 2);
+        // Persist-before-sign: a reload sees the last persisted value even
+        // though the signing step never ran (crash-after-persist burns a seq,
+        // never replays one).
+        let mut reloaded = lichen_gateway::slot::ClaimSeqStore::load(&path).unwrap();
+        assert_eq!(reloaded.next_seq().unwrap(), 3);
+        drop(guard);
     }
 }

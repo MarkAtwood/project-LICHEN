@@ -19,6 +19,7 @@
  */
 
 #include <errno.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <zephyr/kernel.h>
@@ -26,6 +27,9 @@
 #include <zephyr/sys/util.h>
 #include <zephyr/net/coap.h>
 #include <zephyr/net/coap_service.h>
+/* coap_core_metadata (resource attributes for /.well-known/core discovery)
+ * is defined in coap_link_format.h, not coap.h, on Zephyr 4.1. */
+#include <zephyr/net/coap_link_format.h>
 
 #include <lichen/coap_slot_coord.h>
 #include <lichen/coap_server.h>
@@ -326,7 +330,12 @@ const struct lichen_slot_claim *lichen_slot_coord_resolve_conflict(
  * COSE_Sign1 signature computation and verification (GCP-6.5)
  * -------------------------------------------------------------------------- */
 
-#ifdef CONFIG_TINYCRYPT_SHA256
+#if defined(CONFIG_MBEDTLS_SHA256)
+/* Zephyr: SHA-256 via lichen_sha256 (mbedTLS; TinyCrypt is deprecated
+ * in Zephyr 4.1). The slot-coord Kconfig selects MBEDTLS_SHA256. */
+#include "lichen_util.h"
+#define TC_SHA256_DIGEST_SIZE 32
+#elif defined(CONFIG_TINYCRYPT_SHA256)
 #include <tinycrypt/sha256.h>
 #include <tinycrypt/constants.h>
 #else
@@ -788,7 +797,6 @@ static int claim_compute_digest(const uint8_t *payload, size_t payload_len,
 	uint8_t scratch[COSE_SIGN1_ELEMS + sizeof(cose_protected_alg) +
 			CLAIM_PAYLOAD_MAX + 16];
 	struct cbor_enc_ctx e;
-	struct tc_sha256_state_struct sha;
 
 	cbor_enc_init(&e, scratch, sizeof(scratch));
 	cbor_enc_array_header(&e, COSE_SIGN1_ELEMS);
@@ -800,6 +808,13 @@ static int claim_compute_digest(const uint8_t *payload, size_t payload_len,
 		return -ENOBUFS;
 	}
 
+#ifdef CONFIG_MBEDTLS_SHA256
+	if (lichen_sha256(scratch, e.off, digest, TC_SHA256_DIGEST_SIZE) != 0) {
+		return -EIO;
+	}
+#else
+	struct tc_sha256_state_struct sha;
+
 	if (tc_sha256_init(&sha) != TC_CRYPTO_SUCCESS) {
 		return -EIO;
 	}
@@ -809,6 +824,7 @@ static int claim_compute_digest(const uint8_t *payload, size_t payload_len,
 	if (tc_sha256_final(digest, &sha) != TC_CRYPTO_SUCCESS) {
 		return -EIO;
 	}
+#endif
 
 	return 0;
 }
@@ -905,7 +921,7 @@ int lichen_slot_coord_sign_claim(const uint8_t *privkey,
 	if (privkey == NULL || pubkey == NULL || claim == NULL || buf == NULL) {
 		return -EINVAL;
 	}
-#ifdef CONFIG_TINYCRYPT_SHA256
+#if defined(CONFIG_MBEDTLS_SHA256) || defined(CONFIG_TINYCRYPT_SHA256)
 	/* Payload -> Sig_structure digest -> Schnorr48 signature */
 	uint8_t payload[CLAIM_PAYLOAD_MAX];
 	uint8_t digest[TC_SHA256_DIGEST_SIZE];
@@ -944,7 +960,7 @@ int lichen_slot_coord_sign_claim(const uint8_t *privkey,
 
 	return (int)e.off;
 #else
-#error "slot-coord requires TINYCRYPT_SHA256: claim digest must never be compiled out"
+#error "slot-coord requires a SHA-256 provider (MBEDTLS_SHA256 or TINYCRYPT_SHA256): claim digest must never be compiled out"
 	return -EIO;
 #endif
 }
@@ -1468,7 +1484,7 @@ struct lichen_slot_rate_entry {
 static struct lichen_slot_rate_entry s_rate_entries[LICHEN_SLOT_RATE_PEERS];
 static uint32_t s_rate_global[LICHEN_SLOT_RATE_GLOBAL_MAX];
 static size_t s_rate_global_len;
-static struct k_mutex s_rate_lock = K_MUTEX_INITIALIZER(s_rate_lock);
+static K_MUTEX_DEFINE(s_rate_lock);
 
 static bool rate_stamp_in_window(uint32_t stamp, uint32_t now_ms)
 {
@@ -1695,12 +1711,12 @@ static int info_get(struct coap_resource *resource,
 	cbor_enc_uint(&e, 0, s_ctx.superframe.slots_per_superframe);
 
 	cbor_enc_tstr(&e, KEY_TIME_SOURCE);
-	const char *ts_str;
+	const char *ts_str = "none";
 	switch (s_ctx.superframe.time_source) {
 	case LICHEN_TIME_SOURCE_GPS:      ts_str = "gps"; break;
 	case LICHEN_TIME_SOURCE_BACKBONE: ts_str = "backbone"; break;
 	case LICHEN_TIME_SOURCE_LOCAL:    ts_str = "local"; break;
-	default:                          ts_str = "none"; break;
+	case LICHEN_TIME_SOURCE_NONE:     ts_str = "none"; break;
 	}
 	cbor_enc_tstr(&e, ts_str);
 

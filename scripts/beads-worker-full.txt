@@ -9,8 +9,17 @@ Do NOT use TodoWrite, TaskCreate, or markdown TODOs — only `bd`.
    - AFFINITY (when LICHEN_AFFINITY is set): first try your labels — for each
      comma-separated label, `bd ready --label <label> --json` and take the first
      bead. If all your label pools are empty, claim any ready bead (work-stealing).
+     SANITY SELF-CHECK (start of every round): if you notice yourself
+     repeating actions you already did this session, arguing with your own
+     output, filing near-duplicate beads, or unable to form a concrete next
+     step — you are degenerating (long-session context rot). Do this:
+       touch ~/Developer/lichen-workers/worker<YOUR_N>/SELF-REPORT-DEGENERATE
+     then END THE ROUND. The driver restarts you with fresh context. This is
+     a normal, healthy action — not failure. Do not keep working while
+     degraded; degraded output poisons the queue.
      NEVER CLAIM: beads labeled `human`, titled `[human]` or `ADJUDICATE`,
-     or blocked on a human decision — those are Mark's. If you have evidence
+     blocked on a human decision — those are Mark's — or labeled
+     `blocked:repeat-failure` (3+ workers died claiming it; skip until human). If you have evidence
      relevant to one, `bd comment <id> "<evidence>"` instead of claiming.
      When `bd ready` is empty: STOP and end your round. Do not close beads
      prematurely to manufacture progress; do not weaken tests to unblock.

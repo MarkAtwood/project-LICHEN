@@ -33,6 +33,9 @@ lichen_beacon_header_parse(const uint8_t *data, size_t len,
 	if (data[13] & LICHEN_BEACON_FLAG_RESERVED_MASK) {
 		return LICHEN_BEACON_RESERVED_FLAG_SET;
 	}
+	if (data[4] == 0U) {
+		return LICHEN_BEACON_INVALID_FIELD;
+	}
 	out->epoch = ((uint32_t)data[0] << 24) | ((uint32_t)data[1] << 16) |
 		     ((uint32_t)data[2] << 8) | (uint32_t)data[3];
 	out->num_slots = data[4];
@@ -63,6 +66,9 @@ lichen_beacon_header_serialize(const struct lichen_beacon_header *header,
 	}
 	if (header->flags & LICHEN_BEACON_FLAG_RESERVED_MASK) {
 		return LICHEN_BEACON_RESERVED_FLAG_SET;
+	}
+	if (header->num_slots == 0U) {
+		return LICHEN_BEACON_INVALID_FIELD;
 	}
 	out[0] = (uint8_t)(header->epoch >> 24);
 	out[1] = (uint8_t)(header->epoch >> 16);

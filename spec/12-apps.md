@@ -11,6 +11,15 @@ This section defines standard application-layer features using IETF protocols.
 All features use CoAP (RFC 7252) with CBOR payloads and leverage existing
 standards wherever possible.
 
+Application-generated mesh traffic, including Observe notifications, is
+subject to radio queue backpressure, deadlines, and eligible-TX priority in
+07-transport-app.md §10.2 and appendix-bufferbloat.md. The node owns resource
+state and notification scheduling as specified in 11-lci.md §17.8.8.
+[Receiver-Aware CCP](02b-ccp-receiver-aware.md) defines the adopted policy and
+qualified full-band experiments; new wire activation remains gated on exact
+versioned encodings and independent conformance oracles, not an assumption of
+production readiness.
+
 ### 18.1. Messaging
 
 Text messaging between nodes, supporting unicast, multicast, and broadcast.
@@ -39,14 +48,14 @@ Text messaging between nodes, supporting unicast, multicast, and broadcast.
 **Timestamp Semantics:**
 
 The `ts` field is a Unix timestamp (seconds since 1970-01-01T00:00:00Z) from
-the firmware time provider. Senders SHOULD include `ts` only when their time
-provider reports `wall_clock_valid=true`. Receivers MAY accept messages without
-`ts` or with `ts=0` as "time unknown" rather than rejecting them.
+the firmware time provider. All nodes have GNSS-derived wall-clock time under
+normal operation (see 09-packets-timing.md §14.6) and MUST include `ts`.
+During the transient pre-GNSS-lock interval, senders MAY omit `ts` or set
+`ts=0`; receivers SHOULD accept such messages as "time unknown."
 
-The `ttl` field is a relative duration in seconds. Expiry comparison uses the
-receiver's wall-clock time when available. Nodes without valid wall-clock time
-SHOULD NOT enforce TTL-based expiry (messages remain valid until storage
-eviction).
+The `ttl` field is a relative duration in seconds. Expiry is computed as
+`ts + ttl` and compared against the receiver's GNSS wall-clock time. All
+nodes enforce TTL-based expiry under normal operation.
 
 #### 18.1.2. Resources
 
@@ -83,11 +92,45 @@ Content-Format: application/cbor
 }
 ```
 
-New messages trigger Observe notifications.
+New messages trigger Observe notifications. Coalescing replaceable state
+updates MUST NOT merge or discard individual inbox messages or custody records.
 
-**Delivery Receipt:**
+**Delivery Service Selection:**
 
-When `ack: true`, recipient sends:
+Messages use the **message delivery service** (custody transfer,
+store-and-forward) by default. The sender's node sets the DTN S and C flags
+(see 05-routing.md §9.8) and sends via CoAP CON. This enables best-effort
+store-and-forward across multiple meshes and gateways during hours or days of
+recipient unavailability, within the existing TTL and storage policies.
+
+Broadcast messages (`to: "ff02::1"`) use the datagram service (no custody,
+best-effort).
+
+**Delivery Receipts:**
+
+Delivery confirmation uses two complementary mechanisms:
+
+*Piggybacked receipt (default):* When Bob replies to Alice, his reply
+implicitly acknowledges all prior messages from her. The reply carries an
+`ack_through` field naming the highest message ID received:
+
+```
+POST coap://[alice]/msg/inbox
+Content-Format: application/cbor
+
+{
+  "body": "Got it, on my way",
+  "reply_to": 12345,
+  "ack_through": 12345          ; ACKs all messages up through this ID
+}
+```
+
+This costs zero extra airtime -- the acknowledgment piggybacks on a message
+that was being sent anyway.
+
+*Explicit receipt (fallback):* When `ack: true` and the recipient does not
+reply within a receipt window (RECOMMENDED: 5 minutes), the recipient's node
+sends a standalone receipt:
 
 ```
 POST coap://[sender]/msg/ack
@@ -95,14 +138,46 @@ Content-Format: application/cbor
 
 {
   "id": 12345,
-  "status": "delivered",    ; "delivered", "read", "failed"
+  "status": "delivered",
   "ts": 1716742900
 }
 ```
 
+Explicit receipts are themselves custody-transfer messages and traverse
+the network using the same store-and-forward path.
+
+Senders SHOULD treat `ack_through` in any reply as equivalent to an explicit
+receipt for all messages with ID <= the `ack_through` value.
+
+**Sender UX States:**
+
+| State | Display | Trigger |
+|---|---|---|
+| No custody yet | Sending... | POST not yet ACKed by any custodian |
+| Custody accepted | Sent | 2.01 from first custodian (or relay/BR) |
+| Delivered | Delivered | Explicit receipt or `ack_through` in reply |
+| Expired | May not have been delivered | TTL expired, no receipt received |
+
+Custody acceptance records forwarding responsibility, not guaranteed delivery.
+A delivery receipt confirms recipient acceptance, not human reading.
+
+The sender does not retry after TTL expiry. The custody chain is the retry
+mechanism -- each custodian keeps attempting the next hop until TTL expires.
+If a message expires without confirmation, the sender's UI indicates this and
+the user decides whether to resend manually.
+
 #### 18.1.3. Canned Messages
 
-Pre-defined messages for quick sending (configurable):
+Pre-defined messages for quick sending. Nodes ship with a default set and
+users can replace any slot via PUT. Canned messages are the primary input
+method on e-ink devices (3-button cycle + select) and a shortcut on
+full-keyboard surfaces.
+
+**Design criteria:** Each message must make sense as a standalone
+transmission with no follow-up required. Short enough for LoRa efficiency.
+Unambiguous without context.
+
+**Default Set (16 messages in 4 categories):**
 
 ```
 GET coap://[node]/msg/canned
@@ -110,40 +185,111 @@ Content-Format: application/cbor
 
 {
   "messages": [
-    {"id": 0, "text": "I'm OK"},
-    {"id": 1, "text": "Need assistance"},
-    {"id": 2, "text": "At checkpoint"},
-    {"id": 3, "text": "Returning to base"},
-    {"id": 4, "text": "Emergency - send help"}
+    {"id": 0,  "cat": "status",  "text": "I'm OK"},
+    {"id": 1,  "cat": "status",  "text": "Busy, can't talk"},
+    {"id": 2,  "cat": "status",  "text": "Low battery"},
+    {"id": 3,  "cat": "status",  "text": "Heading out, back later"},
+
+    {"id": 4,  "cat": "move",    "text": "On my way"},
+    {"id": 5,  "cat": "move",    "text": "At checkpoint"},
+    {"id": 6,  "cat": "move",    "text": "Returning to base"},
+    {"id": 7,  "cat": "move",    "text": "Stopped, holding position"},
+
+    {"id": 8,  "cat": "coord",   "text": "Copy"},
+    {"id": 9,  "cat": "coord",   "text": "Negative"},
+    {"id": 10, "cat": "coord",   "text": "Wait one"},
+    {"id": 11, "cat": "coord",   "text": "Meet at my position"},
+
+    {"id": 12, "cat": "urgent",  "text": "Need assistance (non-emergency)"},
+    {"id": 13, "cat": "urgent",  "text": "Medical issue, need help"},
+    {"id": 14, "cat": "urgent",  "text": "Lost, need directions"},
+    {"id": 15, "cat": "urgent",  "text": "EMERGENCY - send help NOW"}
   ]
 }
 ```
+
+Category `cat` is a display hint for grouping in the UI. IDs 0-11 are
+normal priority; 12-14 are priority=1 (high); 15 is priority=2 (emergency,
+triggers SOS path per §18.5).
+
+**Sending:**
 
 ```
 POST coap://[destination]/msg/inbox
 Content-Format: application/cbor
 
-{"canned": 4, "ack": true}
+{"canned": 8, "ack": true}
 ```
+
+Recipients render the canned text. The `canned` field is the ID; the
+recipient's node looks up the text locally. This saves airtime — only
+the ID (1 byte) is transmitted, not the full text string.
+
+**User Customization:**
+
+Users can replace any canned message via PUT. Custom messages persist
+across reboots (stored in flash).
+
+```
+PUT coap://[node]/msg/canned/7
+Content-Format: application/cbor
+
+{"text": "Grabbing beer, want one?"}
+
+Response: 2.04 Changed
+```
+
+To reset a slot to its default:
+
+```
+DELETE coap://[node]/msg/canned/7
+
+Response: 2.02 Deleted    ; slot reverts to factory default
+```
+
+**Constraints:**
+- Maximum 16 slots (IDs 0-15)
+- Maximum text length: 64 bytes UTF-8
+- Slot 15 is always emergency; users MAY change its text but it always
+  sends as priority=2 and triggers SOS path
+- Custom messages MUST be transmitted as full text (not ID) when the
+  recipient may not have the same customization — implementations SHOULD
+  include both `canned` ID and `body` text when the slot has been
+  customized
+
+**E-ink compose flow:**
+1. PREV/NEXT cycles through canned messages grouped by category
+2. Category headers shown: STATUS / MOVEMENT / COORD / URGENT
+3. SELECT sends immediately (with confirmation for urgent category)
+4. Long-press SELECT on any message opens recipient picker first
 
 #### 18.1.4. Store-and-Forward
 
-Nodes MAY implement store-and-forward for offline recipients:
+Messages use custody transfer (05-routing.md §9.8.1) for best-effort
+store-and-forward delivery. When the destination is unreachable, each
+custody-capable node that accepts custody persists the message to flash and
+takes responsibility for attempting forwarding under the existing policies.
 
-1. Sender POSTs to destination
-2. If destination unreachable, intermediate node stores message
-3. When destination appears, stored messages are delivered
-4. TTL prevents unbounded storage
+The custody chain works as follows:
 
-Store-and-forward nodes advertise capability:
+1. Sender POSTs to first custody-capable node (relay or BR)
+2. Custodian stores message, responds 2.01 Created
+3. Sender deletes message -- custodian now owns it
+4. Custodian forwards to next hop when available, transferring custody
+5. Final custodian delivers to recipient; recipient ACKs with 2.04
+6. Delivery receipt propagates back to sender (piggybacked or explicit,
+   see §18.1.2)
+
+Custody-capable nodes advertise capability:
 
 ```
-GET /.well-known/core?rt=msg.store
+GET /.well-known/core?rt=msg.custody
 
-</msg/store>;rt="msg.store"
+</msg/custody>;rt="msg.custody"
 ```
 
-Implementation is OPTIONAL. Implementations that support store-and-forward
+Implementation is OPTIONAL for leaf nodes but RECOMMENDED for powered relays
+and REQUIRED for border routers. Implementations that support custody
 MUST comply with the limits below.
 
 **Storage Limits:**
@@ -247,7 +393,16 @@ Content-Format: application/senml+cbor
 ]
 ```
 
-Beacon interval: configurable, default 60 seconds when moving, 300 when stationary.
+Beacon interval: configurable, default 60 seconds when moving, 300 when
+stationary. In dense deployments the interval is density-adaptive: when the
+local density estimate (`EstimateDensity`, 02a-coordinated-capacity.md
+§2a.10.3) exceeds 20, the beacon interval MUST be at least 300 seconds
+regardless of motion state, preventing position broadcast from dominating
+airtime. Parameters take effect on the next beacon cycle.
+
+If radio admission is delayed, the node MAY replace an unsent position update
+with newer state for the same resource and destination. This does not relax
+beacon intervals or freshness deadlines, or permit coalescing distinct messages.
 
 Nodes receiving beacons update their position cache:
 
@@ -543,19 +698,50 @@ Priority alerting for emergencies.
 
 #### 18.4.1. SOS Authentication and Rate Limiting
 
-SOS messages are high-priority and trigger network-wide flooding. Without
-controls, fake SOS floods cause denial of service. All SOS messages MUST
-be authenticated and rate-limited.
+SOS messages are high-priority and trigger controlled flooding within the
+existing forwarding scope and TTL limits. Without controls, fake SOS floods
+cause denial of service. All SOS messages MUST be authenticated and rate-limited.
 
 **Authentication (REQUIRED):**
 
-SOS messages MUST carry a valid link-layer signature from the originating
-node. The Ed25519/Schnorr signature is verified at each receiving node
-before rebroadcast. Unsigned or invalid SOS messages are silently dropped.
+SOS messages MUST carry a valid SOS Origin Signature from the originating
+node, and every receiver MUST verify it before rebroadcast. SOS messages with
+a missing, malformed, or invalid origin signature are silently dropped.
+
+The link-layer (LLSec) signature is hop-by-hop: relays create a new link
+frame, allocate their own replay counter, populate their own SIID, and
+re-sign each hop (06-security.md §8.4), so it cannot authenticate the origin
+past hop 1. End-to-end origin authentication is therefore a separate object,
+following the DAO Origin Signature pattern (05-routing.md §8.6): the origin
+signs a domain-separated transcript over relay-immutable content, and relays
+preserve the SOS payload and origin signature verbatim, changing only the
+enclosing hop-by-hop link frame and signature.
 
 ```
-SOS frame = [LLSec header] [SOS payload] [Schnorr signature (48B)]
+SOS message = [LLSec header] [SOS payload (CBOR)] [SOS Origin Signature (56B)]
 ```
+
+The SOS Origin Signature is a 56-octet object: an 8-octet Origin Sequence
+(unsigned 64-bit, network byte order) followed by a 48-octet Schnorr48
+signature computed with the origin key over the 64-octet digest:
+
+```
+SHA-512("LICHEN-SOS-ORIGIN-v1" || origin IPv6 address ||
+        Origin Sequence || canonical CBOR SOS payload)
+```
+
+The domain is exactly the 20 ASCII octets shown, with no terminating NUL. The
+origin IPv6 address is the originator's 16-octet primary `02xx` address
+preserved end to end. The SOS payload is the deterministic (canonical, RFC
+8949 §4.2.1) CBOR encoding of the alert map in §18.4.2; no field is decoded,
+normalized, reordered, or re-encoded for the transcript. Each receiver
+verifies the signature against the origin's pinned public key and enforces a
+per-origin monotonic Origin Sequence gate, accepting a sequence only if it
+strictly exceeds the highest sequence already accepted from that origin; this
+closes replay of stale-but-unseen captures. Independently, the current hop's
+LLSec signature is still verified on receipt and the frame is re-signed on
+rebroadcast per 06-security.md §8.4; unsigned or invalid link frames are
+silently dropped.
 
 **Rate Limiting (REQUIRED):**
 
@@ -565,12 +751,38 @@ Each node enforces per-source SOS rate limits:
 |-----------|-------|-----------|
 | SOS cooldown | 10 minutes | Prevents accidental spam |
 | Max SOS per hour | 3 | Limits intentional abuse |
-| Burst allowance | 2 | Allows rapid updates to same SOS |
+| Burst allowance | 2 | Rate-limiter headroom for the first 2 SOS per window (see note) |
 
-Nodes track (source IID, SOS count, last SOS uptime). Rate limiting uses
-monotonic uptime rather than wall-clock time to ensure enforcement works even
-when wall-clock is unavailable. An SOS from a node that exceeds rate limits
-is dropped and logged but not relayed.
+Nodes track (origin IPv6 source address, SOS count, last SOS uptime). The key
+is the full 16-byte IPv6 source, which relays MUST preserve end-to-end
+(04-network.md §6.3.2) — the same accounting key as the §6.3.3 broadcast relay
+budget, whose spoofed-source ceiling applies here as well. Under mesh-wide
+flooding the source is the upstream primary /128, which embeds no IID
+(04-network.md §6.2); implementations MUST NOT attempt IID extraction. The key
+is also the node identifier carried in the alert payload (§18.4.2). Rate
+limiting uses monotonic uptime rather than wall-clock time to ensure
+enforcement works even when wall-clock is unavailable. An SOS from a node
+that exceeds rate limits is dropped and logged but not relayed.
+
+Two acknowledged limitations of this tuple (tracking gaps, not new
+requirements):
+
+- **No SOS-ID/seq dimension.** The tuple carries (origin, count, uptime) only;
+  the §18.4.2 payload `seq` field is not tracked by the limiter, so updates
+  to an existing SOS and distinct SOSes are indistinguishable to it. The
+  "burst" row above therefore means limiter headroom for the first 2 SOS of
+  any kind per window, not per-incident updates. Tracking `(origin, seq)` is
+  a future refinement; it is NOT required by this section. Consequence:
+  cancel and update messages (§18.4.2 `seq`, §18.4.4) share the same bucket —
+  a node that exhausts its 3/hour budget may be unable to withdraw an active
+  SOS until refill, leaving it visible mesh-wide until the §18.4.6 timeout.
+  Senders SHOULD reserve headroom for a cancel (guidance, not a requirement).
+- **Key rotation resets abuse state.** Rotation (06-security.md §8.7.4)
+  derives and pins a new identity, so the new IID starts with a fresh 3/hour
+  bucket and a clean soft-blacklist score; an abuser can rotate to evade.
+  This evasion window is accepted and documented here rather than closed:
+  rotation attestations carry no abuse-state hand-over. (Acknowledged;
+  see §8.7.4 for the attestation shape.)
 
 **Soft Blacklist (RECOMMENDED):**
 
@@ -593,6 +805,9 @@ Nodes SHOULD support operator commands to:
 - Clear rate limit for a specific node (emergency responder scenario)
 - Manually blacklist/whitelist nodes
 - Disable rate limiting entirely (trusted network)
+
+These overrides affect application abuse controls only; they do not relax
+radio TX eligibility or regulatory accounting (§18.4.6).
 
 #### 18.4.2. Emergency Alert Format
 
@@ -634,9 +849,18 @@ Content-Format: application/cbor
 Response: 2.04 Changed
 ```
 
+**Link-layer marking (REQUIRED):** the sender MUST emit the alert with the
+link-layer dispatch byte `0x16` (SOS emergency alert, 02-physical-link.md
+§4.1) carrying the §18.4.2 CBOR alert map — NOT as a SCHC-compressed CoAP
+frame. Relays classify SOS for the separate 3/hour SOS budget (04-network.md
+§6.3.3) solely by this dispatch byte; the CoAP `/sos` path is invisible to
+them (OSCORE encrypts Uri-Path end-to-end, SCHC elides it). The CoAP POST
+above is the application interface; the `0x16` dispatch is the wire form.
+
 Nodes receiving SOS:
 1. Display alert prominently
-2. Re-broadcast once (controlled flooding, TTL-limited)
+2. Re-broadcast once when TX is eligible (controlled flooding, TTL-limited,
+   within the existing forwarding scope)
 3. Log to `/sos/log`
 
 #### 18.4.4. SOS Button Behavior
@@ -690,10 +914,18 @@ Content-Format: application/cbor
 
 When SOS is active:
 
-1. **Priority routing:** SOS packets get priority in TX queue
+1. **Priority routing:** SOS packets get priority among eligible TX
 2. **Beacon boost:** Originating node beacons position every 30s
-3. **Relay duty:** All nodes relay SOS (once per SOS ID)
+3. **Relay duty:** All nodes within the forwarding scope attempt eligible SOS
+   relay (once per SOS ID)
 4. **Persistence:** SOS remains active until cancelled or 4-hour timeout
+
+These are best-effort forwarding obligations, not a delivery guarantee or an
+emergency regulatory bypass. SOS and boosted position beacons MUST NOT preempt
+committed RX, exceed legal or adaptive airtime limits, or start unless the full
+radio operation plus guard fits the opportunity. Existing authentication,
+rate, queue, expiry, and forwarding-scope limits still apply; urgency does not
+create airtime budget by changing channels or retuning.
 
 ### 18.5. Presence and Status
 
@@ -1505,7 +1737,7 @@ Asynchronous, rate-limited data drops for store-and-forward style communication 
 /deaddrop CoAP messages MUST use the project's SCHC rule set. SenML payloads >~100 bytes after compression trigger fragmentation/reassembly per the SCHC profile. Rules for path `/deaddrop`, content-format 112, and OSCORE options are pre-provisioned (see appendix-schc.md and constants.toml). Implementations MUST match test vector outputs for compressed packets.
 
 **Rate Limits (REQUIRED):**
-Prevents spam and storage exhaustion on constrained nodes. Enforced per-source (IID or OSCORE context). Values aligned with SOS (max 3-6/hour) and store-and-forward budgets (18.1.4).
+Prevents spam and storage exhaustion on constrained nodes. Enforced per-source. Since POSTs are OSCORE-protected (:1692), the key is the sender's OSCORE identity — the sender/recipient ID pair for a pairwise context, or the (group context, Sender ID) pair for a group context. It MUST NOT key on an extracted IID: the routable /128 is upstream `AddrForKey` and embeds no IID (04-network.md §6.2). Values aligned with SOS (max 3-6/hour) and store-and-forward budgets (18.1.4).
 
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
@@ -1638,7 +1870,7 @@ Or `GET /confessions/8a4f2b` for a specific entry. Supports query params such as
 | Total storage | 2 KB (leaf), 8 KB (BR) | RAM-only; smaller than deaddrop budget |
 | Default retention | 12 h (max 48 h) | Ephemeral by design |
 
-Rate limiting uses per-node IID (not OSCORE context, since anonymous posts may skip OSCORE). Enforced via monotonic uptime (not wall-clock) to prevent clock-spoof bypass.
+Which key applies: when a post is OSCORE-protected with a pairwise context, the key is the sender/recipient ID pair; with a group context, the key is the (group context, Sender ID) pair; otherwise the key is the full 16-byte IPv6 source address, preserved end-to-end per 04-network.md §6.3.2. All posts attributable to the same node, however keyed, MUST be charged against a single accounting entry, so alternating pairwise-OSCORE and unprotected posts cannot double the budget. Group-context posts are exempt from that unification: §18.10.5 gives group members sender unlinkability, so the receiver cannot fold a group post into the sender's entry and keys only on the claimed Sender ID — a group member rotating Sender IDs can exceed the per-node budget, an accepted ceiling of the RECOMMENDED group mode. Rate limiting MUST NOT key on an extracted IID: the routable /128 is upstream `AddrForKey` and embeds no IID (04-network.md §6.2). Keying on 128 bits strengthens collision resistance over the 64-bit IID; the source address is not authenticated end-to-end for unprotected posts, so spoofed-source budget exhaustion remains a radio-adversary ceiling — a spoofer can burn budget attributed to other addresses but each fabricated source still costs a real transmission on air. Enforced via monotonic uptime (not wall-clock) to prevent clock-spoof bypass.
 
 Exceeding limits returns `4.29 Too Many Requests` with `Retry-After` header.
 

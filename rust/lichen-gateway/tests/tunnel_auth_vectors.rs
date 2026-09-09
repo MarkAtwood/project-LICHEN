@@ -400,412 +400,500 @@ fn expired_longest_prefix_denies_without_falling_back_to_shorter_live_grant() {
     );
 }
 
-// ── Wired-path cases (m9i4): the Gateway's POST resource and egress data ──
-// plane, exercised through the public post-authentication boundary methods
-// (handle_tunnel_auth_request / authorize_tunnel_egress) rather than the
-// bare table.
+// ---- Wired CoAP dispatch (spec 06-security 8.11, POST /.well-known/tunnel-auth) ----
 
-use lichen_gateway::resources::CoapMethod;
-use lichen_gateway::Gateway;
-use lichen_link::identity::Identity;
+use lichen_gateway::resources::{CoapMethod, GatewayCoordinator};
 
-/// 2.04 Changed and 4.03 Forbidden on the wire (C tunnel_auth.c:24-33
-/// permit/deny analog); 4.05 for non-POST methods.
-const COAP_CHANGED: u8 = 0x44;
-const COAP_FORBIDDEN: u8 = 0x83;
-const COAP_METHOD_NOT_ALLOWED: u8 = 0x85;
-
-fn wired_identity(seed: u8) -> Identity {
-    Identity::from_seed(Seed::new([seed; 32]))
+fn corpus() -> Value {
+    serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../test/vectors/tunnel_authorization.json"
+    )))
+    .unwrap()
 }
 
-fn mesh_addr(last: u8) -> [u8; 16] {
+fn ygg_addr(iid: [u8; 8]) -> [u8; 16] {
     let mut addr = [0u8; 16];
     addr[0] = 0x02;
-    addr[15] = last;
+    addr[1..8].copy_from_slice(&iid[..7]);
+    addr[8..16].copy_from_slice(&iid);
     addr
 }
 
-fn inner_datagram(source: [u8; 16], destination: [u8; 16]) -> Vec<u8> {
-    let mut inner = vec![0u8; 40];
-    inner[0] = 0x60;
-    inner[6] = 59; // No Next Header
-    inner[7] = 63;
-    inner[8..24].copy_from_slice(&source);
-    inner[24..40].copy_from_slice(&destination);
-    inner
+fn egress_coordinator(corpus: &Value, egress_name: &str) -> GatewayCoordinator {
+    let (egress_iid, _) = identity(corpus, egress_name);
+    let mut coordinator = GatewayCoordinator::new_ephemeral(ygg_addr(egress_iid), 60, 64).unwrap();
+    coordinator.set_tunnel_auth_root(identity(corpus, "root").0);
+    coordinator
 }
 
-/// Source-routed tunnel as it arrives at the terminating egress: every
-/// segment consumed (segments_left == 0), the visited hops recorded in the
-/// SRH grid, and the outer destination naming this egress.
-fn terminating_tunnel(
-    outer_src: &[u8; 16],
-    outer_dst: &[u8; 16],
-    grid: &[[u8; 16]],
-    segments_left: u8,
-    inner: &[u8],
-) -> Vec<u8> {
-    let routing_len = 8 + 16 * grid.len();
-    let payload_len = u16::try_from(routing_len + inner.len()).unwrap();
-    let mut packet = vec![0u8; 40 + routing_len];
-    packet[0] = 0x60;
-    packet[4..6].copy_from_slice(&payload_len.to_be_bytes());
-    packet[6] = 43; // Routing header
-    packet[7] = 63;
-    packet[8..24].copy_from_slice(outer_src);
-    packet[24..40].copy_from_slice(outer_dst);
-    packet[40] = 41; // next header: IPv6-in-IPv6
-    packet[41] = (routing_len / 8 - 1) as u8;
-    packet[42] = 3; // RH3
-    packet[43] = segments_left;
-    for (index, addr) in grid.iter().enumerate() {
-        packet[48 + index * 16..48 + (index + 1) * 16].copy_from_slice(addr);
-    }
-    packet.extend_from_slice(inner);
-    packet
+fn vector_envelope(vector: &Value) -> Vec<u8> {
+    hex::decode(vector["cose_sign1_hex"].as_str().unwrap()).unwrap()
 }
 
-struct WiredFixture {
-    gateway: Gateway,
+#[test]
+fn wired_coap_tunnel_auth_accepts_valid_vector_then_replay_is_forbidden() {
+    let corpus = corpus();
+    let vector = named(&corpus, "authorizations", "valid");
+    let mut coordinator = egress_coordinator(&corpus, "egress");
+    let (root_iid, root_key) = identity(&corpus, "root");
+    let wire = vector_envelope(vector);
+    assert_eq!(root_iid, bytes(vector["kid_iid_hex"].as_str().unwrap()));
+
+    let response = coordinator.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        true,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x44);
+    assert!(response.payload.is_empty());
+
+    // An identical replayed POST hits the replay floor: 4.03, nothing cached.
+    let response = coordinator.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        true,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+}
+
+#[test]
+fn wired_coap_tunnel_auth_fails_closed_on_missing_oscore_wrong_root_and_wrong_egress() {
+    let corpus = corpus();
+    let vector = named(&corpus, "authorizations", "valid");
+    let (_, root_key) = identity(&corpus, "root");
+    let (_, other_root_key) = identity(&corpus, "other_root");
+    let wire = vector_envelope(vector);
+
+    // A table with no bound root never accepts (WrongRoot, fail-closed).
+    let (egress_iid, _) = identity(&corpus, "egress");
+    let mut unbound = GatewayCoordinator::new_ephemeral(ygg_addr(egress_iid), 60, 64).unwrap();
+    let response = unbound.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        true,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+
+    // Missing OSCORE authentication is refused before any table mutation.
+    let mut coordinator = egress_coordinator(&corpus, "egress");
+    let response = coordinator.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        false,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+
+    // A different root (kid binding fails against the bound root) is denied.
+    let response = coordinator.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        true,
+        Some(other_root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+
+    // The claim binds a specific egress IID; another egress is denied.
+    let mut other_egress = egress_coordinator(&corpus, "other_egress");
+    let response = other_egress.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        true,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+
+    // Corrupting any envelope byte fails signature verification.
+    let mut corrupted = wire.clone();
+    let last = corrupted.len() - 1;
+    corrupted[last] ^= 0x01;
+    let response = coordinator.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &corrupted,
+        true,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+
+    // GET is not a tunnel-auth method.
+    let response = coordinator.handle_request(CoapMethod::Get, "tunnel-auth", &wire, true, None, 0);
+    assert_eq!(response.code, 0x84); // 4.04 Not Found
+}
+
+// ── Wired data-path egress gate (spec 06-security 8.11) ─────────────────────
+//
+// The egress half of the tunnel-auth contract: mesh-ingress unicast datagrams
+// forwarded to external networks must be covered by a current-root grant
+// (Gateway::ingest_mesh_frame_at_superframe → GatewayCoordinator::authorize_egress).
+
+use lichen_core::addr::Ipv6Addr as CoreIpv6Addr;
+use lichen_core::constants::L2_DISPATCH_SCHC;
+use lichen_core::icmpv6;
+use lichen_gateway::Gateway;
+use lichen_link::identity::{Identity, PeerIdentity};
+use lichen_link::keys::Seed as LinkSeed;
+use lichen_link::link_layer::LinkLayer;
+use lichen_link::schnorr;
+use lichen_link::seqnum::LinkSeqNum;
+use lichen_schc::codec;
+
+const EXTERNAL_DST: [u8; 16] = [
+    0x20, 0x01, 0x48, 0x60, 0x48, 0x60, 0, 0, 0, 0, 0, 0, 0, 0, 0x88, 0x88,
+];
+const GRANTED_SRC: [u8; 16] = [
+    0x02, 0x00, 0x12, 0x34, 0x56, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x42,
+];
+const OUTSIDE_SRC: [u8; 16] = [
+    0x02, 0x00, 0x99, 0x99, 0x99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x42,
+];
+const GRANT_PREFIX: [u8; 16] = [
+    0x02, 0x00, 0x12, 0x34, 0x56, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
+fn gateway_identity() -> Identity {
+    Identity::from_seed(LinkSeed::new([0x02; 32]))
+}
+
+fn fresh_gateway() -> Gateway {
+    Gateway::new_ephemeral(gateway_identity(), 128).unwrap()
+}
+
+/// A mesh peer whose link keys are installed in the gateway via a signed
+/// Announce (the sole unknown-key bootstrap), so subsequent SCHC frames
+/// authenticate at the gateway's link layer.
+struct MeshPeer {
     identity: Identity,
-    hop_addr: [u8; 16],
-    hop_iid: [u8; 8],
-    inner_source: [u8; 16],
-    inner: Vec<u8>,
+    link: LinkLayer,
+    next_sequence: u16,
 }
 
-/// Gateway with a self-rooted authorization table plus a claim signed by the
-/// gateway's own identity over (inner_source/128, [hop, egress]).
-fn wired_setup() -> WiredFixture {
-    let identity = wired_identity(0x42);
-    let gateway = Gateway::new_ephemeral(identity.clone(), 128).unwrap();
-    let hop_iid = [0x11; 8];
-    let mut hop_addr = [0u8; 16];
-    hop_addr[0] = 0x02;
-    hop_addr[8..16].copy_from_slice(&hop_iid);
-    let inner_source = mesh_addr(0x77);
-    let inner = inner_datagram(inner_source, [0x20; 16]);
-    WiredFixture {
-        gateway,
-        identity,
-        hop_addr,
-        hop_iid,
-        inner_source,
-        inner,
-    }
-}
-
-impl WiredFixture {
-    fn route(&self) -> Vec<[u8; 8]> {
-        vec![self.hop_iid, self.identity.iid]
+impl MeshPeer {
+    fn new() -> Self {
+        let identity = Identity::from_seed(LinkSeed::new([9; 32]));
+        let mut link = LinkLayer::new(identity.clone());
+        link.add_peer(PeerIdentity::from_pubkey(gateway_identity().pubkey));
+        Self {
+            identity,
+            link,
+            next_sequence: 1,
+        }
     }
 
-    fn signed_post(&self, path_seq: u64, expiry: u64) -> Vec<u8> {
-        let route = self.route();
-        let claim = TunnelAuthorization::new(
-            self.inner_source,
-            128,
-            route_hash(&route).unwrap(),
-            path_seq,
-            expiry,
-            self.identity.iid,
+    fn root_eui64() -> [u8; 8] {
+        let mut eui = gateway_identity().iid;
+        eui[0] ^= 0x02;
+        eui
+    }
+
+    fn build_wire(&mut self, l2_payload: &[u8], destination: &[u8]) -> Vec<u8> {
+        let mut wire = [0u8; 255];
+        let len = self
+            .link
+            .build_frame(
+                128,
+                LinkSeqNum::new(self.next_sequence),
+                destination,
+                l2_payload,
+                &mut wire,
+            )
+            .unwrap();
+        self.next_sequence += 1;
+        wire[..len].to_vec()
+    }
+
+    fn signed_announce(&self) -> Vec<u8> {
+        let rx_channel = 3;
+        let sequence = 1u16;
+        let mut signed = [0u8; 64];
+        lichen_core::announce::write_announce_signed_data(
+            &self.identity.iid,
+            self.identity.pubkey.as_bytes(),
+            sequence,
+            rx_channel,
+            &[],
+            &mut signed,
         )
         .unwrap();
-        build_root_post(
-            claim,
-            &route,
-            self.identity.iid,
-            &self.identity.privkey,
-            &self.identity.pubkey,
-        )
+        let signature = schnorr::sign(&self.identity.privkey, &self.identity.pubkey, &signed);
+        let mut announce = vec![0u8; 93];
+        let len = lichen_core::announce::AnnounceBuilder {
+            originator_iid: &self.identity.iid,
+            pubkey: self.identity.pubkey.as_bytes(),
+            seq_num: sequence,
+            hop_count: 0,
+            rx_channel,
+            signature: &signature,
+            app_data: &[],
+        }
+        .write_to(&mut announce)
+        .unwrap();
+        announce.truncate(len);
+        let mut payload = vec![lichen_core::constants::L2_DISPATCH_ROUTING];
+        payload.extend_from_slice(&announce);
+        payload
+    }
+
+    async fn bootstrap(&mut self, gateway: &mut Gateway, now_ms: u64) {
+        let announce = self.signed_announce();
+        let wire = self.build_wire(&announce, &[]);
+        gateway
+            .ingest_mesh_frame(&wire, Some(-50), Some(10), now_ms)
+            .await
+            .unwrap();
+    }
+}
+
+fn unix_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
-        .body
-        .as_bytes()
-        .to_vec()
-    }
-
-    fn tunnel(&self) -> Vec<u8> {
-        terminating_tunnel(
-            &self.identity.ygg_addr,
-            &self.identity.ygg_addr,
-            &[self.hop_addr],
-            0,
-            &self.inner,
-        )
-    }
-
-    fn post(&mut self, wire: &[u8], now: u64) -> u8 {
-        self.gateway
-            .handle_tunnel_auth_request(
-                CoapMethod::Post,
-                wire,
-                self.identity.iid,
-                self.identity.pubkey.as_bytes(),
-                now,
-            )
-            .code
-    }
+        .as_secs()
 }
 
-#[test]
-fn wired_post_then_tunnel_decapsulates_and_forwards_inner() {
-    let mut fixture = wired_setup();
-    let wire = fixture.signed_post(1, 1_000);
-    assert_eq!(fixture.post(&wire, 100), COAP_CHANGED);
-    let packet = fixture.tunnel();
-    let forwarded = fixture
-        .gateway
-        .authorize_tunnel_egress(&packet, 100)
-        .expect("authorized tunnel is decapsulated");
-    assert_eq!(forwarded, fixture.inner);
-}
-
-#[test]
-fn wired_tunnel_without_authorization_is_dropped() {
-    let mut fixture = wired_setup();
-    let packet = fixture.tunnel();
-    assert_eq!(fixture.gateway.authorize_tunnel_egress(&packet, 100), None);
-}
-
-#[test]
-fn wired_tunnel_with_wrong_route_is_dropped() {
-    let mut fixture = wired_setup();
-    let wire = fixture.signed_post(1, 1_000);
-    assert_eq!(fixture.post(&wire, 100), COAP_CHANGED);
-    // Same claim, but the packet arrives via a different visited hop: the
-    // route hash no longer matches the authorization.
-    let mut other_addr = [0u8; 16];
-    other_addr[0] = 0x02;
-    other_addr[8..16].copy_from_slice(&[0x22; 8]);
-    let packet = terminating_tunnel(
-        &fixture.identity.ygg_addr,
-        &fixture.identity.ygg_addr,
-        &[other_addr],
-        0,
-        &fixture.inner,
-    );
-    assert_eq!(fixture.gateway.authorize_tunnel_egress(&packet, 100), None);
-}
-
-#[test]
-fn wired_tunnel_to_mesh_destination_is_dropped() {
-    let mut fixture = wired_setup();
-    let wire = fixture.signed_post(1, 1_000);
-    assert_eq!(fixture.post(&wire, 100), COAP_CHANGED);
-    let inner = inner_datagram(fixture.inner_source, mesh_addr(0x99));
-    let packet = terminating_tunnel(
-        &fixture.identity.ygg_addr,
-        &fixture.identity.ygg_addr,
-        &[fixture.hop_addr],
-        0,
-        &inner,
-    );
-    assert_eq!(fixture.gateway.authorize_tunnel_egress(&packet, 100), None);
-}
-
-#[test]
-fn wired_tunnel_from_external_source_is_dropped() {
-    let mut fixture = wired_setup();
-    let wire = fixture.signed_post(1, 1_000);
-    assert_eq!(fixture.post(&wire, 100), COAP_CHANGED);
-    let inner = inner_datagram([0x20; 16], [0x20; 16]);
-    let packet = terminating_tunnel(
-        &fixture.identity.ygg_addr,
-        &fixture.identity.ygg_addr,
-        &[fixture.hop_addr],
-        0,
-        &inner,
-    );
-    assert_eq!(fixture.gateway.authorize_tunnel_egress(&packet, 100), None);
-}
-
-#[test]
-fn wired_expired_authorization_is_dropped() {
-    let mut fixture = wired_setup();
-    let wire = fixture.signed_post(1, 150);
-    assert_eq!(fixture.post(&wire, 100), COAP_CHANGED);
-    let packet = fixture.tunnel();
-    assert_eq!(fixture.gateway.authorize_tunnel_egress(&packet, 200), None);
-}
-
-#[test]
-fn wired_in_transit_source_route_is_dropped() {
-    let mut fixture = wired_setup();
-    let wire = fixture.signed_post(1, 1_000);
-    assert_eq!(fixture.post(&wire, 100), COAP_CHANGED);
-    // segments_left != 0: relay policy belongs to the node stack, never to
-    // the border upstream path.
-    let packet = terminating_tunnel(
-        &fixture.identity.ygg_addr,
-        &fixture.identity.ygg_addr,
-        &[fixture.hop_addr],
-        1,
-        &fixture.inner,
-    );
-    assert_eq!(fixture.gateway.authorize_tunnel_egress(&packet, 100), None);
-}
-
-#[test]
-fn wired_plain_upward_packet_passes_through() {
-    let mut fixture = wired_setup();
-    // Ordinary upward UDP datagram (no Routing header): not a tunnel, so the
-    // authorization layer must not touch it.
-    let mut packet = vec![0u8; 48];
-    packet[0] = 0x60;
-    packet[4..6].copy_from_slice(&8u16.to_be_bytes());
-    packet[6] = 17; // UDP
-    packet[7] = 63;
-    packet[8..24].copy_from_slice(&mesh_addr(0x77));
-    packet[24..40].copy_from_slice(&[0x20; 16]);
-    let forwarded = fixture.gateway.authorize_tunnel_egress(&packet, 100);
-    assert_eq!(forwarded, Some(packet));
-}
-
-#[test]
-fn wired_post_from_non_root_peer_is_forbidden() {
-    let mut fixture = wired_setup();
-    let attacker = wired_identity(0x99);
-    // Well-formed self-consistent post, but signed by (and sent from) an
-    // identity that is not the configured DODAG root.
-    let route = fixture.route();
+/// POST an already-elapsed grant; the coordinator must refuse it (4.03).
+fn provision_expired_grant_refused(gateway: &mut Gateway) {
+    let identity = gateway_identity();
+    let gw_iid = iid_from_pubkey_bytes(identity.pubkey.as_bytes());
+    let route = [gw_iid];
     let claim = TunnelAuthorization::new(
-        fixture.inner_source,
-        128,
+        GRANT_PREFIX,
+        40,
         route_hash(&route).unwrap(),
-        1,
-        1_000,
-        fixture.identity.iid,
+        7,
+        unix_secs().saturating_sub(1),
+        gw_iid,
     )
     .unwrap();
-    let wire = build_root_post(
-        claim,
-        &route,
-        attacker.iid,
-        &attacker.privkey,
-        &attacker.pubkey,
-    )
-    .unwrap()
-    .body
-    .as_bytes()
-    .to_vec();
-    assert_eq!(
-        fixture
-            .gateway
-            .handle_tunnel_auth_request(
-                CoapMethod::Post,
-                &wire,
-                attacker.iid,
-                attacker.pubkey.as_bytes(),
-                100,
-            )
-            .code,
-        COAP_FORBIDDEN
+    let post = build_root_post(claim, &route, gw_iid, &identity.privkey, &identity.pubkey).unwrap();
+    let response = gateway.coordinator_mut().handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        post.body.as_bytes(),
+        true,
+        Some(identity.pubkey.as_bytes()),
+        0,
     );
-    // And the data plane stays closed afterwards.
-    let packet = fixture.tunnel();
-    assert_eq!(fixture.gateway.authorize_tunnel_egress(&packet, 100), None);
+    assert_eq!(response.code, 0x83, "expired grant must be refused (4.03)");
 }
 
-#[test]
-fn wired_post_garbage_payload_is_forbidden() {
-    let mut fixture = wired_setup();
-    assert_eq!(fixture.post(b"not a cose sign1", 100), COAP_FORBIDDEN);
-}
-
-#[test]
-fn wired_get_on_tunnel_auth_is_method_not_allowed() {
-    let mut fixture = wired_setup();
-    assert_eq!(
-        fixture
-            .gateway
-            .handle_tunnel_auth_request(
-                CoapMethod::Get,
-                &[],
-                fixture.identity.iid,
-                fixture.identity.pubkey.as_bytes(),
-                100,
-            )
-            .code,
-        COAP_METHOD_NOT_ALLOWED
-    );
-}
-
-#[test]
-fn wired_tunnel_to_scoped_destination_is_dropped_despite_valid_grant() {
-    // C tunnel_auth.c:434 / Python destination_allowed parity: unspecified,
-    // loopback, multicast, and link-local destinations are out of egress
-    // scope even when the (source prefix, route) grant is valid.
-    let unspecified = [0u8; 16];
-    let mut loopback = [0u8; 16];
-    loopback[15] = 1;
-    let mut multicast = [0u8; 16];
-    multicast[0] = 0xff;
-    multicast[1] = 0x02;
-    multicast[15] = 1;
-    let mut link_local = [0u8; 16];
-    link_local[0] = 0xfe;
-    link_local[1] = 0x80;
-    for destination in [unspecified, loopback, multicast, link_local] {
-        let mut fixture = wired_setup();
-        let wire = fixture.signed_post(1, 1_000);
-        assert_eq!(fixture.post(&wire, 100), COAP_CHANGED);
-        let inner = inner_datagram(fixture.inner_source, destination);
-        let packet = terminating_tunnel(
-            &fixture.identity.ygg_addr,
-            &fixture.identity.ygg_addr,
-            &[fixture.hop_addr],
-            0,
-            &inner,
-        );
-        assert_eq!(
-            fixture.gateway.authorize_tunnel_egress(&packet, 100),
-            None,
-            "scoped destination {destination:02x?} must be dropped"
-        );
-    }
-}
-
-#[test]
-fn wired_tunnel_from_scoped_source_is_dropped_despite_matching_grant() {
-    // C tunnel_auth.c:433 / Python source_allowed parity: a link-local (or
-    // otherwise unsafe) source never rides the tunnel, even when a claim
-    // prefix covers it — the grant below is over the link-local source
-    // itself so the prefix match cannot be the reason for the denial.
-    let mut fixture = wired_setup();
-    let mut link_local_source = [0u8; 16];
-    link_local_source[0] = 0xfe;
-    link_local_source[1] = 0x80;
-    link_local_source[15] = 0x77;
-    let route = fixture.route();
-    let claim = TunnelAuthorization::new(
-        link_local_source,
-        128,
-        route_hash(&route).unwrap(),
+/// SCHC-compressed ICMPv6 echo request (L2 payload) from `src` to `dst`.
+fn egress_frame(src: [u8; 16], dst: [u8; 16]) -> Vec<u8> {
+    let mut pkt = [0u8; 64];
+    let n = icmpv6::echo_request(
+        &CoreIpv6Addr(src),
+        &CoreIpv6Addr(dst),
+        0xaaaa,
         1,
-        1_000,
-        fixture.identity.iid,
+        b"tunnel-auth",
+        &mut pkt,
+    );
+    let ipv6 = &pkt[..n];
+    let mut out = vec![0u8; ipv6.len() + 3];
+    out[0] = L2_DISPATCH_SCHC;
+    let compressed = codec::compress(ipv6, &mut out[1..]).expect("SCHC compress");
+    out.truncate(compressed + 1);
+    out
+}
+
+/// Mint a single-hop root grant over `[gateway IID]` and POST it into the
+/// gateway's coordinator (0x44 expected). Root seed and address shapes follow
+/// the tunnel_authorization vector corpus (root = the gateway itself).
+fn provision_grant(gateway: &mut Gateway, expiry: u64) {
+    let identity = gateway_identity();
+    let gw_iid = iid_from_pubkey_bytes(identity.pubkey.as_bytes());
+    let route = [gw_iid];
+    let claim = TunnelAuthorization::new(
+        GRANT_PREFIX,
+        40,
+        route_hash(&route).unwrap(),
+        7,
+        expiry,
+        gw_iid,
     )
     .unwrap();
-    let wire = build_root_post(
+    let post = build_root_post(claim, &route, gw_iid, &identity.privkey, &identity.pubkey).unwrap();
+    let response = gateway.coordinator_mut().handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        post.body.as_bytes(),
+        true,
+        Some(identity.pubkey.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x44, "grant POST must be accepted (2.04)");
+}
+
+/// Mint a grant signed by a DODAG root that is NOT the gateway itself,
+/// covering the gateway's own IID as the egress, and POST it into the
+/// coordinator under that root binding (0x44 expected).
+fn provision_grant_from_distinct_root(gateway: &mut Gateway) {
+    let root_identity = Identity::from_seed(LinkSeed::new([0x77; 32]));
+    let root_iid = iid_from_pubkey_bytes(root_identity.pubkey.as_bytes());
+    gateway.coordinator_mut().set_tunnel_auth_root(root_iid);
+    let gw_iid = iid_from_pubkey_bytes(gateway_identity().pubkey.as_bytes());
+    let route = [gw_iid];
+    let claim = TunnelAuthorization::new(
+        GRANT_PREFIX,
+        40,
+        route_hash(&route).unwrap(),
+        7,
+        unix_secs() + 3600,
+        gw_iid,
+    )
+    .unwrap();
+    let post = build_root_post(
         claim,
         &route,
-        fixture.identity.iid,
-        &fixture.identity.privkey,
-        &fixture.identity.pubkey,
+        root_iid,
+        &root_identity.privkey,
+        &root_identity.pubkey,
     )
-    .unwrap()
-    .body
-    .as_bytes()
-    .to_vec();
-    assert_eq!(fixture.post(&wire, 100), COAP_CHANGED);
-    let inner = inner_datagram(link_local_source, [0x20; 16]);
-    let packet = terminating_tunnel(
-        &fixture.identity.ygg_addr,
-        &fixture.identity.ygg_addr,
-        &[fixture.hop_addr],
+    .unwrap();
+    let response = gateway.coordinator_mut().handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        post.body.as_bytes(),
+        true,
+        Some(root_identity.pubkey.as_bytes()),
         0,
-        &inner,
     );
-    assert_eq!(fixture.gateway.authorize_tunnel_egress(&packet, 100), None);
+    assert_eq!(
+        response.code, 0x44,
+        "distinct-root grant must be accepted (2.04)"
+    );
+}
+
+async fn ingest_source_to(
+    peer: &mut MeshPeer,
+    gateway: &mut Gateway,
+    source: [u8; 16],
+    destination: [u8; 16],
+) -> Option<Vec<u8>> {
+    let l2 = egress_frame(source, destination);
+    let wire = peer.build_wire(&l2, &MeshPeer::root_eui64());
+    gateway
+        .ingest_mesh_frame(&wire, Some(-50), Some(10), 1000)
+        .await
+        .unwrap()
+        .into_upstream_ipv6()
+}
+
+#[tokio::test]
+async fn wired_egress_forwards_authorized_tunnel() {
+    let mut gateway = fresh_gateway();
+    let mut peer = MeshPeer::new();
+    peer.bootstrap(&mut gateway, 0).await;
+    provision_grant(&mut gateway, unix_secs() + 3600);
+
+    let upstream = ingest_source_to(&mut peer, &mut gateway, GRANTED_SRC, EXTERNAL_DST)
+        .await
+        .expect("authorized tunnel must be forwarded upstream");
+    assert_eq!(upstream[0] >> 4, 6, "upstream datagram is IPv6");
+    assert_eq!(&upstream[8..24], &GRANTED_SRC, "inner source preserved");
+    assert_eq!(
+        &upstream[24..40],
+        &EXTERNAL_DST,
+        "inner destination preserved"
+    );
+}
+
+#[tokio::test]
+async fn wired_egress_matches_grant_under_distinct_root_via_own_iid_route_evidence() {
+    // Root ≠ gateway: route evidence must be the gateway's own IID (it is the
+    // egress), not the bound DODAG root IID, or the grant can never match.
+    let mut gateway = fresh_gateway();
+    let mut peer = MeshPeer::new();
+    peer.bootstrap(&mut gateway, 0).await;
+    provision_grant_from_distinct_root(&mut gateway);
+
+    let upstream = ingest_source_to(&mut peer, &mut gateway, GRANTED_SRC, EXTERNAL_DST)
+        .await
+        .expect("grant over the gateway's own IID must be forwarded upstream");
+    assert_eq!(upstream[0] >> 4, 6, "upstream datagram is IPv6");
+    assert_eq!(&upstream[8..24], &GRANTED_SRC, "inner source preserved");
+}
+
+#[tokio::test]
+async fn wired_egress_drops_unauthorized_tunnel() {
+    let mut gateway = fresh_gateway();
+    let mut peer = MeshPeer::new();
+    peer.bootstrap(&mut gateway, 0).await;
+
+    assert!(
+        ingest_source_to(&mut peer, &mut gateway, GRANTED_SRC, EXTERNAL_DST)
+            .await
+            .is_none(),
+        "no grant provisioned: egress must fail closed"
+    );
+}
+
+#[tokio::test]
+async fn wired_egress_drops_source_outside_granted_prefix() {
+    let mut gateway = fresh_gateway();
+    let mut peer = MeshPeer::new();
+    peer.bootstrap(&mut gateway, 0).await;
+    provision_grant(&mut gateway, unix_secs() + 3600);
+
+    assert!(
+        ingest_source_to(&mut peer, &mut gateway, OUTSIDE_SRC, EXTERNAL_DST)
+            .await
+            .is_none(),
+        "source outside the signed prefix must be dropped"
+    );
+}
+
+#[tokio::test]
+async fn wired_egress_refuses_expired_grant_and_stays_closed() {
+    let mut gateway = fresh_gateway();
+    let mut peer = MeshPeer::new();
+    peer.bootstrap(&mut gateway, 0).await;
+
+    // accept_post refuses already-elapsed grants outright (Expired -> 4.03),
+    // so an expired grant can never arm the data path. The table-level
+    // Expired-on-authorize branch is covered by the corpus decapsulation
+    // cases (canonical_decapsulation_cases_enforce_least_privilege).
+    provision_expired_grant_refused(&mut gateway);
+
+    assert!(
+        ingest_source_to(&mut peer, &mut gateway, GRANTED_SRC, EXTERNAL_DST)
+            .await
+            .is_none(),
+        "no live grant cached: egress must fail closed"
+    );
+}
+
+#[tokio::test]
+async fn wired_egress_hairpin_bypasses_gate() {
+    let mut gateway = fresh_gateway();
+    let mut peer = MeshPeer::new();
+    peer.bootstrap(&mut gateway, 0).await;
+
+    let mut destination = [0u8; 16];
+    destination[..8].copy_from_slice(&[0xfe, 0x80, 0, 0, 0, 0, 0, 0]);
+    destination[8..].copy_from_slice(&gateway_identity().iid);
+
+    assert!(
+        ingest_source_to(&mut peer, &mut gateway, GRANTED_SRC, destination)
+            .await
+            .is_some(),
+        "mesh-destined (hairpin) traffic is mesh-internal forwarding, not egress"
+    );
 }

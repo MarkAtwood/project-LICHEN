@@ -274,7 +274,7 @@ To prevent DIS storms:
 | DAO refresh | Every 15 minutes (half the 30-minute soft-state lifetime) |
 | DAO on parent change | Immediate (with jitter 0-500ms) |
 
-**DAO Source Address Model:** DAO packets use the origin's self-derived primary 0200::/8 address as their IPv6 source for multi-hop forwarding. The source address is `[0x02] + SHA-512(pubkey)[0:7] + IID` with `IID = SHA-512(pubkey)[0:8]` and the U/L bit cleared (spec/04-network.md §6.2, spec/06-security.md §8.5); the DODAG root does not advertise any prefix and no ULA exists in this profile. Relays MUST preserve the original IPv6 source end-to-end (see spec/05-routing.md §8.6). This satisfies security requirements for source binding.
+**DAO Source Address Model:** DAO packets use the origin's self-derived primary 0200::/8 address as their IPv6 source for multi-hop forwarding. The source address is the upstream Yggdrasil `AddrForKey(pubkey)` `/128` (spec/04-network.md §6.2, spec/06-security.md §8.5, and the `upstream-yggdrasil-addressing` decision in `spec/decisions.jsonl`); the DODAG root does not advertise any prefix and no ULA exists in this profile. Relays MUST preserve the original IPv6 source end-to-end (see spec/05-routing.md §8.6). This satisfies security requirements for source binding.
 
 ### 7.2. DAO Lifetime
 

@@ -18,6 +18,7 @@ use lichen_core::constants::{L2_DISPATCH_SCHC, RPL_ICMPV6_TYPE, RPL_INSTANCE_ID}
 use lichen_core::icmpv6;
 use lichen_core::icmpv6::hdr_field;
 use lichen_core::ipv6::{field, next_header, IPV6_HEADER_LEN};
+use lichen_gateway::tunnel_auth::{build_root_post, route_hash, TunnelAuthorization};
 use lichen_gateway::{
     handoff::{HandoffRejectReason, HandoffRequest, HandoffResponse, NodeRegistryEntry},
     resources::{CoapMethod, GatewayCoordinator, SlotClaim},
@@ -470,6 +471,35 @@ async fn gateway_rejects_replayed_authenticated_wire_before_forwarding() {
     let mut peer = MeshPeer::new(7);
     peer.bootstrap(&mut gw, 0).await;
 
+    // Spec 06-security 8.11: the first (non-replayed) datagram is only
+    // forwardable under a current-root egress grant; the replay half of the
+    // test below is unchanged by that gate.
+    let identity = gateway_identity();
+    let gw_iid = iid_from_pubkey(identity.pubkey.as_bytes());
+    let mut prefix = [0u8; 16];
+    prefix[0] = 0xfe;
+    prefix[1] = 0x80;
+    let route = [gw_iid];
+    let claim = TunnelAuthorization::new(
+        prefix,
+        64,
+        route_hash(&route).unwrap(),
+        1,
+        9_000_000_000,
+        gw_iid,
+    )
+    .unwrap();
+    let post = build_root_post(claim, &route, gw_iid, &identity.privkey, &identity.pubkey).unwrap();
+    let response = gw.coordinator_mut().handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        post.body.as_bytes(),
+        true,
+        Some(identity.pubkey.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x44);
+
     let source = peer.link_local();
     let destination = gua(0x88, 0x88);
     let mut packet = [0u8; 48];
@@ -915,6 +945,9 @@ async fn config_removal_revokes_durable_pin_and_context() {
 async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
     let gateway_identity = gateway_identity();
     let gateway_addr = gw_native(&gateway_identity);
+    // GCP coordination is link-local control traffic; using the native address
+    // here selects the mixed-address SCHC budget and rejects the COSE claim.
+    let gateway_link_addr = Addr::link_local_from_eui64(&gateway_identity.iid);
     let remote_identity = Identity::from_seed(Seed::new([0x76; 32]));
     let remote_pubkey = *remote_identity.pubkey.as_bytes();
     let remote_iid = remote_identity.iid;
@@ -1000,7 +1033,7 @@ async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
     let payload = claim.encode_cose(&claim_private, &claim_public).unwrap();
     let mut correlation = client
         .send_secure_request(
-            &Addr(gateway_addr),
+            &gateway_link_addr,
             &gateway_identity.iid,
             SecureRequestData {
                 uri_path: &[".well-known", "lichen-gw", "slots"],
@@ -1042,10 +1075,12 @@ async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
     // The default slot_map owns every slot and this gateway's IID is the
     // lower one, so the claim [1,2,3] deterministically lands in the we-win
     // conflict arm: GCP-6.5 step 11 responds 4.09 Conflict (spec/08:315).
+    // The conflict carries no Content-Format option: the C peer omits it and
+    // Rust now byte-parity-omits it for content_format 0 (49e460a2).
     assert!(matches!(
         response,
         lichen_node::secure::SecureResponse::Decrypted { code, options, .. }
-            if matches!(code.0, 0x89) && options == [0xc1, 60]
+            if matches!(code.0, 0x89) && options.is_empty()
     ));
     assert_eq!(
         gateway

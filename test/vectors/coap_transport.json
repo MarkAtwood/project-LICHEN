@@ -170,7 +170,7 @@
     },
     {
       "name": "load_shedding_503",
-      "description": "When congested, respond 5.03 Service Unavailable with retry_after (spec \u00a710.2.3 Load Shedding).",
+      "description": "When congested, respond 5.03 Service Unavailable with retry_after (spec \u00a710.2.4 Load Shedding).",
       "response_code": 163,
       "response_code_name": "5.03 Service Unavailable",
       "payload_example": {
@@ -184,7 +184,7 @@
     },
     {
       "name": "priority_queue",
-      "description": "TX queue ordered by priority (spec \u00a710.2.3). Low priority dropped first during congestion.",
+      "description": "TX queue ordered by priority (spec \u00a710.2.4). Low priority dropped first during congestion.",
       "priorities": [
         {
           "priority": 0,
@@ -215,7 +215,7 @@
     },
     {
       "name": "app_to_priority_mapping",
-      "description": "Application-to-priority mapping (spec \u00a710.2.3).",
+      "description": "Application-to-priority mapping (spec \u00a710.2.4).",
       "mapping": [
         {
           "port": 5681,

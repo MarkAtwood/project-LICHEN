@@ -18,6 +18,7 @@
  * - /diag/traceroute - Mesh path discovery (GET, spec 18.7.4, when enabled)
  * - /deaddrop - DTN dead drop (POST, GET?recipient=...) when enabled
  * - /confessions - Anonymous board (POST/GET, rate-limited RAM-only, per project-LICHEN-2nnd.4.2)
+ * - /.well-known/tunnel-auth - Egress tunnel grants (POST, OSCORE-only, when CONFIG_LICHEN_TUNNEL_AUTH)
  *
  * All payloads use CBOR (content-format 60) for compact encoding.
  */
@@ -45,7 +46,6 @@
 /* Plaintext staging for the mutating handlers' authorize helper (the old
  * per-handler unprotect result carried an equivalent on-stack buffer). */
 static uint8_t server_plain_buf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX];
-#include <lichen/l2/ipv6_addr.h>
 #include <lichen/transport/slip_transport.h>
 
 LOG_MODULE_REGISTER(lichen_coap_server, CONFIG_LICHEN_COAP_SERVER_LOG_LEVEL);
@@ -58,62 +58,7 @@ static uint16_t s_coap_port = 5683;
 
 static struct lichen_coap_server_handlers s_handlers;
 
-/*
- * Common response helper for all CoAP resources (including deaddrop_post).
- * Centralizes duplicated logic from coap_*.c files. Matches Python/Rust reference
- * behavior and spec/18-applications for DTN. Type=ACK for CON requests.
- * Uses per-call static buffer to avoid both shared race and stack use-after-return.
- * Zephyr coap_resource_send + pending slab performs synchronous memcpy of packet data.
- */
-int lichen_coap_respond(struct coap_resource *resource,
-			struct coap_packet *request,
-			struct sockaddr *addr, socklen_t addr_len,
-			uint8_t resp_code, uint16_t content_format,
-			const uint8_t *payload, size_t payload_len)
-{
-	static uint8_t buf[CONFIG_COAP_SERVER_MESSAGE_SIZE];
-	struct coap_packet response;
-	uint8_t token[COAP_TOKEN_MAX_LEN];
-	uint16_t id;
-	uint8_t tkl;
-	int ret;
-
-	id = coap_header_get_id(request);
-	tkl = coap_header_get_token(request, token);
-	uint8_t type = (coap_header_get_type(request) == COAP_TYPE_CON)
-		       ? COAP_TYPE_ACK : COAP_TYPE_NON_CON;
-
-	ret = coap_packet_init(&response, buf, sizeof(buf),
-			       COAP_VERSION_1, type, tkl, token, resp_code, id);
-	if (ret < 0) {
-		LOG_ERR("Failed to init response packet: %d", ret);
-		return ret;
-	}
-
-	if (payload != NULL && payload_len > 0) {
-		ret = coap_append_option_int(&response, COAP_OPTION_CONTENT_FORMAT,
-					     content_format);
-		if (ret < 0) {
-			LOG_ERR("Failed to add content-format: %d", ret);
-			return ret;
-		}
-
-		ret = coap_packet_append_payload_marker(&response);
-		if (ret < 0) {
-			LOG_ERR("Failed to add payload marker: %d", ret);
-			return ret;
-		}
-
-		ret = coap_packet_append_payload(&response, payload, (uint16_t)payload_len);
-		if (ret < 0) {
-			LOG_ERR("Failed to add payload: %d", ret);
-			return ret;
-		}
-	}
-
-	ret = coap_resource_send(resource, &response, addr, addr_len, NULL);
-	return ret;
-}
+/* lichen_coap_respond lives in coap_respond.c (shared with modular mode). */
 
 /*
  * /status resource - GET returns node status as CBOR
@@ -210,6 +155,19 @@ static int config_put(struct coap_resource *resource,
 					     &piv_len, &is_protected);
 	if (ret != 0) {
 		return ret;
+	}
+
+	/* dsrv: gate on the authorize result (same pattern as
+	 * msg_inbox_post and coap_config.c config_put). Without this,
+	 * an unprotected plaintext PUT /config passes the authorize
+	 * helper (ret==0 + payload) and commits with no authentication
+	 * at all under LICHEN_COAP_SERVER_STANDALONE. The request that
+	 * reaches this gate is unprotected by definition, so the 4.01
+	 * goes out as a plain response. */
+	if (!is_protected && !lichen_coap_is_local_admin(addr, addr_len)) {
+		return lichen_coap_respond(resource, request, addr, addr_len,
+					   COAP_RESPONSE_CODE_UNAUTHORIZED,
+					   0, NULL, 0);
 	}
 
 	if (payload == NULL || payload_len == 0) {
@@ -373,7 +331,8 @@ static int msg_inbox_post(struct coap_resource *resource,
 		int r = coap_oscore_protect_response(oscore_ctx, piv, piv_len,
 						     request,
 						     COAP_RESPONSE_CODE_CREATED,
-						     NULL, 0, &resp, buf, sizeof(buf));
+						     NULL, 0, NULL, 0, &resp, buf,
+						     sizeof(buf));
 		if (r < 0) {
 			return lichen_coap_respond(resource, request, addr, addr_len,
 						   COAP_RESPONSE_CODE_INTERNAL_ERROR,
@@ -597,6 +556,154 @@ COAP_RESOURCE_DEFINE(lichen_sos, lichen_coap_server, {
 		.attributes = sos_attrs,
 	}),
 });
+
+#ifdef CONFIG_LICHEN_TUNNEL_AUTH
+#include <zephyr/sys_clock.h>
+#include <lichen/gateway/tunnel_auth.h>
+
+/*
+ * /.well-known/tunnel-auth resource - root-issued COSE_Sign1 egress grants.
+ * POST only, and OSCORE-protected requests only: the grant signer is the
+ * DODAG root, so there is no local-admin plaintext fallback. The verdict's
+ * human code (204/403) maps to the wire encoding 2.04 (0x44) / 4.03 (0x83)
+ * via lichen_tunnel_auth_coap_code(); BUILD_ASSERTs pin that mapping.
+ * Note: 2.04 is Zephyr's COAP_RESPONSE_CODE_CHANGED (Zephyr's "CREATED"
+ * is RFC 7252's 2.01), hence the CHANGED reference below.
+ */
+BUILD_ASSERT(COAP_RESPONSE_CODE_CHANGED == 0x44, "2.04 wire encoding drifted");
+BUILD_ASSERT(COAP_RESPONSE_CODE_FORBIDDEN == 0x83, "4.03 wire encoding drifted");
+
+static int tunnel_auth_post(struct coap_resource *resource,
+			    struct coap_packet *request,
+			    struct sockaddr *addr, socklen_t addr_len)
+{
+	uint8_t piv[OSCORE_PIV_MAX_LEN];
+	size_t piv_len = 0;
+	struct oscore_ctx *oscore_ctx = NULL;
+	const uint8_t *payload = NULL;
+	uint16_t payload_len = 0;
+	bool is_protected = false;
+	int ret;
+
+	if (s_handlers.tunnel_auth == NULL) {
+		return COAP_RESPONSE_CODE_NOT_FOUND;
+	}
+
+	ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+					     COAP_METHOD_POST, server_plain_buf,
+					     sizeof(server_plain_buf), &payload,
+					     &payload_len, &oscore_ctx, piv,
+					     &piv_len, &is_protected);
+	if (ret != 0) {
+		return ret;
+	}
+	if (!is_protected) {
+		return lichen_coap_respond(resource, request, addr, addr_len,
+					   COAP_RESPONSE_CODE_UNAUTHORIZED,
+					   0, NULL, 0);
+	}
+
+	/* Peer identity: LICHEN key-derived link-locals embed the canonical
+	 * pubkey IID (U/L cleared) in the low 8 bytes; pass it through
+	 * UNFLIPPED. lichen_tunnel_auth_receive() compares in canonical
+	 * pubkey-IID space (the root_iid binding and the COSE kid) - NOT in
+	 * the wire-EUI64 space (U/L set) the OSCORE context lookup keys on,
+	 * so the extract+flip from coap_oscore.c must NOT be applied here.
+	 * An unidentifiable sender stays all-zero and is denied WRONG_ROOT. */
+	uint8_t sender_iid[8] = { 0 };
+	(void)lichen_tunnel_sender_iid_from_sockaddr(addr, (size_t)addr_len,
+						     sender_iid);
+
+	/* Uptime seconds stand in for unix time until wall-clock sync lands;
+	 * expiry enforcement stays dormant, replay floors do not. */
+	uint64_t now = (uint64_t)k_uptime_get() / MSEC_PER_SEC;
+	struct lichen_coap_tunnel_verdict verdict = { false, 403 };
+	s_handlers.tunnel_auth(payload, payload_len, true, sender_iid, now,
+			       &verdict);
+
+	return coap_oscore_send_protected(resource, request, addr, addr_len,
+					  oscore_ctx, piv, piv_len,
+					  lichen_tunnel_auth_coap_code(verdict.coap_code));
+}
+
+static const char * const tunnel_auth_path[] = { ".well-known", "tunnel-auth", NULL };
+
+COAP_RESOURCE_DEFINE(lichen_tunnel_auth, lichen_coap_server, {
+	.post = tunnel_auth_post,
+	.path = tunnel_auth_path,
+});
+#endif /* CONFIG_LICHEN_TUNNEL_AUTH */
+
+#ifdef CONFIG_LICHEN_CAPABILITY_ANNOUNCE
+#include <zephyr/sys_clock.h>
+#include <lichen/gateway/capability_announce.h>
+#include <lichen/gateway/tunnel_auth.h>
+/*
+ * /.well-known/capability-announce resource - node capability COSE_Sign1
+ * announcements to the DODAG root (spec 06-security.md 8.12). POST only,
+ * OSCORE-protected only: the announcement is authenticated against the
+ * link-authenticated sender's pinned pubkey, so there is no local-admin
+ * plaintext fallback. The handler (app side) resolves the pinned pubkey,
+ * verifies, and records into the capability table; the verdict's human code
+ * (204/403/503) maps to the wire encoding via lichen_tunnel_auth_coap_code().
+ * 5.03 = (5<<5)|3 = 0xA3 (COAP_MAKE_RESPONSE_CODE uses class<<5).
+ */
+BUILD_ASSERT(COAP_RESPONSE_CODE_SERVICE_UNAVAILABLE == 0xA3, "5.03 wire encoding drifted");
+
+static int capability_announce_post(struct coap_resource *resource,
+				    struct coap_packet *request,
+				    struct sockaddr *addr, socklen_t addr_len)
+{
+	uint8_t piv[OSCORE_PIV_MAX_LEN];
+	size_t piv_len = 0;
+	struct oscore_ctx *oscore_ctx = NULL;
+	const uint8_t *payload = NULL;
+	uint16_t payload_len = 0;
+	bool is_protected = false;
+	int ret;
+
+	if (s_handlers.capability_announce == NULL) {
+		return COAP_RESPONSE_CODE_NOT_FOUND;
+	}
+
+	ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+					     COAP_METHOD_POST, server_plain_buf,
+					     sizeof(server_plain_buf), &payload,
+					     &payload_len, &oscore_ctx, piv,
+					     &piv_len, &is_protected);
+	if (ret != 0) {
+		return ret;
+	}
+	if (!is_protected) {
+		return lichen_coap_respond(resource, request, addr, addr_len,
+					   COAP_RESPONSE_CODE_UNAUTHORIZED,
+					   0, NULL, 0);
+	}
+
+	/* Peer identity, canonical pubkey-IID space (U/L cleared), same as
+	 * tunnel_auth_post: the OSCORE context lookup keys on the wire-EUI64
+	 * space, so no flip is applied here. */
+	uint8_t sender_iid[8] = { 0 };
+	(void)lichen_tunnel_sender_iid_from_sockaddr(addr, (size_t)addr_len,
+						     sender_iid);
+
+	uint64_t now = (uint64_t)k_uptime_get() / MSEC_PER_SEC;
+	struct lichen_coap_capability_verdict verdict = { false, 403 };
+	s_handlers.capability_announce(payload, payload_len, true, sender_iid,
+				       now, &verdict);
+
+	return coap_oscore_send_protected(resource, request, addr, addr_len,
+					  oscore_ctx, piv, piv_len,
+					  lichen_tunnel_auth_coap_code(verdict.coap_code));
+}
+
+static const char * const capability_announce_path[] = { ".well-known", "capability-announce", NULL };
+
+COAP_RESOURCE_DEFINE(lichen_capability_announce, lichen_coap_server, {
+	.post = capability_announce_post,
+	.path = capability_announce_path,
+});
+#endif /* CONFIG_LICHEN_CAPABILITY_ANNOUNCE */
 
 /*
  * Define the CoAP service

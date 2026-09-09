@@ -7,8 +7,9 @@
  *
  * Standalone IPv6 address construction utilities:
  * - Link-local: fe80::<IID>
- * - Native primary: key-derived 0200::/8 address (/128 per node), via
- *   lichen_yggdrasil_addr() (Yggdrasil AddrForKey profile, spec section 12)
+ * - Primary: upstream Yggdrasil AddrForKey 0200::/8 address (/128 per
+ *   node), via lichen_yggdrasil_addr() (spec 6.1; the rejected SHA-512
+ *   native profile is gone)
  * - GUA for compatibility and prefix delegation
  *
  * IID derivation (spec 6.2):
@@ -163,6 +164,9 @@ int lichen_eui64_to_iid(const uint8_t *eui64, uint8_t *iid);
  * with the U/L bit cleared to mark it as locally administered. This is
  * the IID embedded in the canonical 0200::/8 native address and matches
  * the Python and Rust implementations plus yggdrasil-derivation vectors.
+ * QUARANTINED-PENDING-UPSTREAM-MIGRATION: that derivation and its vectors
+ * are the rejected SHA-512 native profile; upstream-yggdrasil-addressing
+ * (spec/decisions.jsonl) requires upstream AddrForKey instead.
  *
  * SECURITY: Uses SHA-512 rather than raw pubkey bytes because
  * Ed25519 public keys have structure that could leak information.

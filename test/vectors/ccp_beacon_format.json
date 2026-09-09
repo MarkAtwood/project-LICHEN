@@ -201,6 +201,18 @@
         "header_hex": "000000011000003039659200800001001408fc3200000001",
         "notes": "epoch, SFN, timestamp, setup_window, occupied_time, and channel_mask are unsigned big-endian; guard is the normative 50 ms."
       }
+    },
+    {
+      "name": "beacon_header_num_slots_zero_rejected",
+      "description": "Header with num_slots=0 is structurally invalid (zero slot modulus; spec 02a 2a.2 default 8) and MUST be rejected by header parse in every runtime.",
+      "type": "beacon_format",
+      "input": {
+        "header_hex": "000000010000003039659200800001001408fc3200000001"
+      },
+      "expected_rejection": {
+        "reason": "num_slots_zero"
+      },
+      "notes": "Same wire bytes as beacon_wire_example except byte[4]=0x00 (num_slots=0). Parse-level rejection oracle: Rust lichen-core tdma_beacon::TdmaBeaconHeader::parse (ParseError::NumSlotsZero), Python lichen.rpl.tdma_beacon.parse_header (BeaconFormatError), C lichen_beacon_header_parse (LICHEN_BEACON_INVALID_FIELD)."
     }
   ]
 }

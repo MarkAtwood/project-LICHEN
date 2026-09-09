@@ -159,10 +159,16 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
 
     /// Install a Unix-seconds wall clock for root-signature expiry checks.
     ///
-    /// Without a wall clock, root-signature expiry cannot be evaluated; the
-    /// receiver then treats every well-formed signature as unexpired (a
-    /// documented limitation — spec 06 §8.10.1 "expired -> treat as unsigned"
-    /// needs a real clock to distinguish).
+    /// Receiver side: without a clock the expiry check is unassessable; an
+    /// otherwise-valid signed DIO degrades to `DioRootSigOutcome::Baseline`
+    /// (treat as unsigned) exactly as it does for an elapsed expiry — spec
+    /// 06 §8.10.1 "expired -> treat as unsigned" applied to the unassessable
+    /// case, never to trusting the signature (forged or tampered signatures
+    /// still reject; see `verify_dio_root_signature`).
+    ///
+    /// Root producer side (feature `root-sig`): this clock also sets the
+    /// expiry on transmitted root signatures; without it, root DIOs are
+    /// sent unsigned (see `send_dio`).
     pub fn set_wall_clock_unix(&mut self, clock: fn() -> u64) {
         self.wall_clock_unix = Some(clock);
     }
@@ -238,8 +244,13 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             });
         }
         if self.rpl.router.is_root() {
-            if let Some(path) = self.rpl.router.lookup_route_at(&destination, now_ms) {
-                let source_route = path.to_vec();
+            if let Some(path) = self
+                .rpl
+                .router
+                .lookup_route_at(core::net::Ipv6Addr::from(destination), now_ms)
+            {
+                let source_route: Vec<[u8; 16]> =
+                    path.iter().map(core::net::Ipv6Addr::octets).collect();
                 if source_route.last() != Some(&destination) {
                     return None;
                 }

@@ -87,6 +87,11 @@ follow the cross-references to this document.
 The client and node communicate via link-local IPv6. The node acts as a
 router: traffic to mesh addresses is forwarded over LoRa.
 
+Local-link throughput does not confer radio capacity. The node owns mesh TX
+admission, bounded radio queues, backpressure, and deadlines as specified in
+07-transport-app.md §10.2 and appendix-bufferbloat.md. Local queue acceptance
+does not mean a packet has transmitted or that custody or delivery is confirmed.
+
 ### 17.3. Transport Bindings
 
 All transports carry IPv6 packets. Framing adapts to the transport.
@@ -164,14 +169,21 @@ Client: fe80::<IID from device MAC>
 Node:   fe80::<node IID>
 ```
 
-`<node IID>` is always the node's key-derived IID: `IID = SHA-512(pubkey)[0:8]`
+`<node IID>` is always the node's key-derived link-local IID: `IID = SHA-512(pubkey)[0:8]`
 with the U/L bit cleared (spec/04-network.md §6.2, spec/06-security.md §8.5).
+This IID appears only in the link-local address; the node's routable
+`0200::/8` `/128` is upstream `AddrForKey(pubkey)` and does not embed the IID
+(`upstream-yggdrasil-addressing` decision, `spec/decisions.jsonl`).
 The node's wire EUI-64 is obtained from that IID by toggling the U/L bit exactly
 once (spec/02-physical-link.md §4.2); it is never the source of the IID. The
 client is a generic IPv6 host and MAY use a static address or one derived from
 its device MAC; such an IID is link-interoperability only and is not a LICHEN
 node identity. `fe80::1` in examples throughout this document is illustrative
-shorthand for the node's link-local address.
+shorthand for the node's link-local address. Likewise, every
+`0200:1234:5678:9abc::...` address in this document is an illustrative
+placeholder, not a literal `AddrForKey` output: a real node primary is
+bit-packed `AddrForKey` bytes (spec/06-security.md §8.5) and has no
+human-friendly form.
 
 The node acts as default router for the client. Client's routing table:
 
@@ -280,10 +292,14 @@ Content-Format: application/cbor
   "pubkey_fingerprint": "SHA256:xY7...",
   "addrs": {
     "link_local": "fe80::0211:22ff:fe33:4455",
-    "primary": "0200:1234:5678:9abc::0211:22ff:fe33:4455"
+    "primary": "0200:1234:5678:9abc:c557:1e9a:04b2:77d0"
   }
 }
 ```
+
+The `primary` lower half above is illustrative: a real primary address is
+upstream `AddrForKey(pubkey)` bit-packed bytes (§17.4, spec/04-network.md §6.2)
+and never contains the EUI-64/IID.
 
 #### 17.5.3. Status Resources
 
@@ -334,7 +350,44 @@ is omitted or zero and the node cannot provide authoritative timestamps. The
 manual, internal-rtc). The `age_s` field shows seconds since the last accepted
 time sample.
 
+For the adopted [Receiver-Aware CCP](02b-ccp-receiver-aware.md) policy,
+`ccp.rx_channel` describes the advertised data-receiver home channel from the
+peer contract, stable for that contract, not the instantaneous tuned channel.
+Periodic CH0 control windows temporarily change tuning without changing the
+advertised home. Status and UIs MUST distinguish home from current tuning;
+if current tuning is not reported, it is unknown, not inferred from home.
+
+`preferred_rx_valid_until_sfn` is scoped to the schedule generation that
+established the peer contract. A generation change invalidates that validity;
+an SFN from another generation MUST NOT extend it. This uses schedule context
+and does not allocate or require a new generation field here.
+
+The legacy `rx_channel` range remains 0..7; it does not encode or enable a
+128-channel plan. The canonical receiver-aware document governs the new
+representation and activation gate: exact versioned encodings and independent
+conformance oracles are required before new wire behavior is enabled. Policy
+adoption and qualified full-band experiments are not production-readiness claims.
+
+Duty usage is interpreted within the applicable regulatory accounting group,
+with per-physical-frequency dwell accounting where required. Changing logical
+channels or retuning MUST NOT be displayed as acquiring a fresh airtime budget.
+
 Status updates pushed via Observe on significant changes.
+
+**Cross-Mesh Log Correlation (GNSS-Enabled):**
+
+All diagnostic events (`/status/node`, `/status/queues`, neighbor tables,
+routing changes) carry GNSS-derived timestamps. Because all nodes share a
+common wall-clock reference, events from different nodes and different meshes
+are directly comparable without NTP-style clock correction. This enables:
+
+- Reconstructing cross-mesh timelines for debugging planetary-scale routing
+- Correlating custody-transfer handshake logs across sender/relay/BR/recipient
+- Comparing queue depth and duty cycle events across nodes to diagnose congestion
+- Post-incident analysis using log exports from multiple nodes with aligned timestamps
+
+Implementations SHOULD include `"ts": <unix_timestamp>` in all diagnostic
+event payloads exposed via LCI.
 
 **Neighbor Table (Observable)**
 
@@ -373,7 +426,7 @@ Content-Format: application/cbor
 {
   "routes": [
     {
-      "prefix": "0200:1234:5678:9abc::/64",
+      "prefix": "0300:1234:5678:9abc::/64",
       "via": "fe80::1234:5678:9abc:def0",
       "metric": 512,
       "lifetime_s": 1800
@@ -472,6 +525,9 @@ Raw TX requests MAY include implementation-defined radio overrides only when
 the firmware can enforce regional limits. Implementations MUST rate-limit raw
 TX, MUST reject frames or overrides that violate configured PHY/regulatory
 constraints, and SHOULD omit raw TX entirely in production firmware.
+Raw TX is also subject to normal radio eligibility: it MUST NOT preempt
+committed RX, exceed adaptive airtime limits, or overrun a full operation plus
+guard. Diagnostic overrides do not bypass these constraints.
 
 Raw diagnostics MUST require local administrative authorization. BLE transports
 MUST require LE Secure Connections for these resources; deployments that expose
@@ -757,6 +813,293 @@ A capable node (border router, gateway) SHOULD implement:
 | SLIP framing | 256 B | 512 B |
 | LCI CoAP resources | 1-2 KB | 4-8 KB |
 | BLE UART service | 512 B | 2 KB |
+
+### 17.8. Unified UI Specification
+
+All LICHEN user interfaces — phone app, on-device display, terminal TUI,
+web dashboard — share a single information architecture. The mental model
+is identical; only the rendering adapts to the surface.
+
+**Design principles:**
+
+1. **Same screens everywhere.** Every surface shows the same 4+2 screens
+   in the same order. Users switching between phone and e-ink don't relearn
+   navigation.
+2. **Information density over decoration.** Every pixel earns its place. If
+   a UI element doesn't answer a question the user has, delete it. No
+   gradients, no drop shadows, no rounded-corner cards around single values.
+3. **Status is always visible.** Battery, signal, time, and mesh state are
+   persistent — never hidden behind a tap or scroll.
+4. **Progressive disclosure.** Primary screens show what you need 90% of
+   the time. Details are one action deeper. Settings are two actions deeper.
+5. **Text is UI.** Well-formatted text with monospace alignment conveys more
+   information per pixel than icons. Use icons only for universal concepts
+   (battery, signal bars, message status).
+
+#### 17.8.1. Screen Vocabulary
+
+**Primary screens (tab bar / button cycle):**
+
+| # | Screen | Shows | Updates |
+|---|--------|-------|---------|
+| 1 | **Messages** | Conversations, custody status (Sending/Sent/Delivered/Expired) | On Observe notification |
+| 2 | **Map** | Peer positions, own position, bearing/distance | On position beacon |
+| 3 | **Peers** | Who's on mesh: IID, name, signal, hops, last seen, trust | On announce/status |
+| 4 | **Status** | Own node: battery, duty cycle, DODAG, radio stats, custody store | On change |
+
+**Secondary screens (accessed from primary):**
+
+| # | Screen | Shows | Access |
+|---|--------|-------|--------|
+| 5 | **Settings** | Config: name, channel, TX power, announce rate | From Status |
+| 6 | **Keys** | Trust store: pinned keys, TOFU history, verification | From Peers |
+
+Six screens total. That's the entire UI.
+
+#### 17.8.2. Status Bar
+
+Persistent across all screens. Same layout on all surfaces.
+
+```
+┌──────────────────────────────────────┐
+│ ▮▮▮▯ 87%  ⊕3hop  12:34  ✉2  ◉SYNCED │
+└──────────────────────────────────────┘
+```
+
+| Element | Meaning | Source |
+|---------|---------|--------|
+| ▮▮▮▯ 87% | Battery level | /status battery_pct |
+| ⊕3hop | RPL rank (hops to root) | /status dodag.rank |
+| 12:34 | GNSS time (HH:MM) | time provider |
+| ✉2 | Unread message count | /msg/inbox unread |
+| ◉SYNCED | TDMA sync state | CCP desync FSM |
+
+On e-ink: status bar is top line, partial-refresh only on change.
+On phone: status bar is persistent header or system notification.
+On TUI: status bar is top or bottom terminal line.
+
+#### 17.8.3. Messages Screen
+
+The primary screen. Conversation list, most recent first.
+
+```
+┌──────────────────────────────────────┐
+│ MESSAGES                        [New]│
+├──────────────────────────────────────┤
+│ Alice           12:31  ✓✓ Delivered  │
+│  Got it, on my way                   │
+│                                      │
+│ Bob             12:28  ✓  Sent       │
+│  Meet at checkpoint 3                │
+│                                      │
+│ SAR Team (5)    12:15  ✓✓ Delivered  │
+│  All clear sector 7                  │
+│                                      │
+│ Charlie         11:50  ⚠ Expired     │
+│  Anyone at base camp?                │
+└──────────────────────────────────────┘
+```
+
+**Custody status indicators** (from §18.1.2 sender UX states):
+
+| Indicator | Meaning |
+|-----------|---------|
+| ⏳ | Sending (no custody yet) |
+| ✓ | Sent (custody accepted) |
+| ✓✓ | Delivered (receipt or ack_through) |
+| ⚠ | May not have been delivered (TTL expired) |
+
+Tapping/selecting a conversation opens the message thread. Conversation
+view shows individual messages with timestamps and status.
+
+On e-ink: show 3-4 conversations per screen. Buttons: up/down scroll,
+select opens thread, long-press opens compose (canned or T9-style).
+
+#### 17.8.4. Map Screen
+
+Peer positions relative to self. Text-first, not tile-map.
+
+```
+┌──────────────────────────────────────┐
+│ MAP                     N↑  42.3614° │
+├──────────────────────────────────────┤
+│                  · Alice (0.3km NW)  │
+│         ·Bob                         │
+│        (1.2km W)                     │
+│                                      │
+│               ★ You                  │
+│                                      │
+│                     ·Charlie         │
+│                      (0.8km SE)      │
+│                                      │
+│  ·SAR-Base (2.1km S)                 │
+└──────────────────────────────────────┘
+```
+
+On capable surfaces (phone, web): optional tile map background with peer
+dots overlaid. The text bearing/distance list is always available as
+fallback.
+
+On e-ink: bearing/distance list only (no map tiles). Sorted by distance.
+
+```
+┌────────────────────┐
+│ PEERS NEARBY       │
+│ Alice   0.3km  NW ✓│
+│ Charlie 0.8km  SE ✓│
+│ Bob     1.2km  W  ✓│
+│ SAR-Bas 2.1km  S  ✓│
+│ Delta   4.7km  NE ?│
+└────────────────────┘
+```
+
+✓ = recent position (< 5 min). ? = stale position (> 5 min).
+
+#### 17.8.5. Peers Screen
+
+Everyone the node knows about. Sorted by signal quality.
+
+```
+┌──────────────────────────────────────┐
+│ PEERS (7 visible, 12 known)         │
+├──────────────────────────────────────┤
+│ Alice      -72dBm  12.0dB  1hop  5s │
+│ Bob        -85dBm   7.5dB  2hop 30s │
+│ Charlie    -91dBm   3.2dB  3hop  2m │
+│ SAR-Base   -78dBm   9.0dB  1hop 10s │
+│ Delta      -95dBm   1.1dB  4hop  5m │
+│ Echo       -88dBm   5.5dB  2hop  1m │
+│ Foxtrot   [via BR]         6hop 15m │
+├──────────────────────────────────────┤
+│ 5 more via backbone (not direct)    │
+└──────────────────────────────────────┘
+```
+
+Columns: name, RSSI, SNR, hop count, last seen. Selecting a peer shows
+detail: IID, public key fingerprint, trust state (TOFU/pinned), message
+history, position if known.
+
+"via BR" indicates the peer is in a different DODAG, reachable through
+backbone. No RSSI/SNR for backbone peers (no direct radio link).
+
+#### 17.8.6. Status Screen
+
+Own node health. The dashboard.
+
+```
+┌──────────────────────────────────────┐
+│ STATUS                    [Settings] │
+├──────────────────────────────────────┤
+│ Battery:    87% (3950mV) ~18h remain │
+│ Uptime:     3h 42m                   │
+│ Time:       12:34:56 UTC (GNSS)      │
+│                                      │
+│ Radio:                               │
+│  Duty:      2.3% (limit 5%)         │
+│  TX/RX:     567 / 1234 packets       │
+│  Errors:    12 (0.97%)               │
+│  Channel:   CH3 (SF10)               │
+│                                      │
+│ Mesh:                                │
+│  DODAG:     joined (rank 512)        │
+│  Root:      SAR-Base (1 hop)         │
+│  Peers:     7 direct, 5 backbone     │
+│  Custody:   2 held (1.2 KB)          │
+│                                      │
+│ Position:   42.3614°N 71.0579°W      │
+│  Fix:       3D, 8 sats, HDOP 1.2    │
+└──────────────────────────────────────┘
+```
+
+Custody store line shows how many messages this node is holding for others
+and the storage used. Relevant for powered relays/BRs.
+The channel display MUST label advertised home and current tuning distinctly
+as described in §17.5.3; a CH0 control visit does not change the data home.
+Duty displays MUST identify the applicable accounting scope, not imply a
+separate budget for every logical channel.
+
+#### 17.8.7. Surface Adaptations
+
+The information architecture is fixed. Rendering adapts:
+
+| Surface | Resolution | Input | Color | Refresh |
+|---------|-----------|-------|-------|---------|
+| T-Echo e-ink | 200×200 1-bit | 3 buttons | B&W | Partial 50ms, full 200ms |
+| Phone app | Variable | Touch | Full | Immediate |
+| TUI | Terminal grid | Keyboard | 256-color | Immediate |
+| Web dashboard | Variable | Mouse/keyboard | Full | WebSocket push |
+
+**E-ink specifics:**
+- 3 buttons: PREV / SELECT / NEXT
+- PREV/NEXT cycle screens; within a screen, scroll
+- SELECT opens detail / compose / settings
+- Long-press SELECT: SOS (from any screen)
+- Partial refresh for status bar and scroll; full refresh on screen change
+- Sleep after 30s inactivity; wake on button or radio event
+- Unread badge persists on sleep screen: "✉3 new messages"
+
+**Phone specifics:**
+- Bottom tab bar: Messages / Map / Peers / Status
+- Swipe between tabs; pull-to-refresh
+- Map tab uses native map view with peer overlay
+- Push notifications for new messages (via BLE Observe)
+- Compose with full keyboard
+
+**TUI specifics:**
+- Tab/number keys switch screens (1-4 primary, 5-6 secondary)
+- Vim-style navigation (j/k scroll, Enter select, q back)
+- Color: green=good, yellow=warning, red=critical for signal/battery
+- Resize-aware; works in 80×24 minimum
+
+**Web specifics:**
+- Single-page app, WebSocket for Observe notifications
+- Same 4-tab layout; sidebar for peer detail
+- Map uses Leaflet/OpenStreetMap
+
+#### 17.8.8. Data Binding
+
+All UI surfaces are CoAP Observe clients to the local node. The node is
+the single source of truth. UIs do not maintain independent state.
+
+| Screen | CoAP Resource | Observe? |
+|--------|---------------|----------|
+| Messages | /msg/inbox | Yes |
+| Map | /pos (multicast) + /status | Yes |
+| Peers | /status/neighbors | Yes |
+| Status | /status/node | Yes |
+| Settings | /config | No (poll on open) |
+| Keys | /keys | No (poll on open) |
+
+New messages, position updates, peer changes, and status changes are
+pushed via Observe notifications. The UI reacts; it never polls in a loop.
+
+Under radio backpressure, the node applies deadlines and MAY coalesce unsent
+notifications of replaceable state, such as current position, as specified in
+07-transport-app.md §10.3. This MUST NOT merge or discard distinct messages,
+commands, receipts, or custody records. Clients reflect the node's state and
+admission failures rather than maintaining independent radio queues or
+replaying stale updates to defeat backpressure.
+
+#### 17.8.9. Message Compose
+
+Compose adapts to input capability:
+
+| Surface | Input method |
+|---------|-------------|
+| E-ink (3 button) | Canned messages (§18.1.3) + T9-style character picker |
+| Phone | Full keyboard |
+| TUI | Full keyboard |
+| Web | Full keyboard |
+
+E-ink compose flow:
+1. Select "New" from Messages screen
+2. Pick recipient (from Peers list or recent conversations)
+3. Choose: Canned message (fast, one button cycle) or Free text (T9)
+4. Confirm and send
+5. Screen shows "⏳ Sending..." then updates to "✓ Sent" on custody ACK
+
+Canned messages are the 80% case for e-ink. Free text is available but
+slow. Phone/TUI/web always use free text with canned as shortcuts.
 
 ---
 

@@ -15,8 +15,10 @@
 #include <zephyr/toolchain.h>
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/printk.h>
-#include <tinycrypt/sha256.h>
-#include <tinycrypt/constants.h>
+
+/* SHA-256 provider lives in lichen_util.c only: TinyCrypt on host builds,
+ * mbedTLS under Zephyr (TinyCrypt is deprecated in Zephyr 4.1). Callers
+ * include no crypto headers. */
 
 /*
  * LICHEN-specific error codes (only when link layer is available).
@@ -54,17 +56,18 @@ static inline void secure_zero(void *ptr, size_t len)
 /**
  * @brief Compute SHA-256 hash with secure cleanup
  *
- * SECURITY: The output buffer MUST be at least TC_SHA256_DIGEST_SIZE (32) bytes.
+ * SECURITY: The output buffer MUST be at least 32 bytes (the SHA-256 digest
+ * size). This function NEVER produces partial hashes.
  * The outlen parameter is validated at runtime: a buffer smaller than
- * TC_SHA256_DIGEST_SIZE is rejected with -ENOMEM instead of overflowing.
- * Callers should declare: uint8_t hash[TC_SHA256_DIGEST_SIZE];
+ * 32 (the SHA-256 digest size) is rejected with -ENOMEM instead of
+ * overflowing. Callers should declare: uint8_t hash[32];
  *
  * @param input Input data (may be NULL if inlen is 0)
  * @param inlen Input length in bytes
- * @param output Output buffer, must be >= TC_SHA256_DIGEST_SIZE bytes
- * @param outlen Output buffer size in bytes, must be >= TC_SHA256_DIGEST_SIZE
+ * @param output Output buffer, must be >= 32 bytes
+ * @param outlen Output buffer size in bytes, must be >= 32
  * @return 0 on success, -EINVAL if output is NULL or input is NULL with inlen > 0,
- *         -ENOMEM if outlen < TC_SHA256_DIGEST_SIZE,
+ *         -ENOMEM if outlen < 32,
  *         -EIO if SHA-256 init fails, -EMSGSIZE if SHA-256 update fails,
  *         -EBADMSG if SHA-256 final fails
  */

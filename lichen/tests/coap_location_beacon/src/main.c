@@ -387,8 +387,11 @@ ZTEST(coap_location_beacon, test_payload_fields_are_bounded_and_canonical) {
   zassert_true(tx.payload_len <= LICHEN_POSITION_BEACON_PAYLOAD_MAX);
   zassert_str_equal(encoded_base_name, "urn:dev:mac:0011223344556677:");
   zassert_equal(encoded_base_time, 1710000000U);
-  zassert_within(encoded_latitude, 47.620613, 0.000001);
-  zassert_within(encoded_longitude, -122.3493, 0.00001);
+  /* Encoders are f64 on the wire (spec vectors pin 0xfb); compare against
+   * the exact double the e7->degree conversion produces, not an f32 literal
+   * (which differs from the double in the 8th decimal). */
+  zassert_within(encoded_latitude, 476206130.0 / 1e7, 1e-9);
+  zassert_within(encoded_longitude, -1223493000.0 / 1e7, 1e-9);
   zassert_within(encoded_altitude, 42.0, 0.001);
   zassert_within(encoded_hacc, 1.25, 0.001);
   zassert_within(encoded_vacc, 2.5, 0.001);

@@ -186,7 +186,8 @@ pub struct Router {
     grounded: bool,
     /// Root-side 0x17 DIO signature sequence counter (spec 06 8.10.1):
     /// starts at 1 (seq 0 is wire-illegal), monotone, terminal at u64::MAX.
-    #[cfg_attr(not(feature = "root-sig"), allow(dead_code))] // read by root-sig DIO builder
+    /// Read only by the root-sig DIO producer; dead in builds without it.
+    #[cfg_attr(not(feature = "root-sig"), allow(dead_code))]
     pub(crate) root_dio_seq: u64,
     /// This node's geographic coordinates for GPSR (spec 9.7).
     /// None if GPS unavailable or privacy mode enabled.
@@ -1052,7 +1053,7 @@ impl Router {
     /// Get the route path for a destination (root only).
     ///
     /// Non-root nodes always return `None` (routing table is root-only in non-storing RPL mode per spec/05-routing.md). Error handling for invalid dst is delegated to routing_table.lookup.
-    pub fn lookup_route(&self, dst: &[u8; 16]) -> Option<&[[u8; 16]]> {
+    pub fn lookup_route(&self, dst: Ipv6Addr) -> Option<&[Ipv6Addr]> {
         if !self.dodag.is_root() {
             return None;
         }
@@ -1060,13 +1061,13 @@ impl Router {
     }
 
     /// Expire finite routes and look up a destination using monotonic time.
-    pub fn lookup_route_at(&mut self, dst: &[u8; 16], now_ms: u64) -> Option<&[[u8; 16]]> {
+    pub fn lookup_route_at(&mut self, dst: Ipv6Addr, now_ms: u64) -> Option<&[Ipv6Addr]> {
         self.expire_routes_at(now_ms);
         self.lookup_route(dst)
     }
 
     /// Inject a route directly into the routing table (for testing).
-    pub fn inject_route(&mut self, target: [u8; 16], path: &[[u8; 16]]) {
+    pub fn inject_route(&mut self, target: Ipv6Addr, path: &[Ipv6Addr]) {
         self.dao_manager.routing_table_mut().add_route(target, path);
     }
 

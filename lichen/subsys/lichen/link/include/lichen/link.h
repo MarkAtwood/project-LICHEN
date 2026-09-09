@@ -295,12 +295,18 @@ lichen_desync_on_sfn_wrap(struct lichen_tdma_ctx *tdma, bool time_valid);
  * @brief Process a beacon result: drives the DESYNCED -> RECOVERING ->
  * SYNCED recovery path; an invalid beacon in RECOVERING returns to DESYNCED.
  *
+ * Per R-02a-084 the node MUST NOT leave DESYNCED while the wall clock is
+ * unsynced: a signature-valid beacon is ignored until the wall clock is
+ * valid (parity with python timing/sfn.py on_beacon and rust desync.rs).
+ *
  * @param[in,out] tdma  TDMA context
  * @param[in]     valid True when the beacon is valid (floor-checked, SFN match)
+ * @param[in]     wall_clock_valid True when the wall-clock provider is valid
  * @return The new desync state
  */
 enum lichen_desync_state lichen_desync_on_beacon(struct lichen_tdma_ctx *tdma,
-						  bool valid);
+						  bool valid,
+						  bool wall_clock_valid);
 
 /**
  * @brief Advance the bounded RECOVERING listen timeout by one superframe.

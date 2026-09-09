@@ -979,6 +979,43 @@ class TestSlotClaimVectors:
                 )
                 break
 
+    def test_cose_envelope_vectors(self, vectors: list[dict]) -> None:
+        """Every envelope_hex vector decodes and verifies per its expectation
+        (l1qw.16.2: the basic tier documents the spec COSE_Sign1 form)."""
+        path = VECTORS_DIR / "gcp_slot_claim.json"
+        with open(path) as f:
+            doc = json.load(f)
+        now = doc["constants"]["evaluation_time"]
+        envelope_vectors = [v for v in vectors if "envelope_hex" in v]
+        assert envelope_vectors, "basic tier lost its COSE envelope vectors"
+
+        for v in envelope_vectors:
+            envelope = bytes.fromhex(v["envelope_hex"])
+            expected = v["expected"]
+            if expected.get("reason") == "missing_signature":
+                # An empty signature bstr is structurally malformed.
+                with pytest.raises(ClaimError):
+                    SlotClaim.decode_cose(envelope)
+                continue
+            claim = SlotClaim.decode_cose(envelope)
+            pubkey = bytes.fromhex(v["signer"]["public_key_hex"])
+            is_valid, reason = verify_slot_claim(claim, pubkey, now_unix=now)
+            expect_valid = expected.get(
+                "valid", expected.get("verify_with_gateway_pubkey", False)
+            )
+            if expect_valid:
+                assert (is_valid, reason) == (True, None), v["name"]
+                if "signature_length" in expected:
+                    assert len(claim.signature) == expected["signature_length"]
+                if "allocation_mode" in expected:
+                    mode = slot_claim.AllocationMode[
+                        expected["allocation_mode"].upper()
+                    ]
+                    assert claim.allocation_mode == mode, v["name"]
+            else:
+                assert not is_valid, v["name"]
+                assert reason == ClaimRejectReason.INVALID_SIGNATURE
+
 
 class TestClaimExpiryHorizon:
     """GCP-6.3 hardening: bound how far ahead a claim may pre-book."""
@@ -1156,3 +1193,78 @@ class TestSlotClaimRateLimiter:
         )
         assert not ok
         assert reason == ClaimRejectReason.RATE_LIMITED
+
+
+class TestClaimSeqStore:
+    """Tests for the sender-side claim_seq persistence (GCP-6.5, l1qw.20.1)."""
+
+    def test_missing_file_initializes_to_zero(self, tmp_path: Path) -> None:
+        store = slot_claim.ClaimSeqStore(tmp_path / "claim_seq")
+        assert store.next_seq() == 1
+
+    def test_increment_persists_before_return(self, tmp_path: Path) -> None:
+        path = tmp_path / "claim_seq"
+        store = slot_claim.ClaimSeqStore(path)
+        seq = store.next_seq()
+        assert seq == 1
+        # GCP-6.5 "Before claim" row: persist to NVS, then sign and send —
+        # the value is durable the moment next_seq() returns it.
+        assert path.read_text(encoding="ascii").strip() == str(seq)
+
+    def test_monotonic_across_restart(self, tmp_path: Path) -> None:
+        path = tmp_path / "claim_seq"
+        first = slot_claim.ClaimSeqStore(path)
+        assert first.next_seq() == 1
+        assert first.next_seq() == 2
+        rebooted = slot_claim.ClaimSeqStore(path)
+        assert rebooted.next_seq() == 3
+
+    def test_corrupt_file_initializes_to_zero(self, tmp_path: Path) -> None:
+        path = tmp_path / "claim_seq"
+        path.write_text("not a number", encoding="ascii")
+        store = slot_claim.ClaimSeqStore(path)
+        # Safe direction: a rewound counter only makes receivers reject the
+        # claims as replays (step 8) until the sender climbs past their
+        # cached high-water.
+        assert store.next_seq() == 1
+
+    def test_stale_temp_files_never_read(self, tmp_path: Path) -> None:
+        path = tmp_path / "claim_seq"
+        store = slot_claim.ClaimSeqStore(path)
+        assert store.next_seq() == 1
+        (tmp_path / ".claim_seq.crashed.tmp").write_text("999", encoding="ascii")
+        reloaded = slot_claim.ClaimSeqStore(path)
+        assert reloaded.next_seq() == 2
+
+    def test_persist_failure_raises_and_state_stays_consistent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        path = tmp_path / "claim_seq"
+        store = slot_claim.ClaimSeqStore(path)
+
+        def broken_replace(src: object, dst: object) -> None:
+            raise OSError("disk gone")
+
+        monkeypatch.setattr(slot_claim.os, "replace", broken_replace)
+        with pytest.raises(OSError):
+            store.next_seq()
+        monkeypatch.undo()
+        # The failed sequence was not consumed: the retry persists and
+        # returns it.
+        assert store.next_seq() == 1
+        assert path.read_text(encoding="ascii").strip() == "1"
+
+    def test_signed_claim_carries_store_sequence(self, tmp_path: Path) -> None:
+        identity = Identity.from_seed(bytes([9]) * 32)
+        store = slot_claim.ClaimSeqStore(tmp_path / "claim_seq")
+        seq = store.next_seq()
+        claim = SlotClaim(
+            gateway_iid=identity.iid.hex(),
+            slots=(0, 1),
+            superframe_id=10,
+            expiry=int(time.time()) + 8,
+            claim_seq=seq,
+        )
+        signed = sign_slot_claim(claim, identity.privkey, identity.pubkey)
+        ok, reason = verify_slot_claim(signed, identity.pubkey)
+        assert ok, reason

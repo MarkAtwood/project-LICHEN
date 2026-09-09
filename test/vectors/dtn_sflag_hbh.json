@@ -40,6 +40,16 @@
   "expected": "parse"
  },
  {
+  "name": "padn_precedes_dtn",
+  "description": "PadN option (RFC 8200 4.2: type 0x01, Len=N-2, N-2 zero bytes; here PadN(4)) preceding the DTN option is skipped via the generic TLV branch and the DTN intent still parses. Oracle: RFC 8200 4.2 + spec/05-routing.md 9.8 (independent, spec-derived).",
+  "type": "dtn_hbh",
+  "option_hex": "010200000305806553f600",
+  "expiry_unix": 1700001280,
+  "s_flag": 1,
+  "expiry_be_bytes": "6553f600",
+  "expected": "parse"
+ },
+ {
   "name": "expired_with_valid_clock",
   "description": "Node with valid wall clock: expiry < now -> drop silently (spec 9.8 Absolute TTL). Oracle: spec/05-routing.md 9.8 (independent, spec-derived).",
   "type": "dtn_semantic",

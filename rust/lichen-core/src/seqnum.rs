@@ -200,20 +200,35 @@ mod tests {
             match expected {
                 Some(Ordering::Less) => {
                     assert!(x < y && x <= y, "{a:#06x} < {b:#06x}");
-                    assert!(!(x > y) && !(x >= y), "{a:#06x} > {b:#06x}");
+                    // Exact partial_cmp equality rather than negated
+                    // comparison operators or a !matches! exclusion: it pins
+                    // the precise ordering (a regression to the unordered
+                    // None fails) and stays clippy-clean
+                    // (neg_cmp_op_on_partial_ord).
+                    assert_eq!(
+                        x.partial_cmp(&y),
+                        Some(Ordering::Less),
+                        "{a:#06x} not < {b:#06x}"
+                    );
                     assert!(x != y);
                 }
                 Some(Ordering::Greater) => {
                     assert!(x > y && x >= y, "{a:#06x} > {b:#06x}");
-                    assert!(!(x < y) && !(x <= y), "{a:#06x} < {b:#06x}");
+                    assert_eq!(
+                        x.partial_cmp(&y),
+                        Some(Ordering::Greater),
+                        "{a:#06x} not > {b:#06x}"
+                    );
                     assert!(x != y);
                 }
                 Some(Ordering::Equal) => {
                     assert!(x == y);
-                    assert!(!(x < y) && !(x > y));
+                    assert_eq!(x.partial_cmp(&y), Some(Ordering::Equal));
                 }
                 None => {
-                    assert!(!(x < y) && !(x > y) && !(x <= y) && !(x >= y));
+                    // All four comparison operators are false exactly when the
+                    // pair is unordered.
+                    assert_eq!(x.partial_cmp(&y), None);
                 }
             }
         }
@@ -233,7 +248,8 @@ mod tests {
             let (x, y) = (SeqNum::new(a), SeqNum::new(b));
             assert_eq!(x.rfc1982_cmp(y), None, "{a:#06x} vs {b:#06x}");
             assert_eq!(y.rfc1982_cmp(x), None, "{b:#06x} vs {a:#06x}");
-            assert!(!(x < y) && !(x > y) && !(x <= y) && !(x >= y));
+            // All four comparison operators are false exactly when unordered.
+            assert_eq!(x.partial_cmp(&y), None, "{a:#06x} unordered vs {b:#06x}");
             assert!(x != y, "unordered does not mean equal");
         }
     }
@@ -245,7 +261,7 @@ mod tests {
             assert_eq!(x.rfc1982_cmp(x), Some(Ordering::Equal));
             assert_eq!(oracle_cmp(a, a), Some(Ordering::Equal));
             assert!(x == x);
-            assert!(!(x < x) && !(x > x));
+            assert_eq!(x.partial_cmp(&x), Some(Ordering::Equal));
         }
     }
 

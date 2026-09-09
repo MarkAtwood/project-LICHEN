@@ -104,6 +104,11 @@ int coap_oscore_unprotect_resource_request(struct coap_resource *resource,
  * @return 0 on success (result->payload valid), positive CoAP response code
  *         on error (caller must return it without sending)
  */
+int coap_oscore_authorize_mutating_result(struct coap_resource *_Nonnull resource,
+					  struct coap_packet *_Nonnull request,
+					  struct sockaddr *_Nonnull addr, socklen_t addr_len,
+					  uint8_t expected_method,
+					  struct coap_oscore_unprotect_result *_Nonnull result);
 
 
 /**
@@ -199,6 +204,14 @@ int coap_oscore_unprotect_request(struct oscore_ctx *_Nonnull ctx,
  * @param[in]     request_piv_len PIV length
  * @param[in]     original_request Original CoAP request (for token, etc)
  * @param[in]     response_code  CoAP response code
+ * @param[in]     options        Inner (Class E) options, pre-encoded as raw
+ *			       CoAP option bytes; encrypted with the payload.
+ *			       NULL/options_len == 0 for none. Content-Format
+ *			       is Class E (RFC 8613 Section 5.4) and MUST be
+ *			       carried here so protected responses keep the
+ *			       payload's media type (parity with the Rust
+ *			       gateway, which emits it whenever nonzero).
+ * @param[in]     options_len    Options length
  * @param[in]     payload        Response payload to encrypt
  * @param[in]     payload_len    Payload length
  * @param[out]    response       Output protected response packet
@@ -210,6 +223,7 @@ int coap_oscore_protect_response(struct oscore_ctx *_Nonnull ctx,
 				 const uint8_t *_Nonnull request_piv, size_t request_piv_len,
 				 const struct coap_packet *_Nonnull original_request,
 				 uint8_t response_code,
+				 const uint8_t *_Nullable options, size_t options_len,
 				 const uint8_t *_Nonnull payload, size_t payload_len,
 				 struct coap_packet *_Nonnull response,
 				 uint8_t *_Nonnull resp_buf, size_t resp_buf_len);
