@@ -400,7 +400,6 @@ impl Router {
     ) -> DioProcessOutcome {
         let signer_iid = frame.sender().iid;
         if self.dio_rate_limited(signer_iid, now_ms) {
-            std::eprintln!("PROBE rate_limited");
             return DioProcessOutcome::Rejected;
         }
         let expected_role =
@@ -419,34 +418,28 @@ impl Router {
             expected_role,
         ) else {
             self.revoke_schc_peer(&signer_iid, now_ms);
-            std::eprintln!("PROBE schc_gate");
             return DioProcessOutcome::Rejected;
         };
         let Some(frame) = peer.authenticated_frame() else {
             self.revoke_schc_peer(&signer_iid, now_ms);
-            std::eprintln!("PROBE schc_gate");
             return DioProcessOutcome::Rejected;
         };
         if !peer.allows_dodag_join() || !link.accepts_authenticated_frame(frame) {
             self.revoke_schc_peer(&signer_iid, now_ms);
-            std::eprintln!("PROBE schc_gate");
             return DioProcessOutcome::Rejected;
         }
         let mut ipv6 = [0u8; 512];
         let Ok(ipv6_len) = lichen_schc::decompress(&frame.payload()[1..], &mut ipv6) else {
             self.revoke_schc_peer(&signer_iid, now_ms);
-            std::eprintln!("PROBE schc_gate");
             return DioProcessOutcome::Rejected;
         };
         if ipv6_len < 68 {
             self.revoke_schc_peer(&signer_iid, now_ms);
-            std::eprintln!("PROBE schc_gate");
             return DioProcessOutcome::Rejected;
         }
         let dio_bytes = &ipv6[44..ipv6_len];
         let Ok(dio) = Dio::from_bytes(dio_bytes) else {
             self.revoke_schc_peer(&signer_iid, now_ms);
-            std::eprintln!("PROBE schc_gate");
             return DioProcessOutcome::Rejected;
         };
         let sender_addr = ipv6[8..24]
@@ -510,11 +503,9 @@ impl Router {
     ) -> DioProcessOutcome {
         let now_ms = self.observe_now(now_ms);
         if !etx.is_finite() || etx < 1.0 {
-            std::eprintln!("PROBE etx");
             return DioProcessOutcome::Rejected;
         }
         if Dio::from_bytes(dio_bytes).as_ref() != Ok(dio) {
-            std::eprintln!("PROBE dio_bytes_roundtrip");
             return DioProcessOutcome::Rejected;
         }
         if self.dodag.is_root()
@@ -522,12 +513,10 @@ impl Router {
             || dio.dodag_id != self.dodag_id
             || dio.mode_of_operation != NON_STORING_MOP
         {
-            std::eprintln!("PROBE instance_dodag_mop");
             return DioProcessOutcome::Rejected;
         }
 
         let Some(version_order) = version_cmp(dio.version, self.dodag.version) else {
-            std::eprintln!("PROBE version_cmp");
             return DioProcessOutcome::Rejected;
         };
         if version_order.is_lt() {
