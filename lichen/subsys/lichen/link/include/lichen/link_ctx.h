@@ -434,21 +434,23 @@ int lichen_link_copy_identity(const struct lichen_link_ctx *_Nonnull ctx,
 /**
  * @brief Derive 16-byte Yggdrasil address from Ed25519 public key
  *
- * LICHEN native profile inspired by Yggdrasil 0200::/8 range; NOT
- * wire-compatible with upstream AddrForKey (which bit-packs the pubkey
- * without hashing). See test/vectors/yggdrasil_address.json for divergence.
+ * Upstream Yggdrasil AddrForKey (yggdrasil-go@422836ee
+ * src/address/address.go), per spec/decisions.jsonl
+ * upstream-yggdrasil-addressing. Wire-compatible with upstream; the
+ * rejected SHA-512 native profile is gone. See the pinned
+ * upstream_addr_for_key oracle in test/vectors/yggdrasil_address.json.
  *
- * Algorithm:
- *   1. Compute `h = SHA-512(pubkey)`
- *   2. `addr = [0x02] || h[0:7] || h[0:8]`
- *   3. Clear U/L bit in IID byte: `addr[8] &= 0xfd`
+ * Algorithm (no hashing):
+ *   1. Invert all 32 pubkey bytes.
+ *   2. `addr[0] = 0x02`; `addr[1]` = count of leading 1 bits in the
+ *      inverted key (uint8 wrap at 256, matching upstream's byte counter).
+ *   3. Skip those 1s and the first 0 bit; pack the remaining bits
+ *      MSB-first into whole bytes, discarding the trailing partial byte;
+ *      copy into `addr[2:16]`, zero tail.
  *
- * The 0200::/7 prefix byte (`0x02`) is the Yggdrasil global routing prefix.
- * Bytes 1-7 (from `h[0:7]`) provide /7 dispersion across the Yggdrasil DHT.
- * Bytes 8-15 (from `h[0:8]`) form the IID, binding the address to the pubkey.
- *
- * Matches test vectors in test/vectors/yggdrasil-derivation.json (cross-validated
- * across Rust, Python, C implementations).
+ * The 0200::/8 prefix byte (`0x02`) is the Yggdrasil global routing
+ * prefix. The SHA-512 IID (lichen_key_pubkey_to_iid) does NOT appear in
+ * the routable address; it remains link-local-only.
  *
  * @param pubkey 32-byte Ed25519 public key
  * @param ygg_addr Output buffer for 16-byte address
