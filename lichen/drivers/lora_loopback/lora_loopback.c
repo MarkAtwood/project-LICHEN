@@ -196,20 +196,6 @@ static int lora_loopback_recv(const struct device *dev,
 	return pkt.len;
 }
 
-#if IS_ENABLED(CONFIG_LICHEN_LORA_L2)
-static int lora_loopback_cad(const struct device *dev, k_timeout_t timeout,
-			     bool *busy)
-{
-	ARG_UNUSED(dev);
-	ARG_UNUSED(timeout);
-	if (busy == NULL) {
-		return -EINVAL;
-	}
-	*busy = false;
-	return 0;
-}
-#endif
-
 /* Deliver queued packets to the registered async callback. Runs in system
  * workqueue context; the callback may cancel (recv_async(NULL)) — cancel-then
  * re-arm also works — both handled by re-reading recv_cb each packet. The
@@ -273,6 +259,24 @@ static int lora_loopback_recv_async(const struct device *dev,
 
 	k_spinlock_key_t key = k_spin_lock(&data->rx_lock);
 
+	if (data->recv_cb == cb) {
+		/* Idempotent re-arm (bead project-LICHEN-worker6-m4yk): this
+		 * driver's registration is persistent across deliveries, so
+		 * the L2 RX path's mandatory post-delivery re-arm must be a
+		 * no-op success, not a conflict — otherwise every delivery
+		 * starts a -EBUSY retry storm that aborts RX after 3 strikes
+		 * and deafens the module. Arming a DIFFERENT callback while
+		 * one is registered still conflicts: one receiver at a time
+		 * (upstream sx12xx semantics). */
+#if KERNEL_VERSION_NUMBER >= 0x040000
+		data->recv_user_data = user_data;
+#endif
+		k_spin_unlock(&data->rx_lock, key);
+		/* Deliver anything already queued (sent before the re-arm). */
+		k_work_submit(&data->rx_work);
+		return 0;
+	}
+
 	if (data->recv_cb != NULL) {
 		k_spin_unlock(&data->rx_lock, key);
 		return -EBUSY;
@@ -304,7 +308,8 @@ static int lora_loopback_init(const struct device *dev)
 		LOOPBACK_QUEUE_DEPTH);
 
 #if IS_ENABLED(CONFIG_LICHEN_LORA_L2)
-	return lichen_lora_cad_register(dev, lora_loopback_cad);
+	/* No hardware CAD: emulated clear-channel completion (lora_cad). */
+	return lichen_lora_cad_start_register(dev, NULL);
 #endif
 	return 0;
 }

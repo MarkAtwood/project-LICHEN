@@ -863,7 +863,12 @@ class Node:
         """Process a received and verified frame.
 
         Why separate method: Keeps receive loop simple, allows testing.
+
+        ``rx.pkt_id`` is the link-assigned correlation id; packet-path logs in
+        this method (and the source-route relay and SCHC-failure helpers it
+        calls) carry it so an id can be traced from RX entry.
         """
+        pkt_id = rx.pkt_id
         payload = rx.payload
 
         kind = classify_l2_payload(payload)
@@ -880,8 +885,9 @@ class Node:
             # (other routing subtypes, malformed or truncated routing frames)
             # is consumed here: it never reaches the application callback.
             logger.debug(
-                "dropping non-ANNOUNCE routing frame from %s",
+                "dropping non-ANNOUNCE routing frame from %s pkt_id=%d",
                 rx.sender,
+                pkt_id,
             )
             return
 
@@ -894,8 +900,9 @@ class Node:
             # Either way there is nothing for the application; undefined
             # dispatch values remain an application extension point.
             logger.debug(
-                "dropping empty or truncated dispatch frame from %s",
+                "dropping empty or truncated dispatch frame from %s pkt_id=%d",
                 rx.sender,
+                pkt_id,
             )
             return
 
@@ -1007,7 +1014,7 @@ class Node:
         # of 0 is exhausted upstream, so the datagram is rejected before any
         # routing, local consumption, or relay re-encoding.
         if packet.header.hop_limit == 0:
-            logger.debug("dropping IPv6 packet with exhausted Hop Limit")
+            logger.debug("dropping IPv6 packet with exhausted Hop Limit pkt_id=%d", pkt_id)
             return
         relay_identity = _relay_identity(packet)
 
@@ -1020,10 +1027,14 @@ class Node:
         try:
             in_transit = survey_source_route(packet)
         except RoutingError as error:
-            logger.debug("dropping packet with invalid source-route header: %s", error)
+            logger.debug(
+                "dropping packet with invalid source-route header: %s pkt_id=%d",
+                error,
+                pkt_id,
+            )
             return
         if in_transit:
-            await self._relay_source_routed(packet, relay_identity, now_ms)
+            await self._relay_source_routed(packet, relay_identity, now_ms, pkt_id)
             return
 
         decision, next_hop = self.router.route(packet, now_ms)
@@ -1035,7 +1046,7 @@ class Node:
             if self._relay_seen_recently(relay_identity, now_ms):
                 return
             if packet.header.hop_limit <= 1:
-                logger.debug("dropping IPv6 packet with exhausted Hop Limit")
+                logger.debug("dropping IPv6 packet with exhausted Hop Limit pkt_id=%d", pkt_id)
                 return
             packet.header.hop_limit -= 1
             forwarded_ipv6 = packet.to_bytes()
@@ -1044,7 +1055,7 @@ class Node:
             # routable gradient table for its asserted IPv6 source.
             peer = self._peer_for_next_hop(next_hop)
             if peer is None:
-                logger.warning("forwarding next hop has no pinned peer identity")
+                logger.warning("forwarding next hop has no pinned peer identity pkt_id=%d", pkt_id)
                 return
             try:
                 forwarded = self.link.compress_schc_for_peer(
@@ -1053,21 +1064,27 @@ class Node:
                     allow_fragmentation=True,
                 )
             except (SchcError, TypeError, ValueError):
-                logger.warning("forwarding next-hop SCHC policy rejected packet")
+                logger.warning("forwarding next-hop SCHC policy rejected packet pkt_id=%d", pkt_id)
                 return
             if not await self._transmit_peer_schc(forwarded, peer):
                 return
             # Cache only a packet accepted for transmission; a transient
             # sender-capacity/radio failure must remain retryable.
             self._remember_relay(relay_identity, now_ms)
+            logger.debug("forwarded IPv6 packet in_pkt_id=%d", pkt_id)
 
     async def _relay_source_routed(
         self,
         packet: IPv6Packet,
         relay_identity: bytes,
         now_ms: int,
+        pkt_id: int,
     ) -> None:
-        """Consume one RH3 segment and relay (RFC 6554); never deliver locally."""
+        """Consume one RH3 segment and relay (RFC 6554); never deliver locally.
+
+        ``pkt_id`` is the inbound correlation id, carried into every
+        relay-path log so the hop stays traceable to its RX entry.
+        """
         # SECURITY: an in-transit datagram must be addressed to this node
         # (outer destination = our native or link-local address). Anything else
         # would turn this node into a generic RH3 redirector for datagrams the
@@ -1076,12 +1093,15 @@ class Node:
             self.router.node_address,
             make_link_local(self.identity.iid),
         ):
-            logger.debug("dropping in-transit source-routed packet not addressed to this node")
+            logger.debug(
+                "dropping in-transit source-routed packet not addressed to this node pkt_id=%d",
+                pkt_id,
+            )
             return
         try:
             advanced, next_hop = advance_source_route(packet)
         except RoutingError as error:
-            logger.debug("dropping in-transit source-routed packet: %s", error)
+            logger.debug("dropping in-transit source-routed packet: %s pkt_id=%d", error, pkt_id)
             return
         if next_hop is None:
             # survey_source_route guarantees segments_left != 0 here.
@@ -1094,7 +1114,7 @@ class Node:
         # routable gradient table for its asserted IPv6 source.
         peer = self._peer_for_next_hop(next_hop)
         if peer is None:
-            logger.warning("source-route next hop has no pinned peer identity")
+            logger.warning("source-route next hop has no pinned peer identity pkt_id=%d", pkt_id)
             return
         try:
             forwarded = self.link.compress_schc_for_peer(
@@ -1103,13 +1123,14 @@ class Node:
                 allow_fragmentation=True,
             )
         except (SchcError, TypeError, ValueError):
-            logger.warning("forwarding next-hop SCHC policy rejected packet")
+            logger.warning("forwarding next-hop SCHC policy rejected packet pkt_id=%d", pkt_id)
             return
         if not await self._transmit_peer_schc(forwarded, peer):
             return
         # Cache only a packet accepted for transmission; a transient
         # sender-capacity/radio failure must remain retryable.
         self._remember_relay(relay_identity, now_ms)
+        logger.debug("relayed source-routed IPv6 packet in_pkt_id=%d", pkt_id)
 
     def _is_configured_rpl_dio(self, schc: bytes) -> bool:
         """Classify a candidate DIO without consuming its authenticated receipt."""
@@ -1321,14 +1342,16 @@ class Node:
             notify = self._rule_version_failures.record_failure(rx.sender_pubkey)
         except RuleVersionFailureTrackerFull:
             logger.error(
-                "SCHC failure tracker full; source not admitted: %s",
+                "SCHC failure tracker full; source not admitted: %s pkt_id=%d",
                 rx.sender_iid.hex(),
+                rx.pkt_id,
             )
             return
         if notify:
             logger.error(
-                "repeated SCHC/IPv6 ingress failures from signer %s",
+                "repeated SCHC/IPv6 ingress failures from signer %s pkt_id=%d",
                 rx.sender_pubkey.hex(),
+                rx.pkt_id,
             )
             if self._on_rule_version_failure is not None:
                 try:

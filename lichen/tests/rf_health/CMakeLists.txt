@@ -15,16 +15,9 @@ target_include_directories(rf_health_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/include
 )
 
-# Apply sanitizers and hardening
+# Apply sanitizers and hardening (test_common.cmake probes the compiler and
+# picks -std=c23 or -std=c2x as supported — no per-target std surgery here).
 lichen_test_target(rf_health_test)
-
-# ponytail: shared test_common.cmake targets Apple clang (-std=c23); gcc 13
-# (this Linux builder) only accepts c2x — later flag wins for this target.
-# Upgrade path: make test_common.cmake probe the compiler.
-get_target_property(RF_HEALTH_OPTS rf_health_test COMPILE_OPTIONS)
-list(REMOVE_ITEM RF_HEALTH_OPTS -std=c23)
-list(APPEND RF_HEALTH_OPTS -std=c2x)
-set_target_properties(rf_health_test PROPERTIES COMPILE_OPTIONS "${RF_HEALTH_OPTS}")
 
 include(CTest)
 add_test(NAME rf_health

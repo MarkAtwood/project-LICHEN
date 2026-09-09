@@ -18,6 +18,18 @@ menuconfig LICHEN_RPL
 
 if LICHEN_RPL
 
+config LICHEN_RPL_ROOT_SIG
+	bool "Root DIO signature verification"
+	default n
+	help
+	  Verify the optional COSE_Sign1 Root DIO Signature option (0x17)
+	  on the DIO receive path (spec 06-security.md 8.10.1). Forged,
+	  tampered, and replayed signatures reject the DIO; a missing
+	  option, a missing trust pin, or an expired/unassessable
+	  signature falls back to the link-layer baseline (graceful
+	  degradation). Enable for deployments operating in adversarial
+	  environments.
+
 config LICHEN_RPL_MRHOF
 	bool "MRHOF objective function"
 	default y
@@ -125,8 +137,12 @@ config LICHEN_CCP_TDMA
 	bool "CCP-1 TDMA time slots with RPL"
 	default y
 	depends on LICHEN_RPL
-	select LICHEN_TDMA
-	select LICHEN_CCP_TIME_SYNC
+	# LICHEN_TDMA and LICHEN_CCP_TIME_SYNC genuinely require
+	# LICHEN_LINK_CCP16_LOAD_BALANCING; unconditional selects produce
+	# unsatisfied-deps Kconfig warnings (fatal under WARN_TO_ERROR) on
+	# builds with the persist options off, e.g. native_sim gateway (jy0a).
+	select LICHEN_TDMA if LICHEN_LINK_CCP16_LOAD_BALANCING
+	select LICHEN_CCP_TIME_SYNC if LICHEN_LINK_CCP16_LOAD_BALANCING
 	help
 	  Enable TDMA integration for CCP-1 (coordinated capacity planning).
 	  Adds support for slot assignment, beacon sync, and tdma_tx_allowed()

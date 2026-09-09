@@ -83,7 +83,7 @@ class CongestionProvider(Protocol):
 
 
 class CongestionAwareSite(resource.Site):
-    """A CoAP Site that enforces congestion-based load shedding (spec 07 §10.2.3).
+    """A CoAP Site that enforces congestion-based load shedding (spec 07 §10.2.4).
 
     When duty cycle congestion exceeds thresholds, incoming requests are rejected
     with 5.03 Service Unavailable before reaching resource handlers. This prevents
@@ -124,7 +124,7 @@ class CongestionAwareSite(resource.Site):
         if self._congestion_provider is not None:
             # Use atomic read to ensure level and retry_after_ms are consistent (r1-P3-43)
             state = self._congestion_provider.congestion_state()
-            # Map request type to priority per spec §10.2.3
+            # Map request type to priority per spec §10.2.4
             # CON -> URGENT (P2), NON -> NORMAL (P3)
             priority = Priority.URGENT if request.mtype == CON else Priority.NORMAL
             if not check_congestion_allows(state.level, priority):
@@ -188,7 +188,7 @@ def build_site(
             CoAP Observe support. If None, a default resource is created.
         congestion_provider: If provided, the site will check congestion level
             before processing requests and return 5.03 Service Unavailable when
-            duty cycle congestion exceeds thresholds (spec 07 §10.2.3).
+            duty cycle congestion exceeds thresholds (spec 07 §10.2.4).
     """
     site: resource.Site
     if congestion_provider is not None:

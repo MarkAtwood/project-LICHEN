@@ -153,6 +153,21 @@ uint8_t lora_l2_duty_region(void);
 int lora_l2_rx_start(void);
 
 /**
+ * @brief Arm asynchronous RX, replacing any existing driver arm
+ *
+ * The caller must not hold modem_mutex. RX re-arm owns that mutex while it
+ * disarms the previous driver lease and installs the next one.
+ */
+void lora_l2_rx_arm(void);
+
+/**
+ * @brief Disarm the driver while modem_mutex is held
+ *
+ * @return 0 when the driver is disarmed, negative errno otherwise
+ */
+int lora_l2_rx_disarm_locked(void);
+
+/**
  * @brief Disarm the driver and drain the RX work item
  *
  * Called from stop() after the transition to STOPPED, and from the ABORTED

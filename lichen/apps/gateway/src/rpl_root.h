@@ -10,7 +10,24 @@
 #include <lichen/rpl.h>
 
 struct net_if;
-struct lichen_rpl_root;
+
+/* Complete type: main.c allocates a static lichen_rpl_root and logs
+ * s_rpl_root.dodag.rank, so the definition must live in this header
+ * (it was rpl_root.c-private until 6c73465c40 made main.c a consumer,
+ * which never compiled under CONFIG_LORA_LICHEN_GATEWAY_RPL_ROOT). */
+struct lichen_rpl_root {
+	struct lichen_rpl_dodag dodag;
+	struct lichen_trickle trickle;
+	struct lichen_rpl_dao_manager dao_manager;
+	struct lichen_rpl_dao_root_state root_state;
+	uint8_t prefix[16];
+	uint8_t prefix_len;
+	/* Root's own link-local address; DIOs originate from it (the DODAGID
+	 * is the root's 02xx:: Yggdrasil address and must not be reused as
+	 * the link-local IID). */
+	uint8_t self_addr[16];
+	struct net_if *iface;
+};
 
 struct lichen_rpl_root *lichen_rpl_root_init(struct lichen_rpl_root *root, struct net_if *iface,
 					     const uint8_t *dodag_id, const uint8_t *node_addr);

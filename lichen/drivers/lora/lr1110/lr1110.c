@@ -175,7 +175,7 @@ struct lr1110_data {
 	 * and the work handler's self-disarm. */
 	lora_recv_cb         async_cb;
 	void *                async_cb_user_data;
-	struct k_spinlock    cb_lock;
+	struct k_mutex       cb_lock;
 	atomic_t             modem_usage;
 	/* Async CAD (bead uwip.2): self-rescheduling poll work dodges the
 	 * documented DIO9+get_status freeze hazard on delivered packets while
@@ -276,11 +276,11 @@ static void lr1110_irq_work_handler(struct k_work *work)
 	 * transactions below must not turn this into a NULL call, and the
 	 * handler's own disarm cannot double-release against the cancel
 	 * path. */
-	k_spinlock_key_t key = k_spin_lock(&data->cb_lock);
+	k_mutex_lock(&data->cb_lock, K_FOREVER);
 	lora_recv_cb cb = data->async_cb;
 	void *cb_user_data = data->async_cb_user_data;
 
-	k_spin_unlock(&data->cb_lock, key);
+	k_mutex_unlock(&data->cb_lock);
 
 	if (status_ok && cb != NULL &&
 	    (irq & LR1110_SYSTEM_IRQ_RXDONE_MASK)) {
@@ -331,26 +331,24 @@ static void lr1110_irq_work_handler(struct k_work *work)
 		 * regains control (sync ops and the next arm recover), and
 		 * leave DIO9 off — the IRQ flags were not cleared, so
 		 * re-enabling would storm the ISR. */
-		key = k_spin_lock(&data->cb_lock);
+		k_mutex_lock(&data->cb_lock, K_FOREVER);
 		bool was_armed = data->async_cb != NULL;
 
 		data->async_cb = NULL;
 		data->async_cb_user_data = NULL;
-		k_spin_unlock(&data->cb_lock, key);
+		k_mutex_unlock(&data->cb_lock);
 		if (was_armed) {
 			lr1110_modem_release(data);
 			LOG_ERR("async rx: radio SPI failure, disarmed");
 		}
-	} else if (data->async_cb != NULL) {
-		if (irq & (LR1110_SYSTEM_IRQ_RXDONE_MASK |
-			   LR1110_SYSTEM_IRQ_TIMEOUT_MASK |
-			   LR1110_SYSTEM_IRQ_CRCERR_MASK |
-			   LR1110_SYSTEM_IRQ_HEADERERR_MASK)) {
-			/* RX-continuous re-arm per datasheet: RXDONE exits RX
-			 * to the configured fallback mode (STANDBY_RC), and
-			 * timeout/error IRQs end the window too. */
-			lr1110_async_rx_rearm(data);
-		}
+	} else if (irq & (LR1110_SYSTEM_IRQ_RXDONE_MASK |
+				 LR1110_SYSTEM_IRQ_TIMEOUT_MASK |
+				 LR1110_SYSTEM_IRQ_CRCERR_MASK |
+				 LR1110_SYSTEM_IRQ_HEADERERR_MASK)) {
+		/* RX-continuous re-arm per datasheet. The helper holds cb_lock
+		 * across the armed check and SPI operation so cancellation cannot
+		 * release the modem while the radio is being re-armed. */
+		lr1110_async_rx_rearm(data);
 	}
 
 	/* Re-arm the DIO9 edge interrupt now that clear_irq has deasserted the
@@ -358,10 +356,13 @@ static void lr1110_irq_work_handler(struct k_work *work)
 	 * storm if DIO9 stays asserted (nRF GPIO SENSE re-triggers on a held
 	 * level). Only re-enabled while async RX is armed; sync-only operation
 	 * drives everything by polling and keeps the interrupt off. */
-	if (data->async_cb != NULL) {
+	k_mutex_lock(&data->cb_lock, K_FOREVER);
+	bool still_armed = data->async_cb != NULL;
+	if (still_armed) {
 		gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9,
 						GPIO_INT_EDGE_TO_ACTIVE);
 	}
+	k_mutex_unlock(&data->cb_lock);
 }
 
 static void lr1110_dio9_isr(const struct device *port,
@@ -811,18 +812,38 @@ static int lr1110_lora_recv(const struct device *dev, uint8_t *data,
  * bd r002) and re-issue RX-continuous so an armed async RX keeps listening. */
 static void lr1110_async_rx_rearm(struct lr1110_data *data)
 {
+	int ret;
+	bool failed = false;
+
+	k_mutex_lock(&data->cb_lock, K_FOREVER);
 	if (data->async_cb == NULL) {
+		k_mutex_unlock(&data->cb_lock);
 		return;
 	}
 	if (data->pkt_params.payload_length_in_byte != LR1110_MAX_PAYLOAD) {
 		data->pkt_params.payload_length_in_byte = LR1110_MAX_PAYLOAD;
 		lr1110_hal_clear_last_error();
 		lr1110_radio_set_packet_param_lora(lr1110_dev, &data->pkt_params);
-		(void)lr1110_hal_get_last_error();
+		ret = lr1110_hal_get_last_error();
+		failed = ret < 0;
 	}
-	lr1110_hal_clear_last_error();
-	lr1110_radio_set_rx(lr1110_dev, LR1110_RX_CONTINUOUS);
-	(void)lr1110_hal_get_last_error();
+	if (!failed) {
+		lr1110_hal_clear_last_error();
+		lr1110_radio_set_rx(lr1110_dev, LR1110_RX_CONTINUOUS);
+		ret = lr1110_hal_get_last_error();
+		failed = ret < 0;
+	}
+	if (failed) {
+		data->async_cb = NULL;
+		data->async_cb_user_data = NULL;
+		gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9,
+						GPIO_INT_DISABLE);
+	}
+	k_mutex_unlock(&data->cb_lock);
+	if (failed) {
+		lr1110_modem_release(data);
+		LOG_ERR("async rx: re-arm failed, disarmed");
+	}
 }
 
 static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb,
@@ -837,14 +858,22 @@ static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb,
 		/* Cancel: disarm under cb_lock (exactly one of the cancel
 		 * path and a handler SPI-failure disarm may release the
 		 * modem), quiesce the work item, stop RX, park in standby. */
-		k_spinlock_key_t key = k_spin_lock(&drv->cb_lock);
+		/* A queued item on the same workqueue must run before the lease
+		 * can be released; the running item is this handler and may
+		 * self-cancel from its callback. */
+		unsigned int busy = k_work_busy_get(&drv->irq_work);
+		if (k_current_get() == &k_sys_work_q.thread &&
+		    busy != 0U && (busy & K_WORK_RUNNING) == 0U) {
+			return -EBUSY;
+		}
+		k_mutex_lock(&drv->cb_lock, K_FOREVER);
 		bool was_armed = drv->async_cb != NULL;
 
 		drv->async_cb = NULL;
 		drv->async_cb_user_data = NULL;
-		k_spin_unlock(&drv->cb_lock, key);
+		k_mutex_unlock(&drv->cb_lock);
 		if (!was_armed) {
-			return -EINVAL;
+			return 0;
 		}
 
 		gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9,
@@ -861,6 +890,7 @@ static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb,
 		} else if (k_work_busy_get(&drv->irq_work) == 0) {
 			/* On the sysworkq but our item is idle (cancel from a
 			 * different sysworkq item): nothing to race. */
+			(void)k_work_cancel(&drv->irq_work);
 			(void)lr1110_system_clear_irq(dev, 0xFFFFFFFFu);
 			(void)lr1110_system_set_standby(dev,
 						LR1110_SYSTEM_STDBY_CONFIG_RC);
@@ -882,7 +912,6 @@ static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb,
 	bool in_cb = (busy & K_WORK_RUNNING) != 0U &&
 		     (k_current_get() == &k_sys_work_q.thread);
 	bool acquired = false;
-	k_spinlock_key_t fail_key;
 
 	if (!in_cb) {
 		if (!lr1110_modem_acquire(drv)) {
@@ -918,11 +947,11 @@ static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb,
 	}
 	LR_RX_STAT_INC(windows);
 
-	k_spinlock_key_t key = k_spin_lock(&drv->cb_lock);
+	k_mutex_lock(&drv->cb_lock, K_FOREVER);
 
 	drv->async_cb = cb;
 	drv->async_cb_user_data = user_data;
-	k_spin_unlock(&drv->cb_lock, key);
+	k_mutex_unlock(&drv->cb_lock);
 
 	/* Enable DIO9 after SetRx: the ISR/work path is the async RX
 	 * delivery mechanism. While armed, sync paths are excluded by the
@@ -932,11 +961,11 @@ static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb,
 	return 0;
 
 fail:
-	fail_key = k_spin_lock(&drv->cb_lock);
+	k_mutex_lock(&drv->cb_lock, K_FOREVER);
 
 	drv->async_cb = NULL;
 	drv->async_cb_user_data = NULL;
-	k_spin_unlock(&drv->cb_lock, fail_key);
+	k_mutex_unlock(&drv->cb_lock);
 	if (acquired) {
 		lr1110_modem_release(drv);
 	}
@@ -944,91 +973,15 @@ fail:
 }
 
 #if IS_ENABLED(CONFIG_LICHEN_LORA_L2)
-static int lr1110_cad_impl(const struct device *dev, k_timeout_t timeout,
-			   bool *busy)
-{
-	if (busy == NULL) {
-		return -EINVAL;
-	}
-
-	/* Configure CAD params for the current LoRa config. The protocol fixes
-	 * CAD at three symbols; detection thresholds match SF10/BW125.
-	 * Exit to standby after CAD so the radio doesn't auto-RX. */
-	lr1110_radio_cad_params_t cad_params = {
-		.symbol_num = LICHEN_CSMA_CAD_TIMEOUT_SYMBOLS,
-		.det_peak   = 0x32,
-		.det_min    = 0x0A,
-		.exit_mode  = LR1110_RADIO_CAD_EXIT_MODE_STANDBYRC,
-		.timeout    = 0,
-	};
-
-	gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9, GPIO_INT_DISABLE);
-
-	LR1110_RETURN_ON_HAL_ERROR(
-		lr1110_radio_set_cad_params(dev, &cad_params));
-	LR1110_RETURN_ON_HAL_ERROR(
-		lr1110_system_set_dio_irq_params(
-			dev, LR1110_SYSTEM_IRQ_CADDONE_MASK |
-			     LR1110_SYSTEM_IRQ_CADDETECTED_MASK, 0));
-	LR1110_RETURN_ON_HAL_ERROR(
-		lr1110_radio_set_cad(dev));
-
-	/* Poll for CAD completion */
-	lr1110_system_stat1_t stat1;
-	lr1110_system_stat2_t stat2;
-	uint32_t irq = 0;
-	int64_t deadline = k_uptime_get() + k_ticks_to_ms_floor64(timeout.ticks);
-	do {
-		lichen_radio_progress();
-		k_sleep(K_MSEC(10));
-		lr1110_system_get_status(dev, &stat1, &stat2, &irq);
-		if (irq & (LR1110_SYSTEM_IRQ_CADDONE_MASK |
-			   LR1110_SYSTEM_IRQ_CADDETECTED_MASK)) {
-			break;
-		}
-	} while (k_uptime_get() < deadline);
-
-	lr1110_system_clear_irq(dev, irq);
-
-	int ret = lr1110_hal_get_last_error();
-	if (ret < 0) {
-		lr1110_system_set_standby(dev, LR1110_SYSTEM_STDBY_CONFIG_RC);
-		*busy = false;
-		return ret;
-	}
-
-	if (!(irq & (LR1110_SYSTEM_IRQ_CADDONE_MASK |
-		     LR1110_SYSTEM_IRQ_CADDETECTED_MASK))) {
-		/* A missing CAD completion is not evidence of a clear channel. */
-		LR1110_RETURN_ON_HAL_ERROR(
-			lr1110_system_set_standby(dev, LR1110_SYSTEM_STDBY_CONFIG_RC));
-		LR1110_RETURN_ON_HAL_ERROR(
-			lr1110_system_set_dio_irq_params(dev, LR1110_IRQ_RADIO, 0));
-		*busy = true;
-		return -ETIMEDOUT;
-	}
-
-	*busy = (irq & LR1110_SYSTEM_IRQ_CADDETECTED_MASK) != 0;
-
-	LR1110_RETURN_ON_HAL_ERROR(
-		lr1110_system_set_standby(dev, LR1110_SYSTEM_STDBY_CONFIG_RC));
-
-	/* Restore IRQ mask for normal radio operations */
-	LR1110_RETURN_ON_HAL_ERROR(
-		lr1110_system_set_dio_irq_params(dev, LR1110_IRQ_RADIO, 0));
-
-	LOG_DBG("lr1110: CAD %s", *busy ? "busy" : "clear");
-	return 0;
-}
-
 /* Async CAD poll step (uwip.2): re-arm every 10ms until CadDone/CadDetected
  * or deadline, mirroring cad_impl's fail-closed classification without
  * blocking the caller. Runs in the system workqueue; modem is held for the
  * whole CAD (released here before the done callback fires). */
 static void lr1110_cad_poll_fn(struct k_work *work)
 {
+	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
 	struct lr1110_data *drv =
-		CONTAINER_OF(work, struct lr1110_data, cad_poll);
+		CONTAINER_OF(dwork, struct lr1110_data, cad_poll);
 	lr1110_system_stat1_t stat1;
 	lr1110_system_stat2_t stat2;
 	uint32_t irq = 0;
@@ -1087,15 +1040,15 @@ static int lr1110_cad_start_impl(const struct device *dev, k_timeout_t timeout)
 
 	gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9, GPIO_INT_DISABLE);
 
-	int ret = lr1110_radio_set_cad_params(dev, &cad_params);
-	if (ret == 0) {
-		ret = lr1110_system_set_dio_irq_params(
-			dev, LR1110_SYSTEM_IRQ_CADDONE_MASK |
-			     LR1110_SYSTEM_IRQ_CADDETECTED_MASK, 0);
-	}
-	if (ret == 0) {
-		ret = lr1110_radio_set_cad(dev);
-	}
+	/* HAL entry points return void; errors surface via the HAL's sticky
+	 * last-error channel (same convention as the rest of this driver). */
+	lr1110_hal_clear_last_error();
+	lr1110_radio_set_cad_params(dev, &cad_params);
+	lr1110_system_set_dio_irq_params(
+		dev, LR1110_SYSTEM_IRQ_CADDONE_MASK |
+		     LR1110_SYSTEM_IRQ_CADDETECTED_MASK, 0);
+	lr1110_radio_set_cad(dev);
+	int ret = lr1110_hal_get_last_error();
 	if (ret != 0) {
 		/* Synchronous arm failure: no completion will be delivered. */
 		(void)lr1110_system_set_standby(
@@ -1108,24 +1061,6 @@ static int lr1110_cad_start_impl(const struct device *dev, k_timeout_t timeout)
 		k_uptime_get() + k_ticks_to_ms_floor64(timeout.ticks);
 	k_work_reschedule(&drv->cad_poll, K_MSEC(10));
 	return 0;
-}
-
-static int lr1110_lora_cad(const struct device *dev, k_timeout_t timeout,
-			   bool *busy)
-{
-	if (dev == NULL || busy == NULL) {
-		return -EINVAL;
-	}
-	struct lr1110_data *drv = dev->data;
-
-	if (!lr1110_modem_acquire(drv)) {
-		/* An armed async RX holds the modem. */
-		return -EBUSY;
-	}
-	int ret = lr1110_cad_impl(dev, timeout, busy);
-
-	lr1110_modem_release(drv);
-	return ret;
 }
 #endif
 
@@ -1168,6 +1103,7 @@ static int lr1110_init(const struct device *dev)
 #endif
 
 	k_sem_init(&data->radio_sem, 0, 1);
+	k_mutex_init(&data->cb_lock);
 	k_work_init(&data->irq_work, lr1110_irq_work_handler);
 	k_work_init_delayable(&data->cad_poll, lr1110_cad_poll_fn);
 	data->async_cb = NULL;
@@ -1187,12 +1123,7 @@ static int lr1110_init(const struct device *dev)
 #endif
 
 #if IS_ENABLED(CONFIG_LICHEN_LORA_L2)
-	int ret = lichen_lora_cad_register(dev, lr1110_lora_cad);
-	if (ret < 0) {
-		LOG_ERR("CAD extension registration failed (%d)", ret);
-		return ret;
-	}
-	ret = lichen_lora_cad_start_register(dev, lr1110_cad_start_impl);
+	int ret = lichen_lora_cad_start_register(dev, lr1110_cad_start_impl);
 	if (ret < 0) {
 		LOG_ERR("async CAD registration failed (%d)", ret);
 		return ret;

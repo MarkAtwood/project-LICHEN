@@ -13,9 +13,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import cbor2
 import pytest
 
 from lichen.gateway.slot_claim import (
+    AllocationMode,
     ClaimError,
     ClaimRejectReason,
     SlotClaim,
@@ -153,3 +155,114 @@ def test_ordinal_absent_rejected() -> None:
     case = _case("ordinal_absent")
     with pytest.raises(ClaimError):
         SlotClaim.decode_cose(_hex(case["cose_sign1_hex"]))
+
+
+def test_claim_seq_over_u32_rejected_at_decode() -> None:
+    # The Rust decoder bounds claim_seq with u32::try_from (slot.rs:590);
+    # Python must reject the same range or a signed claim with
+    # claim_seq > 2**32-1 diverges cross-implementation (accepted by
+    # Python, MalformedClaim to Rust). Both the u64-width form (major
+    # type 0, 8-byte argument) and the tag-2 bignum form must fail.
+    case = _case("happy_path_n1")
+    elements = cbor2.loads(_hex(case["cose_sign1_hex"]))
+
+    for over in (0x1_0000_0000, 2**64 + 1):  # u64-width and tag-2 bignum
+        payload = cbor2.loads(elements[2])
+        payload[6] = over
+        body = cbor2.dumps([elements[0], elements[1], cbor2.dumps(payload), elements[3]])
+        with pytest.raises(ClaimError, match="claim_seq must be a u32 integer"):
+            SlotClaim.decode_cose(body)
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        (2, 2**64),  # superframe_epoch: above u64 (tag-2 bignum on wire)
+        (4, 2**64),  # expiry: above u64
+        (7, 2**64),  # ordinal: above u64
+        (1, [2**32]),  # slot index above u32
+        (1, [-1]),  # negative slot index (Rust uint() never admits)
+        (1, [0] * 4097),  # over MAX_SLOTS_PER_SUPERFRAME
+        (1, [True]),  # CBOR 0xf5 -> bool is not a u32 slot
+    ],
+)
+def test_oversized_sibling_fields_rejected_at_decode(key: int, value: object) -> None:
+    # s61e: the sibling payload fields get the same Rust-parity bounds as
+    # claim_seq — a key holder signing oversized values must not produce a
+    # claim Python accepts (advancing the replay high-water) while every
+    # Rust peer discards the identical bytes as malformed.
+    case = _case("happy_path_n1")
+    elements = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    payload = cbor2.loads(elements[2])
+    payload[key] = value
+    body = cbor2.dumps([elements[0], elements[1], cbor2.dumps(payload), elements[3]])
+    with pytest.raises(ClaimError):
+        SlotClaim.decode_cose(body)
+
+
+@pytest.mark.parametrize("bad_mode", [False, True, 0.0, 1.0, 2, None, "0"])
+def test_non_integer_mode_rejected_at_decode(bad_mode: object) -> None:
+    # ft5w: value equality admits CBOR false/true (bool) and float 0.0/1.0
+    # as modes, which Rust's p.uint() rejects as MalformedClaim — the
+    # decode must be type-strict (type(mode) is int, not value == 0/1).
+    case = _case("happy_path_n1")
+    elements = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    payload = cbor2.loads(elements[2])
+    payload[3] = bad_mode
+    body = cbor2.dumps([elements[0], elements[1], cbor2.dumps(payload), elements[3]])
+    with pytest.raises(ClaimError, match="mode must be 0"):
+        SlotClaim.decode_cose(body)
+
+
+@pytest.mark.parametrize(
+    "mode,expected",
+    [(0, AllocationMode.INTERLEAVED), (1, AllocationMode.CONTIGUOUS)],
+)
+def test_integer_modes_accepted_at_decode(mode: int, expected: AllocationMode) -> None:
+    case = _case("happy_path_n1")
+    elements = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    payload = cbor2.loads(elements[2])
+    payload[3] = mode
+    body = cbor2.dumps([elements[0], elements[1], cbor2.dumps(payload), elements[3]])
+    assert SlotClaim.decode_cose(body).allocation_mode == expected
+
+
+def test_oversized_envelope_rejected_before_decode() -> None:
+    # prgb: the envelope cap fires before cbor2.loads materializes anything —
+    # a max-legit claim is ~21.1 KB; 24 KB bounds pre-rejection decode work.
+    from lichen.gateway.slot_claim import MAX_CLAIM_ENVELOPE_BYTES
+
+    with pytest.raises(ClaimError, match="envelope exceeds maximum size"):
+        SlotClaim.decode_cose(b"\x84" + b"\x00" * (MAX_CLAIM_ENVELOPE_BYTES + 1))
+    # A real envelope is far under the cap.
+    case = _case("happy_path_n60")
+    assert len(_hex(case["cose_sign1_hex"])) < MAX_CLAIM_ENVELOPE_BYTES
+    SlotClaim.decode_cose(_hex(case["cose_sign1_hex"]))
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        (2, 2**64 - 1),  # superframe_epoch at u64::MAX
+        (4, 2**64 - 1),  # expiry at u64::MAX
+        (7, 2**64 - 1),  # ordinal at u64::MAX
+        (1, [2**32 - 1]),  # slot index at u32::MAX
+    ],
+)
+def test_boundary_sibling_fields_accepted_at_decode(key: int, value: object) -> None:
+    # s61e: values AT the Rust-decodable maximum must still decode — the
+    # bound is inclusive, matching u64::try_from/u32::try_from acceptance.
+    case = _case("happy_path_n1")
+    elements = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    payload = cbor2.loads(elements[2])
+    payload[key] = value
+    body = cbor2.dumps([elements[0], elements[1], cbor2.dumps(payload), elements[3]])
+    claim = SlotClaim.decode_cose(body)
+    if key == 1:
+        assert list(claim.slots) == value
+    elif key == 2:
+        assert claim.superframe_id == value
+    elif key == 4:
+        assert claim.expiry == value
+    else:
+        assert claim.ordinal == value

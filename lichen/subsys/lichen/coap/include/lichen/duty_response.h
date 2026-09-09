@@ -4,7 +4,7 @@
 /**
  * @file duty_response.h
  * @brief Duty-cycle congestion 5.03 load-shedding response builder
- *        (spec 07 10.2.3, R-07-031; bead b7z9.45.b).
+ *        (spec 07 10.2.4, R-07-031; bead b7z9.45.b).
  *
  * Mirrors python/src/lichen/coap/params.py congestion_service_unavailable():
  * a 5.03 Service Unavailable carrying Max-Age + CBOR
@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-/** Duty-cycle congestion levels (spec §10.2.3; mirrors python
+/** Duty-cycle congestion levels (spec §10.2.4; mirrors python
  * CongestionLevel). */
 enum lichen_congestion_level {
 	LICHEN_CONGESTION_NORMAL = 0,
@@ -42,7 +42,7 @@ struct lichen_duty_response {
 };
 
 /** Map a duty-cycle usage permille (0..1000+) to a congestion level
- * (thresholds per spec 07 10.2.3: <700 normal, <850 elevated,
+ * (thresholds per spec 07 10.2.4: <700 normal, <850 elevated,
  * <950 critical, else exhausted). */
 enum lichen_congestion_level
 lichen_congestion_level_from_usage(uint16_t usage_permille);

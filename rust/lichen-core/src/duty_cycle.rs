@@ -1136,6 +1136,9 @@ mod tests {
     }
 
     #[test]
+    // The point of this test is exercising both Copy and Clone on the type;
+    // the clone is intentional.
+    #[allow(clippy::clone_on_copy)]
     fn congestion_level_copy_clone() {
         let level = CongestionLevel::Critical;
         let copied = level;

@@ -8,6 +8,7 @@
 //! corpus is the committed independent oracle for all three suites.
 
 use lichen_core::desync::{DesyncFSM, DesyncState};
+use serde_json::Value;
 
 fn vectors() -> Vec<Value> {
     let content = include_str!("../../../test/vectors/ccp16-desync.json");
@@ -23,9 +24,14 @@ fn find_case(name: &str) -> Value {
 
 #[test]
 fn corpus_case_count_is_pinned() {
-    // Guard against corpus case-count drift (beads-worker-4); the C and
-    // Python consumers pin the same count.
-    assert_eq!(vectors().len(), 4, "corpus case count changed");
+    // Guard against corpus case-count drift (beads-worker-4, qmkt): the
+    // Python consumer pins the same count (EXPECTED_COUNTS) and the C
+    // consumer pins it in lichen/tests/desync_fsm/main.c count_cases.
+    // (Merge resolution vs beads-worker-3: kept HEAD's comment — verified
+    // against the sources: main.c CHECK(count_cases(json) == 5U) and python
+    // EXPECTED_COUNTS both exist; the "no C count pin" claim predates the
+    // C pin added under bead qmkt.)
+    assert_eq!(vectors().len(), 5, "corpus case count changed");
 }
 
 #[test]
@@ -107,5 +113,53 @@ fn multi_root_version_conflict_vector_semantics() {
     // behavior, not the version gate — so the semantics pin is kept.
     let v = find_case("multi_root_version_conflict_desync");
     assert_eq!(v["expected"], "desync");
-    assert_ne!(v["version"], v["alternate_version"]);
+    // Pin presence+type before the inequality (bead 686f): serde_json
+    // indexing yields Null for a missing key, and Null != anything — so
+    // assert_ne! alone passes if either field is deleted or renamed.
+    let version = v["version"]
+        .as_u64()
+        .expect("version present and integer-valued");
+    let alternate = v["alternate_version"]
+        .as_u64()
+        .expect("alternate_version present and integer-valued");
+    assert_ne!(version, alternate);
+}
+
+#[test]
+fn synced_missed_beacons_desync_vector() {
+    // R-02a-081 SYNCED row (spec/02a-coordinated-capacity.md:267): a
+    // SYNCED node with >= 3 consecutive missed superframes transitions to
+    // DESYNCED, counters reset — mirroring the python sfn.py SYNCED
+    // branch (b7z9.25.5), the C tdma.c SYNCED branch, and the
+    // lichen-rpl consumer (added with the vector in 468ac9cfb4).
+    // (Merge resolution: union of both sides — this side names every
+    // consumer HEAD named plus the C tdma.c branch; all verified present.)
+    let v = find_case("synced_missed_beacons_desync");
+    assert_eq!(v["type"], "missed_beacons");
+    assert_eq!(v["state"], "synced");
+    assert_eq!(v["missed_count"], 3);
+    assert_eq!(v["expected"], "desynced");
+
+    // DesyncFSM::new() starts SYNCED (spec 9.8 initial state).
+    // (Merge resolution: union — beads-worker-3's initial-state note and
+    // drive kept; HEAD's beacon-clears-streak block below kept as extra
+    // coverage of the on_beacon SYNCED arm.)
+    let mut fsm = DesyncFSM::new();
+    assert_eq!(fsm.on_missed_superframe(), DesyncState::Synced);
+    assert_eq!(fsm.on_missed_superframe(), DesyncState::Synced);
+    // Third consecutive miss crosses the threshold -> DESYNCED, counters
+    // reset.
+    assert_eq!(fsm.on_missed_superframe(), DesyncState::Desynced);
+    assert_eq!(fsm.missed_superframes(), 0);
+    assert_eq!(fsm.consecutive_valid(), 0);
+
+    // A valid beacon in SYNCED clears the streak so isolated misses
+    // never accumulate (on_beacon SYNCED branch).
+    let mut fsm = DesyncFSM::new();
+    assert_eq!(fsm.on_missed_superframe(), DesyncState::Synced);
+    assert_eq!(fsm.on_beacon(true, true), DesyncState::Synced);
+    assert_eq!(fsm.missed_superframes(), 0);
+    assert_eq!(fsm.on_missed_superframe(), DesyncState::Synced);
+    assert_eq!(fsm.on_missed_superframe(), DesyncState::Synced);
+    assert_eq!(fsm.state(), DesyncState::Synced);
 }

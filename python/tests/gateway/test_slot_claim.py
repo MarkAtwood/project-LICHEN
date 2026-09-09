@@ -19,6 +19,7 @@ from lichen.crypto.identity import Identity, _pubkey_to_iid
 from lichen.gateway import slot_claim
 from lichen.gateway.slot_claim import (
     MAX_CLAIM_DURATION_SECONDS,
+    AllocationMode,
     ClaimError,
     ClaimRejectReason,
     SlotClaim,
@@ -114,6 +115,90 @@ class TestSlotClaim:
                 expiry=int(time.time()) + 8,
                 claim_seq=0,
             )
+
+    def test_claim_seq_u32_boundary(self) -> None:
+        """claim_seq is u32 on the wire (Rust slot.rs decodes with
+        u32::try_from); 2**32-1 must be accepted and 2**32 rejected at
+        construction so both boundaries match the Rust verdict."""
+        claim = SlotClaim(
+            gateway_iid="0011223344556677",
+            slots=(0,),
+            superframe_id=1,
+            expiry=int(time.time()) + 8,
+            claim_seq=0xFFFF_FFFF,
+        )
+        assert claim.claim_seq == 0xFFFF_FFFF
+        with pytest.raises(ClaimError, match="claim_seq must be a u32 integer"):
+            SlotClaim(
+                gateway_iid="0011223344556677",
+                slots=(0,),
+                superframe_id=1,
+                expiry=int(time.time()) + 8,
+                claim_seq=0x1_0000_0000,
+            )
+        with pytest.raises(ClaimError, match="claim_seq must be a u32 integer"):
+            SlotClaim(
+                gateway_iid="0011223344556677",
+                slots=(0,),
+                superframe_id=1,
+                expiry=int(time.time()) + 8,
+                claim_seq=-1,
+            )
+
+    def test_sibling_field_upper_bounds(self) -> None:
+        """s61e: Rust slot.rs decodes superframe_epoch/expiry/ordinal as u64
+        and slot indices as u32 (count <= 4096); Python must reject the same
+        out-of-range values at construction so a signed claim cannot be
+        accepted by Python while Rust calls the identical bytes malformed."""
+        base = {
+            "gateway_iid": "0011223344556677",
+            "slots": (0,),
+            "superframe_id": 1,
+            "expiry": int(time.time()) + 8,
+            "claim_seq": 0,
+        }
+        # Boundary values accepted (Rust u64/u32 maxima are encodable).
+        SlotClaim(**{**base, "superframe_id": 0xFFFF_FFFF_FFFF_FFFF})
+        SlotClaim(**{**base, "expiry": 0xFFFF_FFFF_FFFF_FFFF})
+        SlotClaim(**{**base, "ordinal": 0xFFFF_FFFF_FFFF_FFFF})
+        SlotClaim(**{**base, "slots": (0xFFFF_FFFF,)})
+        # Above the Rust-decodable range -> rejected.
+        with pytest.raises(ClaimError, match="superframe_id"):
+            SlotClaim(**{**base, "superframe_id": 0x1_0000_0000_0000_0000})
+        with pytest.raises(ClaimError, match="expiry"):
+            SlotClaim(**{**base, "expiry": 0x1_0000_0000_0000_0000})
+        with pytest.raises(ClaimError, match="ordinal"):
+            SlotClaim(**{**base, "ordinal": 0x1_0000_0000_0000_0000})
+        with pytest.raises(ClaimError, match="ordinal"):
+            SlotClaim(**{**base, "ordinal": -1})
+        with pytest.raises(ClaimError, match="slots must be u32"):
+            SlotClaim(**{**base, "slots": (0x1_0000_0000,)})
+        with pytest.raises(ClaimError, match="slots must be u32"):
+            SlotClaim(**{**base, "slots": (-1,)})
+        with pytest.raises(ClaimError, match="slots must be u32"):
+            SlotClaim(**{**base, "slots": (True,)})
+        with pytest.raises(ClaimError, match="MAX_SLOTS_PER_SUPERFRAME"):
+            SlotClaim(**{**base, "slots": tuple(range(4097))})
+        # None ordinal (local-only claim) and empty slots remain valid.
+        SlotClaim(**{**base, "ordinal": None})
+        SlotClaim(**{**base, "slots": ()})
+
+    def test_allocation_mode_must_be_enum(self) -> None:
+        """9ez4: a raw int/str allocation_mode must not construct — it would
+        serialize inverted (any non-INTERLEAVED value maps to CONTIGUOUS on
+        the wire)."""
+        base = {
+            "gateway_iid": "0011223344556677",
+            "slots": (0,),
+            "superframe_id": 1,
+            "expiry": int(time.time()) + 8,
+            "claim_seq": 0,
+        }
+        for bad in (0, 1, "interleaved", None):
+            with pytest.raises(ClaimError, match="allocation_mode must be an AllocationMode"):
+                SlotClaim(**{**base, "allocation_mode": bad})
+        for good in (AllocationMode.INTERLEAVED, AllocationMode.CONTIGUOUS):
+            SlotClaim(**{**base, "allocation_mode": good})
 
     def test_invalid_signature_length(self) -> None:
         with pytest.raises(ClaimError, match="signature must be 48 bytes"):
@@ -271,51 +356,50 @@ class TestSignAndVerify:
     def test_replay_cache_rejects_replay_and_allows_advance(
         self, keypair: tuple[bytes, bytes]
     ) -> None:
-        """l1qw.20.2: the replay cache rejects at-or-below high-water and
-        accepts strictly advancing superframes (mirrors Rust slot.rs
-        last_seen semantics)."""
+        """l1qw.20.5: the replay cache is a pure claim_seq high-water per
+        gateway IID (GCP-6.5 step 8), independent of superframe — mirrors
+        Rust slot.rs last_seen semantics."""
         privkey, pubkey = keypair
         cache = SlotClaimReplayCache()
 
         iid = _bound_iid(pubkey)
         expiry = int(time.time()) + 8
 
-        # First claim (superframe 5) is accepted and advances the cache.
-        claim_5 = sign_slot_claim(
-            SlotClaim(gateway_iid=iid, slots=(0,), superframe_id=5, expiry=expiry, claim_seq=0),
-            privkey,
-            pubkey,
-        )
-        is_valid, reason = verify_slot_claim(claim_5, pubkey, replay_cache=cache)
+        def claim(superframe: int, seq: int, slot: int = 0):
+            return sign_slot_claim(
+                SlotClaim(
+                    gateway_iid=iid,
+                    slots=(slot,),
+                    superframe_id=superframe,
+                    expiry=expiry,
+                    claim_seq=seq,
+                ),
+                privkey,
+                pubkey,
+            )
+
+        # First claim (superframe 5, seq 0) is accepted and seeds the cache.
+        is_valid, reason = verify_slot_claim(claim(5, 0), pubkey, replay_cache=cache)
         assert is_valid and reason is None
 
-        # Replay of the same superframe -> REPLAY.
-        replay = sign_slot_claim(
-            SlotClaim(gateway_iid=iid, slots=(0,), superframe_id=5, expiry=expiry, claim_seq=1),
-            privkey,
-            pubkey,
-        )
-        is_valid, reason = verify_slot_claim(replay, pubkey, replay_cache=cache)
+        # Same superframe with advanced seq -> accepted (loser-reclaim
+        # within a superframe must advance the signed claim_seq).
+        is_valid, reason = verify_slot_claim(claim(5, 1, slot=1), pubkey, replay_cache=cache)
+        assert is_valid and reason is None
+
+        # Replay of the cached seq -> REPLAY.
+        is_valid, reason = verify_slot_claim(claim(5, 1), pubkey, replay_cache=cache)
         assert not is_valid
         assert reason == ClaimRejectReason.REPLAY
 
-        # Older superframe -> REPLAY.
-        older = sign_slot_claim(
-            SlotClaim(gateway_iid=iid, slots=(0,), superframe_id=4, expiry=expiry, claim_seq=2),
-            privkey,
-            pubkey,
-        )
-        is_valid, reason = verify_slot_claim(older, pubkey, replay_cache=cache)
+        # Lower seq in a NEWER superframe -> REPLAY (seq rollback across
+        # the superframe boundary is exactly what step 8 blocks).
+        is_valid, reason = verify_slot_claim(claim(6, 0), pubkey, replay_cache=cache)
         assert not is_valid
         assert reason == ClaimRejectReason.REPLAY
 
-        # Strictly advancing superframe -> accepted.
-        newer = sign_slot_claim(
-            SlotClaim(gateway_iid=iid, slots=(0,), superframe_id=6, expiry=expiry, claim_seq=3),
-            privkey,
-            pubkey,
-        )
-        is_valid, reason = verify_slot_claim(newer, pubkey, replay_cache=cache)
+        # Advancing seq across the superframe boundary -> accepted.
+        is_valid, reason = verify_slot_claim(claim(6, 2), pubkey, replay_cache=cache)
         assert is_valid and reason is None
 
     def test_claim_expiry_bounded_to_max_duration(
@@ -370,14 +454,14 @@ class TestSignAndVerify:
         cache = SlotClaimReplayCache()
         expiry = int(time.time()) + 8
 
-        def claim_for(iid: str, superframe: int):
+        def claim_for(iid: str, superframe: int, seq: int = 0):
             return sign_slot_claim(
                 SlotClaim(
                     gateway_iid=iid,
                     slots=(0,),
                     superframe_id=superframe,
                     expiry=expiry,
-                    claim_seq=0,
+                    claim_seq=seq,
                 ),
                 privkey,
                 pubkey,
@@ -420,8 +504,9 @@ class TestSignAndVerify:
         assert not is_valid
         assert reason == ClaimRejectReason.STATE_FULL
 
-        # An ALREADY-TRACKED gateway still advances at capacity.
-        is_valid, reason = verify_slot_claim(claim_for(tracked_iid, 11), pubkey, cache)
+        # An ALREADY-TRACKED gateway still advances at capacity (seq
+        # high-water strictly advances; superframe is irrelevant).
+        is_valid, reason = verify_slot_claim(claim_for(tracked_iid, 11, seq=1), pubkey, cache)
         assert is_valid and reason is None
 
     def test_replay_cache_tracks_gateways_independently(self, keypair: tuple[bytes, bytes]) -> None:
@@ -1108,3 +1193,78 @@ class TestSlotClaimRateLimiter:
         )
         assert not ok
         assert reason == ClaimRejectReason.RATE_LIMITED
+
+
+class TestClaimSeqStore:
+    """Tests for the sender-side claim_seq persistence (GCP-6.5, l1qw.20.1)."""
+
+    def test_missing_file_initializes_to_zero(self, tmp_path: Path) -> None:
+        store = slot_claim.ClaimSeqStore(tmp_path / "claim_seq")
+        assert store.next_seq() == 1
+
+    def test_increment_persists_before_return(self, tmp_path: Path) -> None:
+        path = tmp_path / "claim_seq"
+        store = slot_claim.ClaimSeqStore(path)
+        seq = store.next_seq()
+        assert seq == 1
+        # GCP-6.5 "Before claim" row: persist to NVS, then sign and send —
+        # the value is durable the moment next_seq() returns it.
+        assert path.read_text(encoding="ascii").strip() == str(seq)
+
+    def test_monotonic_across_restart(self, tmp_path: Path) -> None:
+        path = tmp_path / "claim_seq"
+        first = slot_claim.ClaimSeqStore(path)
+        assert first.next_seq() == 1
+        assert first.next_seq() == 2
+        rebooted = slot_claim.ClaimSeqStore(path)
+        assert rebooted.next_seq() == 3
+
+    def test_corrupt_file_initializes_to_zero(self, tmp_path: Path) -> None:
+        path = tmp_path / "claim_seq"
+        path.write_text("not a number", encoding="ascii")
+        store = slot_claim.ClaimSeqStore(path)
+        # Safe direction: a rewound counter only makes receivers reject the
+        # claims as replays (step 8) until the sender climbs past their
+        # cached high-water.
+        assert store.next_seq() == 1
+
+    def test_stale_temp_files_never_read(self, tmp_path: Path) -> None:
+        path = tmp_path / "claim_seq"
+        store = slot_claim.ClaimSeqStore(path)
+        assert store.next_seq() == 1
+        (tmp_path / ".claim_seq.crashed.tmp").write_text("999", encoding="ascii")
+        reloaded = slot_claim.ClaimSeqStore(path)
+        assert reloaded.next_seq() == 2
+
+    def test_persist_failure_raises_and_state_stays_consistent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        path = tmp_path / "claim_seq"
+        store = slot_claim.ClaimSeqStore(path)
+
+        def broken_replace(src: object, dst: object) -> None:
+            raise OSError("disk gone")
+
+        monkeypatch.setattr(slot_claim.os, "replace", broken_replace)
+        with pytest.raises(OSError):
+            store.next_seq()
+        monkeypatch.undo()
+        # The failed sequence was not consumed: the retry persists and
+        # returns it.
+        assert store.next_seq() == 1
+        assert path.read_text(encoding="ascii").strip() == "1"
+
+    def test_signed_claim_carries_store_sequence(self, tmp_path: Path) -> None:
+        identity = Identity.from_seed(bytes([9]) * 32)
+        store = slot_claim.ClaimSeqStore(tmp_path / "claim_seq")
+        seq = store.next_seq()
+        claim = SlotClaim(
+            gateway_iid=identity.iid.hex(),
+            slots=(0, 1),
+            superframe_id=10,
+            expiry=int(time.time()) + 8,
+            claim_seq=seq,
+        )
+        signed = sign_slot_claim(claim, identity.privkey, identity.pubkey)
+        ok, reason = verify_slot_claim(signed, identity.pubkey)
+        assert ok, reason

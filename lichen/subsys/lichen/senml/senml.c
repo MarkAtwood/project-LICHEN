@@ -94,7 +94,7 @@ int senml_pack_init(struct senml_pack *pack,
 int senml_add_float(struct senml_pack *pack,
 		    const char *name,
 		    const char *unit,
-		    float value)
+		    double value)
 {
 	if (pack == NULL || name == NULL) {
 		return -EINVAL;
@@ -126,7 +126,7 @@ int senml_add_float(struct senml_pack *pack,
 int senml_add_float_t(struct senml_pack *pack,
 		      const char *name,
 		      const char *unit,
-		      float value,
+		      double value,
 		      int32_t time_offset)
 {
 	if (pack == NULL || name == NULL) {
@@ -235,17 +235,63 @@ int senml_add_data(struct senml_pack *pack, const char *name,
 	return 0;
 }
 
-/* Encode a single SenML record as a CBOR map. */
-static int encode_record(zcbor_state_t *state,
-			 const struct senml_record *rec,
-			 const struct senml_pack *pack,
-			 bool is_first)
-
+/*
+ * Encode the base fields (bn/bt) as their own value-less leading record
+ * (RFC 8428 §6). This is the cross-implementation canonical form: python
+ * senml.codec.pack() and the Rust wire codec emit a base-only first record
+ * (see test/vectors/senml_location.json; the integral_base_time test in
+ * Rust lichen-senml wire.rs pins the same a2 {bn, bt} head bytes).
+ *
+ * Returns 0 on success, negative errno on failure.
+ */
+static int encode_base_record(zcbor_state_t *state,
+			      const struct senml_pack *pack)
 {
-	/* Count map entries (order matches encoding: BT, BN, N, U, V/VB/VS, T) */
+	size_t entries = 0U;
+
+	if (pack->base_name != NULL) {
+		entries++;
+	}
+	if (pack->has_base_time) {
+		entries++;
+	}
+
+	if (validate_name(pack->base_name) < 0) {
+		return -EMSGSIZE;
+	}
+
+	if (!zcbor_map_start_encode(state, entries)) {
+		return -ENOMEM;
+	}
+
+	/* Base name before base time: label -2 (0x21) sorts before label -3
+	 * (0x22) bytewise per RFC 8949 §4.2.1 (RFC 8428 §6) */
+	if (pack->base_name != NULL) {
+		if (!zcbor_int32_put(state, SENML_LABEL_BN) ||
+		    !zcbor_tstr_put_term(state, pack->base_name, 256)) {
+			return -ENOMEM;
+		}
+	}
+
+	if (pack->has_base_time) {
+		if (!zcbor_int32_put(state, SENML_LABEL_BT) ||
+		    !zcbor_uint64_put(state, pack->base_time)) {
+			return -ENOMEM;
+		}
+	}
+
+	if (!zcbor_map_end_encode(state, entries)) {
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+/* Encode a single SenML record as a CBOR map. */
+static int encode_record(zcbor_state_t *state, const struct senml_record *rec)
+{
+	/* Count map entries (order matches encoding: N, U, V/VB/VS/VD, T) */
 	size_t entries = 1; /* value always present */
-	if (is_first && pack->has_base_time) entries++;
-	if (is_first && pack->base_name != NULL) entries++;
 	if (rec->name != NULL) entries++;
 	if (rec->unit != NULL) entries++;
 	if (rec->has_time) entries++;
@@ -253,8 +299,7 @@ static int encode_record(zcbor_state_t *state,
 	if (rec->type == SENML_VALUE_FLOAT && !isfinite(rec->value.f)) {
 		return -EINVAL;
 	}
-	if ((is_first && validate_name(pack->base_name) < 0) ||
-	    validate_name(rec->name) < 0 ||
+	if (validate_name(rec->name) < 0 ||
 	    validate_unit(rec->unit) < 0 ||
 	    (rec->type == SENML_VALUE_STRING && rec->value.s != NULL &&
 	     validate_string(rec->value.s) < 0) ||
@@ -266,22 +311,6 @@ static int encode_record(zcbor_state_t *state,
 
 	if (!zcbor_map_start_encode(state, entries)) {
 		return -ENOMEM;
-	}
-
-	/* Base time (first record only) — encoded before base name per canonical CBOR ordering (RFC 8428 §6) */
-	if (is_first && pack->has_base_time) {
-		if (!zcbor_int32_put(state, SENML_LABEL_BT) ||
-		    !zcbor_uint64_put(state, pack->base_time)) {
-			return -ENOMEM;
-		}
-	}
-
-	/* Base name (first record only) */
-	if (is_first && pack->base_name != NULL) {
-		if (!zcbor_int32_put(state, SENML_LABEL_BN) ||
-		    !zcbor_tstr_put_term(state, pack->base_name, 256)) {
-			return -ENOMEM;
-		}
 	}
 
 	/* Name */
@@ -304,7 +333,7 @@ static int encode_record(zcbor_state_t *state,
 	switch (rec->type) {
 	case SENML_VALUE_FLOAT:
 		if (!zcbor_int32_put(state, SENML_LABEL_V) ||
-		    !zcbor_float32_put(state, rec->value.f)) {
+		    !zcbor_float64_put(state, rec->value.f)) {
 			return -ENOMEM;
 		}
 		break;
@@ -374,20 +403,33 @@ int senml_encode_cbor(const struct senml_pack *pack,
 
 	ZCBOR_STATE_E(state, 1, buf, buflen, 1);
 
+	/* Base fields (bn/bt) are emitted as their own value-less leading
+	 * record, so the array holds one more element when they are set. */
+	bool has_base_record = pack->base_name != NULL || pack->has_base_time;
+	size_t array_len = pack->record_count + (has_base_record ? 1U : 0U);
+
 	/* SenML is an array of records */
-	if (!zcbor_list_start_encode(state, pack->record_count)) {
+	if (!zcbor_list_start_encode(state, array_len)) {
 		return -ENOMEM;
 	}
 
-	/* Encode each record */
-	for (size_t i = 0; i < pack->record_count; i++) {
-		int ret = encode_record(state, &pack->records[i], pack, (i == 0));
+	if (has_base_record) {
+		int ret = encode_base_record(state, pack);
+
 		if (ret < 0) {
 			return ret;
 		}
 	}
 
-	if (!zcbor_list_end_encode(state, pack->record_count)) {
+	/* Encode each record */
+	for (size_t i = 0; i < pack->record_count; i++) {
+		int ret = encode_record(state, &pack->records[i]);
+		if (ret < 0) {
+			return ret;
+		}
+	}
+
+	if (!zcbor_list_end_encode(state, array_len)) {
 		return -ENOMEM;
 	}
 
@@ -875,7 +917,10 @@ int senml_decode_cbor(const uint8_t *buf, size_t buflen,
 	if (ret < 0 || major != 4U || record_count == 0U) {
 		return -EINVAL;
 	}
-	if (record_count > SENML_MAX_RECORDS) {
+	/* Capacity matches the encoder's maximum output: up to
+	 * SENML_MAX_RECORDS value records plus the value-less base
+	 * record it emits when bn/bt are set. */
+	if (record_count > SENML_MAX_RECORDS + 1U) {
 		return -ENOMEM;
 	}
 	for (size_t i = 0; i < (size_t)record_count; i++) {
@@ -894,7 +939,7 @@ int senml_decode_cbor(const uint8_t *buf, size_t buflen,
 }
 
 int senml_encode_location(const char *base_name, uint64_t base_time,
-			  float lat, float lon, float alt,
+			  double lat, double lon, double alt,
 			  uint8_t *buf, size_t buflen)
 {
 	struct senml_pack pack;
@@ -906,7 +951,7 @@ int senml_encode_location(const char *base_name, uint64_t base_time,
 	}
 
 	/* Validate WGS84 coordinate ranges */
-	if (lat < -90.0f || lat > 90.0f || lon < -180.0f || lon > 180.0f) {
+	if (lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0) {
 		return -ERANGE;
 	}
 
@@ -936,9 +981,9 @@ int senml_encode_location(const char *base_name, uint64_t base_time,
 }
 
 int senml_encode_location_full(const char *base_name, uint64_t base_time,
-			       float lat, float lon, float alt,
-			       float speed, float heading,
-			       float hacc, float vacc,
+			       double lat, double lon, double alt,
+			       double speed, double heading,
+			       double hacc, double vacc,
 			       uint8_t *buf, size_t buflen)
 {
 	struct senml_pack pack;
@@ -950,7 +995,7 @@ int senml_encode_location_full(const char *base_name, uint64_t base_time,
 	}
 
 	/* Validate WGS84 coordinate ranges */
-	if (lat < -90.0f || lat > 90.0f || lon < -180.0f || lon > 180.0f) {
+	if (lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0) {
 		return -ERANGE;
 	}
 
@@ -1020,12 +1065,12 @@ int senml_encode_battery(const char *base_name, uint64_t base_time,
 	}
 
 	/* Use "%" for battery percentage (not %RH which is relative humidity) */
-	ret = senml_add_float(&pack, SENML_BATTERY_PCT, SENML_BATTERY_UNIT_PCT, (float)percent);
+	ret = senml_add_float(&pack, SENML_BATTERY_PCT, SENML_BATTERY_UNIT_PCT, (double)percent);
 	if (ret < 0) {
 		return ret;
 	}
 
-	ret = senml_add_float(&pack, SENML_BATTERY_MV, SENML_BATTERY_UNIT_MV, (float)mv);
+	ret = senml_add_float(&pack, SENML_BATTERY_MV, SENML_BATTERY_UNIT_MV, (double)mv);
 	if (ret < 0) {
 		return ret;
 	}
@@ -1039,7 +1084,7 @@ int senml_encode_battery(const char *base_name, uint64_t base_time,
 }
 
 int senml_encode_temperature(const char *base_name, uint64_t base_time,
-			     float temp_c,
+			     double temp_c,
 			     uint8_t *buf, size_t buflen)
 {
 	struct senml_pack pack;
@@ -1070,7 +1115,7 @@ int senml_encode_deaddrop(const char *base_name, uint64_t base_time,
 		return ret;
 	}
 
-	ret = senml_add_float(&pack, SENML_DEADDROP_PENDING, NULL, (float)pending);
+	ret = senml_add_float(&pack, SENML_DEADDROP_PENDING, NULL, (double)pending);
 	if (ret < 0) {
 		return ret;
 	}

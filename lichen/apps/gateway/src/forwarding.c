@@ -10,10 +10,15 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys_clock.h>
 #include <zephyr/net/net_if.h>
-#include <zephyr/net/net_ip.h>
 #include <zephyr/net/net_mgmt.h>
 #include <zephyr/net/net_pkt.h>
+#include <zephyr/net/net_pkt_filter.h>
+
+#if defined(CONFIG_LICHEN_TUNNEL_AUTH)
+#include <lichen/gateway/tunnel_auth.h>
+#endif
 
 LOG_MODULE_REGISTER(lichen_forwarding, LOG_LEVEL_INF);
 
@@ -23,6 +28,13 @@ static struct k_mutex s_stats_mutex;
 static struct lichen_forwarding_stats s_stats;
 
 static bool s_initialized;
+
+static struct net_if *s_mesh_iface;
+
+#if defined(CONFIG_LICHEN_TUNNEL_AUTH)
+static struct lichen_tunnel_auth_ctx s_tunnel_ctx;
+static bool s_tunnel_ready;
+#endif
 
 static void forwarding_stats_init(struct lichen_forwarding_stats *stats)
 {
@@ -42,6 +54,35 @@ static void forwarding_mgmt_event_handler(struct net_mgmt_event_callback *cb,
 	}
 }
 
+#if defined(CONFIG_NET_PKT_FILTER)
+/*
+ * NPF send-rule test: true (match) when the forwarding gate denied the
+ * packet, so the rule result NET_DROP drops it; false lets evaluation fall
+ * through to the terminating npf_default_ok rule.
+ *
+ * net_pkt_orig_iface() is the ingress interface for forwarded packets
+ * (set by net_recv_data()/ipv6_route_packet()) and NULL for packets the
+ * gateway originates itself; lichen_forwarding_handle() allows both.
+ */
+static bool lichen_forwarding_egress_test(struct npf_test *test,
+					  struct net_pkt *pkt)
+{
+	ARG_UNUSED(test);
+
+	return !lichen_forwarding_handle(pkt, net_pkt_orig_iface(pkt),
+					 net_pkt_iface(pkt));
+}
+
+static struct {
+	struct npf_test test;
+} lichen_forwarding_egress = {
+	.test.fn = lichen_forwarding_egress_test,
+};
+
+static NPF_RULE(lichen_forwarding_egress_drop, NET_DROP,
+		lichen_forwarding_egress);
+#endif /* CONFIG_NET_PKT_FILTER */
+
 int lichen_forwarding_init(void)
 {
 	if (s_initialized) {
@@ -58,24 +99,116 @@ int lichen_forwarding_init(void)
 				     NET_EVENT_IPV6_CMD_ROUTE_DEL);
 	net_mgmt_add_event_callback(&fwd_mgmt_cb);
 
+#if defined(CONFIG_NET_PKT_FILTER)
+	/* Live egress call site: every queued TX runs the forwarding gate.
+	 * The terminating accept rule is required — when no rule matches,
+	 * npf evaluation drops the packet. */
+	npf_append_send_rule(&lichen_forwarding_egress_drop);
+	npf_append_send_rule(&npf_default_ok);
+#endif
+
 	LOG_INF("IPv6 forwarding active: mesh MTU=%u", LICHEN_MESH_MTU);
 
 	s_initialized = true;
 	return 0;
 }
 
-void lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
+void lichen_forwarding_set_mesh_iface(struct net_if *iface)
+{
+	s_mesh_iface = iface;
+}
+
+#if defined(CONFIG_LICHEN_TUNNEL_AUTH)
+int lichen_gateway_tunnel_auth_init(const uint8_t egress_iid[8],
+				    const uint8_t root_iid[8],
+				    const uint8_t root_pubkey[32])
+{
+	struct lichen_tunnel_crypto crypto;
+	int ret = lichen_tunnel_auth_default_crypto(&crypto);
+
+	if (ret != 0) {
+		return ret;
+	}
+	ret = lichen_tunnel_auth_init(&s_tunnel_ctx, egress_iid, root_iid,
+				      root_pubkey, &crypto);
+	s_tunnel_ready = (ret == 0);
+	return ret;
+}
+
+struct lichen_tunnel_result lichen_gateway_tunnel_auth_receive(
+	const uint8_t *body, size_t body_len, bool oscore_authenticated,
+	const uint8_t oscore_sender_iid[8], uint64_t now_seconds)
+{
+	return lichen_tunnel_auth_receive(&s_tunnel_ctx, body, body_len,
+					  oscore_authenticated,
+					  oscore_sender_iid, now_seconds);
+}
+#endif
+
+static void tunnel_stats_denied(void)
+{
+	k_mutex_lock(&s_stats_mutex, K_FOREVER);
+	s_stats.tunnel_auth_denied++;
+	k_mutex_unlock(&s_stats_mutex);
+}
+
+bool lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
 			      struct net_if *out_iface)
 {
 	uint32_t pkt_len;
 
 	if (pkt == NULL || in_iface == NULL || out_iface == NULL) {
-		return;
+		return true;
 	}
 
 	if (in_iface == out_iface) {
-		return;
+		return true;
 	}
+
+#if defined(CONFIG_LICHEN_TUNNEL_AUTH)
+	if (s_tunnel_ready) {
+		/* Fail closed if the mesh iface was never identified: with
+		 * tunnel authorization on, unclassified cross-iface traffic
+		 * is not forwardable. */
+		if (s_mesh_iface == NULL) {
+			tunnel_stats_denied();
+			LOG_WRN("Egress dropped: mesh iface unidentified");
+			return false;
+		}
+		if (in_iface == s_mesh_iface) {
+			uint8_t ip6[40];
+			struct net_pkt_cursor backup;
+			struct lichen_tunnel_result r;
+			int rread;
+
+			net_pkt_cursor_save(pkt, &backup);
+			rread = net_pkt_read(pkt, ip6, sizeof(ip6));
+			net_pkt_cursor_restore(pkt, &backup);
+			if (rread != 0) {
+				tunnel_stats_denied();
+				LOG_WRN("Egress dropped: unreadable IPv6 header");
+				return false;
+			}
+			/* Single-hop route: this gateway is the egress.
+			 * ponytail: multi-hop SRH route extraction is not
+			 * wired, so grants issued over longer routes fail
+			 * closed here; upgrade path is SRH parsing at the
+			 * L2 decapsulation site. Uptime seconds stand in
+			 * for unix time (expiry dormant, replay floors not). */
+			r = lichen_tunnel_auth_decapsulate(
+				&s_tunnel_ctx, ip6 + 8, ip6 + 24,
+				s_tunnel_ctx.egress_iid, 1,
+				LICHEN_TUNNEL_MESH_TO_EXTERNAL,
+				(uint64_t)k_uptime_get() / MSEC_PER_SEC);
+			if (!r.allowed) {
+				tunnel_stats_denied();
+				LOG_WRN("Egress dropped: tunnel denial %d",
+					(int)r.denial);
+				return false;
+			}
+		}
+	}
+#endif
 
 	pkt_len = net_pkt_get_len(pkt);
 
@@ -88,6 +221,8 @@ void lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
 	}
 
 	k_mutex_unlock(&s_stats_mutex);
+
+	return true;
 }
 
 int lichen_forwarding_stats_get(struct lichen_forwarding_stats *stats)

@@ -86,7 +86,8 @@ class CapabilityPayload:
 
     Attributes:
         capabilities: Bitmask of announced capabilities (see Capability enum)
-        prefix: Prefix bytes (prefix_len/8 bytes, zero-padded)
+        prefix: Significant prefix bytes ((prefix_len+7)//8), optionally
+            zero-padded (at most 16 bytes)
         prefix_len: Prefix length in bits (0-128)
         expiry: Unix timestamp when announcement expires
         seq: Sequence number for replay protection
@@ -114,19 +115,24 @@ class CapabilityPayload:
         if not 0 <= self.prefix_len <= 128:
             raise ValueError(f"prefix_len must be 0-128, got {self.prefix_len}")
 
-        # Validate prefix length matches prefix_len
-        expected_prefix_bytes = (self.prefix_len + 7) // 8
-        if len(self.prefix) != expected_prefix_bytes:
+        # Validate prefix length: at least the significant
+        # (prefix_len+7)//8 bytes, at most 16 (a /128). The shared vector
+        # corpus zero-pads the prefix to a fixed width (Rust/C parity);
+        # any padded tail beyond the significant bytes MUST be zero.
+        significant_prefix_bytes = (self.prefix_len + 7) // 8
+        if len(self.prefix) < significant_prefix_bytes:
             raise ValueError(
-                f"prefix must be {expected_prefix_bytes} bytes for prefix_len {self.prefix_len}, "
-                f"got {len(self.prefix)}"
+                f"prefix must be at least {significant_prefix_bytes} bytes "
+                f"for prefix_len {self.prefix_len}, got {len(self.prefix)}"
             )
+        if len(self.prefix) > 16:
+            raise ValueError(f"prefix must be at most 16 bytes, got {len(self.prefix)}")
+        if any(self.prefix[significant_prefix_bytes:]):
+            raise ValueError("prefix padding beyond prefix_len bits must be zero")
 
         # Validate announcer_iid
         if len(self.announcer_iid) != 8:
-            raise ValueError(
-                f"announcer_iid must be 8 bytes, got {len(self.announcer_iid)}"
-            )
+            raise ValueError(f"announcer_iid must be 8 bytes, got {len(self.announcer_iid)}")
 
         # Validate expiry is positive
         if self.expiry <= 0:
@@ -210,7 +216,14 @@ class CapabilityAnnouncement:
         """
         cose_array = cbor2.loads(data)
 
-        if not isinstance(cose_array, list) or len(cose_array) != 4:
+        # RFC 9052 COSE_Sign1 may be CBOR tag 18 wrapped (the shared vector
+        # corpus uses that form). Decode tolerates both (Rust parity);
+        # to_cose_sign1() emits untagged. cbor2 >= 6 decodes the wrapped
+        # array as a tuple, untagged as a list — accept either sequence.
+        if isinstance(cose_array, cbor2.CBORTag) and cose_array.tag == 18:
+            cose_array = cose_array.value
+
+        if not isinstance(cose_array, (list, tuple)) or len(cose_array) != 4:
             raise ValueError("COSE_Sign1 must be a 4-element array")
 
         protected_bytes, unprotected, payload_bytes, signature = cose_array
@@ -219,8 +232,7 @@ class CapabilityAnnouncement:
         protected = cbor2.loads(protected_bytes)
         if protected.get(COSE_ALG_LABEL) != SCHNORR48_ED25519_ALG:
             raise ValueError(
-                f"Algorithm must be {SCHNORR48_ED25519_ALG}, "
-                f"got {protected.get(COSE_ALG_LABEL)}"
+                f"Algorithm must be {SCHNORR48_ED25519_ALG}, got {protected.get(COSE_ALG_LABEL)}"
             )
 
         # Decode payload

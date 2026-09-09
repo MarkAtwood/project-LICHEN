@@ -34,6 +34,7 @@ bool zcbor_uint64_put(zcbor_state_t *state, uint64_t value);
 bool zcbor_tstr_put_term(zcbor_state_t *state, const char *str, size_t maxlen);
 bool zcbor_bstr_encode_ptr(zcbor_state_t *state, const char *str, size_t len);
 bool zcbor_float32_put(zcbor_state_t *state, float value);
+bool zcbor_float64_put(zcbor_state_t *state, double value);
 bool zcbor_bool_put(zcbor_state_t *state, bool value);
 
 #endif /* ZCBOR_ENCODE_H_ */

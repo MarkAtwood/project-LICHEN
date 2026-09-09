@@ -438,7 +438,7 @@ impl RequestCorrelation {
 /// OSCORE-protected stack.
 #[cfg(feature = "std")]
 pub struct SecureStack<R: Radio> {
-    stack: Stack<R>,
+    pub(crate) stack: Stack<R>,
     /// OSCORE contexts keyed by peer IID.
     contexts: HashMap<[u8; 8], Context>,
     pending_requests: Vec<PendingRequest>,
@@ -2059,12 +2059,10 @@ mod tests {
             let mut leaf = [0u8; 16];
             leaf[15] = 0xAA;
             p[24..40].copy_from_slice(&leaf);
-            let mut offset = 40usize;
             if hbh {
                 p.extend_from_slice(&[0u8; 8]);
                 p[40] = 43; // HBH next = Routing
                 p[41] = 0; // 8-byte HBH
-                offset = 48;
             }
             let routing_len = 8 + 16 * addresses;
             let mut payload = vec![0u8; routing_len + 8];

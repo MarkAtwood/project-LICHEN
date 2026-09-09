@@ -400,6 +400,16 @@ Procedure SelectChannel(EUI64, Epoch, Density, NChannels):
    5. N = NChannels - 1    // exclude reserved CH0
    6. RETURN 1 + (Hash MOD N)
 
+**Dense deployment note (>200 nodes):** The `Density > 10 → CH0` fallback
+was designed for small meshes where high density signals interference and
+CH0 consolidation aids coordination. In multi-DODAG dense deployments
+(05-routing.md §9.10), this threshold is counter-productive: all data
+traffic collapses onto the control channel, increasing congestion. A future
+revision SHOULD raise the CH0-fallback threshold (e.g., density > 50) or
+replace it with an interference-score-based trigger, and regenerate test
+vectors accordingly. Until then, multi-DODAG deployments mitigate by
+keeping per-DODAG density below the threshold through BR placement.
+
 ## 2a.8. Adaptive Spreading Factor Selection (per 8gac)
 
 SF10 is the REQUIRED baseline for moderate density (5-20 nodes). Density-aware adaptation and per-neighbor EMA (alpha = 1/4) override only on explicit thresholds. Load_factor from gateway DIOs takes precedence. All paths MUST match ccp16.json and ccp_load_balancing.json exactly (independent oracle).

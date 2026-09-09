@@ -1222,12 +1222,50 @@ Private keys MUST be stored in:
 | Link | 8-bit epoch + 16-bit SeqNum (24-bit logical counter) |
 | OSCORE | Partial IV / Sequence Number |
 | RPL | Link-layer seqnum (baseline), secure mode counters (optional) |
+| Message/DTN | Absolute-time dedup keyed by message ID |
 
 **Link-Layer Replay Window:**
 
 Receivers track per-sender (epoch, seqnum) state with a 32-entry sliding
 window for out-of-order tolerance. Epoch persisted to flash; increments
-on wrap or reboot. See 02-physical-link.md:4.4 (and draft-lichen-link-01.md:5.2).
+on reboot. The epoch space is never wrapped: exhaustion at 255 fails
+closed and requires identity rotation. See 02-physical-link.md:4.4
+(and draft-lichen-link-01.md:5.2).
+
+**Time-Assisted Replay Rejection (GNSS-Enabled):**
+
+Because all nodes have GNSS wall-clock time, link-layer replay protection
+MAY augment the sequence-number sliding window with a time-based check.
+Receivers record the wall-clock timestamp of each accepted frame's
+reception. A frame whose link-layer timestamp (if present) or reception
+time falls outside `[now - REPLAY_TIME_WINDOW, now]` is rejected
+regardless of sequence number validity.
+
+This provides two benefits:
+1. **Reboot resilience:** After a reboot, sequence state may be lost or
+   stale. The time window provides an independent rejection mechanism that
+   survives reboots without persisting per-sender sequence state.
+2. **Bounded memory:** The time window implicitly limits how long per-sender
+   replay state must be retained. Entries older than `REPLAY_TIME_WINDOW`
+   can be garbage-collected.
+
+RECOMMENDED `REPLAY_TIME_WINDOW`: 600 seconds (2x `ANNOUNCE_INTERVAL`).
+This is an additional defense layer; the epoch+seqnum sliding window
+remains the primary replay protection mechanism.
+
+**Time-Bounded Dedup Tables:**
+
+Because all nodes have GNSS wall-clock time (see 09-packets-timing.md §14.6),
+dedup tables for store-and-forward messages use absolute expiry rather than
+fixed-size sliding windows. Each dedup entry is keyed by message ID and
+expires at exactly the message's absolute TTL. This provides a deterministic
+memory budget: the maximum number of dedup entries equals the maximum number
+of unexpired messages the node could have seen.
+
+Implementations MUST retain dedup entries until the corresponding message's
+absolute expiry timestamp. Implementations MUST NOT accept a message whose
+ID matches an existing dedup entry (even if received from a different path).
+After expiry, the dedup entry is garbage-collected.
 
 **OSCORE Replay Window:**
 
