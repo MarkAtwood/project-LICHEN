@@ -2,7 +2,7 @@
   "$schema": "./schema.json",
   "format_version": 2,
   "name": "x25519",
-  "description": "X25519/Ed25519 link-key derivation and clamping test vectors. Verifies RFC 8032 clamping is correctly applied during key generation, that the full seed->key-material bundle (Ed25519 keypair, X25519 static DH public, IID, native 02xx address) is consistent and deterministic (consumers MUST derive each bundle twice and require identical bytes across calls), and that non-32-byte seeds are rejected.",
+  "description": "X25519/Ed25519 link-key derivation and clamping test vectors. Verifies RFC 8032 clamping is correctly applied during key generation, that the full seed->key-material bundle (Ed25519 keypair, X25519 static DH public, IID, native 02xx address) is consistent and deterministic (QUARANTINE NOTE per spec/decisions.jsonl upstream-yggdrasil-addressing: iid and ygg_addr encode the rejected SHA-512 native profile from the legacy corpus; they are internal-consistency pins only, MUST NOT be used as conformance oracles for addressing, and MUST be regenerated as pinned upstream AddrForKey byte-equality vectors when the migration lands) (consumers MUST derive each bundle twice and require identical bytes across calls), and that non-32-byte seeds are rejected.",
   "spec": "https://www.rfc-editor.org/rfc/rfc8032",
   "vectors": [
     {
@@ -64,7 +64,7 @@
         "iid": "0c02a50225b4baaa",
         "ygg_addr": "020e02a50225b4ba0c02a50225b4baaa"
       },
-      "note": "SHA-512 of empty message signed with this key is the RFC 8032 test signature. public_key is the RFC 8032 constant (external anchor). iid/ygg_addr match test/vectors/yggdrasil-derivation.json vector 3; x25519_public cross-checked with the cryptography-library X25519 implementation."
+      "note": "SHA-512 of empty message signed with this key is the RFC 8032 test signature. public_key is the RFC 8032 constant (external anchor). iid/ygg_addr match test/vectors/legacy/yggdrasil-derivation.json vector 3 (QUARANTINED legacy SHA-512 native profile; not a conformance oracle); x25519_public cross-checked with the cryptography-library X25519 implementation."
     },
     {
       "name": "invalid_seed_length_empty",

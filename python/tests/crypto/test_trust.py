@@ -37,6 +37,12 @@ from lichen.crypto.trust import compute_rotation_transcript
 SEED_ALICE = bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000001")
 SEED_BOB = bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000002")
 SEED_CHARLIE = bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000003")
+# QUARANTINE (spec/decisions.jsonl upstream-yggdrasil-addressing): the
+# ygg_addr/ygg_addr_str fields in this corpus encode the rejected SHA-512
+# native profile from test/vectors/legacy/; they pin internal consistency
+# only, MUST NOT be treated as addressing conformance oracles, and must be
+# regenerated as pinned upstream AddrForKey byte-equality vectors when the
+# migration lands.
 GCP3_VECTORS = Path(__file__).parents[3] / "test" / "vectors" / "gcp3_trust_models.json"
 
 
