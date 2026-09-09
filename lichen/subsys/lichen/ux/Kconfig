@@ -21,3 +21,18 @@ config LICHEN_UX_LED
 	  Boards set CONFIG_LICHEN_HAS_LEDS (which BUILD_ASSERTs an led0 alias);
 	  targets with no LED (hal_led_get fails) degrade to a quiet no-op and
 	  the driver does not schedule any periodic work.
+
+config LICHEN_UX_BUTTON
+	bool "Spec 19 §4/§8/§9 button interaction grammar (screen ring + SOS + reset)"
+	depends on LICHEN_UX
+	depends on LICHEN_UX_LED
+	default y
+	help
+	  Drive the user button with the universal interaction grammar from
+	  spec 19 §4: short-press advances the screen ring, hold >=2s arms
+	  SOS (single-button hardware, §8), hold >=5s opens the guarded
+	  factory-reset path (§9), with mandatory hold feedback within 500 ms
+	  (the H-tier LED switches to the 4 Hz hold pattern, §10). The pure
+	  grammar engine is always compiled; this selects the GPIO backend
+	  that reads the user button via the HAL. Targets with no button
+	  (hal_button_get fails) degrade to a quiet no-op.
