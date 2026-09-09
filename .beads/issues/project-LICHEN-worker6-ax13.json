@@ -1,0 +1,17 @@
+{
+  "id": "project-LICHEN-worker6-ax13",
+  "title": "node.rs forwarder DAO anti-spoof gate uses link-local same_interface — dead for routable parent forms; needs own-routable-identity input",
+  "description": "Sibling of ssg9 (router.rs root-side gate, fixed). rust/lichen-node/src/node.rs ~:610: the 'we are a DAO parent' check compares advertised DAO parents via same_interface(parent, self.node.node_id.link_local_addr()) — low-half equality against the link-local IID. Post-i72x.2 production DAO writers name the parent in ROUTABLE form (node.rs:1443 parent_addr = ygg_addr_from_pubkey(parent.pubkey)), so this gate is dead for the routable parent form just as ssg9's was. Fixing it needs the forwarder's OWN routable /128, which is NOT reachable at that call site (RplNode holds only node_id EUI-64 + Router; Router has no node_addr field; DaoManager stores node_address but exposes no getter). That is the same design input nnmc (parent two-forms) must settle — do NOT hack it in isolation. Coordinate with nnmc.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T15:27:56.328213556Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T15:36:38.059896206Z",
+  "started_at": "2026-09-09T15:36:32.310568519Z",
+  "labels": [
+    "rust",
+    "yggdrasil"
+  ]
+}
