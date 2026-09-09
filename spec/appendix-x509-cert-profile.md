@@ -145,9 +145,10 @@ Worked extnValue encodings (OCTET STRING wrapper shown):
 
 The role bits mirror the §8.13 `lichen:relay` claim semantics: a
 certificate whose role extension asserts bit 1 (relay) presented by a
-node satisfies a verifier's `lichen:relay=true` requirement, unless the
-deployment requires the short-lived COSE local-fact form for that
-decision (Section 8).
+node satisfies a verifier's `lichen:relay=true` requirement, subject to
+the role-assertion trust scope of Section 8 (the chain must validate to
+a role-granting anchor), unless the deployment requires the short-lived
+COSE local-fact form for that decision.
 
 ## 6. Validity and Revocation
 
@@ -161,8 +162,23 @@ lifetime is the primary exposure bound:
   days MUST NOT be issued.
 - Renewal is by re-issuance through the provisioning flow
   (USB/BLE cert injection). Certificate replacement is signaled
-  by presenting the new chain; verifiers replace cached chains
-  wholesale and have no notion of certificate sequence numbers.
+  by presenting the new chain; verifiers have no notion of certificate
+  sequence numbers and MUST apply freshness ordering instead: a
+  presented chain replaces the cached one only if its leaf `notBefore`
+  is strictly later than the cached leaf's. A chain whose leaf is not
+  newer MUST NOT displace the cached chain. This prevents a replayed or
+  re-fetched older-but-still-valid chain from rolling a node back to a
+  prior (e.g. reduced-role or superseded) attestation.
+
+  Because `notBefore` is truncated to the issuance day (above), two
+  certificates issued on the same UTC day tie on `notBefore`, and the
+  strict-later rule then keeps the first-cached chain. Same-day
+  re-issuance therefore does NOT propagate to verifiers that already
+  cached the earlier chain; a deployment that must replace a
+  certificate within the same day (e.g. to revoke a role) MUST wait for
+  the next UTC day or use a fresher out-of-band channel. Accept-on-tie
+  is not permitted: it would reopen the same-day rollback this rule
+  exists to close, and there are no sequence numbers to break ties.
 
 ## 7. Signature Algorithm
 
@@ -188,19 +204,37 @@ A constrained verifier processing a profile-conformant chain:
 2. Checks validity window.
 3. Checks `basicConstraints` CA=false and `keyUsage` digitalSignature
    on each end-entity certificate.
-4. **Address binding (the attestation payload):** computes
-   `SHA-512(subjectPublicKey)` per 03-addressing.md §3.1, clears the U/L
-   bit, and verifies that the resulting IID equals the lower 64 bits of
-   the SAN native `/128`. A certificate that fails this check MUST be
-   rejected — it attests a key-to-address pairing that does not hold.
+4. **Address binding (the attestation payload):** recomputes the full
+   native address from the subject public key per 03-addressing.md §3.1 —
+   `SHA-512(subjectPublicKey)`, set `addr[0]=0x02`, `addr[1:8]=hash[0:7]`,
+   IID = `hash[0:8]` with the U/L bit cleared into `addr[8:16]` — and
+   verifies that the SAN native `/128` equals this recomputed 128-bit
+   address (not merely that its lower 64 bits match the IID). A
+   certificate that fails this check MUST be rejected — it attests a
+   key-to-address pairing that does not hold.
 5. If role-based authorization applies, reads the mesh role extension
    (Section 5); when the certificate asserts the needed role, the check
-   passes without contacting the gateway.
+   passes without contacting the gateway. Role assertions are honored
+   only from chains terminating at a trust anchor the deployment has
+   explicitly configured as a role-granting authority; see below.
 
 Step 4 is what makes the certificate an *attestation*: the CA is
 asserting "this Ed25519 key is the identity key for this mesh address".
 Any CA can verify the same binding before issuing, using only the
 public key from the CSR.
+
+### Role-assertion trust scope
+
+The mesh role extension (Section 5) MUST be honored only when the chain
+validates to a trust anchor that the deployment has separately
+configured as authorized to grant roles. A chain validating to any
+other configured anchor (including the optional public default CA in
+06-security.md §8.13) establishes key-to-address binding (step 4) but
+MUST NOT be read as asserting any mesh role. This keeps role grants
+gateway/mesh-scoped, consistent with the `lichen:relay` local-fact
+model (06-security.md §8.13.1): an identity-only anchor must not become
+a mesh-wide forwarding grantor. As in Section 5, absence of a role
+assertion is "unasserted", never "leaf".
 
 ## 9. Interoperability Notes
 
