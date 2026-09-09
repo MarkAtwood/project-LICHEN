@@ -1052,11 +1052,8 @@ impl Gateway {
         let (radio, radio_peer) = LoopbackRadio::pair();
         let stack = SecureStack::from_radio(radio, identity, safe_epoch, 0)
             .map_err(|_| GatewayOpenError::InvalidEpoch)?;
-        let announces = AnnounceProcessor::with_trust_store(
-            GradientTable::new(64),
-            dodag_id[..8].try_into().unwrap(),
-            backing.announce_trust,
-        );
+        let announces =
+            AnnounceProcessor::with_trust_store(GradientTable::new(64), backing.announce_trust);
         let mut rpl_stack = if backing.provision {
             RplStack::provision_root(stack, root_addr, dodag_id, announces, backing.storage)
                 .map_err(|_| GatewayOpenError::RplProvision)?
