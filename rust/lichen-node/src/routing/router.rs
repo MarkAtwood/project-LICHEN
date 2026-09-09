@@ -186,6 +186,7 @@ pub struct Router {
     grounded: bool,
     /// Root-side 0x17 DIO signature sequence counter (spec 06 8.10.1):
     /// starts at 1 (seq 0 is wire-illegal), monotone, terminal at u64::MAX.
+    #[cfg_attr(not(feature = "root-sig"), allow(dead_code))] // read by root-sig DIO builder
     pub(crate) root_dio_seq: u64,
     /// This node's geographic coordinates for GPSR (spec 9.7).
     /// None if GPS unavailable or privacy mode enabled.
@@ -366,7 +367,7 @@ impl Router {
         const PER_SOURCE_MAX: usize = 30;
         // Lazy prune of stale entries.
         self.dio_rate_log
-            .retain(|(source, at)| now_ms.wrapping_sub(*at) < WINDOW_MS);
+            .retain(|(_source, at)| now_ms.wrapping_sub(*at) < WINDOW_MS);
         let arrivals = self
             .dio_rate_log
             .iter()
@@ -942,7 +943,7 @@ impl Router {
             1, // Non-Storing, matching build_dio_with_authorization.
         ) {
             Ok(option) => {
-                if !(base + option.len() <= out.len()) {
+                if base + option.len() > out.len() {
                     panic!(
                         "TRACE root-sig: option {} + base {base} > out {}",
                         option.len(),
@@ -1379,7 +1380,7 @@ mod sf_emission_tests {
             lichen_link::keys::Seed::new([7u8; 32]),
         ));
         let dodag_id = lichen_core::addr::ygg_addr_from_pubkey(link.local_public_key().as_bytes());
-        let mut router = Router::new_root(dodag_id);
+        let router = Router::new_root(dodag_id);
         let mut out = [0u8; 256];
         let len = router.build_authenticated_dio(&mut out, &link);
         assert!(len > 0);

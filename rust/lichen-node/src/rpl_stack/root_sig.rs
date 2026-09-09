@@ -74,6 +74,7 @@ pub enum RootSigError {
 impl RootSigError {
     /// Vector-oracle error string (test/vectors/root_dio_signature.json).
     #[must_use]
+    #[allow(dead_code, reason = "vector-oracle error-string mapping; consumers pending b7z9.88.x vector wiring")]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Decode => "decode_error",
@@ -430,6 +431,11 @@ impl DecodedRootSig {
 /// the Python create_root_dio_signature oracle byte-for-byte: canonical
 /// payload labels 1-7, protected {1: -65537}, Sig_structure
 /// ["Signature1", protected, h'', payload], Schnorr48 over SHA-256.
+#[cfg_attr(
+    not(feature = "root-sig"),
+    allow(dead_code, reason = "producer call site is root-sig-gated (b7z9.88.2)")
+)]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn produce_root_dio_signature_option(
     signer: &dyn Fn(&[u8]) -> [u8; 48],
     signer_iid: [u8; 8],
@@ -502,6 +508,7 @@ pub(crate) fn produce_root_dio_signature_option(
     Ok(option)
 }
 
+#[cfg(test)]
 pub(crate) mod tests {
     use super::*;
     use lichen_rpl::root_seq_cache::RootSeqCache;
@@ -658,7 +665,7 @@ pub(crate) mod tests {
             &[][..],
             &[0xd2, 0x84][..],
             &[0x01, 0x02, 0x03][..],
-            VALID_COSE_SIGN1[..64].as_bytes(),
+            &VALID_COSE_SIGN1.as_bytes()[..64],
         ] {
             assert_eq!(
                 DecodedRootSig::from_cose_sign1(garbage),
@@ -671,7 +678,7 @@ pub(crate) mod tests {
         // Craft a protected header carrying alg twice: {1: -65537, 1: -7}.
         // Python (dict last-wins) would see whichever came last; Rust must
         // reject the ambiguity outright instead of picking a winner.
-        let mut blob = decode_hex(VALID_COSE_SIGN1);
+        let blob = decode_hex(VALID_COSE_SIGN1);
         // protected header bytes live at offset 5..12 (a1 01 3a 00 01 00 00)
         let protected_start = 3usize;
         let protected_len = (blob[2] & 0x1f) as usize; // short bstr header
