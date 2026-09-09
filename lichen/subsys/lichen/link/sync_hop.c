@@ -49,7 +49,7 @@ uint32_t lichen_sfn_from_unix_ms(uint64_t unix_time_ms)
     uint64_t superframe_ms = CONFIG_LICHEN_SYNC_HOP_SUPERFRAME_MS;
 
     /* SECURITY: Prevent underflow if timestamp is before epoch base (spoofed/malformed GNSS) */
-    if (unix_time_ms < EPOCH_BASE_MS) {
+    if (unix_time_ms < EPOCH_BASE_MS || superframe_ms == 0U) {
         return 0;
     }
 
