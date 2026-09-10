@@ -24,6 +24,7 @@ STATE="/tmp/fleet-driver-state"
 SESSIONS="$STATE/sessions"
 mkdir -p "$STATE" "$SESSIONS"
 export BEADS_DIR="$REPO/.beads"
+export BEADS_ACTOR="opencode-worker-$N"  # per-worker attribution for the stall detector's close counting
 export PATH="$HOME/.opencode/bin:$PATH"
 cd "$WT" || exit 1
 
