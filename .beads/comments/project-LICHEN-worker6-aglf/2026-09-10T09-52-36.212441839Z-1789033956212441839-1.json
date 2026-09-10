@@ -1,0 +1,7 @@
+{
+  "id": "1789033956212441839-1",
+  "issue_id": "project-LICHEN-worker6-aglf",
+  "author": "opencode-worker-8",
+  "text": "Verified already satisfied on current main. Existing implementation: lora_l2_rx.c disarms async RX under modem_mutex before re-arm; lora_l2_tx.c disarms before TX and re-arms after release; lr1110 clears async callback and releases modem on cancel/re-arm failure; simulator releases modem after self-disarm. History includes 4a101a2285/88b4035a71/ddd46ae690/73b0348eb3. Tests: tx_queue host CMake passed with ASan/UBSan; csma passed with ASan/UBSan. l2_dispatch could not configure because ZephyrConfig.cmake is unavailable in this checkout; link_ctx has unrelated pre-existing explicit_bzero declaration failure. Delegated Kimi correctness/security/edge reviews failed due insufficient credits; local equivalent three-pass review found no defects. No source change needed.",
+  "created_at": "2026-09-10T09:52:36.212441839Z"
+}
