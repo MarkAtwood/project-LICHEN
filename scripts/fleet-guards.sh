@@ -8,7 +8,7 @@
 set -u
 REPO="/home/mark/Developer/lichen-workspace/project-LICHEN"
 CYCLE_MIN="${1:-10}"
-case "$CYCLE_MIN" in ''|*[!0-9]*|0) echo "fleet-guards: cycle_minutes must be a positive integer (got '$CYCLE_MIN')" >&2; exit 1;; esac
+case "$CYCLE_MIN" in ''|*[!0-9]*|0*) echo "fleet-guards: cycle_minutes must be a positive integer without leading zeros (got '$CYCLE_MIN')" >&2; exit 1;; esac
 export BEADS_DIR="$REPO/.beads"
 cd "$REPO" || exit 1
 STATE="/tmp/fleet-driver-state"
