@@ -1394,7 +1394,8 @@ impl Gateway {
     /// is mesh-internal forwarding, not egress, and an unprovisioned table
     /// keeps the gate open (C `s_tunnel_ready == false` parity). Route
     /// evidence mirrors the C call site in `forwarding.c`: single-hop
-    /// `[egress_iid]` — this gateway is the egress. ponytail: multi-hop SRH
+    /// `[egress_addr]` — the gateway's own primary 02xx address; it is the
+    /// egress. ponytail: multi-hop SRH
     /// route extraction is not wired, so grants issued over longer routes
     /// fail closed here; upgrade path is SRH parsing at the node decap site.
     fn egress_tunnel_authorized(&mut self, received: &lichen_node::stack::ReceivedIpv6) -> bool {
