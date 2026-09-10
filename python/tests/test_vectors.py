@@ -1890,6 +1890,8 @@ def test_ccp9_rendezvous_vector(name: str, vector: dict) -> None:
         # hash_32(eui || epoch_le) per appendix-ccp12-hopping.md §3.1 (CCP-16)
         hash_input = peer_eui + epoch.to_bytes(4, "little")
         h = _oracle_hash_32(hash_input)
+        if "hash_32" in vector:
+            assert h == vector["hash_32"]
         computed_channel = 1 + (h % (n_channels - 1))
         assert computed_channel == vector["expected_channel"]
         if "expected_slot" in vector:
