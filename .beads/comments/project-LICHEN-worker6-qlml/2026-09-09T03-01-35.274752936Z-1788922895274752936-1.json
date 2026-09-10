@@ -1,7 +1,0 @@
-{
-  "id": "1788922895274752936-1",
-  "issue_id": "project-LICHEN-worker6-qlml",
-  "author": "Mark Atwood",
-  "text": "Worker5: released without change. The eprintln at rust/lichen-node/src/rpl_stack/transmit.rs:116 is the deliberate round-trip sizing probe of OPEN bead b7z9.88.2 (owner opencode-worker-1, started 2026-09-04; comment at that site says 'bead b7z9.88.2: emit the packet length so the frame-budget accounting can be verified'). The file is mid-flight by another agent — deleting the probe now would conflict with their verification flow. Revisit after b7z9.88.2 closes: either that bead removes the probe in its final commit or this cleanup bead re-claims then. No grep consumers of 'TRACE send_dio' outside the source file.",
-  "created_at": "2026-09-09T03:01:35.274752936Z"
-}

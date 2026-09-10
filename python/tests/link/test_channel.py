@@ -387,36 +387,35 @@ class TestSelectChannel:
         assert 1 <= ch <= 7
 
     def test_epoch_wraps_as_u32(self) -> None:
-        """Negative or oversized epoch is little-endian u32, matching SFN masking."""
+        """Negative or oversized epoch is little-endian u32; SFN has no effect."""
         eui = b"\x01\x02\x03\x04\x05\x06\x07\x08"
-        sfn = 42
         n_channels = 8
         n = max(n_channels - 1, 1)
 
-        expected = 1 + (_fnv1a32(eui + _u32le(-1) + _u32le(sfn)) % n)
+        expected = 1 + (_fnv1a32(eui + _u32le(-1)) % n)
         assert (
             select_channel(
                 peer_eui64=eui,
                 peer_known=True,
-                sfn=sfn,
+                sfn=42,
                 epoch=-1,
                 n_channels=n_channels,
             )
             == expected
         )
 
-        expected_over = 1 + (_fnv1a32(eui + _u32le(0x1_0000_0007) + _u32le(sfn)) % n)
+        expected_over = 1 + (_fnv1a32(eui + _u32le(0x1_0000_0007)) % n)
         assert (
             select_channel(
                 peer_eui64=eui,
                 peer_known=True,
-                sfn=sfn,
+                sfn=42,
                 epoch=0x1_0000_0007,
                 n_channels=n_channels,
             )
             == expected_over
         )
-        assert expected_over == 1 + (_fnv1a32(eui + _u32le(7) + _u32le(sfn)) % n)
+        assert expected_over == 1 + (_fnv1a32(eui + _u32le(7)) % n)
 
     def test_gnss_zero_duration_does_not_raise(self) -> None:
         """Zero superframe duration must not crash GNSS-synced selection."""

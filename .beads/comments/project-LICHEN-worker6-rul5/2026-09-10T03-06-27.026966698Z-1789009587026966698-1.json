@@ -1,7 +1,0 @@
-{
-  "id": "1789009587026966698-1",
-  "issue_id": "project-LICHEN-worker6-rul5",
-  "author": "Mark Atwood",
-  "text": "Additional vanished-family evidence found 2026-09-10 while working b7z9.93: 'bd show project-LICHEN-worker6-osjz' and bd search 'osjz' return nothing, but python/tests/gateway/test_tunnel_auth_vectors.py on main cites it by name twice ('regeneration is bead project-LICHEN-worker6-osjz' xfail markers, added with the 54b28ee331 python 16-byte route_hash migration). So the tunnel-vector-regeneration bead is a THIRD vanished family (after i72x and q6ko). The osjz work (16-byte corpus regeneration) was absorbed and completed by b7z9.93 this round; recording here for the forensics/restore pass.",
-  "created_at": "2026-09-10T03:06:27.026966698Z"
-}

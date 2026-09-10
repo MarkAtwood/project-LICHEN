@@ -1,7 +1,0 @@
-{
-  "id": "1789009006150208504-1",
-  "issue_id": "project-LICHEN-worker6-lbui",
-  "author": "Mark Atwood",
-  "text": "Security pass on the 2ehk follow-up batch (kimi-k3) adds concrete clobber vectors beyond the suppression vector already noted: (a) fixed-name redirect 2\u003e\"$STATE/fleet_burn.err\" follows a planted symlink and truncates an arbitrary user-writable file every cycle (e.g. ~/.config/opencode/opencode.json -\u003e credential destruction) — no pid guessing needed; (b) burn-snapshot.json.\u003cpid\u003e.tmp follows pre-planted symlinks (pid-range spray cheap); os.replace itself is safe (replaces the link, not the target). The rmza self-heal (dir recreated when tmpfiles cleans) widens the recreate-window. Prereq: local unprivileged account on the guard host (latent on current single-user hosts). Fix: state under ${XDG_STATE_HOME:-~/.local/state}/fleet-driver, or install -d -m 700 + owner verify, and os.open tmp with O_CREAT|O_EXCL|O_NOFOLLOW.",
-  "created_at": "2026-09-10T02:56:46.150208504Z"
-}

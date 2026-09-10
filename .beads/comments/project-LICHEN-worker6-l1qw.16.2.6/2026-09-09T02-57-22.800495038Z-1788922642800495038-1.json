@@ -1,7 +1,0 @@
-{
-  "id": "1788922642800495038-1",
-  "issue_id": "project-LICHEN-worker6-l1qw.16.2.6",
-  "author": "Mark Atwood",
-  "text": "Verification evidence 2026-09-09 (worker6, during m9i4): runtime_ingress_dispatches_authenticated_gcp_slot_claim is red on main 0add35b351, deterministic 6/6 at end_to_end.rs:1079. Actual decrypted response: 4.09 Conflict (code 0x89 CORRECT) with options [0xc0] (present zero-length Content-Format) and empty payload; test expects options [0xc1, 60] with the CF-60 legacy rejection-map era shape. The [0xc1,60] expectation is stale since 620ca2bcd3 dropped the legacy rejection map (its own unit tests were updated to content_format==0 + empty payload, but this e2e test was not). Bisect note: failure is NOT attributable to a single linear commit (parallel-branch DAG, multi-layer red history: setup CoapEncode unwrap failures at 1014 on some branch states, assertion failure at 1048/1079 on others); test passes at 60eca1c83f and 5a345ef75d. Fix shape when ljgs lands: either update the stale assertion to current documented fallback (4.09, empty payload, CF omitted) or record own-claim envelope via record_own_claim_envelope in the test to exercise the spec echo path. Related: 12gq (CF 0 serializer maps to 0xC0 present instead of omitting — C parity break acknowledged in 620ca2bcd3 comments).",
-  "created_at": "2026-09-09T02:57:22.800495038Z"
-}

@@ -1,7 +1,0 @@
-{
-  "id": "1788974003291630853-1",
-  "issue_id": "project-LICHEN-worker6-r3e5",
-  "author": "Mark Atwood",
-  "text": "Post-close 3x codereview on 58049f20d8, each pass delegated to reviewer model (kimi-k3): correctness PASS (verified gate admits only DIO/DIS unicast-to-self + multicast; identity derivation is the single lichen-core iid_from_pubkey_bytes at all sites), security PASS (gate is admission filter not trust boundary; multicast path already reachable to adversary; OSCORE id alignment cannot admit forgery), edge-cases PASS (zero-IID drop, spoofed-source still LLSec-gated, pre-migration alias harmless, multicast arm unaffected). Zero findings filed.",
-  "created_at": "2026-09-09T17:13:23.291630853Z"
-}

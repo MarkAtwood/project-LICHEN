@@ -1,7 +1,0 @@
-{
-  "id": "1789014710243881440-1",
-  "issue_id": "project-LICHEN-worker6-b7z9.121.2",
-  "author": "Mark Atwood",
-  "text": "Interop alert (edge-codereview of b7z9.121.3): the Python slice already landed yggdrasil_address(pubkey) verification (commit 026bcedd). Until this C slice lands, C receivers still synthesize 0200:0000::IID transcripts, so Python\u003c-\u003eC SOS origin verification is broken both directions. Fix is scoped here; b7z9.121.5 covers the vector regeneration. Treat migration as live breakage, not a future cleanup.",
-  "created_at": "2026-09-10T04:31:50.24388144Z"
-}

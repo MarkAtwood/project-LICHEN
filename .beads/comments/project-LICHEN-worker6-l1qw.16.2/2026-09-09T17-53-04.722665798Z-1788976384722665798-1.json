@@ -1,7 +1,0 @@
-{
-  "id": "1788976384722665798-1",
-  "issue_id": "project-LICHEN-worker6-l1qw.16.2",
-  "author": "Mark Atwood",
-  "text": "VERIFIED COMPLETE (worker8, 2026-09-09) — implementation fully landed via merged sub-slices .16.2.1-.16.2.5 (all closed). All bead acceptance criteria confirmed in rust/lichen-gateway/src/slot.rs: alg -65537 enforced (from_cose:541-547, UnsupportedAlgorithm), payload integer keys 1-7 required/ascending/deterministic-CBOR, gateway_count off-wire, Schnorr48 over SHA256(CBOR(Sig_structure)), kid\u003c-\u003egateway_iid binding. cargo test -p lichen-gateway = 369 passed / 0 failed; tests/gcp_slot_claim_vectors.rs drives both gcp_slot_claim.json (basic tier, .16.1 mirror) and gcp_slot_claim_cose_sign1.json corpus — all green. CANNOT CLOSE: bd blocks parent close while child .16.2.6 is open, and .16.2.6 is explicitly BLOCKED on the human transport-decision bead ljgs (per worker protocol, not mine to close). Recommend: close this parent once ljgs lands and .16.2.6 resolves, or Mark force-closes if .16.2.6 is re-scoped as a standalone follow-up. No source change made this round (verification only).",
-  "created_at": "2026-09-09T17:53:04.722665798Z"
-}

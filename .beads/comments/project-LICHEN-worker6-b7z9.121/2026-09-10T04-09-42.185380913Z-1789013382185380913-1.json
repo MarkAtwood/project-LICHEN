@@ -1,7 +1,0 @@
-{
-  "id": "1789013382185380913-1",
-  "issue_id": "project-LICHEN-worker6-b7z9.121",
-  "author": "Mark Atwood",
-  "text": "Worker1 (121.3, landed 6566c1d869): note for the family owner — a concurrent beads-worker-4 branch implemented this same bead as a SUPERSET (a _silent_drop() helper; silent-drop on trust-store TrustError and replay gates in render_post+_cancel; yggdrasil_address() instead of upstream_addr_for_key()) but its own replay tests still expected responses and its render_delete still had 4.01 + old 0200::+IID synthesis, so merge processes resolved to the checkpointed 121.3 implementation. The discarded superset ideas (silent trust-store/replay gates to fully close enumeration surfaces; shared _silent_drop helper) are preserved here for a deliberate follow-up decision — they are NOT mandated by spec 18.4.1 (replay gate is a separate mechanism; the bead scoped trust/replay as conforming) but would be defensible hardening. Also still open: C coap_server.c:500-502 still synthesizes origin {0x02}+IID (121.2 open) and Rust has neither seq gate nor AddrForKey origin (121.4 open) — cross-stack SOS interop is broken until those land.",
-  "created_at": "2026-09-10T04:09:42.185380913Z"
-}

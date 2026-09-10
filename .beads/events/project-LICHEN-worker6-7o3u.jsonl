@@ -1,2 +1,0 @@
-{"id":"01a089ca-c92a-7cc8-b150-3437f4321cd8","issue_id":"project-LICHEN-worker6-7o3u","event_type":"created","actor":"opencode-worker-5","old_value":"","new_value":"","created_at":"2026-09-10T05:29:23.498838646Z"}
-{"id":"01a089ca-e22b-7bb5-8ab4-a91a0088add7","issue_id":"project-LICHEN-worker6-7o3u","event_type":"closed","actor":"opencode-worker-5","old_value":"","new_value":"Accidental placeholder created by an erroneous bd create invocation while checking the store; no work item. Real bead: project-LICHEN-worker6-yhbl.","created_at":"2026-09-10T05:29:29.899768835Z"}

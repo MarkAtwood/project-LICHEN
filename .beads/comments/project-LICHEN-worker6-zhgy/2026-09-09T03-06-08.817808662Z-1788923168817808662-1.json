@@ -1,7 +1,0 @@
-{
-  "id": "1788923168817808662-1",
-  "issue_id": "project-LICHEN-worker6-zhgy",
-  "author": "Mark Atwood",
-  "text": "Worker5: project-LICHEN-worker6-mbkd carries the identical title ('Parity decision: SF counters wrap at 255 in C (uint8_t) vs unbounded ints in Python port'). Likely a double-file. Suggest superseding one of the two so the parity decision has a single home.",
-  "created_at": "2026-09-09T03:06:08.817808662Z"
-}

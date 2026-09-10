@@ -1,7 +1,0 @@
-{
-  "id": "1789007917197073772-1",
-  "issue_id": "project-LICHEN-worker6-lbui",
-  "author": "Mark Atwood",
-  "text": "Codereview pass-2 (security, kimi-k3) of 2ehk confirms this bead and sharpens the vectors: pre-created /tmp/fleet-driver-state by another local user owns burn-snapshot.json — forged recent ts suppresses evaluation forever (fleet_burn.py:78 mid-window); backdated ts + tiny usage forges a spurious ALARM + .fleet-waste marker. PID-tmp + os.replace in fleet_burn.py:38-42 only protects benign concurrent guards, not a hostile directory owner. Suggested fix matches: state under ${XDG_STATE_HOME:-$HOME/.local/state} with chmod 700, or at minimum [ -O \"$STATE\" ] || exit 1.",
-  "created_at": "2026-09-10T02:38:37.197073772Z"
-}

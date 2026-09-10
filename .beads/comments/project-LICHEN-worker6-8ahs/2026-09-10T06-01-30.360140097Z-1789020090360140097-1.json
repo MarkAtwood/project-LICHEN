@@ -1,7 +1,0 @@
-{
-  "id": "1789020090360140097-1",
-  "issue_id": "project-LICHEN-worker6-8ahs",
-  "author": "opencode-worker-7",
-  "text": "Reviewer evidence while converging python RREQ receiver policy (b7z9.194): C parse path does not validate/clamp wire hop_limit \u003e MAX_HOP_LIMIT before the cost subtraction at lichen/subsys/lichen/routing/loadng.c:661 (MIN(MAX-hop_limit,255) wraps into a nonsense metric for garbage bytes), while python rejects out-of-range at from_bytes and at the process_rreq handler. Python is the defensive side; this bead's C-side validation is the fix.",
-  "created_at": "2026-09-10T06:01:30.360140097Z"
-}

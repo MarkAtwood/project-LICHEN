@@ -1,7 +1,0 @@
-{
-  "id": "1789020090618353525-1",
-  "issue_id": "project-LICHEN-worker6-72qe",
-  "author": "opencode-worker-7",
-  "text": "Partially superseded by b7z9.194 (2026-09-10): loadng_discovery.json now has ring-2 (hl=8, cost 7) and ring-3 (hl=15, cost 0) receiver-acceptance vectors, plus out-of-range rejection coverage in python/tests/loadng/test_discovery.py (test_rreq_out_of_range_hop_limit_dropped_cleanly_and_repeatable). Remaining scope of this bead: cache-fresh/gradient-empty stale and equal-seq cases.",
-  "created_at": "2026-09-10T06:01:30.618353525Z"
-}

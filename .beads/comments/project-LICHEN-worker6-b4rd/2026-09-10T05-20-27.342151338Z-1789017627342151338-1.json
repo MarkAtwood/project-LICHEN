@@ -1,7 +1,0 @@
-{
-  "id": "1789017627342151338-1",
-  "issue_id": "project-LICHEN-worker6-b4rd",
-  "author": "Mark Atwood",
-  "text": "Scope extension from 7djg security pass (kimi-k3): the NEW invalid-observation provider-outage latch added in this hunk (fleet-guards.sh ~135-136, flag $REPO/.fleet-provider-obs) repeats the same flag-before-create-with-masked-rc pattern — include it in the b4rd fix sweep. The bead's note already covers the other guards' instances; this is the one new instance added after b4rd was filed.",
-  "created_at": "2026-09-10T05:20:27.342151338Z"
-}

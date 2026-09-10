@@ -1,7 +1,0 @@
-{
-  "id": "1789015587278900125-1",
-  "issue_id": "project-LICHEN-worker6-3dpc.1",
-  "author": "Mark Atwood",
-  "text": "Design refinement during implementation: instead of adding lichen_key_store_get_by_addr to coap_keys_store.c, use the existing lichen_key_store_list() enumeration from coap_server.c sos_post (mirrors the Rust pinned_pubkey_for_addr pattern landed in a348cba56e). Rationale: coap_keys_store.c is compiled standalone by lichen/tests/coap_keys_lifecycle WITHOUT the link module, so a store-level call to lichen_identity_ygg_addr_from_ed25519 would break that host link; a server-side lookup adds no new dependency and no test churn. Store untouched; same -ENOENT semantics.",
-  "created_at": "2026-09-10T04:46:27.278900125Z"
-}

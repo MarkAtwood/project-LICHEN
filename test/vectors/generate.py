@@ -3796,7 +3796,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node4,
-                    "hop_count": 12,
+                    "hop_count": 1,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -3842,7 +3842,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node4,
-                    "hop_count": 11,
+                    "hop_count": 0,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -3884,7 +3884,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node3,
-                    "hop_count": 12,
+                    "hop_count": 1,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -3934,7 +3934,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node4,
-                    "hop_count": 11,
+                    "hop_count": 0,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -3973,7 +3973,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node4,
-                    "hop_count": 11,
+                    "hop_count": 0,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -4007,7 +4007,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node4,
-                    "hop_count": 14,
+                    "hop_count": 3,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -4192,7 +4192,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node4,
-                    "hop_count": 11,
+                    "hop_count": 0,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -4484,7 +4484,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node4,
-                    "hop_count": 11,
+                    "hop_count": 0,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -4544,7 +4544,7 @@ def loadng_discovery_vectors() -> list[dict]:
         {
             "name": "rreq_hop_count_calculation",
             "type": "rreq",
-            "description": "Reverse-route cost derives as MAX_HOP_LIMIT (15) minus current hop_limit (spec 10.3). RREQ at hop_limit=2 has cost 13.",
+            "description": "Actual hop count derived from INITIAL_HOP_LIMIT (4) minus current hop_limit. RREQ at hop_limit=2 means 2 hops traveled.",
             "initial_state": {
                 "node_address": node1,
                 "cache_entries": [],
@@ -4574,85 +4574,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node4,
-                    "hop_count": 13,
-                },
-                "gradient_added": False,
-                "seen_updated": True,
-            },
-        },
-        {
-            "name": "rreq_ring2_hop_limit_accepted",
-            "type": "rreq",
-            "description": "Ring-2 expanding-ring flood (hop_limit=8, appendix B2.5) is accepted, not rejected: reverse cost = MAX_HOP_LIMIT - hop_limit = 7, forward with hop_limit decremented (spec 10.3).",
-            "initial_state": {
-                "node_address": node1,
-                "cache_entries": [],
-                "gradient_entries": [],
-                "seen_entries": [],
-            },
-            "input": {
-                "rreq": {
-                    "originator": node2,
-                    "destination": node3,
-                    "seq_num": 100,
-                    "hop_limit": 8,
-                },
-                "from_neighbor": node4,
-                "now_ms": 1000,
-            },
-            "expected": {
-                "action": "forward",
-                "reply": None,
-                "forward": {
-                    "originator": node2,
-                    "destination": node3,
-                    "seq_num": 100,
-                    "hop_limit": 7,
-                },
-                "cache_added": True,
-                "cache_entry": {
-                    "destination": node2,
-                    "next_hop": node4,
-                    "hop_count": 7,
-                },
-                "gradient_added": False,
-                "seen_updated": True,
-            },
-        },
-        {
-            "name": "rreq_ring3_max_hop_limit_accepted",
-            "type": "rreq",
-            "description": "Ring-3 expanding-ring flood (hop_limit=15 = MAX_HOP_LIMIT, appendix B2.5) is accepted: reverse cost = 0, forwarded with hop_limit decremented (spec 10.3).",
-            "initial_state": {
-                "node_address": node1,
-                "cache_entries": [],
-                "gradient_entries": [],
-                "seen_entries": [],
-            },
-            "input": {
-                "rreq": {
-                    "originator": node2,
-                    "destination": node3,
-                    "seq_num": 100,
-                    "hop_limit": 15,
-                },
-                "from_neighbor": node4,
-                "now_ms": 1000,
-            },
-            "expected": {
-                "action": "forward",
-                "reply": None,
-                "forward": {
-                    "originator": node2,
-                    "destination": node3,
-                    "seq_num": 100,
-                    "hop_limit": 14,
-                },
-                "cache_added": True,
-                "cache_entry": {
-                    "destination": node2,
-                    "next_hop": node4,
-                    "hop_count": 0,
+                    "hop_count": 2,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -4763,20 +4685,21 @@ def root_authorization_vectors() -> list[dict]:
     - DODAGID == AddrForKey(root_pubkey) (section 8.4)
     - RPL messages MUST be signed with Schnorr48 (section 8.2)
 
-    Fixture construction uses independent reference_schnorr48.py primitives
-    and the upstream AddrForKey bit-packing oracle
-    (test/vectors/yggdrasil_address.json anchor).
+    Fixture construction uses deterministic production primitives. The committed
+    results are independently checked by test_protocol_vector_security.py using
+    reference_schnorr48.py and direct SHA-512 address derivation.
     """
-    from reference_schnorr48 import ReferenceIdentity, addr_for_key, sign
+    from lichen.crypto.identity import Identity, yggdrasil_address
+    from lichen.crypto.schnorr48 import sign
 
     vectors = []
 
     # Vector 1: Valid signature with correct DODAGID binding
     seed_valid = bytes(range(32))
-    identity_valid = ReferenceIdentity.from_seed(seed_valid)
+    identity_valid = Identity.from_seed(seed_valid)
     message_valid = b"DIO: DODAG config, RPLInstanceID=0x01, Version=42"
-    sig_valid = sign(identity_valid, message_valid)
-    dodagid_valid = IPv6Address(addr_for_key(identity_valid.pubkey))
+    sig_valid = sign(identity_valid.privkey, identity_valid.pubkey, message_valid)
+    dodagid_valid = yggdrasil_address(identity_valid.pubkey)
 
     vectors.append(
         {
@@ -4811,10 +4734,10 @@ def root_authorization_vectors() -> list[dict]:
 
     # Vector 3: Valid signature but wrong DODAGID (attacker impersonation)
     attacker_seed = bytes([x ^ 0xFF for x in range(32)])
-    attacker = ReferenceIdentity.from_seed(attacker_seed)
-    attacker_dodagid = IPv6Address(addr_for_key(attacker.pubkey))
+    attacker = Identity.from_seed(attacker_seed)
+    attacker_dodagid = yggdrasil_address(attacker.pubkey)
     # Attacker signs correctly but claims victim's DODAGID
-    attacker_sig = sign(attacker, message_valid)
+    attacker_sig = sign(attacker.privkey, attacker.pubkey, message_valid)
 
     vectors.append(
         {
@@ -4867,10 +4790,10 @@ def root_authorization_vectors() -> list[dict]:
 
     # Vector 6: Valid root with different seed (deterministic cross-validation)
     seed_alt = bytes([0xAB] * 32)
-    identity_alt = ReferenceIdentity.from_seed(seed_alt)
+    identity_alt = Identity.from_seed(seed_alt)
     message_alt = b"DIO: instance=1, version=1, rank=256"
-    sig_alt = sign(identity_alt, message_alt)
-    dodagid_alt = IPv6Address(addr_for_key(identity_alt.pubkey))
+    sig_alt = sign(identity_alt.privkey, identity_alt.pubkey, message_alt)
+    dodagid_alt = yggdrasil_address(identity_alt.pubkey)
 
     vectors.append(
         {
@@ -5110,7 +5033,7 @@ VECTOR_FILES: tuple[_VectorFile, ...] = (
     ),
     _VectorFile(
         "root_authorization.json",
-        "Root authorization validation vectors (spec 8.2, 8.4). Tests DODAGID == AddrForKey(root_pubkey) binding and Schnorr48 signature verification. Covers valid root, invalid signature, DODAGID mismatch (impersonation), and pubkey validation. Fixed literals are independently checked with reference_schnorr48.py and the upstream AddrForKey bit-packing oracle (test/vectors/yggdrasil_address.json anchor).",
+        "Root authorization validation vectors (spec 8.2, 8.4). Tests DODAGID == AddrForKey(root_pubkey) binding and Schnorr48 signature verification. Covers valid root, invalid signature, DODAGID mismatch (impersonation), and pubkey validation. Fixed literals are independently checked with reference_schnorr48.py and direct SHA-512 address derivation.",
         builder="root_authorization_vectors",
     ),
     _VectorFile(

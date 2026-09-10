@@ -1,3 +1,0 @@
-{"id":"01a088f1-7f1a-771b-9619-d4973276a202","issue_id":"project-LICHEN-worker6-bedw.18","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-10T01:32:03.22646666Z"}
-{"id":"01a088f1-7f1f-7229-88c9-7ec8d41520c3","issue_id":"project-LICHEN-worker6-bedw.18","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-09-10T01:32:03.231142435Z"}
-{"id":"01a088f1-7f23-7cb2-bc89-8d6655ebb329","issue_id":"project-LICHEN-worker6-bedw.18","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec-gap","created_at":"2026-09-10T01:32:03.235832846Z"}

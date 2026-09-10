@@ -494,6 +494,23 @@ GLOBAL_OSCORE_RULE = Rule(
     fields=_ipv6_header_fields(17, link_local=False) + _udp_fields() + _coap_fields(),
 )
 
+# /deaddrop rule provision (spec/appendix-schc.md A.4.1, spec/12-apps.md 18.9):
+# no dedicated rule IDs. POSTs MUST use Rule 5/6 (OSCORE mandatory on writes);
+# GETs use Rule 5/6 when OSCORE-protected, Rule 0/1 for unprotected reads of
+# public drops. Uri-Path "deaddrop" and Content-Format 112 are Inner options
+# encrypted in the OSCORE ciphertext on protected traffic, verbatim tail
+# options when unprotected. The registry and descriptor hash are unchanged.
+DEADDROP_POST_RULES: tuple[int, int] = (
+    LINK_LOCAL_OSCORE_RULE.rule_id,
+    GLOBAL_OSCORE_RULE.rule_id,
+)
+DEADDROP_GET_RULES: tuple[int, ...] = (
+    LINK_LOCAL_OSCORE_RULE.rule_id,
+    GLOBAL_OSCORE_RULE.rule_id,
+    LINK_LOCAL_COAP_RULE.rule_id,
+    GLOBAL_COAP_RULE.rule_id,
+)
+
 UNCOMPRESSED_RULE = Rule(rule_id=RULE_ID_UNCOMPRESSED, fields=())
 
 

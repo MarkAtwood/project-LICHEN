@@ -1,3 +1,0 @@
-{"id":"01a08719-078f-71f5-b69b-f962cd0c0249","issue_id":"project-LICHEN-worker6-99sg.3","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-09T16:55:59.631130059Z"}
-{"id":"01a08719-0794-7004-9502-4231647b2b87","issue_id":"project-LICHEN-worker6-99sg.3","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: rust","created_at":"2026-09-09T16:55:59.636002644Z"}
-{"id":"01a08719-0798-7d14-b582-06f0fb9e533a","issue_id":"project-LICHEN-worker6-99sg.3","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-09-09T16:55:59.640858519Z"}

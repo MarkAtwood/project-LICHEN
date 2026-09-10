@@ -1,7 +1,0 @@
-{
-  "id": "1789005821800242510-1",
-  "issue_id": "project-LICHEN-kpv0.6",
-  "author": "Mark Atwood",
-  "text": "worker2 2026-09-10 evidence (from b7z9.184 work, untouched sibling file): cargo clippy -p lichen-node --all-features -- -D warnings fails with clippy::duplicated_attributes at lichen-node/src/rpl_stack/dao_tx_timing.rs:14 - '#![allow(dead_code)]' is duplicated (crates.io lichen-rpl dep also carries an inner allow for the same lint, or two identical attrs in this crate). Plain 'cargo clippy -p lichen-node' (default features) is 0 warnings. One more item for the all-features sweep this bead already covers.",
-  "created_at": "2026-09-10T02:03:41.80024251Z"
-}

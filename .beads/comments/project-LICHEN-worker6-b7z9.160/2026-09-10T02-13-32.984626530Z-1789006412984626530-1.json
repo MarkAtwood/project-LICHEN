@@ -1,7 +1,0 @@
-{
-  "id": "1789006412984626530-1",
-  "issue_id": "project-LICHEN-worker6-b7z9.160",
-  "author": "Mark Atwood",
-  "text": "Related evidence from b7z9.156 security review (2026-09-09): after the beacon wire-format fix (stratum is NOT a beacon field; it rides DIO Time option 0x15, now stated at 02a-tdma.md:23), the multi-root and FSM text still attributes stratum to the beacon: 02a-tdma.md:66/71/72 ('The beacon with the higher stratum', 'the beacon's stratum') and :62 ACQUIRING gate '(signature verified, stratum \u003e= current, ts \u003e= epoch_floor)'. Neither names the stratum source (signed DIO Time option) nor states it must be signature-verified before use in the join/root-preference gates. The adjudication this bead needs should also pin the stratum provenance for these gates.",
-  "created_at": "2026-09-10T02:13:32.98462653Z"
-}

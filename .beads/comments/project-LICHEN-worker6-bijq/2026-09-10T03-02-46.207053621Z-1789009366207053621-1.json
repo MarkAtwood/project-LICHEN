@@ -1,7 +1,0 @@
-{
-  "id": "1789009366207053621-1",
-  "issue_id": "project-LICHEN-worker6-bijq",
-  "author": "Mark Atwood",
-  "text": "Edge-cases codereview pass on v03v independently flagged README.md:52 + AGENTS.md:123 (18-33 B) as the same stale-figure family this bead covers — confirms scope, no new defect beyond the two named lines. Also note: appendix-misc.md Header Overhead row is already '23-37 bytes baseline' on origin/main (b7z9.205 landed there); local worker branches are behind the janitor merge, so bijq's README/AGENTS edits should re-check against a rebase on origin/main before landing.",
-  "created_at": "2026-09-10T03:02:46.207053621Z"
-}

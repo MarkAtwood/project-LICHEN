@@ -37,6 +37,12 @@ mqtt_sn          = 7    # IPv6 + UDP + MQTT-SN (port 10883)
 srh              = 8    # Source Routing Header wrapper (NH=43)
 uncompressed     = 255  # No compression; full headers follow
 
+# /deaddrop (spec 18.9) has no dedicated rule IDs: POSTs use rules 5/6
+# (OSCORE mandatory on writes), GETs use 5/6 or 0/1. Uri-Path "deaddrop"
+# and Content-Format 112 are Inner options encrypted in the OSCORE
+# ciphertext on protected traffic, verbatim tail options when unprotected
+# (appendix-schc A.4.1).
+
 [l2.payload_dispatch]
 # Authenticated link inner-payload namespace. SCHC rule IDs begin after
 # dispatch=0x14; routing/control message types begin after dispatch=0x15.

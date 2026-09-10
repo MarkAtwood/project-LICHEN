@@ -216,9 +216,7 @@ def test_tofu_edge_vectors_and_c_fixture_are_fresh() -> None:
         "schc_tile_sizing.json",
         # density_adaptive.json intentionally absent (project-LICHEN-worker6-1p2r.6):
         # the schema's density_adaptive_vector family (announce tier/interval fields)
-        # has no spec section and no implementation; no corpus can be honestly
-        # authored for it. Re-add here together with a specced generator if the
-        # family is ever specified.
+        # is planned work, and no consumer exists yet.
         "dtn_sflag_hbh.json",
     ],
 )
@@ -1902,12 +1900,13 @@ def test_ccp9_rendezvous_vector(name: str, vector: dict) -> None:
     mechanism = vector.get("mechanism") or vector.get("expected", {}).get("mechanism", "")
     if mechanism == "hash_based":
         peer_eui = bytes.fromhex(vector["peer_eui64"])
-        sfn = vector["sfn"]
         epoch = vector.get("epoch", 0)  # default epoch=0 per vector description
         n_channels = vector["n_channels"]
-        # hash_32(eui || epoch_le || sfn_le) per spec 02a-coordinated-capacity.md
-        hash_input = peer_eui + epoch.to_bytes(4, "little") + sfn.to_bytes(4, "little")
+        # hash_32(eui || epoch_le) per appendix-ccp12-hopping.md §3.1 (CCP-16)
+        hash_input = peer_eui + epoch.to_bytes(4, "little")
         h = _oracle_hash_32(hash_input)
+        if "hash_32" in vector:
+            assert h == vector["hash_32"]
         computed_channel = 1 + (h % (n_channels - 1))
         assert computed_channel == vector["expected_channel"]
         if "expected_slot" in vector:
@@ -2358,15 +2357,15 @@ def test_x25519_key_derivation_vector(name: str, vector: dict) -> None:
     These vectors verify RFC 8032 clamping is correctly applied during key generation.
     The clamped_scalar/private_key is used for both Ed25519 signing and X25519 ECDH.
     Derivation-consistency vectors additionally pin the full seed->key-material bundle
-    (Ed25519 keypair, X25519 public, IID, routable 02xx address), require identical
+    (Ed25519 keypair, X25519 public, IID, native 02xx address), require identical
     bytes across repeated derivation calls, and cover non-32-byte seed rejection.
 
-    Per spec/decisions.jsonl upstream-yggdrasil-addressing: ygg_addr pins the
-    upstream Yggdrasil AddrForKey byte-equality value for the vector public key
-    (the pinned conformance oracle; computed with the same algorithm anchored
-    by test/vectors/yggdrasil_address.json and upstream address_test.go). The
-    iid is the retained link-local IID (SHA-512) and is NOT embedded in the
-    routable address.
+    QUARANTINE (spec/decisions.jsonl upstream-yggdrasil-addressing): the iid and
+    ygg_addr fields encode the rejected SHA-512 native profile from the legacy
+    corpus (test/vectors/legacy/). They pin internal derivation consistency only
+    and MUST NOT be treated as addressing conformance oracles; when the upstream
+    AddrForKey migration lands these fields must be regenerated as pinned
+    upstream byte-equality vectors.
     """
     from hashlib import sha512
 

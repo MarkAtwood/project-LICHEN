@@ -1,20 +1,13 @@
-## spec/02-physical-link.md — coverage (sweep 2026-09-09)
+# spec/02-physical-link.md — coverage (sweep 2026-09-01)
 
-87 requirements extracted (R-02-001…R-02-087). This matrix
-supersedes a lost prior 02-physical-link matrix (only its Opus verification log
-`02-physical-link-verify.log` survives; its old→new ID mapping is in
-`02-physical-link-flagged.md`). Step-0 check passed: decision `density-high`
-(>10, not >8) — `"Density > 8"` absent from spec/02a-coordinated-capacity.md and
-this section's normative text already uses >10. Per-stack qualifiers appear in
-Status. Gap beads: **10 new filed** (`b7z9.103`–`b7z9.112`), cap 10 reached,
-**1 overflow** noted (§3.6 SFN coordinated transmission, R-02-036); 21 further
-divergent/not-implemented rows resolve to pre-existing open beads (b7z9.29,
-b7z9.72, b7z9.74, b7z9.75, b7z9.76, b7z9.77, b7z9.78, 6g4z; also lhf5/tpr2/c5s7,
-fw0f/f0vn/hxqj, r4sn, 0dgd.11, qefi, xemz, 2hcq, cmj5) — no duplicates filed.
+Sweep of `spec/02-physical-link.md` (§3 Physical Layer, §4 Link Layer).
+Step 0: adjudicated decision `density-high` (DENSITY_HIGH >10) verified —
+`grep_absent "Density > 8"` passes on `spec/02a-coordinated-capacity.md`, and
+this spec section uses `density > 10` throughout. No other decision targets
+this file.
 
-Classification histogram: implemented+tested 44 · implemented+untested 4 ·
-divergent 31 · not-implemented 8 · ambiguous 0. Flagged for Opus: see
-`02-physical-link-flagged.md`.
+Evidence abbreviations: R = rust/, C = lichen/ (Zephyr), P = python/src/lichen/.
+Vectors in `test/vectors/`.
 
 <!-- Merge resolution (2026-09-09, vs branch beads-worker-3): kept this
      2026-09-09 sweep (87 requirements, R-02-001…R-02-087) and dropped the

@@ -1,7 +1,0 @@
-{
-  "id": "1789017917164723091-1",
-  "issue_id": "project-LICHEN-27pe",
-  "author": "opencode-worker-5",
-  "text": "worker5 4vzi edge-review evidence: the DEADDROP_RATE_LIMIT_MS help text (/deaddrop and /confessions) is inaccurate for confessions - the confessions path uses compile-time CONFESSIONS_RATE_WINDOW_MS (30000U) at coap_dtn.c:340,502, not this Kconfig symbol. Fix when touching the help text. Not a diff defect of the 4vzi SECURITY note (that note makes no confessions claim).",
-  "created_at": "2026-09-10T05:25:17.164723091Z"
-}
