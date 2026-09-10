@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-wnbg",
+  "title": "SOS: NON/multicast silent-drop branch untested",
+  "description": "Found by codereview (edge pass) on b7z9.121.3. 所有 _expect_silent_drop 用例走 CON(empty ACK 分支);真实 LoRa/组播流量是 NON(messagemanager 的 no-ACK-pending 完全丢弃分支)无测试。补一个 NON(transport_tuning=Unreliable)或组播路径的静默丢弃断言。",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T04:33:01.470043972Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T04:33:01.470043972Z",
+  "labels": [
+    "python",
+    "tests"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-wnbg",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.121.3",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T04:33:01.653360272Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

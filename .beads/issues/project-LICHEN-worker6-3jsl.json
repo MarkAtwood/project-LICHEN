@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-3jsl",
+  "title": "Doc overclaim on _silent_drop(): CON requests produce empty ACK; only NON requests are truly wire-silent",
+  "description": "Codereview edge-pass finding on b7z9.121.3: python/src/lichen/coap/resources/emergency.py docstring claims 'the requesting side discards' / 'nothing crosses the wire', but aiocoap encodes the no_response suppression server-side and for CON requests substitutes an empty ACK (messagemanager.py:444-450 \u0026\u0026 461). Only NON (e.g. ff02::1 multicast) requests are truly wire-silent. Fix: rewrite comment to accurately describe aiocoap behavior.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T04:31:45.448925567Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T04:49:39.145976436Z",
+  "labels": [
+    "app-interface",
+    "python",
+    "coap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-3jsl",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.121.3",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T04:31:45.592190977Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

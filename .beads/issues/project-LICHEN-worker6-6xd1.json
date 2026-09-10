@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-6xd1",
+  "title": "SOS rate-limit dict unbounded by minted identities (TOFU)",
+  "description": "Codereview edge-pass finding on b7z9.121.3: python/src/lichen/coap/resources/emergency.py SosResource._request_times/_period_start grow per distinct from_hex with no global cap (_prune_old_requests prunes only the accessing source). TOFU accepts any new key so a radio adversary mints identities and grows both dicts without bound. OriginSequenceTracker (bounded 256 LRU) proves this was an oversight. Fix: bound like origin-tracker (to max_origins entries, LRU eviction).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T04:45:53.11866668Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T04:45:53.11866668Z",
+  "labels": [
+    "python",
+    "coap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-6xd1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.121.3",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T04:45:53.236217186Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

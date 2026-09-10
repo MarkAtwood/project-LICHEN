@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-3dpc.2",
+  "title": "3dpc.b: sos_post accounting keyed by full 16-byte origin address; drop alert_node_iid",
+  "description": "Child of 3dpc, after 3dpc.a. Spec 18.4.1: the SOS rate-limit/seq accounting key is the full 16-byte origin IPv6 address (MUST NOT extract an IID); 18.4.2 node field is the full 0200:: address string. In coap_server.c sos_post: (1) parse alert-\u003enode (8 colon groups, already validated by validate_node_id) into 16 bytes; (2) reject unless AddrForKey(key_entry.pubkey) == parsed address (string is attacker-supplied; the binding must come from the verified pubkey); (3) key lichen_key_store lookup via lichen_key_store_get_by_addr (3dpc.a) instead of alert_node_iid; (4) re-key s_sos_origins entries from iid[8] to addr[16] (shared header + host test update); (5) delete alert_node_iid. Update lichen/tests/sos_origin_table. C\u003c-\u003ePython: codec already accepts the spec colon form; Python emits 16-hex (3dpc.c), so wire interop stays broken until .c lands - unchanged breakage, not a regression. Verify: native_sim build coap_config_put_auth + host ctest.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T04:45:25.446524569Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T04:45:25.446524569Z",
+  "labels": [
+    "c",
+    "apps",
+    "security",
+    "spec-gap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-3dpc.2",
+      "depends_on_id": "project-LICHEN-worker6-3dpc",
+      "type": "parent-child",
+      "created_at": "2026-09-10T04:45:25.587821318Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
