@@ -252,3 +252,46 @@ class TestStateTransitions:
         node = SimNode(id="node-1")
         with pytest.raises(StateError, match="invalid state value"):
             node.state = "TX"  # type: ignore[assignment]
+
+
+class TestHopChannel:
+    """SimNode.get_hop_channel (CCP-12) hopping-field behavior.
+
+    Literals are hand-derived from the published FNV-1a 32-bit algorithm
+    (spec/appendix-ccp12-hopping.md), never from the code under test:
+    ch = 1 + (hash_32(seed(4 LE) + sfn(4 LE)) % (num_channels - 1)).
+    """
+
+    def test_hop_schedule_indexed_by_sfn_mod_length(self) -> None:
+        """Explicit hop_schedule rotates through entries by SFN % len."""
+        node = SimNode(id="hop", hop_schedule=(3, 1, 7))
+        expected = [3, 1, 7, 3, 1, 7, 3, 1]
+        assert [node.get_hop_channel(sfn=s) for s in range(8)] == expected
+
+    def test_fallback_matches_hand_derived_fnv1a(self) -> None:
+        """No hop_schedule -> synchronized_hop_channel(seed, sfn, num_channels)."""
+        # (seed, sfn, num_channels, expected_channel) via published FNV-1a.
+        cases = [
+            (0xC0FFEE, 42, 8, 6),
+            (0x000001, 123, 16, 11),
+            (0x00AB57, 0xFFFFFFFF, 8, 4),
+        ]
+        for seed, sfn, num_channels, expected in cases:
+            node = SimNode(id="hop", seed=seed, num_channels=num_channels)
+            # seed 0xC0FFEE path exercises the primary branch.
+            assert node.get_hop_channel(sfn=sfn) == expected
+
+    def test_fallback_default_channel_when_no_hash_path(self) -> None:
+        """seed==0 and num_channels==0 -> return current_channel unchanged."""
+        node = SimNode(id="hop", seed=0, num_channels=0, current_channel=5)
+        assert node.get_hop_channel(sfn=99) == 5
+
+    def test_default_sfn_uses_tdma_clock(self) -> None:
+        """sfn=None must branch on the scheduler clock's SFN."""
+        node = SimNode(id="hop", hop_schedule=(2, 4, 6))
+        node.tdma_scheduler.clock.sfn = 1
+        assert node.get_hop_channel() == 4
+        node.tdma_scheduler.clock.sfn = 2
+        assert node.get_hop_channel() == 6
+        node.tdma_scheduler.clock.sfn = 3  # wraps via % len
+        assert node.get_hop_channel() == 2
