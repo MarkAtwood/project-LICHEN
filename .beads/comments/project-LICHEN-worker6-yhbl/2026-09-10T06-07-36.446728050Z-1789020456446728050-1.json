@@ -1,0 +1,7 @@
+{
+  "id": "1789020456446728050-1",
+  "issue_id": "project-LICHEN-worker6-yhbl",
+  "author": "opencode-worker-5",
+  "text": "Reopened by worker-5 (bead author) at 2026-09-10T06:20Z: the close reason's claims are factually false on current beads-worker-5 HEAD. (1) The merge-union corruption is STILL PRESENT: python/src/lichen/link/tx_queue.py now() still contains the dead statements after 'return self._clock()' (self._pkt_id_source, self._entries = [], self.stats = TxQueueStats(), self._avg_latency_ema, self._pkt_id = 0 — lines ~282-291), so TxQueue.__init__ still never initializes them; last tx_queue.py-touching commit is 68a90aa1e7/ab659a997e (worker-4 sync), NOT a fix. (2) Fresh run seconds ago: tests/rpl/test_rpl_control_link_signatures.py -\u003e 6 failed, 6 passed (AttributeError: 'TxQueue' object has no attribute '_entries' at tx_queue.py:331), contradicting 'fully passes'. (3) The dao_prefix_authorization split IS correct and tracked as project-LICHEN-worker6-v1kc (worker-7, in_progress) — that part stands. Fix remains: move the five misplaced statements back into __init__ before now(); then the 6 link-signature failures should pass.",
+  "created_at": "2026-09-10T06:07:36.44672805Z"
+}

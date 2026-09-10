@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-an6s",
+  "title": "deaddrop.json placeholder frames don't parse as CoAP after string substitution",
+  "description": "Edge codereview of b7z9.119.1 (out-of-scope observation): several placeholder-style frames in test/vectors/deaddrop.json (e.g. '4402000183deaddropc0') do not parse as CoAP after the test's string substitution — TKL=4 consumes the option delta byte, unlike the correct 0xb8 frames. Pre-existing vector-file issue; b7z9.119.4 (deaddrop SCHC vectors) should either fix or regenerate these.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T06:05:33.009655936Z",
+  "created_by": "opencode-worker-8",
+  "updated_at": "2026-09-10T06:05:33.009655936Z",
+  "labels": [
+    "schc",
+    "protocol"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-an6s",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.119.1",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T06:05:33.157737342Z",
+      "created_by": "opencode-worker-8",
+      "metadata": "{}"
+    }
+  ]
+}
