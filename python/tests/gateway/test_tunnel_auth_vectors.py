@@ -72,7 +72,7 @@ def _state(
     identity_items = _by_name(document["identities"])
     identities = {name: _identity(item) for name, item in identity_items.items()}
     table = TunnelAuthorizationTable(
-        egress_iid=identities["egress"].iid,
+        egress_pubkey=identities["egress"].pubkey,
         root_iid=identities[active_root].iid,
         root_pubkey=identities[active_root].pubkey,
     )
@@ -191,12 +191,6 @@ def test_tunnel_authorization_generator_is_fresh() -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-@pytest.mark.xfail(
-    reason="stale corpus: tunnel_authorization.json still embeds 8-byte-IID "
-    "route_hash and the rejected pre-AddrForKey identity addresses; "
-    "regeneration is bead project-LICHEN-worker6-osjz",
-    strict=False,
-)
 def test_authorization_intermediates_use_independent_oracle() -> None:
     document = _load()
     messages = _by_name(document["authorizations"])
@@ -224,12 +218,6 @@ def test_authorization_intermediates_use_independent_oracle() -> None:
         )
 
 
-@pytest.mark.xfail(
-    reason="stale corpus: tunnel_authorization.json still embeds 8-byte-IID "
-    "route_hash and the rejected pre-AddrForKey identity addresses; "
-    "regeneration is bead project-LICHEN-worker6-osjz",
-    strict=False,
-)
 def test_post_cases_drive_python_production_path() -> None:
     document = _load()
     cases = _by_name(document["post_cases"])
@@ -253,12 +241,6 @@ def test_post_cases_drive_python_production_path() -> None:
         assert result.response_code == expected["response_code"], case["name"]
 
 
-@pytest.mark.xfail(
-    reason="stale corpus: tunnel_authorization.json still embeds 8-byte-IID "
-    "route_hash and the rejected pre-AddrForKey identity addresses; "
-    "regeneration is bead project-LICHEN-worker6-osjz",
-    strict=False,
-)
 def test_decapsulation_cases_drive_python_gateway_policy() -> None:
     document = _load()
     cases = _by_name(document["decapsulation_cases"])
