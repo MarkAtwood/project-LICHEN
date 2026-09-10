@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.165",
+  "title": "[spec-gap][R-19-004/006/010/011/016/017/019-021/023/040] v0.1 screen ring (E/O tiers) entirely unimplemented",
+  "description": "spec/19-device-ux.md §3/§4/§5/§6/§7/§14: the E/O display layer does not exist. No rendering code anywhere (rg display/ssd1306/eink/screen across lichen/, rust/, python/src: only HAL capability plumbing — lichen_hal_display_status/get, lichen/subsys/lichen/hal/hal_caps.c:266-269, and board display flags). Missing: ring-of-screens navigation (§4; button engine emits LICHEN_UX_BUTTON_EVT_ADVANCE with zero consumers), one-fact body + fixed status bar battery/GPS/message-waiting (§5), E partial-refresh/full-refresh-every-N policy (§6), O redraw-on-change + 60s screensaver (§6), E/O hold-feedback filling indicator ~250ms cadence (§4), three-token styling (§7), v0.1 inventory Boot→Status→Position→Last message→screensaver (§14). Data sources all exist: /status (status_cbor.c), /sensors/location (coap_location.c), /msg/inbox unread (coap_msg.c). Suggested placement: new ux screen module in lichen/subsys/lichen/ux/ (ux_screen*.c) consuming lichen_ux_button events via lichen_ux_button_start handler + lichen_hal_display_device_get; targets: t_echo (E, CONFIG_LICHEN_HAS_DISPLAY=y), heltec v3 (O, SSD1306).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T00:07:30.059761554Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T00:07:30.059761554Z",
+  "labels": [
+    "ux",
+    "spec-gap",
+    "c",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.165",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-10T00:07:30.196593112Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.166",
+  "title": "[spec-gap][R-19-039] §13 string table (localization seam) unimplemented",
+  "description": "spec/19-device-ux.md §13: all display text MUST come from a single string table keyed by IDs; v0.1 ships English only; the table is the localization seam; no on-device string construction beyond fixed formats (count, coordinates). Evidence: no string table exists anywhere (rg string_table/STR_TABLE across lichen/, rust/, python/src: only CBOR wire-key arrays in coap encoders, unrelated to display). Nothing renders text today, so this must land with or before the screen ring (b7z9.165) — building it as its own ID-keyed table module first keeps the localization seam from being bolted on later. Suggested placement: lichen/subsys/lichen/ux/ux_strings.c + generated ID header, host-testable like ux_button_core/ux_led_core.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "feature",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T00:07:43.450358532Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T00:07:43.450358532Z",
+  "labels": [
+    "ux",
+    "spec-gap",
+    "c",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.166",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-10T00:07:43.591351573Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
