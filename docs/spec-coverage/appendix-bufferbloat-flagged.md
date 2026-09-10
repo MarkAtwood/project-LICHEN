@@ -22,8 +22,8 @@ touch oscore/EDHOC internals, so nothing carries the `human-only` label.
   normative force here? The vector set treats the appendix as normative
   (test/vectors/tx_queue_expiry.json: "All implementations … MUST match these
   vectors exactly"), and the appendix defines the project's only quantitative
-  queue contract. If lines 90/175 are ruled normative, R-ABF-011 (NACK) and
-  R-ABF-016 (missing congestion scenarios) become MUST-gaps → file the
+  queue contract. If lines 90/175 are ruled normative, R-ABF-016 (missing
+  congestion scenarios) becomes a MUST-gap → file the
   pre-authorized beads below. If not, 0 gap beads stands.
 
 ## R-ABF-003 — Forwarding: 2 packets per source max; total 16 packets max
@@ -47,8 +47,8 @@ touch oscore/EDHOC internals, so nothing carries the `human-only` label.
     (13 vectors from test/vectors/forwarding_buffer.json) and
     python/tests/routing/test_router.py:958.
   - C: Kconfig defaults 8/2/16 (lichen/subsys/lichen/routing/Kconfig:121-144,
-    router.h:65-75) + suite lichen/tests/routing_fwd_buffer (asserts
-    nacks_sent==1 at src/main.c:123).
+     router.h:65-75) + suite lichen/tests/routing_fwd_buffer (asserts
+     packets_backpressure==1 at src/main.c:123).
 - Evidence, not wired into any relay datapath:
   - Rust: `Stack::queue_forward` (stack.rs:704) has zero callers (rg across
     rust/); the IPv6 receive/forward path never enqueues into the buffer.
@@ -69,7 +69,8 @@ touch oscore/EDHOC internals, so nothing carries the `human-only` label.
   forwarding buffer into relay datapaths (R-ABF-003)" — suggested placement:
   rust/lichen-node/src/receive path + python/src/lichen/node.py forward path
   + C router instantiation (lichen_router_init caller), each feeding
-  try_buffer/queue_forward/lichen_router_fwd_enqueue and the NACK hook
+  try_buffer/queue_forward/lichen_router_fwd_enqueue and local backpressure
+  accounting
   (R-ABF-011).
 
 ## R-ABF-007 — ACK/NACK: 10 s deadline
@@ -142,39 +143,13 @@ touch oscore/EDHOC internals, so nothing carries the `human-only` label.
   Rust gateway path, or is warn+drop acceptable there as the No-Silent-Drops
   logging signal (R-ABF-013)? If the former, fold into a bead with R-ABF-003.
 
-## R-ABF-011 — NACK to mesh source for mesh-forwarded packets
+## R-ABF-011 — Historical NACK wording superseded by local backpressure
 
-- Spec: Design Principles 4 ("Negative acknowledgment for mesh-forwarded
-  packets") + Design Principles 5 ("NACK to mesh source (if routable)") +
-  Forwarding Buffer pseudocode comment ("send NACK upstream").
-- Classification: not-implemented (confidence high).
-- Evidence, no NACK message or transmission exists in any stack (rg -i nack
-  across rust/, lichen/subsys, python/src: comments, counters, and hooks
-  only):
-  - C: `fwd_stats.nacks_sent` counter increment + `-ENOBUFS` return, no frame
-    transmitted (lichen/subsys/lichen/routing/router.c:1410-1411); the unit
-    test asserts the counter, not a wire message
-    (lichen/tests/routing_fwd_buffer/src/main.c:123).
-  - Python: on_drop callback documented as "Caller uses this to send NACK
-    upstream" (link/forwarding_buffer.py:56,121) with zero callers; the
-    vector-designated NACK shape is ICMPv6 Destination Unreachable /
-    ADMIN_PROHIBITED via make_resource_exhausted
-    (python/src/lichen/ipv6/icmpv6.py:407, tested through
-    test/vectors/no_silent_drops.json) — but it is never invoked from a drop
-    path (zero callers in python/src).
-  - Rust: doc comments only ("a NACK should be sent upstream",
-    forward_buffer.rs:30,107; stack.rs:90,695).
-- Question for Opus: (a) confirm not-implemented stands (vs. reading
-  "-ENOBUFS + counter" as the negative acknowledgment); (b) confirm the
-  ICMPv6 DEST_UNREACHABLE/ADMIN_PROHIBITED mapping recorded in
-  no_silent_drops.json B.2.5.2 is the intended wire form (it is not defined
-  in the appendix text); (c) if the lowercase musts are normative, file the
-  pre-authorized bead.
-- Pre-authorized disposition: bead (labels `bufferbloat` + `spec-gap`, parent
-  = the sweep epic): "NACK-to-source on forwarding-buffer backpressure
-  (R-ABF-011)" — suggested placement: emit make_resource_exhausted (Py) /
-  ICMPv6 admin-prohibited (Rs lichen-ipv6, C icmpv6.c) toward the source when
-  forwarding buffers reject, gated on routability.
+- Classification: superseded by the settled local-backpressure decision.
+- Evidence: Rust, Python, and C forwarding buffers return local queue-full
+  errors and record backpressure locally; no forwarding path emits an
+  unsolicited mesh error. The ICMPv6 helper vector is a standalone component
+  test, not a forwarding side effect.
 
 ## R-ABF-016 — "Bufferbloat avoidance must be tested under congestion": 5 scenarios
 

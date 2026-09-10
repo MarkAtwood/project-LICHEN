@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: CC-BY-4.0
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
-"""Generate fixed, implementation-independent B.3.2 Forwarding Buffer vectors.
+"""Generate fixed, implementation-independent Forwarding Buffer vectors.
 
 Oracle basis: spec/appendix-bufferbloat.md section "Forwarding Buffer"
 
 Requirements:
 - MAX_FORWARDING_SOURCES = 8
 - MAX_PACKETS_PER_SOURCE = 2
-- Send NACK (backpressure) when per-source limit reached
+- Record local backpressure when per-source limit is reached
 - Total forwarding buffer: 16 packets max
 - LRU eviction when max sources reached
 - FIFO dequeue within a source
@@ -48,7 +48,7 @@ class BufferEntry:
 
 @dataclass
 class ForwardingBufferOracle:
-    """Oracle implementation of B.3.2 Forwarding Buffer.
+    """Oracle implementation of the Forwarding Buffer.
 
     This is a reference implementation used to generate test vectors.
     It matches the spec exactly without optimizations.
@@ -522,7 +522,7 @@ def build_document() -> dict[str, object]:
         "vector_type": "forwarding_buffer",
         "format_version": 1,
         "description": (
-            "Canonical test vectors for B.3.2 Forwarding Buffer (spec appendix-bufferbloat.md). "
+            "Canonical test vectors for the Forwarding Buffer (spec appendix-bufferbloat.md). "
             "Validates per-source limits, LRU eviction, deadline expiry, and backpressure."
         ),
         "oracle": {

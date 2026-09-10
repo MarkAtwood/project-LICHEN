@@ -1,7 +1,7 @@
 {
   "vector_type": "forwarding_buffer",
   "format_version": 1,
-  "description": "Canonical test vectors for B.3.2 Forwarding Buffer (spec appendix-bufferbloat.md). Validates per-source limits, LRU eviction, deadline expiry, and backpressure.",
+  "description": "Canonical test vectors for the Forwarding Buffer (spec appendix-bufferbloat.md). Validates per-source limits, LRU eviction, deadline expiry, and backpressure.",
   "oracle": {
     "basis": "spec/appendix-bufferbloat.md section 'Forwarding Buffer'",
     "max_forwarding_sources": 8,

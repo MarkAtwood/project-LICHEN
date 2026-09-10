@@ -120,7 +120,8 @@ ZTEST(routing_fwd_buffer, test_fwd_per_source_limit)
 	const struct lichen_fwd_stats *stats = lichen_router_fwd_stats(&router);
 	zassert_equal(stats->packets_dropped_full, 1,
 		      "should count dropped packet");
-	zassert_equal(stats->nacks_sent, 1, "should count NACK signal");
+	zassert_equal(stats->packets_backpressure, 1,
+		      "should count local backpressure");
 }
 
 ZTEST(routing_fwd_buffer, test_fwd_multiple_sources)

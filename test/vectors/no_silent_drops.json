@@ -7,19 +7,19 @@
   "spec_section": "4",
   "requirements": [
     {
-      "id": "B.2.5.1",
+      "id": "4.1",
       "text": "Return error to local sender",
-      "implementation": "QueueFullError exception from TxQueue.push() and ForwardingResult.BACKPRESSURE from ForwardingBuffer.try_buffer()"
+        "implementation": "QueueFullError exception from TxQueue.push() and BufferResult.BACKPRESSURE from ForwardingBuffer.try_buffer()"
     },
     {
-      "id": "B.2.5.2",
+      "id": "4.2",
         "text": "Record forwarding drops locally when no eligible protocol response exists",
         "implementation": "ForwardingStats/packets_backpressure and QueueFull return values; no unsolicited mesh NACK"
     },
     {
-      "id": "B.2.5.3",
-      "text": "Log queue-full events for diagnostics",
-      "implementation": "WARNING-level logging on all packet drops (backpressure, eviction, pending queue full)"
+      "id": "5.1",
+      "text": "Expose queue-full events for diagnostics",
+      "implementation": "Local backpressure counters and stack-specific diagnostic logging"
     }
   ],
   "vectors": [
