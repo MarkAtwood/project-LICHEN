@@ -135,13 +135,20 @@ pub struct DecapsulationRequest<'a> {
     pub inner_source: [u8; 16],
     pub source_is_mesh: bool,
     pub destination_is_mesh: bool,
-    pub route: &'a [[u8; 8]],
+    /// Full 16-byte reconstructed SRH hop addresses in visitation order
+    /// (spec 8.11: the hash input is the hop ADDRESSES - under AddrForKey a
+    /// primary 02xx address embeds no IID, so an 8-byte slice carries no
+    /// identity meaning).
+    pub route: &'a [[u8; 16]],
+    /// The egress's own primary 02xx address; the route must terminate here.
+    pub egress_addr: [u8; 16],
 }
 
 /// Build the root's least-privilege authorization POST.
 pub fn build_root_post(
     claim: TunnelAuthorization,
-    route: &[[u8; 8]],
+    route: &[[u8; 16]],
+    egress_pubkey: &PublicKey,
     root_iid: [u8; 8],
     private_key: &PrivateKey,
     public_key: &PublicKey,
@@ -149,7 +156,14 @@ pub fn build_root_post(
     if lichen_core::addr::iid_from_pubkey_bytes(public_key.as_bytes()) != root_iid {
         return Err(TunnelAuthError::RootIdentityMismatch);
     }
-    if route.last() != Some(&claim.egress_iid) || route_hash(route)? != claim.route_hash {
+    // Python `create_tunnel_authorization` parity: the route must terminate
+    // at the egress's primary AddrForKey address, and the claim's egress_iid
+    // must be that same key's SHA-512 IID.
+    let egress_addr = lichen_core::addr::ygg_addr_from_pubkey(egress_pubkey.as_bytes());
+    if route.last() != Some(&egress_addr)
+        || lichen_core::addr::iid_from_pubkey_bytes(egress_pubkey.as_bytes()) != claim.egress_iid
+        || route_hash(route)? != claim.route_hash
+    {
         return Err(TunnelAuthError::InvalidRoute);
     }
     Ok(TunnelAuthPost {
@@ -395,6 +409,11 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
         if request.destination_is_mesh {
             return Err(TunnelAuthError::DestinationInMesh);
         }
+        // Python parity: the route must terminate at this egress's primary
+        // address (an empty route fails here via `last()`), before hashing.
+        if request.route.last() != Some(&request.egress_addr) {
+            return Err(TunnelAuthError::InvalidRoute);
+        }
         validate_route(request.route)?;
         let request_route_hash = route_hash(request.route)?;
         self.check_time(now)?;
@@ -478,7 +497,7 @@ fn same_floor_key(left: &ReplayFloor, right: &TunnelAuthorization) -> bool {
         && left.route_hash == right.route_hash
 }
 
-fn validate_route(hops: &[[u8; 8]]) -> Result<(), TunnelAuthError> {
+fn validate_route(hops: &[[u8; 16]]) -> Result<(), TunnelAuthError> {
     if hops.is_empty() || hops.len() > MAX_ROUTE_HOPS {
         return Err(TunnelAuthError::InvalidRoute);
     }
@@ -490,7 +509,7 @@ fn validate_route(hops: &[[u8; 8]]) -> Result<(), TunnelAuthError> {
     Ok(())
 }
 
-pub fn route_hash(hops: &[[u8; 8]]) -> Result<[u8; 16], TunnelAuthError> {
+pub fn route_hash(hops: &[[u8; 16]]) -> Result<[u8; 16], TunnelAuthError> {
     validate_route(hops)?;
     let mut hash = Sha256::new();
     for hop in hops {
@@ -820,15 +839,20 @@ mod tests {
 
     type Fixture = (
         TunnelAuthorization,
-        [[u8; 8]; 3],
+        [[u8; 16]; 3],
         [u8; 8],
         [u8; 8],
+        [u8; 16],
         PrivateKey,
+        PublicKey,
         PublicKey,
     );
 
     fn fixture() -> Fixture {
-        let route = [[1; 8], [2; 8], [3; 8]];
+        let (_, egress_public) = derive_keypair(&Seed::new([0x43; 32]));
+        let egress_addr = lichen_core::addr::ygg_addr_from_pubkey(egress_public.as_bytes());
+        let own = lichen_core::addr::iid_from_pubkey_bytes(egress_public.as_bytes());
+        let route = [[0x11; 16], [0x22; 16], egress_addr];
         let route_digest = route_hash(&route).unwrap();
         let claim = TunnelAuthorization::new(
             [
@@ -838,12 +862,12 @@ mod tests {
             route_digest,
             7,
             10_000,
-            [3; 8],
+            own,
         )
         .unwrap();
         let (private, public) = derive_keypair(&Seed::new([0x42; 32]));
         let root = lichen_core::addr::iid_from_pubkey_bytes(public.as_bytes());
-        (claim, route, root, [3; 8], private, public)
+        (claim, route, root, own, egress_addr, private, public, egress_public)
     }
 
     fn authenticated<'a>(root: [u8; 8], public: &'a PublicKey) -> AuthenticatedRoot<'a> {
@@ -854,20 +878,25 @@ mod tests {
         }
     }
 
-    fn egress_request<'a>(source: [u8; 16], route: &'a [[u8; 8]]) -> DecapsulationRequest<'a> {
+    fn egress_request<'a>(
+        source: [u8; 16],
+        route: &'a [[u8; 16]],
+        egress_addr: [u8; 16],
+    ) -> DecapsulationRequest<'a> {
         DecapsulationRequest {
             direction: TunnelDirection::MeshToExternal,
             inner_source: source,
             source_is_mesh: true,
             destination_is_mesh: false,
             route,
+            egress_addr,
         }
     }
 
     #[test]
     fn root_post_accepts_and_authorizes_exact_route_and_prefix() {
-        let (claim, route, root, own, private, public) = fixture();
-        let post = build_root_post(claim, &route, root, &private, &public).unwrap();
+        let (claim, route, root, own, egress_addr, private, public, egress_public) = fixture();
+        let post = build_root_post(claim, &route, &egress_public, root, &private, &public).unwrap();
         assert_eq!(post.path, TUNNEL_AUTH_PATH);
         assert!(post.oscore_required);
         assert_eq!(
@@ -883,24 +912,30 @@ mod tests {
         let mut source = claim.prefix;
         source[15] = 1;
         assert_eq!(
-            table.authorize_decapsulation(egress_request(source, &route), 51),
+            table.authorize_decapsulation(egress_request(source, &route, egress_addr), 51),
             Ok(())
         );
+        // Same termination, different transit hop: a different signed route.
         assert_eq!(
-            table.authorize_decapsulation(egress_request(source, &[[7; 8]]), 51),
+            table.authorize_decapsulation(egress_request(source, &[[0x11; 16], [0x99; 16], egress_addr], egress_addr), 51),
             Err(TunnelAuthError::UnauthorizedTunnel)
+        );
+        // Not terminating at this egress is rejected before hashing.
+        assert_eq!(
+            table.authorize_decapsulation(egress_request(source, &[[0x11; 16], [0x33; 16]], egress_addr), 51),
+            Err(TunnelAuthError::InvalidRoute)
         );
         source[0] ^= 1;
         assert_eq!(
-            table.authorize_decapsulation(egress_request(source, &route), 51),
+            table.authorize_decapsulation(egress_request(source, &route, egress_addr), 51),
             Err(TunnelAuthError::UnauthorizedTunnel)
         );
     }
 
     #[test]
     fn rejects_wrong_authentication_signature_egress_expiry_and_replay_atomically() {
-        let (claim, route, root, own, private, public) = fixture();
-        let post = build_root_post(claim, &route, root, &private, &public).unwrap();
+        let (claim, route, root, own, _egress_addr, private, public, egress_public) = fixture();
+        let post = build_root_post(claim, &route, &egress_public, root, &private, &public).unwrap();
         let mut table = TunnelAuthorizationTable::<2>::default();
         table.set_root(root);
         assert_eq!(
@@ -965,23 +1000,25 @@ mod tests {
 
     #[test]
     fn revocation_root_change_expiry_and_lru_fail_closed() {
-        let (base, route, root, own, private, public) = fixture();
+        let (base, route, root, own, egress_addr, private, public, egress_public) = fixture();
         let mut table = TunnelAuthorizationTable::<1>::default();
         table.set_root(root);
-        let first = build_root_post(base, &route, root, &private, &public).unwrap();
+        let first = build_root_post(base, &route, &egress_public, root, &private, &public).unwrap();
         table
             .accept_post(first.body.as_bytes(), authenticated(root, &public), own, 1)
             .unwrap();
         let mut second_claim = base;
         second_claim.prefix[7] = 0x79;
-        let second_route = [[4; 8], [5; 8], [3; 8]];
+        let second_route = [[4; 16], [5; 16], egress_addr];
         second_claim.route_hash = route_hash(&second_route).unwrap();
-        let second = build_root_post(second_claim, &second_route, root, &private, &public).unwrap();
+        let second =
+            build_root_post(second_claim, &second_route, &egress_public, root, &private, &public)
+                .unwrap();
         table
             .accept_post(second.body.as_bytes(), authenticated(root, &public), own, 1)
             .unwrap();
         assert_eq!(
-            table.authorize_decapsulation(egress_request(base.prefix, &route), 2),
+            table.authorize_decapsulation(egress_request(base.prefix, &route, egress_addr), 2),
             Err(TunnelAuthError::UnauthorizedTunnel)
         );
         table
@@ -993,7 +1030,10 @@ mod tests {
             )
             .unwrap();
         assert_eq!(
-            table.authorize_decapsulation(egress_request(second_claim.prefix, &second_route), 2),
+            table.authorize_decapsulation(
+                egress_request(second_claim.prefix, &second_route, egress_addr),
+                2
+            ),
             Err(TunnelAuthError::UnauthorizedTunnel)
         );
         // Revocation removes the accepted entry but retains a revoked floor,
@@ -1007,7 +1047,8 @@ mod tests {
         let mut fresher_claim = second_claim;
         fresher_claim.path_seq += 1;
         let fresher =
-            build_root_post(fresher_claim, &second_route, root, &private, &public).unwrap();
+            build_root_post(fresher_claim, &second_route, &egress_public, root, &private, &public)
+                .unwrap();
         table
             .accept_post(
                 fresher.body.as_bytes(),
@@ -1018,14 +1059,17 @@ mod tests {
             .unwrap();
         table.set_root([0xaa; 8]);
         assert_eq!(
-            table.authorize_decapsulation(egress_request(second_claim.prefix, &second_route), 2),
+            table.authorize_decapsulation(
+                egress_request(second_claim.prefix, &second_route, egress_addr),
+                2
+            ),
             Err(TunnelAuthError::UnauthorizedTunnel)
         );
     }
 
     #[test]
     fn accept_on_full_floor_history_fails_closed_without_eviction() {
-        let (base, route, root, own, private, public) = fixture();
+        let (base, route, root, own, egress_addr, private, public, egress_public) = fixture();
         let mut table = TunnelAuthorizationTable::<1>::default();
         table.set_root(root);
         assert_eq!(table.max_history(), 4);
@@ -1035,9 +1079,11 @@ mod tests {
         for index in 0..4u8 {
             let mut claim = base;
             claim.prefix[7] = 0x70 + index;
-            let claim_route = [[index + 10; 8], [index + 20; 8], [3; 8]];
+            let claim_route = [[index + 10; 16], [index + 20; 16], egress_addr];
             claim.route_hash = route_hash(&claim_route).unwrap();
-            let post = build_root_post(claim, &claim_route, root, &private, &public).unwrap();
+            let post =
+                build_root_post(claim, &claim_route, &egress_public, root, &private, &public)
+                    .unwrap();
             table
                 .accept_post(post.body.as_bytes(), authenticated(root, &public), own, 1)
                 .unwrap();
@@ -1048,9 +1094,11 @@ mod tests {
         // floor, or a captured revoked post could re-arm the data plane.
         let mut fifth_claim = base;
         fifth_claim.prefix[7] = 0x80;
-        let fifth_route = [[9; 8], [10; 8], [3; 8]];
+        let fifth_route = [[9; 16], [10; 16], egress_addr];
         fifth_claim.route_hash = route_hash(&fifth_route).unwrap();
-        let fifth = build_root_post(fifth_claim, &fifth_route, root, &private, &public).unwrap();
+        let fifth =
+            build_root_post(fifth_claim, &fifth_route, &egress_public, root, &private, &public)
+                .unwrap();
         assert_eq!(
             table.accept_post(fifth.body.as_bytes(), authenticated(root, &public), own, 1),
             Err(TunnelAuthError::Capacity)
@@ -1075,7 +1123,8 @@ mod tests {
         let mut fresher_claim = *target_claim;
         fresher_claim.path_seq += 1;
         let fresher =
-            build_root_post(fresher_claim, target_route, root, &private, &public).unwrap();
+            build_root_post(fresher_claim, target_route, &egress_public, root, &private, &public)
+                .unwrap();
         assert_eq!(
             table.accept_post(
                 fresher.body.as_bytes(),
@@ -1108,7 +1157,7 @@ mod tests {
 
     #[test]
     fn revoke_on_full_floor_history_fails_closed_and_mutates_nothing() {
-        let (base, route, root, own, private, public) = fixture();
+        let (base, route, root, own, egress_addr, private, public, egress_public) = fixture();
         let mut table = TunnelAuthorizationTable::<1>::default();
         table.set_root(root);
 
@@ -1116,9 +1165,11 @@ mod tests {
         for index in 0..4u8 {
             let mut claim = base;
             claim.prefix[7] = 0x70 + index;
-            let claim_route = [[index + 10; 8], [index + 20; 8], [3; 8]];
+            let claim_route = [[index + 10; 16], [index + 20; 16], egress_addr];
             claim.route_hash = route_hash(&claim_route).unwrap();
-            let post = build_root_post(claim, &claim_route, root, &private, &public).unwrap();
+            let post =
+                build_root_post(claim, &claim_route, &egress_public, root, &private, &public)
+                    .unwrap();
             table
                 .accept_post(post.body.as_bytes(), authenticated(root, &public), own, 1)
                 .unwrap();
@@ -1137,7 +1188,7 @@ mod tests {
         // mutates nothing: every retained revoked floor still rejects.
         let mut unknown = base;
         unknown.prefix[7] = 0x90;
-        let unknown_route = [[11; 8], [12; 8], [3; 8]];
+        let unknown_route = [[11; 16], [12; 16], egress_addr];
         unknown.route_hash = route_hash(&unknown_route).unwrap();
         assert_eq!(
             table.revoke(
@@ -1172,38 +1223,38 @@ mod tests {
 
     #[test]
     fn direction_scope_clock_and_capacity_fail_closed() {
-        let (claim, route, root, own, private, public) = fixture();
-        let post = build_root_post(claim, &route, root, &private, &public).unwrap();
+        let (claim, route, root, own, egress_addr, private, public, egress_public) = fixture();
+        let post = build_root_post(claim, &route, &egress_public, root, &private, &public).unwrap();
         let mut table = TunnelAuthorizationTable::<2>::default();
         table.set_root(root);
         table
             .accept_post(post.body.as_bytes(), authenticated(root, &public), own, 50)
             .unwrap();
 
-        let mut wrong_direction = egress_request(claim.prefix, &route);
+        let mut wrong_direction = egress_request(claim.prefix, &route, egress_addr);
         wrong_direction.direction = TunnelDirection::ExternalToMesh;
         assert_eq!(
             table.authorize_decapsulation(wrong_direction, 51),
             Err(TunnelAuthError::WrongDirection)
         );
-        let mut non_mesh_source = egress_request(claim.prefix, &route);
+        let mut non_mesh_source = egress_request(claim.prefix, &route, egress_addr);
         non_mesh_source.source_is_mesh = false;
         assert_eq!(
             table.authorize_decapsulation(non_mesh_source, 51),
             Err(TunnelAuthError::SourceOutsideMesh)
         );
-        let mut mesh_destination = egress_request(claim.prefix, &route);
+        let mut mesh_destination = egress_request(claim.prefix, &route, egress_addr);
         mesh_destination.destination_is_mesh = true;
         assert_eq!(
             table.authorize_decapsulation(mesh_destination, 51),
             Err(TunnelAuthError::DestinationInMesh)
         );
         assert_eq!(
-            table.authorize_decapsulation(egress_request(claim.prefix, &route), 49),
+            table.authorize_decapsulation(egress_request(claim.prefix, &route, egress_addr), 49),
             Err(TunnelAuthError::ClockRollback)
         );
         assert_eq!(
-            table.authorize_decapsulation(egress_request(claim.prefix, &route), 52),
+            table.authorize_decapsulation(egress_request(claim.prefix, &route, egress_addr), 52),
             Err(TunnelAuthError::UnauthorizedTunnel)
         );
 
@@ -1230,28 +1281,28 @@ mod tests {
 
     #[test]
     fn rollback_retains_replay_floors_high_water_and_denies_rearm() {
-        let (claim, route, root, own, private, public) = fixture();
+        let (claim, route, root, own, egress_addr, private, public, egress_public) = fixture();
         let mut table = TunnelAuthorizationTable::<4>::default();
         table.set_root(root);
 
-        let post = build_root_post(claim, &route, root, &private, &public).unwrap();
+        let post = build_root_post(claim, &route, &egress_public, root, &private, &public).unwrap();
         assert!(table
             .accept_post(post.body.as_bytes(), authenticated(root, &public), own, 10)
             .is_ok());
         assert!(table
-            .authorize_decapsulation(egress_request(claim.prefix, &route), 20)
+            .authorize_decapsulation(egress_request(claim.prefix, &route, egress_addr), 20)
             .is_ok());
 
         // Clock rollback wipes the entries but retains the replay floors and
         // the high-water time (mirrors the Python gateway's _observe_time).
         assert_eq!(
-            table.authorize_decapsulation(egress_request(claim.prefix, &route), 5),
+            table.authorize_decapsulation(egress_request(claim.prefix, &route, egress_addr), 5),
             Err(TunnelAuthError::ClockRollback)
         );
         // The high-water is retained: an even earlier now still trips
         // rollback instead of passing with last_now reset to None.
         assert_eq!(
-            table.authorize_decapsulation(egress_request(claim.prefix, &route), 4),
+            table.authorize_decapsulation(egress_request(claim.prefix, &route, egress_addr), 4),
             Err(TunnelAuthError::ClockRollback)
         );
 
@@ -1270,10 +1321,11 @@ mod tests {
             claim.route_hash,
             8,
             10_000,
-            [3; 8],
+            own,
         )
         .unwrap();
-        let fresh_post = build_root_post(fresh, &route, root, &private, &public).unwrap();
+        let fresh_post =
+            build_root_post(fresh, &route, &egress_public, root, &private, &public).unwrap();
         let accepted = table
             .accept_post(
                 fresh_post.body.as_bytes(),
@@ -1284,7 +1336,7 @@ mod tests {
             .unwrap();
         assert_eq!(accepted.path_seq, 8);
         assert!(table
-            .authorize_decapsulation(egress_request(fresh.prefix, &route), 54)
+            .authorize_decapsulation(egress_request(fresh.prefix, &route, egress_addr), 54)
             .is_ok());
     }
 
