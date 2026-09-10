@@ -1883,11 +1883,10 @@ def test_ccp9_rendezvous_vector(name: str, vector: dict) -> None:
     mechanism = vector.get("mechanism") or vector.get("expected", {}).get("mechanism", "")
     if mechanism == "hash_based":
         peer_eui = bytes.fromhex(vector["peer_eui64"])
-        sfn = vector["sfn"]
         epoch = vector.get("epoch", 0)  # default epoch=0 per vector description
         n_channels = vector["n_channels"]
-        # hash_32(eui || epoch_le || sfn_le) per spec 02a-coordinated-capacity.md
-        hash_input = peer_eui + epoch.to_bytes(4, "little") + sfn.to_bytes(4, "little")
+        # hash_32(eui || epoch_le) per appendix-ccp12-hopping.md §3.1 (CCP-16)
+        hash_input = peer_eui + epoch.to_bytes(4, "little")
         h = _oracle_hash_32(hash_input)
         computed_channel = 1 + (h % (n_channels - 1))
         assert computed_channel == vector["expected_channel"]

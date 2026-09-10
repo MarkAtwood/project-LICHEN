@@ -452,10 +452,10 @@ def test_ccp9_announce_channel_parse_roundtrip() -> None:
 
 
 def test_hyphen_hash_based_peer_rendezvous_vector_literal() -> None:
-    """Vector pins the real priority-3 preimage (``eui || epoch_le || sfn_le``).
+    """Vector pins the CCP-16 priority-3 preimage (``eui64 || epoch_le``).
 
     The regenerated vector matches the runtime ``select_channel`` surface at
-    epoch=0 (channel 5); the former generator-only preimage pin and the
+    epoch=0 (channel 1); the former generator-only preimage pin and the
     unparameterizable ``expected_slot=42`` pin were removed.
     """
     vec = _case(CCP9_HYPHEN, "hash_based_peer_rendezvous")
