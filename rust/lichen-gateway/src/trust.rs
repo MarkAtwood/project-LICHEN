@@ -55,6 +55,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use lichen_oscore::Context as OscoreContext;
 use sha2::{Digest, Sha512};
+use x509_parser::prelude::parse_x509_certificate;
 use zeroize::Zeroizing;
 
 // Re-export Schnorr types from lichen-link
@@ -185,6 +186,8 @@ pub enum TrustError {
     GenerationExhausted,
     /// A durable trust-store I/O operation failed.
     StorageIo(String),
+    /// A configured PKIX chain is malformed or violates RFC 5280 constraints.
+    InvalidCertificate(String),
 }
 
 impl std::fmt::Display for TrustError {
@@ -218,11 +221,97 @@ impl std::fmt::Display for TrustError {
             ),
             Self::GenerationExhausted => write!(f, "trust-store generation exhausted"),
             Self::StorageIo(message) => write!(f, "trust-store I/O failed: {message}"),
+            Self::InvalidCertificate(message) => write!(f, "invalid PKIX certificate: {message}"),
         }
     }
 }
 
 impl std::error::Error for TrustError {}
+
+/// Validate a leaf-first DER X.509 chain against configured DER trust anchors.
+///
+/// The final chain certificate must be byte-for-byte equal to a configured
+/// anchor. Every child is linked by issuer/subject name and verified with the
+/// issuer public key; names alone never authorize a certificate.
+pub fn validate_pkix_chain(chain: &[&[u8]], trust_anchors: &[&[u8]]) -> Result<(), TrustError> {
+    if chain.len() < 2 {
+        return Err(TrustError::InvalidCertificate(
+            "chain must contain a leaf and issuer".into(),
+        ));
+    }
+
+    let certificates = chain
+        .iter()
+        .map(|der| {
+            parse_x509_certificate(der)
+                .map(|(_, certificate)| certificate)
+                .map_err(|error| TrustError::InvalidCertificate(error.to_string()))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let anchor = chain.last().expect("chain length checked");
+    if !trust_anchors.iter().any(|configured| configured == anchor) {
+        return Err(TrustError::InvalidCertificate(
+            "chain does not terminate at a configured trust anchor".into(),
+        ));
+    }
+
+    let leaf = &certificates[0];
+    let basic_constraints = leaf
+        .basic_constraints()
+        .map_err(|error| TrustError::InvalidCertificate(error.to_string()))?
+        .ok_or_else(|| TrustError::InvalidCertificate("leaf lacks basicConstraints".into()))?;
+    if basic_constraints.value.ca {
+        return Err(TrustError::InvalidCertificate(
+            "leaf basicConstraints CA must be false".into(),
+        ));
+    }
+    let key_usage = leaf
+        .key_usage()
+        .map_err(|error| TrustError::InvalidCertificate(error.to_string()))?
+        .ok_or_else(|| TrustError::InvalidCertificate("leaf lacks keyUsage".into()))?;
+    if !key_usage.value.digital_signature() {
+        return Err(TrustError::InvalidCertificate(
+            "leaf keyUsage lacks digitalSignature".into(),
+        ));
+    }
+
+    for index in 0..certificates.len() - 1 {
+        let certificate = &certificates[index];
+        let issuer = &certificates[index + 1];
+        if certificate.tbs_certificate.issuer != issuer.tbs_certificate.subject {
+            return Err(TrustError::InvalidCertificate(
+                "issuer and subject names do not form a chain".into(),
+            ));
+        }
+        certificate
+            .verify_signature(Some(&issuer.tbs_certificate.subject_pki))
+            .map_err(|error| TrustError::InvalidCertificate(error.to_string()))?;
+
+        if index > 0 {
+            let constraints = certificate
+                .basic_constraints()
+                .map_err(|error| TrustError::InvalidCertificate(error.to_string()))?
+                .ok_or_else(|| {
+                    TrustError::InvalidCertificate("issuer lacks basicConstraints".into())
+                })?;
+            if !constraints.value.ca {
+                return Err(TrustError::InvalidCertificate(
+                    "issuer basicConstraints CA must be true".into(),
+                ));
+            }
+            let usage = certificate
+                .key_usage()
+                .map_err(|error| TrustError::InvalidCertificate(error.to_string()))?
+                .ok_or_else(|| TrustError::InvalidCertificate("issuer lacks keyUsage".into()))?;
+            if !usage.value.key_cert_sign() {
+                return Err(TrustError::InvalidCertificate(
+                    "issuer keyUsage lacks keyCertSign".into(),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
 
 // ─── TOFU Result ─────────────────────────────────────────────────────────────
 
@@ -2519,5 +2608,59 @@ mod tests {
 
         // Verify master secrets match (same PSK)
         assert_eq!(alice_ctx.master_secret(), bob_ctx.master_secret());
+    }
+
+    fn pkix_chain(leaf_is_ca: bool) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        use rcgen::{BasicConstraints, CertificateParams, IsCa, KeyPair, KeyUsagePurpose};
+
+        let mut root_params = CertificateParams::new(vec!["root.example".into()]).unwrap();
+        root_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+        root_params.key_usages = vec![KeyUsagePurpose::KeyCertSign];
+        let root_key = KeyPair::generate().unwrap();
+        let root = root_params.self_signed(&root_key).unwrap();
+
+        let mut intermediate_params =
+            CertificateParams::new(vec!["intermediate.example".into()]).unwrap();
+        intermediate_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+        intermediate_params.key_usages = vec![KeyUsagePurpose::KeyCertSign];
+        let intermediate_key = KeyPair::generate().unwrap();
+        let intermediate = intermediate_params
+            .signed_by(&intermediate_key, &root, &root_key)
+            .unwrap();
+        let intermediate_der = intermediate.der().to_vec();
+
+        let mut leaf_params = CertificateParams::new(vec!["gateway.example".into()]).unwrap();
+        leaf_params.is_ca = if leaf_is_ca {
+            IsCa::Ca(BasicConstraints::Unconstrained)
+        } else {
+            IsCa::ExplicitNoCa
+        };
+        leaf_params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
+        let leaf_key = KeyPair::generate().unwrap();
+        let leaf = leaf_params
+            .signed_by(&leaf_key, &intermediate, &intermediate_key)
+            .unwrap();
+        (leaf.der().to_vec(), intermediate_der, root.der().to_vec())
+    }
+
+    #[test]
+    fn pkix_validates_signature_chain_to_configured_anchor() {
+        let (leaf, intermediate, root) = pkix_chain(false);
+        validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]).unwrap();
+    }
+
+    #[test]
+    fn pkix_rejects_unconfigured_anchor() {
+        let (leaf, intermediate, root) = pkix_chain(false);
+        let other_root = pkix_chain(false).2;
+        let result = validate_pkix_chain(&[&leaf, &intermediate, &root], &[&other_root]);
+        assert!(matches!(result, Err(TrustError::InvalidCertificate(_))));
+    }
+
+    #[test]
+    fn pkix_rejects_ca_leaf() {
+        let (leaf, intermediate, root) = pkix_chain(true);
+        let result = validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]);
+        assert!(matches!(result, Err(TrustError::InvalidCertificate(_))));
     }
 }
