@@ -1,0 +1,17 @@
+{
+  "id": "project-LICHEN-worker6-ksan",
+  "title": "Retire still-running legacy worker fleet",
+  "description": "Home artifact audit found eight /bin/bash ./scripts/fleet-headless.sh N processes with cwd ~/Developer/lichen-workers/worker1 through worker8 (deleted), plus merge-janitor.sh and fleet-guards.sh 10. Existing workers are still issuing bd writes. User crontab runs */2 * * * * flock -n /tmp/fleet-watchdog.lock /home/mark/Developer/lichen-workspace/project-LICHEN/scripts/fleet-watchdog.sh; watchdog can recreate workers. Git worktree list only shows main. Obtain authorization to disable this exact watchdog entry and terminate identified legacy fleet processes; inspect current identities before signaling, preserve logs/work, do not stop unrelated tmux sessions or agents. worker2-build/cargo is ~1.67 GiB generated artifacts, cleanup candidate after fleet quiescence. No fleet shutdown or artifact deletion authorized/performed in audit.",
+  "acceptance_criteria": "Authorized legacy fleet shutdown verified, watchdog cannot restart it, unrelated processes and saved recovery data preserved.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T17:27:45.673436632Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T17:32:42.784148361Z",
+  "started_at": "2026-09-10T17:29:28.830691454Z",
+  "closed_at": "2026-09-10T17:32:42.784148361Z",
+  "close_reason": "User-authorized retirement: commented out exact two-minute watchdog crontab entry; verified cwd/argv/PGID and SIGTERM-stopped eight headless workers plus janitor and guard and all live members of their ten process groups. No force kill needed. After 125-second watchdog interval, corrected process check finds zero active fleet scripts and zero active watchdog cron entries. Idle tmux shell, logs, recovery artifacts and unrelated processes preserved."
+}

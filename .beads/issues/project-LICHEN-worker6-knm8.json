@@ -1,0 +1,13 @@
+{
+  "id": "project-LICHEN-worker6-knm8",
+  "title": "Reconcile saved worker ready queue and handoff",
+  "description": "Preserve /home/mark/Developer/lichen-workers/worker2-build/ready.json: 100 saved records, 47 IDs absent from current main/Beads, no exact-title replacements found. Missing families (prefix project-LICHEN-worker6-): w5ve parent/.1/.7/.8/.10/.12; 8oef parent/.1/.2/.5/.6/.8/.10; ldhl parent/.1/.2/.3/.4/.9/.10/.13/.14/.16/.17; qpzt parent/.1; hp2i parent/.1/.2/.3/.7; cwqh parent/.1/.2/.3/.4; tsn3.4.1/.2/.4/.6; gy32.1.3/.5; 30i7,eulv,9pms,wkcq,l1qw.20.3. Saved aekf is Custody Transfer \u0026 Message Delivery Service but current aekf is unrelated worker-stall info; never overwrite blindly. Saved l1qw.12.2.2 has human unblock note missing in current record. Preserve small .scratch/1dyx-verify harness/review transcripts pending reconciliation of open 1dyx; its nested repo is synthetic fixture and func.sh is preserved in main history. Handoff export /home/mark/lichen-handoff-session.json indexed all 953 messages; reconstructed code survives in main/history or superseded config, f6dab981d8 backup adds no needed hunk. No identified unique export-only code. It points to still-existing EXTERNAL oscore stashes a002cf7f9778 and 8582260c5067 and dirty src/lib.rs in /home/mark/crates/oscore: preserve, human-only security-semantic adjudication required. Historical generic stray stashes not all individually mapped; spec sweep b7z9/nuxe/fejd remain tracked; l9jj/iard may be superseded by ilye; mt5q approves Zephyr4.1 while older AGENTS prose says3.7. Only audited home bundles and l4jp.patch were deleted under explicit user authorization.",
+  "acceptance_criteria": "Saved queue reconciled record-by-record against current spec and implementations, collisions handled without overwrite, unique requirements tracked, external OSCORE work preserved and referred for human review before deleting evidence.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T17:27:45.895690223Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T17:27:45.895690223Z"
+}
