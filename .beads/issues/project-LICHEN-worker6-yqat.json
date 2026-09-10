@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-yqat",
+  "title": "SOS TX emission: no stack emits dispatch 0x16 (18.4.3 wire form)",
+  "description": "b7z9.120 follow-up: with the dispatch 0x16 classification now landed in all three stacks (Rust lichen-core L2PayloadKind::Sos + wrap_sos_payload, Python L2PayloadKind.SOS + wrap_sos_payload, C LICHEN_L2_PAYLOAD_SOS), no sender actually EMITS an SOS frame with dispatch 0x16. spec 12-apps.md §18.4.3 (REQUIRED): sender MUST emit SOS with link-layer dispatch 0x16 carrying the §18.4.2 CBOR alert map, NOT as SCHC-compressed CoAP; relays classify solely by this byte for the 3/hour SOS budget. Consequence until wired: 18.4.3 rebroadcast-once and the SOS budget cannot work. Placement: SOS TX emission paths in C (sos_post / link TX), Python (node SOS send), Rust (lichen-node SOS TX), each wrapping the canonical SOS CBOR with the 0x16 dispatch.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T05:47:59.095259776Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-09-10T05:47:59.095259776Z",
+  "labels": [
+    "apps"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-yqat",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.120",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T05:47:59.216933448Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}
