@@ -32,7 +32,7 @@ from lichen.coap.resources.emergency import (
 from lichen.coap.sos_origin import sign_sos_origin
 from lichen.coap.transport import InMemoryNetwork, create_lichen_context
 from lichen.coap.udp_server import bind_coap_udp
-from lichen.crypto.identity import _pubkey_to_iid
+from lichen.crypto.identity import _pubkey_to_iid, yggdrasil_address
 from lichen.crypto.schnorr48 import derive_keypair
 
 # Deterministic signer identity; /sos requires origin signatures (spec 18.4.1),
@@ -102,8 +102,9 @@ def _find_multicast_interface() -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _origin_addr(iid: bytes) -> IPv6Address:
-    return IPv6Address(b"\x02\x00" + b"\x00" * 6 + iid)
+def _origin_addr(pub: bytes) -> IPv6Address:
+    """Origin address must be the AddrForKey /128 derived from the pubkey."""
+    return yggdrasil_address(pub)
 
 
 def _signed_body(
@@ -117,8 +118,26 @@ def _signed_body(
     """Build a spec-18.4.1 signed /sos POST body."""
     core: dict[str, object] = {"from": _EUI.hex(), "t": t}
     core.update(overrides)
-    sig = sign_sos_origin(priv, pub, _origin_addr(_EUI), seq, core)
+    sig = sign_sos_origin(priv, pub, _origin_addr(pub), seq, core)
     return cbor2.dumps({**core, "pubkey": pub, "sig": sig.to_bytes()})
+
+
+async def _expect_silent_drop(
+    client: aiocoap.Context, payload: bytes, timeout_s: float = 3.0
+) -> None:
+    """Assert a /sos POST is silently dropped: no CoAP response is sent.
+
+    Spec 18.4.1 + sos_signature.json (error_response: false): a missing,
+    malformed, or invalid origin signature MUST be silently dropped — no
+    error response is sent, so the request times out from the client's view.
+    """
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(
+            client.request(
+                Message(code=POST, uri="coap://srv/sos", payload=payload, content_format=60)
+            ).response,
+            timeout=timeout_s,
+        )
 
 
 async def _setup() -> tuple[aiocoap.Context, aiocoap.Context, SosResource]:
@@ -129,6 +148,11 @@ async def _setup() -> tuple[aiocoap.Context, aiocoap.Context, SosResource]:
     server = await create_lichen_context(net.channel("srv"), "srv", site=site)
     client = await create_lichen_context(net.channel("cli"), "cli")
     return client, server, sos
+
+
+# ---------------------------------------------------------------------------
+# GET
+# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
@@ -385,10 +409,8 @@ class TestSosPutDelete:
             assert sos._active is True
             other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
             forged = _signed_body(seq=2, priv=other_priv, pub=other_pub, type="cancel")
-            resp = await client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=forged, content_format=60)
-            ).response
-            assert resp.code == aiocoap.UNAUTHORIZED
+            # Forged cancel carries a non-originator signature: silently dropped.
+            await _expect_silent_drop(client, forged)
             assert sos._active is True
         finally:
             await client.shutdown()
@@ -536,10 +558,7 @@ class TestSosSignatureEnforcement:
         client, server, sos = await _setup()
         try:
             body = cbor2.dumps({"from": _EUI.hex(), "t": _T0})
-            resp = await client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
-            ).response
-            assert resp.code.is_successful() is False
+            await _expect_silent_drop(client, body)
             assert sos._active is False
         finally:
             await client.shutdown()
@@ -551,10 +570,7 @@ class TestSosSignatureEnforcement:
             body = bytearray(_signed_body())
             # Flip a bit late in the payload (inside the 48-byte sig).
             body[-1] ^= 0x01
-            resp = await client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=bytes(body), content_format=60)
-            ).response
-            assert resp.code.is_successful() is False
+            await _expect_silent_drop(client, bytes(body))
             assert sos._active is False
         finally:
             await client.shutdown()
@@ -565,11 +581,8 @@ class TestSosSignatureEnforcement:
         try:
             other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
             body = _signed_body(priv=other_priv, pub=other_pub)
-            resp = await client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
-            ).response
             # Other key does not derive to the claimed IID: binding gate fires.
-            assert resp.code.is_successful() is False
+            await _expect_silent_drop(client, body)
             assert sos._active is False
         finally:
             await client.shutdown()
@@ -582,11 +595,7 @@ class TestSosSignatureEnforcement:
                 code=POST, uri="coap://srv/sos", payload=_signed_body(seq=7), content_format=60
             )
             assert (await client.request(first).response).code == aiocoap.CHANGED
-            replay = Message(
-                code=POST, uri="coap://srv/sos", payload=_signed_body(seq=7), content_format=60
-            )
-            resp = await client.request(replay).response
-            assert resp.code.is_successful() is False
+            await _expect_silent_drop(client, _signed_body(seq=7))
         finally:
             await client.shutdown()
             await server.shutdown()
@@ -598,11 +607,7 @@ class TestSosSignatureEnforcement:
                 code=POST, uri="coap://srv/sos", payload=_signed_body(seq=9), content_format=60
             )
             assert (await client.request(first).response).code == aiocoap.CHANGED
-            stale = Message(
-                code=POST, uri="coap://srv/sos", payload=_signed_body(seq=8), content_format=60
-            )
-            resp = await client.request(stale).response
-            assert resp.code.is_successful() is False
+            await _expect_silent_drop(client, _signed_body(seq=8))
         finally:
             await client.shutdown()
             await server.shutdown()
