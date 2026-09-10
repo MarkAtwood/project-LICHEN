@@ -12,7 +12,6 @@ zephyr_library_sources(
   schc_decompress.c
   schc_failure_tracker.c
   schc_helpers.c
-  schc_failure_tracker.c
   schc_session.c
   schc_session_table.c
   schc_session_authority.c
