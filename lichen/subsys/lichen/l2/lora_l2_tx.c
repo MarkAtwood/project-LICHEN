@@ -605,6 +605,11 @@ int lichen_lora_l2_tx(const uint8_t *data, size_t len, uint8_t channel)
         int csma_status = lichen_csma_tx_complete(&lora_data.csma, ret < 0 ? ret : 0);
         if (csma_status < 0) {
             LOG_WRN("lora_l2: CSMA TX completion failed (%d)", csma_status);
+            int reset_status = lichen_csma_reset(&lora_data.csma);
+            if (reset_status < 0) {
+                LOG_ERR("lora_l2: CSMA reset after TX completion failed (%d)",
+                        reset_status);
+            }
         }
     }
 #if defined(CONFIG_LICHEN_DIAG)
