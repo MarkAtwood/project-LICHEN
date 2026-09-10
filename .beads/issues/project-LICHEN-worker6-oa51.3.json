@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-oa51.3",
+  "title": "Connect production simulated relay runners",
+  "description": "Reuse shared lora_medium server and real Python SimRadio/Node, Rust HAL SimRadio/RplStack owner loop, C native_sim LoRa API. Existing Python/Rust tests show mandatory-relay paths but no real mixed runner. C loopback does not connect independent nodes; TCP adapter uses Zephyr sockets requiring verified host-network connectivity; C production L2 path does not call standalone router dispatcher. Audit also finds Rust send_coap_raw_to ignores selected L2 destination. Do not use fake signatures or counter-only hetero fleet script. Recipient-as-root topology is proposed to match current Rust route shape.",
+  "acceptance_criteria": "Actual stack processes exchange signed and SCHC-framed traffic over explicit A-B-C reachability, with no A-C path; chosen route next-hop is used; C relay path demonstrated; runtime ownership remains single and bounded.",
+  "notes": "Infrastructure checkpoint preserved; remaining mixed runner/C relay work pending. User approved endpoint-binding design; active work switches to oa51.2. Current results/details retained in prior events.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T18:25:34.077531972Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T19:54:11.528299706Z",
+  "started_at": "2026-09-10T18:35:38.635659428Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-oa51.3",
+      "depends_on_id": "project-LICHEN-worker6-oa51",
+      "type": "parent-child",
+      "created_at": "2026-09-10T18:25:34.244518832Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

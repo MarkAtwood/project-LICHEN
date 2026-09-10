@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-oa51.1",
+  "title": "Audit real simulator paths and requirements",
+  "description": "Map Python Node/NodeChannel/SecureDatagramChannel, Rust RplStack/SecureStack/Radio, C Zephyr L2/router/CoAP and simulator medium. Reconcile messaging spec12 sections18.1.1-2, LCI17.5.6-7, security/link/OSCORE and settled decisions. Record production seams versus mock/counter demos and run existing diagnostic baselines. No simulator fleet or orchestrator execution.",
+  "acceptance_criteria": "Concrete path and blocker evidence recorded for all three implementations; baseline results distinguished from read-only findings; six-permutation implementation scope presented.",
+  "notes": "Read-only path audits completed for Python/Rust/C and requirements. Actual baseline runs: Python /home/mark/Developer/lichen-venv/bin/python -m pytest -q tests/test_node_coap_integration.py::test_coap_get_via_relay =\u003e1 PASS (real Node stack/directed test radio, plaintext GET); Rust CARGO_TARGET_DIR=/home/mark/Cache/cargo-target cargo +1.98.1 test --locked -p lichen-node --features std --test secure_rpl_public =\u003e2 PASS (public secure request owner, in-memory radio). C native_sim ping_l2 =\u003e8/8 PASS, no skipped tests, ASan/UBSan requested; Zephyr4.1 SDK0.16.8. Build /tmp/opencode/oa51-c-packet-baseline. ZEPHYR_EXTRA_MODULES alone failed because WEST=WEST-NOTFOUND caused no module discovery. Working build uses -DZEPHYR_MODULES=/home/mark/Developer/lichen-workspace/project-LICHEN/lichen;/home/mark/GIT/zcbor;/home/mark/Developer/lichen-workspace/modules/crypto/tinycrypt;/home/mark/Developer/lichen-workspace/modules/crypto/mbedtls (quoted single argument), -DEXTRA_CONF_FILE=\u003crepo\u003e/lichen/tests/sanitizers.conf -DCONFIG_STACK_CANARIES=n (existing testcase policy). Run timeout 90s \u003cbuild\u003e/zephyr/zephyr.exe. eth_posix cannot create zeth without privileges; loopback suite still passes, shared-medium socket path NOT established. No source changes. No mixed application scenario run. Source gaps: Python protected identity lost before resource authorization, messaging archives locally/no outbound/receipt wiring; Rust RplStack generic POST not exposed, messaging stores unwired, send_coap_raw_to ignores next-hop; C standalone router not in L2 production path, msg_send queue-only, inbox callback unset, receipt producer absent, OSCORE routable-source suffix lookup invalid. Existing fake-signature/counter fleet excluded. Requirements: spec12 sections18.1.1-2, spec11 17.5.6-7, spec06 8.3-4/8.9, settled upstream/custody decisions; R-12-004/010-013, R-11-044/048-051 link hints not stable authority. b7z9.122/.123 missing from tracker. Connected scope excludes offline scenarios, not a new custody policy; explicit receipt follows existing receipt window (5min recommended), no invented immediate receipt guarantee.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T18:25:32.94470757Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T18:28:11.390478847Z",
+  "started_at": "2026-09-10T18:28:10.367795718Z",
+  "closed_at": "2026-09-10T18:28:11.390478847Z",
+  "close_reason": "Three stack paths and requirements audited, diagnostic baselines executed, concrete production gaps and implementation approval boundary identified. This closes audit only, not delivery.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-oa51.1",
+      "depends_on_id": "project-LICHEN-worker6-oa51",
+      "type": "parent-child",
+      "created_at": "2026-09-10T18:25:33.101120153Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

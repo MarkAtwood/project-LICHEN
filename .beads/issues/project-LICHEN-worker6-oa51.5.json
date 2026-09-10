@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-oa51.5",
+  "title": "Demonstrate six-way messaging interoperability",
+  "description": "Run all six permutations of Python/Rust/C sender-relay-recipient plus homogeneous diagnostics using actual production handlers. Test normal delivery, captured link and protected-packet replay, tampering and forward/return path loss. Preserve topology evidence and packet/application correlation on pinned revision. No synthetic receipts, no zero-signature stand-ins, no broad review/task generation loop.",
+  "acceptance_criteria": "Every mixed permutation proves exact payload acceptance and authenticated correlated delivered receipt; replay does not duplicate delivery; tampering cannot succeed; forward failure has no acceptance, return failure leaves sender unconfirmed. Report precise commands/configs/revision/results.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T18:25:35.136011113Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T18:25:35.136011113Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-oa51.5",
+      "depends_on_id": "project-LICHEN-worker6-oa51",
+      "type": "parent-child",
+      "created_at": "2026-09-10T18:25:35.308526663Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-oa51.5",
+      "depends_on_id": "project-LICHEN-worker6-oa51.4",
+      "type": "blocks",
+      "created_at": "2026-09-10T18:28:13.621469509Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

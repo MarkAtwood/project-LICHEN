@@ -1,0 +1,39 @@
+{
+  "id": "project-LICHEN-worker6-oa51.4",
+  "title": "Wire messages and recipient acceptance receipts",
+  "description": "Use existing /msg/inbox and /msg/ack codecs/resources, protected by real endpoint OSCORE. Python local send currently archives/delivers locally; Rust resource stores are not runtime-wired and RplStack public secure path is GET-only; C msg_send only queues and standalone inbox callback is unset. Automatic recipient receipt and authenticated sent-record correlation missing/incomplete. Direct IPv6/CoAP LCI is authoritative, not POST/msg/sent convenience API. Preserve message uint64 ID, full recipient identity, ack:true and existing receipt-window semantics. Connected short-message slice excludes offline-custody scenarios, not a claim of complete custody conformance.",
+  "acceptance_criteria": "Client submission reaches recipient handler through relay; acceptance generates specified protected receipt after configured receipt window; sender verifies expected recipient and outstanding message ID; no relay/TX/queued event reports delivery.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T18:25:34.629329968Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T18:25:34.629329968Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-oa51.4",
+      "depends_on_id": "project-LICHEN-worker6-oa51",
+      "type": "parent-child",
+      "created_at": "2026-09-10T18:25:34.785260225Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-oa51.4",
+      "depends_on_id": "project-LICHEN-worker6-oa51.2",
+      "type": "blocks",
+      "created_at": "2026-09-10T18:28:12.064825673Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-oa51.4",
+      "depends_on_id": "project-LICHEN-worker6-oa51.3",
+      "type": "blocks",
+      "created_at": "2026-09-10T18:28:12.823679679Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
