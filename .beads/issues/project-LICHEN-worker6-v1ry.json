@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-v1ry",
+  "title": "[blocked:repeat-failure] project-LICHEN-worker6-jors killed 3+ workers",
+  "description": "Bead project-LICHEN-worker6-jors has 3 lease-reclaim events with no close: every worker that claims it dies (context-length or timeout) before finishing. Skipped by the swarm until a human splits it, adds budget, or unblocks. Evidence: .beads/events/project-LICHEN-worker6-jors.jsonl",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T07:28:13.478386832Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T07:28:13.478386832Z"
+}
