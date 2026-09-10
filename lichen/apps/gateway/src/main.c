@@ -199,8 +199,7 @@ static int gateway_rpl_init(void) {
 	if (ret != 0) {
 		return ret;
 	}
-	ret = lichen_gateway_tunnel_auth_init(root_iid, self.ygg_addr, root_iid,
-					      self.public_key);
+	ret = lichen_gateway_tunnel_auth_init(root_iid, root_iid, self.public_key);
 	if (ret != 0) {
 		LOG_ERR("tunnel auth init failed: %d", ret);
 		return ret;
@@ -807,16 +806,13 @@ static int tunnel_auth_gw_post(struct coap_resource *resource,
 						    0, NULL, 0);
 	}
 
-	/* Peer identity: the canonical pubkey IID carried in the source
-	 * link-local (U/L cleared), NOT the U/L-flipped wire-EUI64 form the
-	 * OSCORE context store keys on (jzx5; lichen_tunnel_auth.h
-	 * documents why the extract+flip must not be applied here). */
+	/* Peer identity: same sockaddr -> IID derivation the OSCORE context
+	 * lookup uses (coap_oscore.c). */
 	uint8_t sender_iid[8] = { 0 };
-	if (lichen_tunnel_sender_iid_from_sockaddr(addr, addr_len, sender_iid) != 0) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_FORBIDDEN,
-						    0, NULL, 0);
+	if (addr_len >= sizeof(struct sockaddr_in6) && addr->sa_family == AF_INET6) {
+		const struct sockaddr_in6 *in6 = (const struct sockaddr_in6 *)addr;
+		memcpy(sender_iid, &in6->sin6_addr.s6_addr[8], 8);
+		lichen_eui64_to_iid(sender_iid, sender_iid);
 	}
 
 	/* Uptime seconds stand in for unix time until wall-clock sync lands;

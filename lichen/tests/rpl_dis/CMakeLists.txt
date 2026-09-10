@@ -10,14 +10,11 @@ add_executable(rpl_dis_test
   main.c
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/rpl_dis.c
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/messages.c
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/rpl_sf_assignment.c
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/hash32.c
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/trickle.c
 )
 
 target_include_directories(rpl_dis_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/include
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../rpl_messages/stub
 )
 lichen_test_target(rpl_dis_test)

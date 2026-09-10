@@ -226,7 +226,7 @@ static int validate_dio_options(const uint8_t *options, size_t options_len)
 		 * byte of SF value; content validated via the shared codec. */
 		case LICHEN_RPL_OPT_ASSIGNED_SF:
 			if (have_assigned_sf || opt.data_len != 1U ||
-			    !lichen_rpl_sf_is_valid(opt.data[0])) {
+			    lichen_rpl_sf_assignment_parse(opt.data, 3U) == 0U) {
 				return LICHEN_RPL_ERR_BAD_OPT;
 			}
 			have_assigned_sf = true;

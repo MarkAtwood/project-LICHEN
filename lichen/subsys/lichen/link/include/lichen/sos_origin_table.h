@@ -7,9 +7,8 @@
  *        per-origin rate-limit state (spec 18.4.1)
  *
  * Header-only bounded table so the CoAP server and host unit tests share
- * one implementation. Each origin (keyed by its full 16-byte origin IPv6
- * address per spec 18.4.1) gets its own highest-accepted Origin Sequence
- * and its own rate-limit state, so:
+ * one implementation. Each origin (keyed by its 8-byte node IID) gets its
+ * own highest-accepted Origin Sequence and its own rate-limit state, so:
  *  - a stale-but-valid replay from one origin is rejected (monotonic gate)
  *  - one chatty origin cannot consume another origin's 3/hour budget
  *
@@ -41,9 +40,7 @@ struct sos_origin_entry {
 	 * replay gap: last_seq==0 alone cannot distinguish "no prior" from
 	 * "accepted seq 0"). */
 	bool accepted;
-	/** Full 16-byte origin IPv6 address (spec 18.4.1: the accounting
-	 * key is the whole address, never an extracted IID). */
-	uint8_t addr[16];
+	uint8_t iid[8];
 	/** Highest Origin Sequence accepted from this origin (gate). */
 	uint64_t last_seq;
 	struct sos_ratelimit_state rl;
@@ -75,26 +72,26 @@ static inline int64_t sos_origin_last_activity(const struct sos_origin_entry *e)
 }
 
 /**
- * Find the entry for addr, allocating one (free slot preferred, else LRU
+ * Find the entry for iid, allocating one (free slot preferred, else LRU
  * eviction of the least-recently-active origin) when absent.
  *
  * @param[in,out] table  Origin table
- * @param[in]     addr   16-byte origin IPv6 address (spec 18.4.1)
+ * @param[in]     iid    8-byte origin node IID
  * @return entry pointer, or NULL on NULL input
  */
 static inline struct sos_origin_entry *
-sos_origin_table_lookup(struct sos_origin_table *table, const uint8_t addr[16])
+sos_origin_table_lookup(struct sos_origin_table *table, const uint8_t iid[8])
 {
 	struct sos_origin_entry *lru;
 
-	if (table == NULL || addr == NULL) {
+	if (table == NULL || iid == NULL) {
 		return NULL;
 	}
 	lru = &table->entries[0];
 	for (size_t i = 0; i < SOS_ORIGIN_TABLE_MAX; i++) {
 		struct sos_origin_entry *e = &table->entries[i];
 
-		if (e->in_use && memcmp(e->addr, addr, 16) == 0) {
+		if (e->in_use && memcmp(e->iid, iid, 8) == 0) {
 			return e;
 		}
 		if (!e->in_use) {
@@ -112,7 +109,7 @@ sos_origin_table_lookup(struct sos_origin_table *table, const uint8_t addr[16])
 	 * link the link-layer ratelimit object; bd a2a2 class). */
 	memset(lru, 0, sizeof(*lru));
 	lru->in_use = true;
-	memcpy(lru->addr, addr, 16);
+	memcpy(lru->iid, iid, 8);
 	return lru;
 }
 

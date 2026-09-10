@@ -77,6 +77,11 @@
 #define EAGAIN 11
 #endif
 
+/** No such file or entry */
+#ifndef ENOENT
+#define ENOENT 2
+#endif
+
 /** Protocol feature is not supported */
 #ifndef EPROTONOSUPPORT
 #define EPROTONOSUPPORT 93
@@ -85,11 +90,6 @@
 /** Numerical result out of range */
 #ifndef ERANGE
 #define ERANGE 34
-#endif
-
-/** No such entry (lookup miss) */
-#ifndef ENOENT
-#define ENOENT 2
 #endif
 
 #endif /* __ZEPHYR__ */

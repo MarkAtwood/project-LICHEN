@@ -7,10 +7,10 @@
 #include <stdio.h>
 #include <string.h>
 
-static void addr_fill(uint8_t addr[16], uint8_t seed)
+static void iid_fill(uint8_t iid[8], uint8_t seed)
 {
-	for (int i = 0; i < 16; i++) {
-		addr[i] = (uint8_t)(seed + i);
+	for (int i = 0; i < 8; i++) {
+		iid[i] = (uint8_t)(seed + i);
 	}
 }
 
@@ -19,10 +19,10 @@ static void addr_fill(uint8_t addr[16], uint8_t seed)
 static void test_per_origin_seq_gate(void)
 {
 	struct sos_origin_table t;
-	uint8_t a[16], b[16];
+	uint8_t a[8], b[8];
 
-	addr_fill(a, 0x10);
-	addr_fill(b, 0x20);
+	iid_fill(a, 0x10);
+	iid_fill(b, 0x20);
 	sos_origin_table_init(&t);
 
 	struct sos_origin_entry *ea = sos_origin_table_lookup(&t, a);
@@ -56,9 +56,9 @@ static void test_per_origin_seq_gate(void)
 static void test_seq_zero_not_replayable(void)
 {
 	struct sos_origin_table t;
-	uint8_t a[16];
+	uint8_t a[8];
 
-	addr_fill(a, 0x50);
+	iid_fill(a, 0x50);
 	sos_origin_table_init(&t);
 	struct sos_origin_entry *e = sos_origin_table_lookup(&t, a);
 	assert(e != NULL);
@@ -79,10 +79,10 @@ static void test_per_origin_rate_limit(void)
 {
 	struct sos_origin_table t;
 	struct sos_ratelimit_config cfg;
-	uint8_t a[16], b[16];
+	uint8_t a[8], b[8];
 
-	addr_fill(a, 0x30);
-	addr_fill(b, 0x40);
+	iid_fill(a, 0x30);
+	iid_fill(b, 0x40);
 	sos_origin_table_init(&t);
 	sos_ratelimit_config_init(&cfg);
 
@@ -109,22 +109,22 @@ static void test_per_origin_rate_limit(void)
 static void test_lru_eviction(void)
 {
 	struct sos_origin_table t;
-	uint8_t addr[16];
+	uint8_t iid[8];
 
 	sos_origin_table_init(&t);
 	/* Fill the table; entry 0 is least-recently-active (oldest alert). */
 	for (size_t i = 0; i < SOS_ORIGIN_TABLE_MAX; i++) {
-		addr_fill(addr, (uint8_t)i);
-		struct sos_origin_entry *e = sos_origin_table_lookup(&t, addr);
+		iid_fill(iid, (uint8_t)i);
+		struct sos_origin_entry *e = sos_origin_table_lookup(&t, iid);
 		assert(e != NULL);
 		/* Alert times strictly increase with slot index. */
 		sos_ratelimit_record(&e->rl, 1000 + (int64_t)i * 1000);
 	}
 	/* A new origin must evict slot 0 (oldest alert), not the
 	 * most-recently-updated one. */
-	uint8_t victim[16], newcomer[16];
-	addr_fill(victim, 0x00);
-	addr_fill(newcomer, 0xEE);
+	uint8_t victim[8], newcomer[8];
+	iid_fill(victim, 0x00);
+	iid_fill(newcomer, 0xEE);
 	struct sos_origin_entry *ev = sos_origin_table_lookup(&t, victim);
 	assert(ev != NULL && ev->rl.alert_count == 1U);
 	struct sos_origin_entry *en = sos_origin_table_lookup(&t, newcomer);
@@ -134,8 +134,8 @@ static void test_lru_eviction(void)
 	assert(en->rl.alert_count == 0U); /* rate-limit state reset */
 	assert(sos_origin_seq_advance(en, 1)); /* fresh gate */
 	/* Origin index 1 (second-oldest alert) survived. */
-	uint8_t survivor[16];
-	addr_fill(survivor, 0x01);
+	uint8_t survivor[8];
+	iid_fill(survivor, 0x01);
 	assert(sos_origin_table_lookup(&t, survivor)->rl.alert_count == 1U);
 }
 
@@ -145,7 +145,7 @@ static void test_null_safety(void)
 
 	sos_origin_table_init(&t);
 	sos_origin_table_init(NULL);
-	assert(sos_origin_table_lookup(NULL, (const uint8_t *)"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0") == NULL);
+	assert(sos_origin_table_lookup(NULL, (const uint8_t *)"\0\0\0\0\0\0\0\0") == NULL);
 	assert(sos_origin_table_lookup(&t, NULL) == NULL);
 	assert(!sos_origin_seq_advance(NULL, 1));
 }

@@ -199,18 +199,18 @@ static int signature_digest(const struct lichen_tunnel_crypto *crypto,
 }
 
 int lichen_tunnel_route_hash(const struct lichen_tunnel_crypto *crypto,
-			     const uint8_t route_addrs[][16], size_t route_hops,
+			     const uint8_t *route_iids, size_t route_hops,
 			     uint8_t route_hash[16])
 {
 	uint8_t digest[32];
-	if (!crypto_valid(crypto) || route_addrs == NULL || route_hash == NULL ||
+	if (!crypto_valid(crypto) || route_iids == NULL || route_hash == NULL ||
 	    route_hops == 0U || route_hops > LICHEN_TUNNEL_AUTH_MAX_ROUTE_HOPS) return -EINVAL;
 	for (size_t i = 0; i < route_hops; i++) {
 		for (size_t j = 0; j < i; j++) {
-			if (memcmp(route_addrs[i], route_addrs[j], 16) == 0) return -ELOOP;
+			if (memcmp(route_iids + 8U * i, route_iids + 8U * j, 8) == 0) return -ELOOP;
 		}
 	}
-	if (crypto->sha256((const uint8_t *)route_addrs, route_hops * 16U, digest) != 0) return -EIO;
+	if (crypto->sha256(route_iids, route_hops * 8U, digest) != 0) return -EIO;
 	memcpy(route_hash, digest, 16); memset(digest, 0, sizeof(digest));
 	return 0;
 }
@@ -218,23 +218,19 @@ int lichen_tunnel_route_hash(const struct lichen_tunnel_crypto *crypto,
 int lichen_tunnel_auth_encode(const struct lichen_tunnel_crypto *crypto,
 			      const uint8_t root_private_key[32], const uint8_t root_public_key[32],
 			      const uint8_t root_iid[8], const struct lichen_tunnel_claims *claims,
-			      const uint8_t route_addrs[][16], size_t route_hops,
-			      const uint8_t egress_addr[16],
+			      const uint8_t *route_iids, size_t route_hops,
 			      uint8_t *output, size_t output_size, size_t *output_len)
 {
 	uint8_t tmp[LICHEN_TUNNEL_AUTH_MAX_WIRE_SIZE], payload[80], digest[32], sig[48], iid[8], rh[16];
 	size_t n = 0, payload_len;
 	int rc = -EINVAL;
 	if (!crypto_valid(crypto) || root_private_key == NULL || root_public_key == NULL || root_iid == NULL ||
-	    claims == NULL || route_addrs == NULL || egress_addr == NULL || output == NULL || output_len == NULL ||
+	    claims == NULL || route_iids == NULL || output == NULL || output_len == NULL ||
 	    !prefix_valid(claims->prefix, claims->prefix_len)) return -EINVAL;
 	if (crypto->derive_iid(root_public_key, iid) != 0 || memcmp(iid, root_iid, 8) != 0) return -EACCES;
-	/* Spec 8.11: the route must terminate at the egress's primary 02xx
-	 * address (AddrForKey - no IID is recoverable from a routable hop). */
-	if (route_hops == 0U || route_hops > LICHEN_TUNNEL_AUTH_MAX_ROUTE_HOPS ||
-	    lichen_tunnel_route_hash(crypto, route_addrs, route_hops, rh) != 0 ||
+	if (lichen_tunnel_route_hash(crypto, route_iids, route_hops, rh) != 0 ||
 	    memcmp(rh, claims->route_hash, 16) != 0 ||
-	    memcmp(route_addrs[route_hops - 1U], egress_addr, 16) != 0) return -EINVAL;
+	    memcmp(route_iids + (route_hops - 1U) * 8U, claims->egress_iid, 8) != 0) return -EINVAL;
 	payload_len = encode_payload(claims, payload);
 	if (signature_digest(crypto, payload, payload_len, digest) != 0 ||
 	    crypto->sign(root_private_key, root_public_key, digest, sig) != 0) { rc = -EIO; goto out; }
@@ -252,9 +248,9 @@ out:
 struct lichen_tunnel_result lichen_tunnel_auth_route_installed(
 	const struct lichen_tunnel_crypto *crypto, const uint8_t root_private_key[32],
 	const uint8_t root_public_key[32], const uint8_t root_iid[8],
-	const struct lichen_tunnel_claims *claims, const uint8_t route_addrs[][16],
-	size_t route_hops, const uint8_t egress_addr[16], bool egress_capable,
-	lichen_tunnel_post_fn post, void *user_data)
+	const struct lichen_tunnel_claims *claims, const uint8_t *route_iids,
+	size_t route_hops, bool egress_capable, lichen_tunnel_post_fn post,
+	void *user_data)
 {
 	uint8_t body[LICHEN_TUNNEL_AUTH_MAX_WIRE_SIZE];
 	size_t body_len = 0;
@@ -265,8 +261,7 @@ struct lichen_tunnel_result lichen_tunnel_auth_route_installed(
 	}
 	if (post == NULL || claims == NULL ||
 	    lichen_tunnel_auth_encode(crypto, root_private_key, root_public_key,
-				      root_iid, claims, route_addrs, route_hops,
-				      egress_addr,
+				      root_iid, claims, route_iids, route_hops,
 				      body, sizeof(body), &body_len) != 0) {
 		return deny(LICHEN_TUNNEL_DENIAL_INVALID_ROUTE);
 	}
@@ -329,15 +324,13 @@ static bool observe_time(struct lichen_tunnel_auth_ctx *ctx, uint64_t now)
 }
 
 int lichen_tunnel_auth_init(struct lichen_tunnel_auth_ctx *ctx, const uint8_t egress_iid[8],
-			    const uint8_t egress_addr[16], const uint8_t root_iid[8],
-			    const uint8_t root_pubkey[32],
+			    const uint8_t root_iid[8], const uint8_t root_pubkey[32],
 			    const struct lichen_tunnel_crypto *crypto)
 {
 	uint8_t derived[8];
-	if (ctx == NULL || egress_iid == NULL || egress_addr == NULL || root_iid == NULL || root_pubkey == NULL || !crypto_valid(crypto)) return -EINVAL;
+	if (ctx == NULL || egress_iid == NULL || root_iid == NULL || root_pubkey == NULL || !crypto_valid(crypto)) return -EINVAL;
 	if (crypto->derive_iid(root_pubkey, derived) != 0 || memcmp(derived, root_iid, 8) != 0) return -EACCES;
 	memset(ctx, 0, sizeof(*ctx)); memcpy(ctx->egress_iid, egress_iid, 8);
-	memcpy(ctx->egress_addr, egress_addr, 16);
 	memcpy(ctx->root_iid, root_iid, 8); memcpy(ctx->root_pubkey, root_pubkey, 32); ctx->crypto = *crypto;
 	atomic_flag_clear(&ctx->lock); return 0;
 }
@@ -447,18 +440,14 @@ static bool unsafe_addr(const uint8_t a[16])
 }
 
 struct lichen_tunnel_result lichen_tunnel_auth_decapsulate(struct lichen_tunnel_auth_ctx *ctx,
-	const uint8_t source[16], const uint8_t destination[16],
-	const uint8_t route_addrs[][16],
+	const uint8_t source[16], const uint8_t destination[16], const uint8_t *route_iids,
 	size_t route_hops, enum lichen_tunnel_direction direction, uint64_t now)
 {
 	uint8_t hash[16]; int best = -1; uint8_t best_bits = 0; bool had_expired = false;
-	if (ctx == NULL || source == NULL || destination == NULL || route_addrs == NULL) return deny(LICHEN_TUNNEL_DENIAL_MALFORMED);
+	if (ctx == NULL || source == NULL || destination == NULL || route_iids == NULL) return deny(LICHEN_TUNNEL_DENIAL_MALFORMED);
 	if (direction != LICHEN_TUNNEL_MESH_TO_EXTERNAL) return deny(LICHEN_TUNNEL_DENIAL_WRONG_DIRECTION);
-	/* Spec 8.11: the route must terminate at this egress's primary 02xx
-	 * address (AddrForKey - no IID is recoverable from a routable hop). */
-	if (route_hops == 0U || route_hops > LICHEN_TUNNEL_AUTH_MAX_ROUTE_HOPS ||
-	    lichen_tunnel_route_hash(&ctx->crypto, route_addrs, route_hops, hash) != 0 ||
-	    memcmp(route_addrs[route_hops - 1U], ctx->egress_addr, 16) != 0) return deny(LICHEN_TUNNEL_DENIAL_INVALID_ROUTE);
+	if (lichen_tunnel_route_hash(&ctx->crypto, route_iids, route_hops, hash) != 0 ||
+	    memcmp(route_iids + (route_hops - 1U) * 8U, ctx->egress_iid, 8) != 0) return deny(LICHEN_TUNNEL_DENIAL_INVALID_ROUTE);
 	lock_ctx(ctx);
 	if (!observe_time(ctx, now)) { unlock_ctx(ctx); return deny(LICHEN_TUNNEL_DENIAL_CLOCK_REGRESSION); }
 	/* Expired entries are not candidates: evict and skip them so a lapsed

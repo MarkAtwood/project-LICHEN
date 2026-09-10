@@ -163,25 +163,16 @@ lichen_schc_ctx_find(struct lichen_schc_session_table *table,
  * @brief Record a terminal tombstone for @p key.
  *
  * Tombstones persist the terminal outcome, session high-water, and terminal
- * time for the hold-down / idempotent-replay window. Recording the same key
- * again (reterminal of the same session, e.g. an idempotent replay of a
- * terminal frame) is a MONOTONIC refresh in place: high_water and
- * terminal_time only advance, never regress, and the outcome is overwritten;
- * no second entry is created and no eviction occurs. On overflow the OLDEST
+ * time for the hold-down / idempotent-replay window. On overflow the OLDEST
  * tombstone by terminal_time is evicted (spec 5.6 requirement) - unlike
- * context allocation, tombstone recording never fails for capacity (the
- * only non-success paths are argument validation and a defensive
- * fail-closed response to internal state corruption).
+ * context allocation, tombstone recording never fails for capacity.
  *
  * @param table         Session tables (must not be NULL).
  * @param key           Context key being retired (must not be NULL).
  * @param outcome       Terminal outcome.
  * @param high_water    Session-wide greatest replay counter.
- * @param terminal_time Terminal timestamp in seconds on the single monotonic
- *                      time base shared by all table entries (for eviction
- *                      ordering + hold-down).
- * @return 0 on success, -EINVAL on NULL args, -ENOBUFS on internal
- *         count/occupancy inconsistency (defense in depth).
+ * @param terminal_time Terminal timestamp (for eviction ordering + hold-down).
+ * @return 0 on success, -EINVAL on NULL args.
  */
 int lichen_schc_tombstone_put(struct lichen_schc_session_table *table,
 			      const struct lichen_schc_ctx_key *key,
@@ -209,8 +200,7 @@ lichen_schc_tombstone_find(struct lichen_schc_session_table *table,
  * @param table      Session tables (must not be NULL).
  * @param key        Context key (must not be NULL).
  * @param high_water Generation-scoped durable admission floor.
- * @return 0 on success, -EINVAL on NULL args, -ENOBUFS on internal
- *         count/occupancy inconsistency (defense in depth).
+ * @return 0 on success, -EINVAL on NULL args.
  */
 int lichen_schc_floor_put(struct lichen_schc_session_table *table,
 			  const struct lichen_schc_ctx_key *key,

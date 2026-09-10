@@ -12,7 +12,6 @@ from pathlib import Path
 KINDS = {
     "schc": "LICHEN_L2_PAYLOAD_SCHC",
     "routing": "LICHEN_L2_PAYLOAD_ROUTING",
-    "sos": "LICHEN_L2_PAYLOAD_SOS",
     "unknown": "LICHEN_L2_PAYLOAD_UNKNOWN",
 }
 

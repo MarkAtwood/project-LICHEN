@@ -35,14 +35,15 @@ static int tests_passed;
 	} \
 } while (0)
 
-/* Upstream Yggdrasil addressing (i72x.1, resynced i72x.6.b): DODAGID =
+/* Regenerated for upstream Yggdrasil addressing (i72x.1): DODAGID =
  * upstream AddrForKey(vector_pubkey) = 020030ad221f03322adb901f8b731688
  * (oracle: yggdrasil-go@422836ee address_test.go anchor, via an
  * independent port — never the C impl); signatures produced by Python's
  * schnorr48 create_root_dio_signature over that DODAGID (independent
- * crypto oracle). Byte-identical to the regenerated shared corpus
- * test/vectors/root_dio_signature.json (i72x.6.a) ::
- * root_dio_signature_valid_basic — verified field-by-field. */
+ * crypto oracle). Mirrors the shape of
+ * test/vectors/root_dio_signature.json :: root_dio_signature_valid_basic;
+ * the shared JSON still encodes the rejected native profile and is
+ * regenerated when Rust (i72x.2) and Python land their migrations. */
 static const uint8_t vector_cose_sign1[] = {
 	0xd2, 0x84, 0x47, 0xa1, 0x01, 0x3a, 0x00, 0x01, 0x00, 0x00, 0xa1, 0x04,
 	0x48, 0x20, 0x3d, 0xf4, 0x66, 0x2a, 0xb8, 0x1f, 0x5a, 0x58, 0x25, 0xa7,
@@ -206,8 +207,7 @@ static int test_dio_parse_accepts_max_len_blob(void)
 
 static int test_dio_parse_without_option_unaffected(void)
 {
-	/* spec 06-security.md 8.10.1: DIOs without the option parse
-	 * normally. */
+	/* L679: DIOs without the option parse normally. */
 	uint8_t buf[24];
 	struct lichen_rpl_dio dio = {0};
 	dio.rpl_instance_id = 0;
@@ -429,9 +429,10 @@ static int test_root_sig_verify_signature_rejects_zero(void)
 static uint8_t lora_l2_last_assigned_sf;
 void lora_l2_assign_sf(uint8_t sf) { lora_l2_last_assigned_sf = sf; }
 
-/* Vector dodag_id: upstream AddrForKey(vector_pubkey) — equals
- * root_dio_signature_valid_basic.dodag_id in the regenerated shared
- * corpus test/vectors/root_dio_signature.json (i72x.6.a). */
+/* Vector dodag_id: upstream AddrForKey(vector_pubkey) — regenerated for
+ * i72x.1 (shape mirrors root_dio_signature_valid_basic.dodag_id; the
+ * shared JSON's native-profile value 02203df4... regenerates with the
+ * Rust/Python migrations). */
 static const uint8_t vector_dodag_id[16] = {
 	0x02, 0x00, 0x30, 0xad, 0x22, 0x1f, 0x03, 0x32,
 	0x2a, 0xdb, 0x90, 0x1f, 0x8b, 0x73, 0x16, 0x88,
@@ -463,9 +464,8 @@ static const uint8_t impersonation_cose_sign1[] = {
 };
 
 /* Far-expiry variant (same key/upstream DODAGID as vector_cose_sign1,
- * expiry 4102444800; byte-identical to
- * root_dio_signature_valid_far_expiry.cose_sign1 in the regenerated
- * shared corpus i72x.6.a). */
+ * expiry 4102444800; regenerated for i72x.1 — mirrors the shape of
+ * root_dio_signature_valid_far_expiry). */
 static const uint8_t far_expiry_cose_sign1[] = {
 	0xd2, 0x84, 0x47, 0xa1, 0x01, 0x3a, 0x00, 0x01, 0x00, 0x00, 0xa1, 0x04,
 	0x48, 0x20, 0x3d, 0xf4, 0x66, 0x2a, 0xb8, 0x1f, 0x5a, 0x58, 0x25, 0xa7,
@@ -548,9 +548,8 @@ static int test_dodag_absent_option_is_baseline(void)
 	int ret = lichen_rpl_dodag_process_dio_bytes_root_sig(
 		&d, buf, len, vector_dodag_id, 256U, 0U, 1000U, true, &cache,
 		vector_pubkey, true, DODAG_TEST_FAR_EXPIRY - 1U, test_sha256);
-	/* spec 06-security.md 8.10.1: no option -> link-layer baseline;
-	 * DIO still processes (returns without the root-sig reject
-	 * code). */
+	/* L679: no option -> link-layer baseline; DIO still processes
+	 * (returns without the root-sig reject code). */
 	ASSERT_EQ(ret, 0, "absent option processed");
 	ASSERT_EQ(root_dio_replay_cache_seen(&cache, vector_dodag_id, 0, 1),
 		  false, "baseline does not touch cache");

@@ -30,13 +30,13 @@ static const char *congestion_level_str(enum lichen_congestion_level level)
 enum lichen_congestion_level
 lichen_congestion_level_from_usage(uint16_t usage_permille)
 {
-	if (usage_permille > 950) {
+	if (usage_permille >= 950) {
 		return LICHEN_CONGESTION_EXHAUSTED;
 	}
-	if (usage_permille >= 800) {
+	if (usage_permille >= 850) {
 		return LICHEN_CONGESTION_CRITICAL;
 	}
-	if (usage_permille >= 500) {
+	if (usage_permille >= 700) {
 		return LICHEN_CONGESTION_ELEVATED;
 	}
 	return LICHEN_CONGESTION_NORMAL;

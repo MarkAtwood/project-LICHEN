@@ -48,10 +48,8 @@ void lichen_forwarding_set_mesh_iface(struct net_if *iface);
 /**
  * Initialize the gateway tunnel authorization context (egress gate).
  * Root material: on a root gateway these are the node's own identity.
- * egress_addr is the node's own primary 02xx address (AddrForKey).
  */
 int lichen_gateway_tunnel_auth_init(const uint8_t egress_iid[8],
-				    const uint8_t egress_addr[16],
 				    const uint8_t root_iid[8],
 				    const uint8_t root_pubkey[32]);
 

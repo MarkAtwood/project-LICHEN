@@ -1,0 +1,177 @@
+{
+  "$schema": "./schema.json",
+  "format_version": 2,
+  "vector_type": "density_adaptive",
+  "name": "density_adaptive",
+  "description": "Density-adaptive announce parameters, num_slots scaling, and position beacon rate. Spec/05-routing.md §9.4 (normative tier table on integer density: sparse < 5, moderate 5-20, dense 21-50, very dense 51-100, extreme > 100; ANNOUNCE_JITTER = ANNOUNCE_INTERVAL / 10 capped at 120 sec), spec/05-routing.md §9.10.4 (num_slots = MAX(8, CEIL(dodag_size / 25))), and the position-beacon scaling rule (8oef.8, destined for 12-apps.md §18.2.1: 30 sec at density <= 20, else 300 sec). Tier boundaries and the jitter cap are the cases most likely to diverge across implementations.",
+  "oracle_provenance": {
+    "method": "Every expected value is computed by direct application of the normative spec table and closed-form rules, cross-checked with an independent Python arithmetic run (tier selection, jitter = min(interval // 10, 120), num_slots = max(8, ceil(size / 25))) before being hardcoded. No implementation code was used as an oracle."
+  },
+  "spec_reference": "spec/05-routing.md section 9.4 (Announce Parameters, density-adaptive scaling table); spec/05-routing.md section 9.10.4 (TDMA coordination across BRs, num_slots scaling); spec/12-apps.md section 18.2.1 (position beacon interval scaling; 8oef.8 spec addition pending)",
+  "vectors": [
+    {
+      "name": "announce_params_density_0",
+      "description": "Density 0 (no peers heard): sparse tier, baseline parameters.",
+      "input": { "density": 0 },
+      "output": { "tier": "sparse", "announce_interval_sec": 300, "max_announce_hops": 15, "gradient_timeout_sec": 600, "announce_jitter_sec": 30 }
+    },
+    {
+      "name": "announce_params_density_4",
+      "description": "Density 4: one below the sparse/moderate boundary (tier changes at density 5).",
+      "input": { "density": 4 },
+      "output": { "tier": "sparse", "announce_interval_sec": 300, "max_announce_hops": 15, "gradient_timeout_sec": 600, "announce_jitter_sec": 30 }
+    },
+    {
+      "name": "announce_params_density_5",
+      "description": "Density 5: first moderate-tier density; hop limit tightens 15 -> 10 while interval stays 300.",
+      "input": { "density": 5 },
+      "output": { "tier": "moderate", "announce_interval_sec": 300, "max_announce_hops": 10, "gradient_timeout_sec": 600, "announce_jitter_sec": 30 }
+    },
+    {
+      "name": "announce_params_density_20",
+      "description": "Density 20: last moderate-tier density (spec baseline boundary 'density <= 20').",
+      "input": { "density": 20 },
+      "output": { "tier": "moderate", "announce_interval_sec": 300, "max_announce_hops": 10, "gradient_timeout_sec": 600, "announce_jitter_sec": 30 }
+    },
+    {
+      "name": "announce_params_density_21",
+      "description": "Density 21: first dense-tier density; interval doubles 300 -> 600, hops 10 -> 5, jitter 30 -> 60.",
+      "input": { "density": 21 },
+      "output": { "tier": "dense", "announce_interval_sec": 600, "max_announce_hops": 5, "gradient_timeout_sec": 1200, "announce_jitter_sec": 60 }
+    },
+    {
+      "name": "announce_params_density_50",
+      "description": "Density 50: last dense-tier density.",
+      "input": { "density": 50 },
+      "output": { "tier": "dense", "announce_interval_sec": 600, "max_announce_hops": 5, "gradient_timeout_sec": 1200, "announce_jitter_sec": 60 }
+    },
+    {
+      "name": "announce_params_density_51",
+      "description": "Density 51: first very-dense-tier density; interval 1200, hops 3, jitter hits the 120-sec cap.",
+      "input": { "density": 51 },
+      "output": { "tier": "very_dense", "announce_interval_sec": 1200, "max_announce_hops": 3, "gradient_timeout_sec": 2400, "announce_jitter_sec": 120 }
+    },
+    {
+      "name": "announce_params_density_100",
+      "description": "Density 100: last very-dense-tier density.",
+      "input": { "density": 100 },
+      "output": { "tier": "very_dense", "announce_interval_sec": 1200, "max_announce_hops": 3, "gradient_timeout_sec": 2400, "announce_jitter_sec": 120 }
+    },
+    {
+      "name": "announce_params_density_101",
+      "description": "Density 101: first extreme-tier density; interval 1800, hops 2, timeout 3600 (2x interval preserved).",
+      "input": { "density": 101 },
+      "output": { "tier": "extreme", "announce_interval_sec": 1800, "max_announce_hops": 2, "gradient_timeout_sec": 3600, "announce_jitter_sec": 120 }
+    },
+    {
+      "name": "announce_params_density_200",
+      "description": "Density 200: deep extreme tier; parameters identical to the 101 boundary case (parameter selection is tier-quantized).",
+      "input": { "density": 200 },
+      "output": { "tier": "extreme", "announce_interval_sec": 1800, "max_announce_hops": 2, "gradient_timeout_sec": 3600, "announce_jitter_sec": 120 }
+    },
+    {
+      "name": "announce_params_gradient_timeout_tracks_interval",
+      "description": "GRADIENT_TIMEOUT is 2x ANNOUNCE_INTERVAL at every tier (300->600, 600->1200, 1200->2400, 1800->3600): asserted across the tier sequence from the density-adaptive table.",
+      "input": { "density": 51 },
+      "output": { "tier": "very_dense", "announce_interval_sec": 1200, "max_announce_hops": 3, "gradient_timeout_sec": 2400, "announce_jitter_sec": 120 },
+      "assert": { "gradient_timeout_is_2x_interval": true }
+    },
+    {
+      "name": "announce_jitter_cap_120",
+      "description": "Jitter = ANNOUNCE_INTERVAL / 10 capped at 120 sec: at very-dense density 75 the uncapped formula yields 1200/10 = 120 (cap not exceeded) and at extreme density 150 yields 180 (capped to 120). Two vectors pin both sides of the cap.",
+      "input": { "density": 150 },
+      "output": { "tier": "extreme", "announce_interval_sec": 1800, "max_announce_hops": 2, "gradient_timeout_sec": 3600, "announce_jitter_sec": 120 },
+      "assert": { "uncapped_jitter_would_be_sec": 180, "cap_sec": 120 }
+    },
+    {
+      "name": "announce_jitter_uncapped_below_cap",
+      "description": "At dense density 35 the formula 600/10 = 60 is below the cap: jitter equals the uncapped value.",
+      "input": { "density": 35 },
+      "output": { "tier": "dense", "announce_interval_sec": 600, "max_announce_hops": 5, "gradient_timeout_sec": 1200, "announce_jitter_sec": 60 }
+    },
+    {
+      "name": "announce_params_defcon_reference",
+      "description": "DEF CON reference density 20-50 per node (§9.10.5): density 50 maps to the dense tier (600 sec / 5 hops), matching the deployment table's 600-1200 sec interval guidance.",
+      "input": { "density": 50 },
+      "output": { "tier": "dense", "announce_interval_sec": 600, "max_announce_hops": 5, "gradient_timeout_sec": 1200, "announce_jitter_sec": 60 }
+    },
+    {
+      "name": "announce_params_burningman_reference",
+      "description": "Burning Man reference density 30-100+ near center camp (§9.10.6): density 100 maps to very-dense (1200 sec / 3 hops), matching the deployment table's 1200-1800 sec interval guidance.",
+      "input": { "density": 100 },
+      "output": { "tier": "very_dense", "announce_interval_sec": 1200, "max_announce_hops": 3, "gradient_timeout_sec": 2400, "announce_jitter_sec": 120 }
+    },
+    {
+      "name": "num_slots_size_1",
+      "description": "DODAG size 1: formula yields 0, floor MAX(8, ...) lifts it to the 8-slot minimum.",
+      "input": { "dodag_size": 1 },
+      "output": { "num_slots": 8 }
+    },
+    {
+      "name": "num_slots_size_25",
+      "description": "DODAG size 25: CEIL(25/25) = 1, below the floor; 8 slots.",
+      "input": { "dodag_size": 25 },
+      "output": { "num_slots": 8 }
+    },
+    {
+      "name": "num_slots_size_26",
+      "description": "DODAG size 26: CEIL(26/25) = 2, still below the floor; 8 slots.",
+      "input": { "dodag_size": 26 },
+      "output": { "num_slots": 8 }
+    },
+    {
+      "name": "num_slots_size_200",
+      "description": "DODAG size 200: CEIL(200/25) = 8, exactly at the floor (spec §9.10.4: at 200 nodes each slot holds 25 nodes).",
+      "input": { "dodag_size": 200 },
+      "output": { "num_slots": 8 }
+    },
+    {
+      "name": "num_slots_size_201",
+      "description": "DODAG size 201: one node past the 200 reference; CEIL(201/25) = 9 lifts num_slots above the floor for the first time.",
+      "input": { "dodag_size": 201 },
+      "output": { "num_slots": 9 }
+    },
+    {
+      "name": "num_slots_size_500",
+      "description": "DODAG size 500: CEIL(500/25) = 20.",
+      "input": { "dodag_size": 500 },
+      "output": { "num_slots": 20 }
+    },
+    {
+      "name": "num_slots_size_2000",
+      "description": "DODAG size 2000 (DEF CON §9.10.5 reference): CEIL(2000/25) = 80, inside the deployment table's 16-32 guidance only per-BR after partitioning; the raw formula value is pinned here.",
+      "input": { "dodag_size": 2000 },
+      "output": { "num_slots": 80 }
+    },
+    {
+      "name": "num_slots_size_8000",
+      "description": "DODAG size 8000 (Burning Man §9.10.6 reference): CEIL(8000/25) = 320; partitioning into 100-300 node DODAGs is the intended operating mode, per-BR num_slots stays 32-64.",
+      "input": { "dodag_size": 8000 },
+      "output": { "num_slots": 320 }
+    },
+    {
+      "name": "position_beacon_rate_density_20",
+      "description": "Position beacon rate at density 20 (last tier of the <= 20 rule): baseline 30 sec (8oef.8; 12-apps.md §18.2.1 spec addition pending).",
+      "input": { "density": 20 },
+      "output": { "position_beacon_interval_sec": 30 }
+    },
+    {
+      "name": "position_beacon_rate_density_4",
+      "description": "Position beacon rate at density 4: sparse baseline 30 sec.",
+      "input": { "density": 4 },
+      "output": { "position_beacon_interval_sec": 30 }
+    },
+    {
+      "name": "position_beacon_rate_density_21",
+      "description": "Position beacon rate at density 21: first density above 20; interval scales 30 -> 300 sec (8oef.8 rule: 'at density > 20, position beacons should be every 5 minutes').",
+      "input": { "density": 21 },
+      "output": { "position_beacon_interval_sec": 300 }
+    },
+    {
+      "name": "position_beacon_rate_density_150",
+      "description": "Position beacon rate at extreme density 150: 300 sec (the 8oef.8 rule is a two-tier scalar, unlike the announce five-tier table).",
+      "input": { "density": 150 },
+      "output": { "position_beacon_interval_sec": 300 }
+    }
+  ]
+}

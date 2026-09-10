@@ -99,7 +99,6 @@ struct lichen_tunnel_history {
 
 struct lichen_tunnel_auth_ctx {
 	uint8_t egress_iid[8];
-	uint8_t egress_addr[16];
 	uint8_t root_iid[8];
 	uint8_t root_pubkey[32];
 	struct lichen_tunnel_crypto crypto;
@@ -118,23 +117,14 @@ typedef int (*lichen_tunnel_post_fn)(const uint8_t peer_iid[8],
 
 int lichen_tunnel_auth_init(struct lichen_tunnel_auth_ctx *ctx,
 			    const uint8_t egress_iid[8],
-			    const uint8_t egress_addr[16],
 			    const uint8_t root_iid[8],
 			    const uint8_t root_pubkey[32],
 			    const struct lichen_tunnel_crypto *crypto);
 
 int lichen_tunnel_auth_default_crypto(struct lichen_tunnel_crypto *crypto);
 
-/**
- * Hash the ordered source-route hops (spec 06-security.md 8.11).
- *
- * The hash input is the FULL 16-byte primary 02xx hop addresses in SRH
- * visitation order - under the AddrForKey profile a primary 02xx address
- * embeds no IID, so an 8-byte slice carries no identity meaning. Duplicate
- * hops are rejected (-ELOOP); the digest is truncated to 16 bytes.
- */
 int lichen_tunnel_route_hash(const struct lichen_tunnel_crypto *crypto,
-			     const uint8_t route_addrs[][16], size_t route_hops,
+			     const uint8_t *route_iids, size_t route_hops,
 			     uint8_t route_hash[16]);
 
 int lichen_tunnel_auth_encode(const struct lichen_tunnel_crypto *crypto,
@@ -142,8 +132,7 @@ int lichen_tunnel_auth_encode(const struct lichen_tunnel_crypto *crypto,
 			      const uint8_t root_public_key[32],
 			      const uint8_t root_iid[8],
 			      const struct lichen_tunnel_claims *claims,
-			      const uint8_t route_addrs[][16], size_t route_hops,
-			      const uint8_t egress_addr[16],
+			      const uint8_t *route_iids, size_t route_hops,
 			      uint8_t *output, size_t output_size,
 			      size_t *output_len);
 
@@ -151,18 +140,12 @@ struct lichen_tunnel_result lichen_tunnel_auth_route_installed(
 	const struct lichen_tunnel_crypto *crypto,
 	const uint8_t root_private_key[32], const uint8_t root_public_key[32],
 	const uint8_t root_iid[8], const struct lichen_tunnel_claims *claims,
-	const uint8_t route_addrs[][16], size_t route_hops,
-	const uint8_t egress_addr[16], bool egress_capable,
+	const uint8_t *route_iids, size_t route_hops, bool egress_capable,
 	lichen_tunnel_post_fn post, void *user_data);
 
 struct lichen_tunnel_result lichen_tunnel_auth_receive(
 	struct lichen_tunnel_auth_ctx *ctx, const uint8_t *body, size_t body_len,
 	bool oscore_authenticated, const uint8_t oscore_sender_iid[8], uint64_t now);
-
-struct lichen_tunnel_result lichen_tunnel_auth_decapsulate(
-	struct lichen_tunnel_auth_ctx *ctx, const uint8_t source[16],
-	const uint8_t destination[16], const uint8_t route_addrs[][16],
-	size_t route_hops, enum lichen_tunnel_direction direction, uint64_t now);
 
 struct sockaddr;
 
@@ -190,6 +173,11 @@ int lichen_tunnel_auth_change_root(struct lichen_tunnel_auth_ctx *ctx,
 int lichen_tunnel_auth_revoke(struct lichen_tunnel_auth_ctx *ctx,
 			      const uint8_t prefix[16], uint8_t prefix_len,
 			      const uint8_t route_hash[16], uint64_t through_seq);
+
+struct lichen_tunnel_result lichen_tunnel_auth_decapsulate(
+	struct lichen_tunnel_auth_ctx *ctx, const uint8_t source[16],
+	const uint8_t destination[16], const uint8_t *route_iids, size_t route_hops,
+	enum lichen_tunnel_direction direction, uint64_t now);
 
 /**
  * Map a verdict's human CoAP code to the one-byte wire encoding

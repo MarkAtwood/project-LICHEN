@@ -103,6 +103,10 @@ extern "C" {
 #define SCHC_FRAGMENT_M 1
 #define SCHC_FRAGMENT_N 6
 #define SCHC_FRAGMENT_T 0
+#define SCHC_RCS_BYTES 4
+#define SCHC_RETRANSMISSION_TIMEOUT_S 10
+#define SCHC_MAX_ACK_REQUESTS 4
+#define SCHC_INACTIVITY_TIMEOUT_S 60
 
 /**
  * @brief Compress an IPv6 packet using SCHC.
