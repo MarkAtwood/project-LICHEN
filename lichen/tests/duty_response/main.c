@@ -131,17 +131,19 @@ static void test_level_from_usage(void)
 {
 	assert(lichen_congestion_level_from_usage(0) ==
 	       LICHEN_CONGESTION_NORMAL);
-	assert(lichen_congestion_level_from_usage(699) ==
+	assert(lichen_congestion_level_from_usage(499) ==
 	       LICHEN_CONGESTION_NORMAL);
-	assert(lichen_congestion_level_from_usage(700) ==
+	assert(lichen_congestion_level_from_usage(500) ==
 	       LICHEN_CONGESTION_ELEVATED);
-	assert(lichen_congestion_level_from_usage(849) ==
+	assert(lichen_congestion_level_from_usage(799) ==
 	       LICHEN_CONGESTION_ELEVATED);
-	assert(lichen_congestion_level_from_usage(850) ==
+	assert(lichen_congestion_level_from_usage(800) ==
 	       LICHEN_CONGESTION_CRITICAL);
 	assert(lichen_congestion_level_from_usage(949) ==
 	       LICHEN_CONGESTION_CRITICAL);
 	assert(lichen_congestion_level_from_usage(950) ==
+	       LICHEN_CONGESTION_CRITICAL);
+	assert(lichen_congestion_level_from_usage(951) ==
 	       LICHEN_CONGESTION_EXHAUSTED);
 }
 
