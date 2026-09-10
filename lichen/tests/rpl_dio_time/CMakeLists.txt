@@ -13,10 +13,13 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/test_common.cmake)
 add_executable(rpl_dio_time_test
   main.c
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/messages.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/rpl_sf_assignment.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/hash32.c
 )
 
 target_include_directories(rpl_dio_time_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/include
   ${CMAKE_CURRENT_SOURCE_DIR}/stub
 )
 lichen_test_target(rpl_dio_time_test)
