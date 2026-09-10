@@ -587,6 +587,21 @@ def l2_payload_vectors() -> list[dict]:
         # former reserved_0x16 vector. HEAD's RPL DODAG Version option
         # namespace-disambiguation note is preserved in the description.
         {
+            "name": "reserved_0x17",
+            "description": (
+                "Dispatch 0x17 is unassigned (spec/02-physical-link.md 4.1) and "
+                "must fail closed as unknown, same as the reserved-byte probes in "
+                "the per-language exhaustive loops. 0x16 is SOS (assigned); "
+                "0x18/0x19 are assigned as well. Keeps a named reserved-dispatch "
+                "vector in the canonical set after reserved_0x16 was replaced by "
+                "sos_0x16."
+            ),
+            "dispatch": 0x17,
+            "kind": "unknown",
+            "body": "",
+            "wrapped": "17",
+        },
+        {
             "name": "sos_alert_dispatch",
             "description": (
                 "Authenticated L2 SOS dispatch (0x16) wrapping a §18.4.2 CBOR "
