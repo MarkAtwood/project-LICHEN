@@ -394,6 +394,156 @@ const char *gcp_trust_level_name(gcp_trust_level_t level)
 
 #ifdef CONFIG_LICHEN_GCP_TRUST_X509
 
+static bool gcp_der_tlv(const uint8_t **cursor, const uint8_t *end,
+                        uint8_t tag, const uint8_t **value, size_t *value_len)
+{
+    const uint8_t *p = *cursor;
+    size_t len = 0;
+
+    if (p >= end || *p++ != tag || p >= end) {
+        return false;
+    }
+    if ((*p & 0x80U) == 0) {
+        len = *p++;
+    } else {
+        size_t octets = *p++ & 0x7fU;
+        if (octets == 0 || octets > sizeof(size_t) ||
+            (size_t)(end - p) < octets) {
+            return false;
+        }
+        for (size_t i = 0; i < octets; i++) {
+            if (len > (SIZE_MAX >> 8)) {
+                return false;
+            }
+            len = (len << 8) | *p++;
+        }
+    }
+    if (len > (size_t)(end - p)) {
+        return false;
+    }
+    *cursor = p + len;
+    *value = p;
+    *value_len = len;
+    return true;
+}
+
+static bool gcp_x509_ed25519_key(const mbedtls_x509_buf *spki,
+                                 uint8_t public_key[32])
+{
+    const uint8_t *p = spki->p;
+    const uint8_t *end = p + spki->len;
+    const uint8_t *sequence;
+    size_t sequence_len;
+    const uint8_t *algorithm;
+    size_t algorithm_len;
+    const uint8_t *oid;
+    size_t oid_len;
+    const uint8_t *bit_string;
+    size_t bit_string_len;
+
+    if (!gcp_der_tlv(&p, end, 0x30, &sequence, &sequence_len) || p != end) {
+        return false;
+    }
+    p = sequence;
+    end = sequence + sequence_len;
+    if (!gcp_der_tlv(&p, end, 0x30, &algorithm, &algorithm_len)) {
+        return false;
+    }
+    const uint8_t *algorithm_cursor = algorithm;
+    const uint8_t *algorithm_end = algorithm + algorithm_len;
+    if (!gcp_der_tlv(&algorithm_cursor, algorithm_end, 0x06, &oid,
+                     &oid_len) || algorithm_cursor != algorithm_end ||
+        oid_len != 3 || oid[0] != 0x2b || oid[1] != 0x65 || oid[2] != 0x70 ||
+        !gcp_der_tlv(&p, end, 0x03, &bit_string, &bit_string_len) ||
+        p != end || bit_string_len != 33 || bit_string[0] != 0) {
+        return false;
+    }
+    memcpy(public_key, bit_string + 1, 32);
+    return true;
+}
+
+static bool gcp_x509_san_critical(const mbedtls_x509_crt *crt,
+                                  bool *critical)
+{
+    const uint8_t *p = crt->v3_ext.p;
+    const uint8_t *end = p + crt->v3_ext.len;
+    const uint8_t *extensions;
+    size_t extensions_len;
+
+    if (!gcp_der_tlv(&p, end, 0x30, &extensions, &extensions_len)) {
+        return false;
+    }
+    p = extensions;
+    end = extensions + extensions_len;
+    while (p < end) {
+        const uint8_t *extension;
+        size_t extension_len;
+        const uint8_t *oid;
+        size_t oid_len;
+        const uint8_t *q;
+        const uint8_t *extension_end;
+        const uint8_t *value;
+        size_t value_len;
+
+        if (!gcp_der_tlv(&p, end, 0x30, &extension, &extension_len)) {
+            return false;
+        }
+        q = extension;
+        extension_end = extension + extension_len;
+        if (!gcp_der_tlv(&q, extension_end, 0x06, &oid, &oid_len)) {
+            return false;
+        }
+        if (oid_len == 3 && oid[0] == 0x55 && oid[1] == 0x1d &&
+            oid[2] == 0x11) {
+            *critical = false;
+            if (q < extension_end && *q == 0x01) {
+                if (!gcp_der_tlv(&q, extension_end, 0x01, &value,
+                                 &value_len) || value_len != 1) {
+                    return false;
+                }
+                *critical = value[0] != 0;
+            }
+            return gcp_der_tlv(&q, extension_end, 0x04, &value, &value_len) &&
+                   q == extension_end;
+        }
+    }
+    return false;
+}
+
+static bool gcp_x509_san_binding(const mbedtls_x509_crt *crt)
+{
+    uint8_t public_key[32];
+    uint8_t expected_address[GCP_TRUST_YGG_ADDR_LEN];
+    bool san_critical;
+    size_t native_count = 0;
+    const mbedtls_x509_sequence *san = &crt->subject_alt_names;
+
+    if (!gcp_x509_san_critical(crt, &san_critical) ||
+        san_critical != (crt->subject_raw.len == 2 &&
+                         crt->subject_raw.p[0] == 0x30 &&
+                         crt->subject_raw.p[1] == 0x00) ||
+        !gcp_x509_ed25519_key(&crt->pk_raw, public_key)) {
+        return false;
+    }
+    gcp_trust_derive_ygg_addr(public_key, expected_address);
+
+    for (; san != NULL; san = san->next) {
+        if (san->buf.tag == (MBEDTLS_ASN1_CONTEXT_SPECIFIC | 2) ||
+            san->buf.tag == (MBEDTLS_ASN1_CONTEXT_SPECIFIC | 6)) {
+            return false;
+        }
+        if (san->buf.tag == (MBEDTLS_ASN1_CONTEXT_SPECIFIC | 7) &&
+            san->buf.len == GCP_TRUST_YGG_ADDR_LEN && san->buf.p[0] == 0x02) {
+            native_count++;
+            if (memcmp(san->buf.p, expected_address,
+                       GCP_TRUST_YGG_ADDR_LEN) != 0) {
+                return false;
+            }
+        }
+    }
+    return native_count == 1;
+}
+
 int gcp_trust_validate_x509_chain(const uint8_t *leaf_der,
                                   size_t leaf_len,
                                   const uint8_t *const *chain_der,
@@ -438,6 +588,11 @@ int gcp_trust_validate_x509_chain(const uint8_t *leaf_der,
         chain.ca_istrue ||
         (chain.ext_types & MBEDTLS_X509_EXT_KEY_USAGE) == 0 ||
         (chain.key_usage & MBEDTLS_X509_KU_DIGITAL_SIGNATURE) == 0) {
+        ret = -EINVAL;
+        goto out;
+    }
+
+    if (!gcp_x509_san_binding(&chain)) {
         ret = -EINVAL;
         goto out;
     }

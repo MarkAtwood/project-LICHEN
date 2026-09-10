@@ -35,10 +35,8 @@ fn hex(value: &str) -> Vec<u8> {
 }
 
 fn vectors() -> VectorFile {
-    let document: VectorFile = serde_json::from_str(include_str!(
-        "../../../test/vectors/deaddrop_schc.json"
-    ))
-    .unwrap();
+    let document: VectorFile =
+        serde_json::from_str(include_str!("../../../test/vectors/deaddrop_schc.json")).unwrap();
     assert_eq!(document.format_version, 2);
     document
 }
