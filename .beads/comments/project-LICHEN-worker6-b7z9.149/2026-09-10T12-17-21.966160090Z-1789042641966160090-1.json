@@ -1,0 +1,7 @@
+{
+  "id": "1789042641966160090-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.149",
+  "author": "opencode-worker-8",
+  "text": "Completed by closed children .149.1/.149.2/.149.3. Child evidence covers Python/Rust/C forwarding-plane martian filtering with independent policy tables and focused tests; C routing_dispatch rerun passed 1/1 under ASan/UBSan. Local Python rerun was blocked at collection by missing lora_medium; Rust rerun was blocked before compilation by unavailable /Volumes/Attic/Cache. Delegated Kimi K3 correctness/security/edge passes were attempted and each failed immediately due insufficient OpenRouter credits; local fallback review found no actionable defect.",
+  "created_at": "2026-09-10T12:17:21.96616009Z"
+}

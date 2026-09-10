@@ -1,0 +1,7 @@
+{
+  "id": "1789042550136538028-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.168.2",
+  "author": "opencode-worker-8",
+  "text": "Released: required C SOS L2 dispatch primitive is absent, and sibling project-LICHEN-worker6-b7z9.168.1 remains open; implementing this UX wiring first would require inventing an API and violate the stated prerequisite.",
+  "created_at": "2026-09-10T12:15:50.136538028Z"
+}

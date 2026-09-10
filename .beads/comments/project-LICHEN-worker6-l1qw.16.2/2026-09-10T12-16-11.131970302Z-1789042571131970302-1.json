@@ -1,0 +1,7 @@
+{
+  "id": "1789042571131970302-1",
+  "issue_id": "project-LICHEN-worker6-l1qw.16.2",
+  "author": "opencode-worker-8",
+  "text": "Released: implementation and vectors are already landed; open child .16.2.6 is blocked on human transport decision ljgs, so this parent cannot be completed by this worker without force-closing a blocked child.",
+  "created_at": "2026-09-10T12:16:11.131970302Z"
+}
