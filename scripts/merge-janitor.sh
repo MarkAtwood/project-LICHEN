@@ -66,8 +66,8 @@ smoke_resolved_file() {
     # unreadable/missing file must abort the merge, not silently pass.
     # Reject symlinks explicitly: -f follows them, and a symlink lets branch
     # content point the grep at an arbitrary host file.
-    if [ -L "$REPO_ROOT/$rel" ] || [ ! -f "$REPO_ROOT/$rel" ]; then
-        echo "   janitor: SMOKE FAIL $rel: not a regular file (missing/symlink?) — refusing to merge blind"
+    if [ -L "$REPO_ROOT/$rel" ] || [ ! -f "$REPO_ROOT/$rel" ] || [ ! -r "$REPO_ROOT/$rel" ]; then
+        echo "   janitor: SMOKE FAIL $rel: not a readable regular file (missing/symlink?) — refusing to merge blind"
         return 1
     fi
     local dupes

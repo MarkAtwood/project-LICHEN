@@ -725,6 +725,206 @@ class TestSosTrustStoreGate:
         assert sos2._active is False
 
 
+class TestSosDeleteGates:
+    """DELETE /sos authentication and validation gates (spec 18.4.2).
+
+    Unlike the POST activation path (which silently drops unsigned traffic per
+    spec 18.4.1), render_delete rejects unauthorized cancels with explicit
+    4.01/4.00 responses and must leave the active alert running.
+    """
+
+    async def _activate(self, client: aiocoap.Context, sos: SosResource, seq: int = 1) -> None:
+        resp = await client.request(
+            Message(
+                code=POST, uri="coap://srv/sos", payload=_signed_body(seq=seq), content_format=60
+            )
+        ).response
+        assert resp.code == aiocoap.CHANGED
+        assert sos._active is True
+
+    async def test_delete_empty_payload_rejected(self) -> None:
+        client, server, sos = await _setup()
+        try:
+            await self._activate(client, sos)
+            resp = await client.request(Message(code=DELETE, uri="coap://srv/sos")).response
+            assert resp.code == aiocoap.UNAUTHORIZED
+            assert sos._active is True
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_delete_invalid_cbor_rejected(self) -> None:
+        client, server, sos = await _setup()
+        try:
+            await self._activate(client, sos)
+            # Truncated CBOR map (declares 5 entries, body cut short)
+            resp = await client.request(
+                Message(code=DELETE, uri="coap://srv/sos", payload=b"\xa5\x01")
+            ).response
+            assert resp.code == aiocoap.BAD_REQUEST
+            assert sos._active is True
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_delete_non_dict_cbor_rejected(self) -> None:
+        client, server, sos = await _setup()
+        try:
+            await self._activate(client, sos)
+            resp = await client.request(
+                Message(
+                    code=DELETE,
+                    uri="coap://srv/sos",
+                    payload=cbor2.dumps(["not", "a", "map"]),
+                    content_format=60,
+                )
+            ).response
+            assert resp.code == aiocoap.BAD_REQUEST
+            assert sos._active is True
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_delete_missing_envelope_rejected(self) -> None:
+        client, server, sos = await _setup()
+        try:
+            await self._activate(client, sos)
+            body = cbor2.dumps({"from": _EUI.hex(), "t": _T0})
+            resp = await client.request(
+                Message(code=DELETE, uri="coap://srv/sos", payload=body, content_format=60)
+            ).response
+            assert resp.code == aiocoap.UNAUTHORIZED
+            assert sos._active is True
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_delete_mistyped_envelope_fields_rejected(self) -> None:
+        """Each sub-branch of the envelope type/length gate rejects with 4.01."""
+        client, server, sos = await _setup()
+        try:
+            await self._activate(client, sos)
+            # Non-bytes pubkey (str) and wrong-length pubkey (31 B).
+            for bad_pub in (_EUI.hex(), _SOS_PUB[:-1]):
+                body = cbor2.dumps({"from": _EUI.hex(), "t": _T0, "pubkey": bad_pub, "sig": b""})
+                resp = await client.request(
+                    Message(code=DELETE, uri="coap://srv/sos", payload=body, content_format=60)
+                ).response
+                assert resp.code == aiocoap.UNAUTHORIZED
+                assert sos._active is True
+            # Non-bytes sig (int).
+            body = cbor2.dumps({"from": _EUI.hex(), "t": _T0, "pubkey": _SOS_PUB, "sig": 7})
+            resp = await client.request(
+                Message(code=DELETE, uri="coap://srv/sos", payload=body, content_format=60)
+            ).response
+            assert resp.code == aiocoap.UNAUTHORIZED
+            assert sos._active is True
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_delete_malformed_sig_blob_rejected(self) -> None:
+        client, server, sos = await _setup()
+        try:
+            await self._activate(client, sos)
+            # Sig blob must be 8-byte sequence + 48-byte signature (56 bytes);
+            # a short blob fails SosOriginSignature.from_bytes.
+            body = cbor2.dumps(
+                {"from": _EUI.hex(), "t": _T0, "pubkey": _SOS_PUB, "sig": b"\x00" * 10}
+            )
+            resp = await client.request(
+                Message(code=DELETE, uri="coap://srv/sos", payload=body, content_format=60)
+            ).response
+            assert resp.code == aiocoap.UNAUTHORIZED
+            assert sos._active is True
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_delete_wrong_key_rejected(self) -> None:
+        client, server, sos = await _setup()
+        try:
+            await self._activate(client, sos)
+            other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
+            # Signed with a key that does not derive to the active originator's
+            # IID: the binding gate must reject and the alert must survive.
+            body = _signed_body(seq=2, priv=other_priv, pub=other_pub)
+            resp = await client.request(
+                Message(code=DELETE, uri="coap://srv/sos", payload=body, content_format=60)
+            ).response
+            assert resp.code == aiocoap.UNAUTHORIZED
+            assert sos._active is True
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_delete_tampered_signature_rejected(self) -> None:
+        client, server, sos = await _setup()
+        try:
+            await self._activate(client, sos)
+            body = bytearray(_signed_body(seq=2))
+            body[-1] ^= 0x01  # flip a bit inside the 48-byte signature
+            resp = await client.request(
+                Message(code=DELETE, uri="coap://srv/sos", payload=bytes(body), content_format=60)
+            ).response
+            assert resp.code == aiocoap.UNAUTHORIZED
+            assert sos._active is True
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_delete_replayed_sequence_rejected_then_advance_cancels(self) -> None:
+        client, server, sos = await _setup()
+        try:
+            await self._activate(client, sos, seq=7)
+            # Same sequence as the activation: replay gate must reject.
+            replay = _signed_body(seq=7)
+            resp = await client.request(
+                Message(code=DELETE, uri="coap://srv/sos", payload=replay, content_format=60)
+            ).response
+            assert resp.code == aiocoap.UNAUTHORIZED
+            assert sos._active is True
+            # Strictly advancing sequence is accepted and cancels the alert.
+            advance = _signed_body(seq=8)
+            resp = await client.request(
+                Message(code=DELETE, uri="coap://srv/sos", payload=advance, content_format=60)
+            ).response
+            assert resp.code == aiocoap.DELETED
+            assert sos._active is False
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_delete_rejection_does_not_consume_sequence(self) -> None:
+        """A rejected DELETE must not advance the replay tracker.
+
+        If a regression consumed the sequence on any reject path, the same-seq
+        retry below would be spuriously rejected (seq <= last_seen).
+        """
+        client, server, sos = await _setup()
+        try:
+            await self._activate(client, sos, seq=7)
+            tampered = bytearray(_signed_body(seq=8))
+            tampered[-1] ^= 0x01
+            resp = await client.request(
+                Message(
+                    code=DELETE, uri="coap://srv/sos", payload=bytes(tampered), content_format=60
+                )
+            ).response
+            assert resp.code == aiocoap.UNAUTHORIZED
+            assert sos._active is True
+            # The same sequence, correctly signed, must still be accepted.
+            retry = _signed_body(seq=8)
+            resp = await client.request(
+                Message(code=DELETE, uri="coap://srv/sos", payload=retry, content_format=60)
+            ).response
+            assert resp.code == aiocoap.DELETED
+            assert sos._active is False
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+
 class TestSosMulticast:
     """R-12-036: /sos is postable at the all-nodes group coap://[ff02::1]/sos.
 
