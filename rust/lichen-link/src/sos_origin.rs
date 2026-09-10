@@ -217,6 +217,11 @@ pub fn verify_sos_origin(
 /// unknown origin at zero capacity. A *new* origin at capacity evicts the
 /// least-recently-accepted entry and is accepted (the gate is bounded, not
 /// fail-closed for new origins).
+///
+/// **Eviction discards replay state:** if an origin is evicted, it is
+/// treated as new on reappearance — previously-seen (including lower)
+/// sequences become acceptable again. Anti-replay is guaranteed only while
+/// an origin remains tracked.
 #[cfg(all(feature = "schnorr", feature = "alloc"))]
 pub fn verify_sos_origin_gated(
     tracker: &mut OriginSequenceTracker,
