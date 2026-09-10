@@ -16,6 +16,8 @@
 #include <string.h>
 
 #include "lichen_util.h"
+#include "monocypher.h"
+#include "monocypher-ed25519.h"
 
 /*
  * Logging abstraction: use Zephyr logging when available, otherwise
