@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Literal
 
 from lichen.ipv6 import routing_key
 from lichen.ipv6.packet import IPv6Header
-from lichen.rpl.messages import DIO, DIO_FLAG_GATEWAY_CENTRIC
+from lichen.rpl.messages import DIO, DIO_FLAG_GATEWAY_CENTRIC, DodagConfig
 from lichen.rpl.root_signature import verify_dodagid_binding
 from lichen.schc.context import versions_compatible
 from lichen.schc.rules import RULE_SET_VERSION, SCHC_RULE_VERSION_TYPE, SchcRuleVersionOption
@@ -309,9 +309,17 @@ class DodagState:
         if self.node_address is not None:
             self.node_address = routing_key(self.node_address)
         # RFC 6550 3.5.1: DAGRank(R) = floor(R / MinHopRankIncrease); MHRI of
-        # 0 is undefined, and a negative MHRI inverts rank increase.
+        # 0 is undefined, and a negative MHRI inverts rank increase. The upper
+        # bounds match the wire encodability (u16) and the Rust receiver
+        # window (set_rank_config rejects MHRI > INFINITE_RANK / 2), so a
+        # misconfigured node fails at construction instead of emitting DIOs
+        # its peers reject.
         if self.min_hop_rank_increase <= 0:
             raise ValueError("min_hop_rank_increase must be > 0")
+        if self.min_hop_rank_increase > 0x7FFF:
+            raise ValueError("min_hop_rank_increase must be <= 0x7FFF")
+        if not 0 <= self.max_rank_increase <= 0xFFFF:
+            raise ValueError("max_rank_increase must be in 0..0xFFFF")
 
     @classmethod
     def as_root(
@@ -382,6 +390,14 @@ class DodagState:
                 grounded=self.grounded,
                 mode_of_operation=1,
                 flags=DIO_FLAG_GATEWAY_CENTRIC if self.gateway_centric else 0,
+                # Advertise the rank configuration this node actually uses
+                # (spec 9.1 R-RPL-032); receivers derive rank math from it.
+                options=[
+                    DodagConfig(
+                        max_rank_increase=self.max_rank_increase,
+                        min_hop_rank_increase=self.min_hop_rank_increase,
+                    ).to_option()
+                ],
             )
 
     def process_dio(self, dio: DIO, neighbor_id: IPv6Address | str, link_etx: float = 1.0) -> None:
