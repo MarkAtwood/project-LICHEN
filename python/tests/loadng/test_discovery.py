@@ -11,9 +11,9 @@ from lichen.loadng.cache import RouteCache
 from lichen.loadng.discovery import RREP_FLAG_PROXY, SUPPRESS_WINDOW_MS, LoadngRouter
 from lichen.loadng.messages import INITIAL_HOP_LIMIT, MAX_HOP_LIMIT, RREP, RREQ
 
-ORIG = IPv6Address("fd00::1")  # originator / requester
-M = IPv6Address("fd00::2")  # intermediate
-D = IPv6Address("fd00::3")  # destination / sought node
+ORIG = IPv6Address("0200::1")  # originator / requester
+M = IPv6Address("0200::2")  # intermediate
+D = IPv6Address("0200::3")  # destination / sought node
 
 
 def _router(node: IPv6Address) -> LoadngRouter:
@@ -679,7 +679,7 @@ def test_rrep_seen_pruned_periodically() -> None:
     # 16 forwarded RREPs with no intervening RREQ activity: the countdown
     # fires and drops the entry that aged out of the suppression window.
     for i in range(16):
-        orig = IPv6Address(f"fd00:a::{i:04x}")
+        orig = IPv6Address(f"0200:a::{i:04x}")
         result = r.process_rrep(
             RREP(originator=orig, destination=ORIG, seq_num=1, hop_count=0),
             from_neighbor=IPv6Address("fe80::c"),
@@ -691,7 +691,7 @@ def test_rrep_seen_pruned_periodically() -> None:
     # The countdown reset after pruning: another 16 checks prune again,
     # dropping the previous batch instead of growing without bound.
     for i in range(16):
-        orig = IPv6Address(f"fd00:b::{i:04x}")
+        orig = IPv6Address(f"0200:b::{i:04x}")
         r.process_rrep(
             RREP(originator=orig, destination=ORIG, seq_num=1, hop_count=0),
             from_neighbor=IPv6Address("fe80::c"),
@@ -713,7 +713,7 @@ def test_rrep_replay_still_suppressed_after_prune() -> None:
     # 16 distinct replay checks trigger the periodic prune; the fresh
     # (D, ORIG) entry is inside the window and must survive it.
     for i in range(16):
-        orig = IPv6Address(f"fd00:c::{i:04x}")
+        orig = IPv6Address(f"0200:c::{i:04x}")
         r.process_rrep(
             RREP(originator=orig, destination=ORIG, seq_num=1, hop_count=0),
             from_neighbor=IPv6Address("fe80::c"),
