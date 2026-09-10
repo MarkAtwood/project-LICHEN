@@ -240,6 +240,9 @@ pub fn verify_sos_origin_gated(
 mod tests {
     use super::*;
 
+    // Vec-based, so alloc-gated: `use alloc::vec::Vec` above is the only
+    // `Vec` in scope under `cfg(test)` (std is linked but not preimported).
+    #[cfg(feature = "alloc")]
     fn hex_to_bytes<const N: usize>(hex: &str) -> [u8; N] {
         let v: Vec<u8> = (0..hex.len())
             .step_by(2)
