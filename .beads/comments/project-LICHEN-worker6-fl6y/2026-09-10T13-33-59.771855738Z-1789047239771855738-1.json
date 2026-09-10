@@ -1,0 +1,7 @@
+{
+  "id": "1789047239771855738-1",
+  "issue_id": "project-LICHEN-worker6-fl6y",
+  "author": "opencode-worker-8",
+  "text": "Released as stale: current rust/lichen-link/src/sos_origin.rs and full rust tree contain no verify_sos_origin_gated, SosOriginGate, or gated replay API; only verify_sos_origin is present/exported. Git history has no implementation of the cited symbol. Adding AddrForKey binding to the ungated public verifier would be an unrelated API/behavior change and would invalidate existing arbitrary-address vectors.",
+  "created_at": "2026-09-10T13:33:59.771855738Z"
+}

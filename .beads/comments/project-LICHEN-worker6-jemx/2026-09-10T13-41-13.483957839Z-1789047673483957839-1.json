@@ -1,0 +1,7 @@
+{
+  "id": "1789047673483957839-1",
+  "issue_id": "project-LICHEN-worker6-jemx",
+  "author": "opencode-worker-8",
+  "text": "Released as stale: docs/spec-coverage/appendix-ccp12-hopping.md is absent at current HEAD, and git history shows the requested renumbering was already completed in ee4e431a97. The remaining spec/appendix-ccp12-hopping.md is the canonical spec, not the coverage document named by this bead.",
+  "created_at": "2026-09-10T13:41:13.483957839Z"
+}
