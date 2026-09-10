@@ -12,8 +12,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <lichen/ux_button.h>
+#include <lichen/ux_strings.h>
 
 static int failures;
 
@@ -184,6 +186,22 @@ static void test_null_safety(void)
 	      "NULL poll emitted an event");
 }
 
+static void test_string_table(void)
+{
+	CHECK(strcmp(lichen_ux_string(LICHEN_UX_STRING_BOOT), "Boot") == 0,
+	      "boot string mismatch");
+	CHECK(strcmp(lichen_ux_string(LICHEN_UX_STRING_LAST_MESSAGE),
+	             "Last message") == 0,
+	      "last-message string mismatch");
+	CHECK(strcmp(lichen_ux_string(LICHEN_UX_STRING_MESSAGE_WAITING),
+	             "Message waiting") == 0,
+	      "message-waiting string mismatch");
+	CHECK(lichen_ux_string((enum lichen_ux_string_id)-1) == NULL,
+	      "negative string ID was accepted");
+	CHECK(lichen_ux_string(LICHEN_UX_STRING_COUNT) == NULL,
+	      "out-of-range string ID was accepted");
+}
+
 int main(void)
 {
 	test_short_press_advances_ring();
@@ -196,6 +214,7 @@ int main(void)
 	test_very_short_press_is_advance();
 	test_no_spurious_events_when_idle();
 	test_null_safety();
+	test_string_table();
 
 	if (failures != 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
