@@ -37,6 +37,7 @@
 #include <lichen/senml.h>
 #include <lichen/sos_alert.h>
 #include <lichen/sos_origin.h>
+#include <lichen/sos_origin_table.h>
 #include <lichen/schnorr48.h>
 #include <lichen/coap_keys.h>
 #include <lichen/sos_ratelimit.h>
@@ -442,9 +443,9 @@ static void alert_node_iid(const struct sos_alert *alert, uint8_t out[8])
 	}
 }
 
-/* Per-source rate limit state (R-12-036/037/038). Single-source scope:
- * the multi-source per-IID table is follow-up work. */
-static struct sos_ratelimit_state s_sos_rl_state;
+/* Per-origin SOS accounting (spec 18.4.1, R-12-036/037/048): one table,
+ * shared implementation with the host unit tests. */
+static struct sos_origin_table s_sos_origins;
 
 static int sos_post(struct coap_resource *resource,
 		    struct coap_packet *request,
@@ -502,25 +503,42 @@ static int sos_post(struct coap_resource *resource,
 		return -ENOENT; /* silent drop: bad signature */
 	}
 
-	/* R-12-036/037/038: per-source rate limits (10-min cooldown,
-	 * 3/hour) on monotonic uptime gate rebroadcast. Violations are
-	 * dropped and logged without relaying. The limiter state persists
-	 * across requests for the current source; a per-IID table is the
-	 * multi-source follow-up. */
+	/* Per-origin monotonic Origin Sequence gate (spec 18.4.1): accept a
+	 * sequence only if it strictly exceeds the highest already accepted
+	 * from this origin, closing replay of stale-but-valid captures.
+	 * Enforced before rate limiting so a replay does not spend budget. */
+	struct sos_origin_entry *origin =
+		sos_origin_table_lookup(&s_sos_origins, node_iid);
+	if (origin == NULL) {
+		return -ENOENT;
+	}
+	if (!sos_origin_seq_advance(origin, origin_sig.origin_sequence)) {
+		LOG_WRN("SOS seq %llu not > last %llu: replay dropped",
+			(unsigned long long)origin_sig.origin_sequence,
+			(unsigned long long)origin->last_seq);
+		return -ENOENT; /* silent drop: stale origin sequence */
+	}
+
+	/* R-12-036/037/038: per-origin rate limits (10-min cooldown,
+	 * 3/hour) on monotonic uptime gate rebroadcast. Keyed per origin so
+	 * one chatty origin cannot consume another's budget. Violations are
+	 * dropped and logged without relaying. */
 	struct sos_ratelimit_config rl_config;
 
 	sos_ratelimit_config_init(&rl_config);
 	int64_t now_ms = k_uptime_get();
 	uint32_t remaining_ms = 0U;
 	enum sos_ratelimit_result rl =
-		sos_ratelimit_check(&s_sos_rl_state, now_ms, &rl_config,
+		sos_ratelimit_check(&origin->rl, now_ms, &rl_config,
 				    &remaining_ms);
 	if (rl != SOS_RATELIMIT_ALLOWED) {
 		LOG_WRN("SOS rate limited (result %d, retry in %u ms)", rl,
 			remaining_ms);
 		return -ENOENT; /* drop, do not relay */
 	}
-	sos_ratelimit_record(&s_sos_rl_state, now_ms);
+	sos_ratelimit_record(&origin->rl, now_ms);
+	origin->last_seq = origin_sig.origin_sequence;
+	origin->accepted = true;
 
 	return lichen_coap_respond(resource, request, addr, addr_len,
 				   COAP_RESPONSE_CODE_CHANGED,
