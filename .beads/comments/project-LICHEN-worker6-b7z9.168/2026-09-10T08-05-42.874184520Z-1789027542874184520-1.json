@@ -1,0 +1,7 @@
+{
+  "id": "1789027542874184520-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.168",
+  "author": "opencode-worker-8",
+  "text": "Released without code changes: this is not a single landable slice. Existing lichen_lora_l2_tx hardcodes TX_PRIORITY_BULK, while SOS origin signing needs private-key and routable IPv6 identity state unavailable to puck/UX. Requires decomposition into (1) priority-aware L2 TX API, (2) app identity/key-to-origin signing context, (3) UX SOS event composer/queue integration, and (4) focused tests. No unsigned shortcut is safe.",
+  "created_at": "2026-09-10T08:05:42.87418452Z"
+}

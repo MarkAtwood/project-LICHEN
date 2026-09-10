@@ -8,7 +8,8 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-10T00:07:44.261563881Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-10T00:07:44.261563881Z",
+  "updated_at": "2026-09-10T08:05:43.333472211Z",
+  "started_at": "2026-09-10T08:04:37.473711221Z",
   "labels": [
     "ux",
     "spec-gap",
