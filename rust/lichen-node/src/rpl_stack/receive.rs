@@ -95,6 +95,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 .process_announce(frame, bootstrapped, now_ms)
                 .await
                 .map(|outcome| Some(RplBorderIngressOutcome::Control(outcome))),
+            L2PayloadKind::Sos => Ok(None),
             L2PayloadKind::Schc => {
                 let mut ipv6 = vec![0u8; 256];
                 let len = self
@@ -219,6 +220,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 .process_announce(frame, bootstrapped, now_ms)
                 .await
                 .map(Some),
+            L2PayloadKind::Sos => Ok(None),
             L2PayloadKind::Schc => {
                 let mut ipv6 = vec![0u8; 256];
                 let len = self
