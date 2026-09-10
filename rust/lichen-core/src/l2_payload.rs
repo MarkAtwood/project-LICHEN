@@ -1,6 +1,8 @@
 //! Authenticated L2 inner-payload dispatch helpers.
 
-use crate::constants::{L2_DISPATCH_ROUTING, L2_DISPATCH_SCHC};
+use crate::constants::L2_DISPATCH_ROUTING;
+use crate::constants::L2_DISPATCH_SCHC;
+use crate::constants::L2_DISPATCH_SOS;
 use crate::error::BufferTooSmall;
 
 /// Routing/control message type for LICHEN announce.
@@ -10,6 +12,7 @@ pub const L2_ROUTING_TYPE_ANNOUNCE: u8 = 0x01;
 pub enum L2PayloadKind {
     Schc,
     Routing,
+    Sos,
     Unknown,
 }
 
@@ -20,6 +23,7 @@ pub fn classify(payload: &[u8]) -> L2PayloadKind {
     match payload.first().copied() {
         Some(L2_DISPATCH_SCHC) => L2PayloadKind::Schc,
         Some(L2_DISPATCH_ROUTING) => L2PayloadKind::Routing,
+        Some(L2_DISPATCH_SOS) => L2PayloadKind::Sos,
         _ => L2PayloadKind::Unknown,
     }
 }
@@ -80,7 +84,7 @@ mod tests {
             Err(UnknownDispatch)
         );
         assert_eq!(classify_known(&[]), Err(UnknownDispatch));
-        assert_eq!(classify_known(&[0x16]), Err(UnknownDispatch));
+        assert_eq!(classify_known(&[0x17]), Err(UnknownDispatch));
         assert_eq!(
             classify_known(&[L2_DISPATCH_SCHC, RULE_GLOBAL_COAP]),
             Ok(L2PayloadKind::Schc)
@@ -97,6 +101,7 @@ mod tests {
             let expected = match dispatch {
                 L2_DISPATCH_SCHC => L2PayloadKind::Schc,
                 L2_DISPATCH_ROUTING => L2PayloadKind::Routing,
+                L2_DISPATCH_SOS => L2PayloadKind::Sos,
                 _ => L2PayloadKind::Unknown,
             };
 
