@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-dbbn",
   "title": "Manual merge needed: beads-worker-6 (janitor failed 3 cycles)",
   "description": "The merge janitor could not resolve beads-worker-6 after 3 consecutive kimi sessions. Branch is . Human or implementer-agent resolution required; the sync loop keeps skipping it. Discovered-from: project-LICHEN-worker6-ba39",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-09T13:48:13.807636533Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-10T03:49:13.440103128Z",
+  "updated_at": "2026-09-10T04:22:12.151768416Z",
+  "closed_at": "2026-09-10T04:22:12.151768416Z",
+  "close_reason": "Root cause: not content conflicts — 3 untracked JSON vector files (byte-identical to main's versions) blocked git merge with 'untracked working tree files would be overwritten'; janitor cannot resolve that. Moved them aside to /tmp/opencode/worker6-dbbn-merge-stash (preserved, redundant copies), merged main (290 commits) cleanly — zero conflict markers (verified via merge-tree pre-check). Driver auto-committed the staged merge as 78c3089447; janitor then integrated beads-worker-6 into main as ab7f8724d8 — branch is fully synced (0 ahead, main contains all). Post-merge verification found REAL merge damage predating my merge: main's lichen/tests/schc_failure_tracker/CMakeLists.txt was a silently-broken 48-line union-merge (duplicate add_executable/add_test; host cmake configure fails). Restored the correct 28-line dual-mode version: 270f1c4679. Verified: host cmake+ctest green (1/1), Zephyr native_sim/native/64 west build green (231/231) and binary prints PASS. Codereview: correctness pass delegated to kimi-k3 — full chain verified, no findings; security+edge passes done by me (reviewer API timed out twice, EXIT=124): PASS, no findings. Header nit noted not filed: schc_failure_tracker.h says zero threshold 'invalid' but code+test treat it as 'disabled' (main's content, untouched this round). Filed follow-up bead on janitor union-merge smoke check (discovered-from dbbn).",
   "labels": [
     "fleet-implementable"
   ]
