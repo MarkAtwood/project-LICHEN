@@ -93,12 +93,14 @@ while :; do
     # never evaluated — lh2z.) Logic lives in fleet_burn.py for testability.
     USED=$(total_used)
     NOW_S=$(date +%s)
-    WASTE=$(python3 "$REPO/scripts/fleet_burn.py" "$STATE" "$USED" "${CLOSES:-0}" "$NOW_S" 2>/dev/null)
+    W_ERR="$STATE/fleet_burn.err"
+    WASTE=$(python3 "$REPO/scripts/fleet_burn.py" "$STATE" "$USED" "${CLOSES:-0}" "$NOW_S" 2>"$W_ERR")
     W_EVAL=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('evaluated', False))" 2>/dev/null || echo PARSE_FAIL)
+    W_HINT=$(tail -n 1 "$W_ERR" 2>/dev/null)
     if [ -z "$WASTE" ]; then
-        echo "$(date '+%F %T') WARN: waste alarm skipped — fleet_burn.py produced no output (helper missing at $REPO/scripts/fleet_burn.py, or interpreter crash)"
+        echo "$(date '+%F %T') WARN: waste alarm skipped — fleet_burn.py produced no output (helper missing at $REPO/scripts/fleet_burn.py, or interpreter crash)${W_HINT:+ — last stderr: $W_HINT} [full stderr: $W_ERR]"
     elif [ "$W_EVAL" = "PARSE_FAIL" ]; then
-        echo "$(date '+%F %T') WARN: waste alarm skipped — fleet_burn.py output not valid JSON"
+        echo "$(date '+%F %T') WARN: waste alarm skipped — fleet_burn.py output not valid JSON${W_HINT:+ — last stderr: $W_HINT} [full stderr: $W_ERR]"
     elif [ "$W_EVAL" = "True" ]; then
         W_BURN=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['burn'])")
         W_CPC=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['cpc_str'])")
