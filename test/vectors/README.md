@@ -23,7 +23,12 @@ Complete index of every vector file (excluding `schema.json` and the per-family 
 | `hash_32.json` | `lichen_hash_32` FNV-1a32 primitive (basis 0x811c9dc5) |
 | `oscore.json` | OSCORE key derivation, request/response protection, replay detection (RFC 8613) |
 | `schnorr48.json` | 48-byte Schnorr signatures per draft-lichen-schnorr-00 (Appendix A vectors) |
-| `x25519.json` | X25519/Ed25519 key derivation and RFC 8032 clamping. QUARANTINE NOTE: per-vector `ygg_addr` field and the `ygg_addr[8:16]==iid` binding encode the rejected SHA-512 native address profile (legacy/ corpus); the `iid` is the retained link-local IID. Quarantined fields are internal-consistency pins only, not addressing oracles — regenerate against upstream `AddrForKey` when migration lands |
+<!-- x25519: kept the post-migration wording (6c50f03406) over both sides' stale
+     quarantine notes — a87e729ba8 regenerated `ygg_addr` as upstream `AddrForKey`
+     byte-equality pins; 5c74bf89c2's restoration of the quarantine text was
+     incidental to the rpl_messages DODAGID regen. -->
+| `x25519.json` | X25519/Ed25519 key derivation and RFC 8032 clamping. Per-vector `ygg_addr` fields are pinned upstream `AddrForKey` byte-equality vectors (external oracle: yggdrasil-go, cross-validated against `yggdrasil_address.json` anchors); the `iid` is the retained SHA-512 link-local IID and is NOT embedded in the routable address |
+| `x509_cert_profile.json` | X.509 cert-profile wire encodings (appendix-x509-cert-profile §2/4/5/9): Ed25519 SPKI, SAN native-address binding (settled upstream `AddrForKey`, pinned via `yggdrasil_address.json`), mesh-role extension OID/extnValue; generator `generate_x509_cert_profile.py` |
 
 ### Link Layer
 

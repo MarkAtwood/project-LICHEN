@@ -139,6 +139,7 @@ from generate import (  # noqa: E402
 )
 from generate_rpl_route_state import build_document as build_route_state_document  # noqa: E402
 from generate_schc_tile_sizing import document as tile_sizing_document  # noqa: E402
+from generate_x509_cert_profile import document as x509_cert_profile_document  # noqa: E402
 
 CONFIG_SECTION_EXPECTATIONS = [
     ("device", 1, [(1, 0), (7, 900)]),
@@ -255,6 +256,19 @@ def _tile_sizing_cases():
 def test_schc_tile_sizing_vectors_are_fresh() -> None:
     assert (VECTORS_DIR / "schc_tile_sizing.json").read_bytes() == json_bytes(
         tile_sizing_document()
+    )
+
+
+def test_x509_cert_profile_vectors_are_fresh() -> None:
+    """X.509 cert-profile corpus reproduces byte-identical from its generator.
+
+    Freshness oracle per appendix-x509-cert-profile section 9; generation
+    additionally fails loudly if the spec section-5 worked table, the UUID-arc
+    decimal, or the pinned yggdrasil_address.json AddrForKey oracle diverge
+    from the generator's independent derivations.
+    """
+    assert (VECTORS_DIR / "x509_cert_profile.json").read_bytes() == json_bytes(
+        x509_cert_profile_document()
     )
 
 

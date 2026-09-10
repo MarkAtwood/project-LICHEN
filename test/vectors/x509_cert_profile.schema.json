@@ -1,0 +1,234 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "X.509 certificate-profile encoding corpus (appendix-x509-cert-profile sections 2/4/5/9)",
+  "description": "Closed schema for x509_cert_profile.json: matches the committed generator output shape (generate_x509_cert_profile.py --check is the freshness oracle). Document fields: constants, identities, cases.",
+  "type": "object",
+  "required": [
+    "$schema",
+    "vector_type",
+    "format_version",
+    "description",
+    "spec",
+    "oracle",
+    "constants",
+    "identities",
+    "cases"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "vector_type": {
+      "const": "x509_cert_profile"
+    },
+    "format_version": {
+      "const": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "spec": {
+      "type": "string"
+    },
+    "oracle": {
+      "type": "object",
+      "required": [
+        "basis",
+        "implementation",
+        "generator_command",
+        "freshness_command"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "type": "string"
+        },
+        "implementation": {
+          "type": "string"
+        },
+        "generator_command": {
+          "type": "string"
+        },
+        "freshness_command": {
+          "type": "string"
+        }
+      }
+    },
+    "constants": {
+      "type": "object",
+      "required": [
+        "ed25519_oid",
+        "ed25519_oid_der_hex",
+        "san_oid",
+        "san_oid_der_hex",
+        "mesh_role_oid",
+        "mesh_role_uuid",
+        "mesh_role_oid_der_hex",
+        "native_address_prefix",
+        "ipaddress_generalname_tag",
+        "role_bits"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "ed25519_oid": {
+          "const": "1.3.101.112"
+        },
+        "ed25519_oid_der_hex": {
+          "type": "string",
+          "pattern": "^[0-9a-f]+$"
+        },
+        "san_oid": {
+          "const": "2.5.29.17"
+        },
+        "san_oid_der_hex": {
+          "type": "string",
+          "pattern": "^[0-9a-f]+$"
+        },
+        "mesh_role_oid": {
+          "const": "2.25.116347725289407359125616919235271862817"
+        },
+        "mesh_role_uuid": {
+          "const": "5787c1be-467b-5e51-92c4-77bcaeb02a21"
+        },
+        "mesh_role_oid_der_hex": {
+          "type": "string",
+          "pattern": "^[0-9a-f]+$"
+        },
+        "native_address_prefix": {
+          "const": "0200::/8"
+        },
+        "ipaddress_generalname_tag": {
+          "const": "87"
+        },
+        "role_bits": {
+          "type": "object",
+          "required": [
+            "leaf",
+            "relay",
+            "gateway"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "leaf": {
+              "const": 0
+            },
+            "relay": {
+              "const": 1
+            },
+            "gateway": {
+              "const": 2
+            }
+          }
+        }
+      }
+    },
+    "identities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "public_key_hex",
+          "native_address_hex",
+          "native_address_ipv6",
+          "oracle_source"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "public_key_hex": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "native_address_hex": {
+            "type": "string",
+            "pattern": "^02[0-9a-f]{30}$"
+          },
+          "native_address_ipv6": {
+            "type": "string"
+          },
+          "oracle_source": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "description"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "subject_public_key_hex": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "spki_der_hex": {
+            "type": "string",
+            "pattern": "^302a300506032b6570032100[0-9a-f]{64}$"
+          },
+          "native_address_hex": {
+            "type": "string",
+            "pattern": "^02[0-9a-f]{30}$"
+          },
+          "san_value_der_hex": {
+            "type": "string",
+            "pattern": "^3012871002[0-9a-f]{30}$"
+          },
+          "san_extension_der_hex": {
+            "type": "string",
+            "pattern": "^[0-9a-f]+$"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "leaf",
+                "relay",
+                "gateway"
+              ]
+            }
+          },
+          "bit_string_content_hex": {
+            "type": "string",
+            "pattern": "^[0-9a-f]*$"
+          },
+          "extn_value_hex": {
+            "type": "string",
+            "pattern": "^04[0-9a-f]+$"
+          },
+          "full_extension_hex": {
+            "type": "string",
+            "pattern": "^30[0-9a-f]+$"
+          },
+          "expect_semantics": {
+            "const": "unasserted"
+          },
+          "oid_dotted": {
+            "const": "2.25.116347725289407359125616919235271862817"
+          },
+          "oid_der_hex": {
+            "type": "string",
+            "pattern": "^06[0-9a-f]+$"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}
