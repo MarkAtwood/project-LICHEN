@@ -57,10 +57,10 @@ pub use link::{
 
 // Re-export LICHEN-specific rule constants and versioning
 pub use rules::{
-    rule_set_v3_descriptor_hash, versions_compatible, SchcRuleVersionOption, GLOBAL_COAP_RULE,
-    GLOBAL_OSCORE_RULE, ICMPV6_ECHO_RULE, LINK_LOCAL_COAP_RULE, LINK_LOCAL_OSCORE_RULE,
-    RPL_DAO_RULE, RPL_DIO_RULE, RULE_SET_V3, RULE_SET_VERSION, SCHC_RULE_VERSION_TYPE,
-    UNCOMPRESSED_RULE,
+    rule_set_v3_descriptor_hash, versions_compatible, SchcRuleVersionOption, DEADDROP_GET_RULES,
+    DEADDROP_POST_RULES, GLOBAL_COAP_RULE, GLOBAL_OSCORE_RULE, ICMPV6_ECHO_RULE,
+    LINK_LOCAL_COAP_RULE, LINK_LOCAL_OSCORE_RULE, RPL_DAO_RULE, RPL_DIO_RULE, RULE_SET_V3,
+    RULE_SET_VERSION, SCHC_RULE_VERSION_TYPE, UNCOMPRESSED_RULE,
 };
 
 #[cfg(feature = "std")]

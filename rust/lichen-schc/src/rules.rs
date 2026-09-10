@@ -461,6 +461,24 @@ pub const LINK_LOCAL_OSCORE_RULE: Rule =
 pub const GLOBAL_OSCORE_RULE: Rule = Rule::new(RULE_GLOBAL_OSCORE, GLOBAL_OSCORE_FIELDS);
 pub const UNCOMPRESSED_RULE: Rule = Rule::new(RULE_UNCOMPRESSED, UNCOMPRESSED_FIELDS);
 
+/// SCHC rules provisioned for `/deaddrop` POSTs.
+///
+/// Writes require OSCORE, so the path reuses the existing OSCORE rules rather
+/// than allocating dedicated rule IDs. The protected URI and content format
+/// remain in the OSCORE payload/tail.
+pub const DEADDROP_POST_RULES: &[u8] = &[RULE_LINK_LOCAL_OSCORE, RULE_GLOBAL_OSCORE];
+
+/// SCHC rules provisioned for `/deaddrop` GETs.
+///
+/// Public drops may be read without OSCORE, while protected reads use the
+/// existing OSCORE rules.
+pub const DEADDROP_GET_RULES: &[u8] = &[
+    RULE_LINK_LOCAL_OSCORE,
+    RULE_GLOBAL_OSCORE,
+    RULE_LINK_LOCAL_COAP,
+    RULE_GLOBAL_COAP,
+];
+
 /// Immutable generic registry for Rule Set Version 3. Specialized Rule 7 is
 /// intentionally absent: `codec::compress`/`codec::decompress` are its sole
 /// byte-level implementation.
@@ -564,6 +582,16 @@ mod tests {
         assert!(RULE_SET_V3
             .iter()
             .all(|rule| !matches!(rule.rule_id, 64..=66)));
+    }
+
+    #[test]
+    fn deaddrop_rules_reuse_existing_registry_entries() {
+        assert_eq!(DEADDROP_POST_RULES, &[5, 6]);
+        assert_eq!(DEADDROP_GET_RULES, &[5, 6, 0, 1]);
+        assert!(DEADDROP_GET_RULES
+            .iter()
+            .all(|rule_id| RULE_SET_V3.iter().any(|rule| rule.rule_id == *rule_id)));
+        assert_eq!(RULE_SET_V3.len(), 8);
     }
 
     #[test]
