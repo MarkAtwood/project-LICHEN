@@ -23,11 +23,14 @@ SNAPSHOT_NAME = "burn-snapshot.json"
 
 
 def _load_baseline(path: str) -> dict | None:
-    """Return {'usage': int, 'ts': int} or None if missing/corrupt."""
+    """Return {'usage': int, 'ts': int} or None if missing/corrupt/absurd."""
     try:
         with open(path) as f:
             d = json.load(f)
-        return {"usage": int(d["usage"]), "ts": int(d["ts"])}
+        b = {"usage": int(d["usage"]), "ts": int(d["ts"])}
+        if b["usage"] < 0 or b["ts"] < 0:
+            return None  # semantically absurd values are corrupt
+        return b
     except Exception:
         return None
 
@@ -66,6 +69,12 @@ def update(
         _write_baseline(path, used, now)
         return {"evaluated": False, "reason": "baseline-established"}
     age = now - baseline["ts"]
+    if age < 0:
+        # Clock stepped backwards (or a future ts got in): a negative age
+        # would be treated as mid-window forever, disabling the alarm.
+        # Treat the baseline as corrupt and re-establish at 'now'.
+        _write_baseline(path, used, now)
+        return {"evaluated": False, "reason": "baseline-reestablished-clock"}
     if age <= window:
         return {"evaluated": False, "age": age}
     burn = used - baseline["usage"]
