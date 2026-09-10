@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-mfab",
+  "title": "sos_origin: upstream AddrForKey pinned-vector oracle test skipped in no-alloc builds",
+  "description": "Security-pass finding on 1k6n fix (commit 26f158b4c9). origin_addr_matches_upstream_pinned_vector (sos_origin.rs:321) is cfg(feature=\"alloc\")-gated, but the function it tests, origin_addr_from_pubkey (:96), is ungated — the test is gated only because its helper hex_to_bytes (:244) is alloc-gated. domain_matches_vector demonstrates the pattern: std::vec::Vec resolves under cfg(test) without the alloc feature (lib.rs:127 cfg(any(test, std)) extern crate std). Fix: rewrite hex_to_bytes with std::vec::Vec (ungated), drop the alloc gate from the vector test so the pinned upstream yggdrasil-go AddrForKey byte-equality oracle (project-designated independent conformance oracle) runs in no-alloc test configurations too. Default-feature runs currently silently skip the only in-file upstream-address check.",
+  "status": "in_progress",
+  "priority": 3,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T03:57:49.847283312Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T03:58:05.928162176Z",
+  "started_at": "2026-09-10T03:58:05.928162176Z",
+  "lease_expires_at": "2026-09-10T04:03:05.928162176Z",
+  "heartbeat_at": "2026-09-10T03:58:05.928162176Z",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-mfab",
+      "depends_on_id": "project-LICHEN-worker6-1k6n",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T03:57:49.976987202Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
