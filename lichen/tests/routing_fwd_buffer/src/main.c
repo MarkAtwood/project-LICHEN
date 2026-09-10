@@ -24,6 +24,7 @@
 #include <zephyr/sys/util.h>
 
 #include <lichen/routing/router.h>
+#include "forwarding_buffer_vectors.h"
 
 /* Test helper: create a ULA mesh address */
 static void make_ula(uint8_t addr[16], uint8_t iid)
@@ -42,6 +43,42 @@ static void make_iid(uint8_t iid[8], uint8_t val)
 
 static struct lichen_router router;
 static uint8_t packet_data[4][64];  /* Test packet buffers */
+
+ZTEST(routing_fwd_buffer, test_forwarding_vectors)
+{
+	zassert_equal(CONFIG_LICHEN_ROUTER_MAX_FORWARDING_SOURCES, FWD_MAX_SOURCES,
+		      "source limit must match canonical vector");
+	zassert_equal(CONFIG_LICHEN_ROUTER_MAX_PACKETS_PER_SOURCE, FWD_MAX_PER_SOURCE,
+		      "per-source limit must match canonical vector");
+
+	for (size_t i = 0; i < FORWARDING_VECTOR_COUNT; i++) {
+		const struct forwarding_vector *vector = &forwarding_vectors[i];
+		uint8_t *data = packet_data[i % ARRAY_SIZE(packet_data)];
+		if (vector->setup_count > 0) {
+			uint8_t setup_data[64];
+			lichen_router_init(&router, (uint8_t[16]){0});
+			for (size_t source = 0; source < vector->setup_count; source++) {
+				zassert_ok(lichen_router_fwd_enqueue(&router,
+								 vector->setup_sources[source], setup_data,
+								 sizeof(setup_data), 0),
+						   "setup source %zu", source);
+			}
+		}
+		int ret = lichen_router_fwd_enqueue(&router, vector->source_iid, data,
+						   32, vector->now_ms);
+		if (vector->result == FWD_ACCEPTED) {
+			zassert_ok(ret, "%s should be accepted", vector->name);
+		} else if (vector->result == FWD_BACKPRESSURE) {
+			zassert_equal(ret, -ENOBUFS, "%s should apply backpressure", vector->name);
+		} else {
+			zassert_ok(ret, "%s should evict and accept", vector->name);
+			zassert_equal(lichen_router_fwd_count(&router), FWD_TOTAL_CAPACITY,
+				      "%s should preserve total capacity", vector->name);
+			zassert_true(lichen_router_fwd_stats(&router)->packets_dropped_full > 0,
+				     "%s should record eviction", vector->name);
+		}
+	}
+}
 
 static void before(void *fixture)
 {
