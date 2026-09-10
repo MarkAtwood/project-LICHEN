@@ -24,8 +24,11 @@ Known divergences (real behavior asserted; tracked in beads):
   both shapes, so both are exercised.
 - ``sos_node_format`` positive examples use colon-hex IPv6 notation; per spec
   18.4.2 ``SosResource`` accepts exactly that form (the originator's full
-  0200:: address string), so the positive half now matches. ``SosRelay``
-  dedup keys remain opaque node strings.
+  0200:: address string), so the 0200:: positive example now matches. The
+  second positive example (``fe80:...:0200:00ff:fe00:0001``) is link-local and
+  can never be accepted — the binding gate requires the primary 02xx
+  AddrForKey (spec 18.4.1), so that example remains divergent from the spec.
+  ``SosRelay`` dedup keys remain opaque node strings.
 - ``sos_seq_rollover`` expects uint8 wraparound (255->0) to be valid; the
   implementation uses 64-bit monotonic sequences for replay protection (spec
   18.4.1), so rollover at 255 is rejected as stale.
