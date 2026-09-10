@@ -46,6 +46,46 @@ file_clean() {
     ! grep -q '^\(<<<<<<<\|>>>>>>>\)' "$1" 2>/dev/null
 }
 
+# Cheap post-resolution smoke (bead obgr): kimi's textual union of two
+# conflict sides can produce git-clean but build-broken output — e.g. a
+# CMakeLists with both parents' add_executable/add_test blocks concatenated
+# (schc_failure_tracker case: 'add_executable cannot create target' at cmake
+# configure time, caught only because a human ran it). The precise signature
+# of that union-concat is a DUPLICATED target name; count heuristics
+# false-positive on legitimate both-sides-added merges, so instead extract
+# the first argument of each add_executable/add_library and fail on any
+# duplicate. Not a full cmake configure (too slow per cycle).
+smoke_resolved_file() {
+    # $1 = repo-relative path (as passed by the resolution loop).
+    local rel="$1"
+    case "$rel" in
+        */CMakeLists.txt|CMakeLists.txt) ;;
+        *) return 0 ;;
+    esac
+    # Fail closed: this gate exists to block bad unattended merges, so an
+    # unreadable/missing file must abort the merge, not silently pass.
+    # Reject symlinks explicitly: -f follows them, and a symlink lets branch
+    # content point the grep at an arbitrary host file.
+    if [ -L "$REPO_ROOT/$rel" ] || [ ! -f "$REPO_ROOT/$rel" ]; then
+        echo "   janitor: SMOKE FAIL $rel: not a regular file (missing/symlink?) — refusing to merge blind"
+        return 1
+    fi
+    local dupes
+    # Target names only (add_executable/add_library): the first argument of
+    # add_test is the literal NAME keyword, and add_test duplicates are far
+    # less damaging (ctest just runs both). Union-concat breaks the build at
+    # the add_executable/add_library duplicate ('cannot create target').
+    # head caps the scan so a symlinked-to-huge file can't burn the cycle.
+    dupes=$(head -c 262144 "$REPO_ROOT/$rel" 2>/dev/null \
+        | grep -oE '^\s*(add_executable|add_library)\s*\(\s*[A-Za-z0-9_.+-]+' \
+        | sed -E 's/.*\(\s*//' | sort | uniq -d)
+    if [ -n "$dupes" ]; then
+        echo "   janitor: SMOKE FAIL $rel: duplicate CMake target/test name(s): $(echo "$dupes" | tr '\n' ' ')— union-concat suspected"
+        return 1
+    fi
+    return 0
+}
+
 janitor_merge_branch() {
     # $1 = branch name. Returns 0 when the branch is fully merged.
     local branch="$1"
@@ -83,7 +123,7 @@ janitor_merge_branch() {
         local failed=0
         for f in $files; do
             echo "   janitor: resolving $f (one kimi session)"
-            if resolve_file "$f" && file_clean "$REPO_ROOT/$f"; then
+            if resolve_file "$f" && file_clean "$REPO_ROOT/$f" && smoke_resolved_file "$f"; then
                 git -C "$REPO_ROOT" add -- "$f"
             else
                 echo "   janitor: FAILED to resolve $f"
