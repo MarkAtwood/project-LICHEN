@@ -387,10 +387,14 @@ class TestSosPutDelete:
             assert sos._active is True
             other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
             forged = _signed_body(seq=2, priv=other_priv, pub=other_pub, type="cancel")
-            resp = await client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=forged, content_format=60)
-            ).response
-            assert resp.code == aiocoap.UNAUTHORIZED
+            # Invalid cancel envelope: SILENTLY dropped (spec 18.4.1).
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(
+                    client.request(
+                        Message(code=POST, uri="coap://srv/sos", payload=forged, content_format=60)
+                    ).response,
+                    timeout=1.0,
+                )
             assert sos._active is True
         finally:
             await client.shutdown()

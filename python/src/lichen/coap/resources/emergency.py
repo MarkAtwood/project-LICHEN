@@ -298,20 +298,20 @@ class SosResource(resource.ObservableResource):
         pubkey = body.get("pubkey")
         sig_blob = body.get("sig")
         if not isinstance(pubkey, bytes) or len(pubkey) != 32 or not isinstance(sig_blob, bytes):
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return Message(no_response=26)
         try:
             origin_sig = SosOriginSignature.from_bytes(sig_blob)
         except ValueError:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return Message(no_response=26)
         active_iid = bytes.fromhex(self._from.lower())
         if _pubkey_to_iid(pubkey) != active_iid:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return Message(no_response=26)
         core_cancel = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
         origin_addr = _origin_addr_for_key(pubkey)
         if not verify_sos_origin(
             pubkey, origin_addr, canonicalize_sos_payload(core_cancel), origin_sig
         ):
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return Message(no_response=26)
         source_key = self._from.lower()
         last_seq = self._sequences.last_seen(source_key)
         if last_seq is not None and origin_sig.origin_sequence <= last_seq:
@@ -330,9 +330,10 @@ class SosResource(resource.ObservableResource):
         # SECURITY: Require active alert to cancel
         if not self._active or self._from is None:
             return Message(code=aiocoap.NOT_FOUND)
-        # SECURITY: Require signed payload for authentication
+        # SECURITY: Require signed payload for authentication; unsigned or
+        # invalid envelopes are silently dropped (spec 18.4.1)
         if not request.payload:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return Message(no_response=26)
         try:
             body = _decode_single_cbor(request.payload)
         except (ValueError, OverflowError, cbor2.CBORDecodeError):
@@ -343,22 +344,22 @@ class SosResource(resource.ObservableResource):
         pubkey = body.get("pubkey")
         sig_blob = body.get("sig")
         if not isinstance(pubkey, bytes) or len(pubkey) != 32 or not isinstance(sig_blob, bytes):
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return Message(no_response=26)
         try:
             origin_sig = SosOriginSignature.from_bytes(sig_blob)
         except ValueError:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return Message(no_response=26)
         # SECURITY: Verify requester is the originator of the active alert
         active_iid = bytes.fromhex(self._from.lower())
         if _pubkey_to_iid(pubkey) != active_iid:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return Message(no_response=26)
         # SECURITY: Verify signature over canonical cancel payload
         core_cancel = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
         origin_addr = _origin_addr_for_key(pubkey)
         if not verify_sos_origin(
             pubkey, origin_addr, canonicalize_sos_payload(core_cancel), origin_sig
         ):
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return Message(no_response=26)
         # SECURITY: Replay gate for cancel requests
         source_key = self._from.lower()
         last_seq = self._sequences.last_seen(source_key)
