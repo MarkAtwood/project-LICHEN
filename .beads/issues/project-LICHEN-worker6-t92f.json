@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-t92f",
+  "title": "09-packets-timing.md:668 stale beacon claim: 'slot bitmap, next-beacon time'",
+  "description": "From b7z9.156 review round 2. spec/09-packets-timing.md:668 says 'Beacon carries SFN, slot bitmap, next-beacon time (see routing dispatch).' Stale: the normative beacon layout (02a-coordinated-capacity.md section 2a.2, decision rule-0x08-tdma-beacon) has no slot bitmap (CBOR slot_map sorted u8 list) and no next-beacon-time field. Same defect class as b7z9.156 (which fixed 02a-tdma.md:23); this line is in 09-packets-timing.md, outside that bead's file scope. Fix: replace with 'Beacon carries SFN and the slot_map (02a-coordinated-capacity.md section 2a.2)' or equivalent.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T02:15:55.488020838Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T02:15:55.488020838Z",
+  "labels": [
+    "spec",
+    "tdma"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-t92f",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.156",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T02:15:55.608678222Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
