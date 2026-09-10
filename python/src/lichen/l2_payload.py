@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from lichen.constants import L2_DISPATCH_ROUTING, L2_DISPATCH_SCHC
+from lichen.constants import L2_DISPATCH_ROUTING, L2_DISPATCH_SCHC, L2_DISPATCH_SOS
 
 L2_ROUTING_TYPE_ANNOUNCE = 0x01
 
@@ -22,6 +22,7 @@ class L2PayloadKind(Enum):
 
     SCHC = "schc"
     ROUTING = "routing"
+    SOS = "sos"
     UNKNOWN = "unknown"
 
 
@@ -35,6 +36,8 @@ def classify_l2_payload(payload: bytes) -> L2PayloadKind:
         return L2PayloadKind.SCHC
     if payload[0] == L2_DISPATCH_ROUTING:
         return L2PayloadKind.ROUTING
+    if payload[0] == L2_DISPATCH_SOS:
+        return L2PayloadKind.SOS
     return L2PayloadKind.UNKNOWN
 
 
@@ -49,3 +52,8 @@ def wrap_schc_payload(schc_payload: bytes) -> bytes:
 
 def wrap_routing_payload(routing_payload: bytes) -> bytes:
     return bytes([L2_DISPATCH_ROUTING]) + routing_payload
+
+
+def wrap_sos_payload(sos_payload: bytes) -> bytes:
+    """Prefix a canonical SOS alert CBOR payload with its L2 dispatch."""
+    return bytes([L2_DISPATCH_SOS]) + sos_payload

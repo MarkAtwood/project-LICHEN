@@ -7,9 +7,11 @@ from pathlib import Path
 import pytest
 
 from lichen.l2_payload import (
+    L2_DISPATCH_SOS,
     L2PayloadKind,
     classify_l2_payload,
     l2_payload_body,
+    wrap_sos_payload,
 )
 
 VECTORS_DIR = Path(__file__).resolve().parents[2] / "test" / "vectors"
@@ -28,6 +30,7 @@ def test_l2_payload_vector_oracle(vector):
     expected_kind = {
         "schc": L2PayloadKind.SCHC,
         "routing": L2PayloadKind.ROUTING,
+        "sos": L2PayloadKind.SOS,
         "unknown": L2PayloadKind.UNKNOWN,
     }[vector["kind"]]
     assert classify_l2_payload(wrapped) is expected_kind
@@ -39,7 +42,18 @@ def test_dispatch_namespace_is_exhaustive_and_single_octet_is_malformed(dispatch
     expected = {
         0x14: L2PayloadKind.SCHC,
         0x15: L2PayloadKind.ROUTING,
+        L2_DISPATCH_SOS: L2PayloadKind.SOS,
     }.get(dispatch, L2PayloadKind.UNKNOWN)
 
     assert classify_l2_payload(bytes([dispatch, 0x00])) is expected
     assert classify_l2_payload(bytes([dispatch])) is L2PayloadKind.UNKNOWN
+
+
+def test_sos_wrapper_preserves_canonical_alert_bytes():
+    alert = bytes.fromhex("a2617400616e68323030313a3a31")
+    wrapped = wrap_sos_payload(alert)
+
+    assert wrapped == bytes([L2_DISPATCH_SOS]) + alert
+    assert classify_l2_payload(wrapped) is L2PayloadKind.SOS
+    assert l2_payload_body(wrapped) == alert
+    assert classify_l2_payload(bytes([L2_DISPATCH_SOS])) is L2PayloadKind.UNKNOWN
