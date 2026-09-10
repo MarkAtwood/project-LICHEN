@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-j2t9",
+  "title": "Rust egress gate lacks inner source/destination scope enforcement (C+Python deny, Rust egresses)",
+  "description": "Found by kimi-k3 security review of b7z9.93 (pass 2). Rust authorize_decapsulation (rust/lichen-gateway/src/tunnel_auth.rs:398-467) enforces NO unsafe/link-local/multicast address checks - scope is entirely delegated to caller-supplied booleans source_is_mesh/destination_is_mesh, and the production callers hardcode them: source_is_mesh: true at rust/lichen-gateway/src/resources.rs:1934 (authorize_egress) and destination_is_mesh: false at rust/lichen-gateway/src/gateway.rs:1429 (egress_tunnel_authorized). The is_local_mesh pre-check (gateway.rs:1410) covers link-local, GUA, NAT64 and routed 0200::/8 but lets multicast and ULA inner DESTINATIONS through as 'not mesh'. C enforces scope internally (tunnel_auth.c:475-478: unspecified/loopback/multicast/link-local source rejected via unsafe_addr + SOURCE_SCOPE; mesh-destination rejected via DESTINATION_SCOPE) and Python likewise (tunnel_auth.py:556-559). Consequence under the radio-adversary model: a mesh node holding ANY covering grant (the corpus itself accepts a /0 grant, accept_prefix_0) can egress a tunneled packet with inner source fe80::1/::1/multicast or inner destination ff02::1 through the Rust gateway where C and Python deny SOURCE_SCOPE/DESTINATION_SCOPE - weakened authorization plus a three-way data-path verdict divergence. Fix: move the scope checks inside Rust authorize_decapsulation (mirror C tunnel_auth.c unsafe_addr semantics exactly: reject unspecified/loopback/multicast/link-local inner source; reject multicast/unsafe/link-local/routable-02xx inner destination per the C code), keeping the booleans for the source_is_mesh prefix question or replacing them outright - mirror Python/C, update the wired tests, and consider a corpus decap case pinning link_local_source_rejected + multicast_destination for the Rust side too (they exist in the corpus already; only the Rust production path skips them). Do NOT weaken the vector runner's classification to compensate.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T03:42:48.541715257Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T03:42:48.541715257Z",
+  "labels": [
+    "security",
+    "gateway",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-j2t9",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.93",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T03:42:48.667491722Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
