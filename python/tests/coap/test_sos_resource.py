@@ -32,9 +32,8 @@ from lichen.coap.resources.emergency import (
 from lichen.coap.sos_origin import sign_sos_origin
 from lichen.coap.transport import InMemoryNetwork, create_lichen_context
 from lichen.coap.udp_server import bind_coap_udp
-from lichen.crypto.identity import _pubkey_to_iid
+from lichen.crypto.identity import _pubkey_to_iid, yggdrasil_address
 from lichen.crypto.schnorr48 import derive_keypair
-from lichen.ipv6.addr import upstream_addr_for_key
 
 # Deterministic signer identity; /sos requires origin signatures (spec 18.4.1),
 # so the POSTing node's EUI-64 must be the one its pubkey derives to.
@@ -104,10 +103,7 @@ def _find_multicast_interface() -> str | None:
 
 
 def _origin_addr(pub: bytes) -> IPv6Address:
-    """Origin transcript address: upstream AddrForKey (upstream-yggdrasil-addressing)."""
-    # Resolved for HEAD: upstream_addr_for_key (lichen.ipv6.addr) is the canonical
-    # settled-decision path; yggdrasil_address is the older alias of the same algorithm.
-    return upstream_addr_for_key(pub)
+    return IPv6Address(yggdrasil_address(pub).packed)
 
 
 def _signed_body(
@@ -125,24 +121,6 @@ def _signed_body(
     return cbor2.dumps({**core, "pubkey": pub, "sig": sig.to_bytes()})
 
 
-async def _expect_silent_drop(
-    client: aiocoap.Context, payload: bytes, timeout_s: float = 3.0
-) -> None:
-    """Assert a /sos POST is silently dropped: no CoAP response is sent.
-
-    Spec 18.4.1 + sos_signature.json (error_response: false): a missing,
-    malformed, or invalid origin signature MUST be silently dropped — no
-    error response is sent, so the request times out from the client's view.
-    """
-    with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(
-            client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=payload, content_format=60)
-            ).response,
-            timeout=timeout_s,
-        )
-
-
 async def _setup() -> tuple[aiocoap.Context, aiocoap.Context, SosResource]:
     net = InMemoryNetwork()
     sos = SosResource(time_func=lambda: _T0)
@@ -151,6 +129,23 @@ async def _setup() -> tuple[aiocoap.Context, aiocoap.Context, SosResource]:
     server = await create_lichen_context(net.channel("srv"), "srv", site=site)
     client = await create_lichen_context(net.channel("cli"), "cli")
     return client, server, sos
+
+
+NO_RESPONSE_OPT = 26  # RFC 7967 bitmask suppressing 2.xx/4.xx/5.xx responses
+
+
+def _sos_resource() -> SosResource:
+    """A resource for direct render calls (no network)."""
+    return SosResource(time_func=lambda: _T0)
+
+
+def _request(body: bytes, code: int = POST) -> Message:
+    return Message(code=code, uri="coap://srv/sos", payload=body, content_format=60)
+
+
+def _assert_silently_dropped(resp: Message) -> None:
+    """Spec 18.4.1 silent drop: the reply carries RFC 7967 No-Response."""
+    assert resp.opt.no_response == NO_RESPONSE_OPT
 
 
 # ---------------------------------------------------------------------------
@@ -398,22 +393,15 @@ class TestSosPutDelete:
 
     async def test_post_cancel_by_non_originator_rejected(self) -> None:
         """Only the active alert's originator may cancel (anti-griefing)."""
-        client, server, sos = await _setup()
-        try:
-            activate_body = _signed_body(seq=1)
-            await client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=activate_body, content_format=60)
-            ).response
-            assert sos._active is True
-            other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
-            forged = _signed_body(seq=2, priv=other_priv, pub=other_pub, type="cancel")
-            # Forged cancel carries a non-originator signature: invalid cancel
-            # envelope, SILENTLY dropped (spec 18.4.1).
-            await _expect_silent_drop(client, forged)
-            assert sos._active is True
-        finally:
-            await client.shutdown()
-            await server.shutdown()
+        sos = _sos_resource()
+        resp = await sos.render_post(_request(_signed_body(seq=1)))
+        assert resp.code == aiocoap.CHANGED
+        assert sos._active is True
+        other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
+        forged = _signed_body(seq=2, priv=other_priv, pub=other_pub, type="cancel")
+        resp = await sos.render_post(_request(forged))
+        _assert_silently_dropped(resp)
+        assert sos._active is True
 
 
 # ---------------------------------------------------------------------------
@@ -539,81 +527,57 @@ class TestSosRateLimiting:
 
 
 class TestSosSignatureEnforcement:
-    """POST /sos origin-signature gate per spec 18.4.1."""
+    """POST /sos origin-signature gate per spec 18.4.1.
+
+    Bad-signature paths are silently dropped: the render returns a message
+    carrying the RFC 7967 No-Response option (asserted directly so no wire
+    wait is involved).
+    """
 
     async def test_valid_signature_accepted(self) -> None:
-        client, server, sos = await _setup()
-        try:
-            resp = await client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=_signed_body(), content_format=60)
-            ).response
-            assert resp.code == aiocoap.CHANGED
-            assert sos._active is True
-        finally:
-            await client.shutdown()
-            await server.shutdown()
+        sos = _sos_resource()
+        resp = await sos.render_post(_request(_signed_body()))
+        assert resp.code == aiocoap.CHANGED
+        assert sos._active is True
 
     async def test_unsigned_post_dropped(self) -> None:
-        client, server, sos = await _setup()
-        try:
-            body = cbor2.dumps({"from": _EUI.hex(), "t": _T0})
-            # Spec 18.4.1: missing origin signature is SILENTLY dropped (no
-            # error response, no activation).
-            await _expect_silent_drop(client, body)
-            assert sos._active is False
-        finally:
-            await client.shutdown()
-            await server.shutdown()
+        sos = _sos_resource()
+        body = cbor2.dumps({"from": _EUI.hex(), "t": _T0})
+        resp = await sos.render_post(_request(body))
+        _assert_silently_dropped(resp)
+        assert sos._active is False
 
     async def test_tampered_signature_dropped(self) -> None:
-        client, server, sos = await _setup()
-        try:
-            body = bytearray(_signed_body())
-            # Flip a bit late in the payload (inside the 48-byte sig).
-            body[-1] ^= 0x01
-            # Spec 18.4.1: invalid origin signature is SILENTLY dropped.
-            await _expect_silent_drop(client, bytes(body))
-            assert sos._active is False
-        finally:
-            await client.shutdown()
-            await server.shutdown()
+        sos = _sos_resource()
+        body = bytearray(_signed_body())
+        # Flip a bit late in the payload (inside the 48-byte sig).
+        body[-1] ^= 0x01
+        resp = await sos.render_post(_request(bytes(body)))
+        _assert_silently_dropped(resp)
+        assert sos._active is False
 
     async def test_wrong_key_signature_dropped(self) -> None:
-        client, server, sos = await _setup()
-        try:
-            other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
-            body = _signed_body(priv=other_priv, pub=other_pub)
-            # Other key does not derive to the claimed IID: binding gate fires
-            # and the message is SILENTLY dropped.
-            await _expect_silent_drop(client, body)
-            assert sos._active is False
-        finally:
-            await client.shutdown()
-            await server.shutdown()
+        sos = _sos_resource()
+        other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
+        body = _signed_body(priv=other_priv, pub=other_pub)
+        resp = await sos.render_post(_request(body))
+        # Other key does not derive to the claimed IID: binding gate fires.
+        _assert_silently_dropped(resp)
+        assert sos._active is False
 
     async def test_replayed_sequence_dropped(self) -> None:
-        client, server, sos = await _setup()
-        try:
-            first = Message(
-                code=POST, uri="coap://srv/sos", payload=_signed_body(seq=7), content_format=60
-            )
-            assert (await client.request(first).response).code == aiocoap.CHANGED
-            await _expect_silent_drop(client, _signed_body(seq=7))
-        finally:
-            await client.shutdown()
-            await server.shutdown()
+        sos = _sos_resource()
+        resp = await sos.render_post(_request(_signed_body(seq=7)))
+        assert resp.code == aiocoap.CHANGED
+        resp = await sos.render_post(_request(_signed_body(seq=7)))
+        _assert_silently_dropped(resp)
 
     async def test_sequence_must_advance(self) -> None:
-        client, server, sos = await _setup()
-        try:
-            first = Message(
-                code=POST, uri="coap://srv/sos", payload=_signed_body(seq=9), content_format=60
-            )
-            assert (await client.request(first).response).code == aiocoap.CHANGED
-            await _expect_silent_drop(client, _signed_body(seq=8))
-        finally:
-            await client.shutdown()
-            await server.shutdown()
+        sos = _sos_resource()
+        resp = await sos.render_post(_request(_signed_body(seq=9)))
+        assert resp.code == aiocoap.CHANGED
+        resp = await sos.render_post(_request(_signed_body(seq=8)))
+        _assert_silently_dropped(resp)
 
 
 class TestSosMulticast:

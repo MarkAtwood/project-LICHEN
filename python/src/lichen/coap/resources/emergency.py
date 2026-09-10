@@ -20,24 +20,17 @@ from lichen.coap.sos_origin import (
     canonicalize_sos_payload,
     verify_sos_origin,
 )
-from lichen.crypto.identity import _pubkey_to_iid
+from lichen.crypto.identity import _pubkey_to_iid, yggdrasil_address
 from lichen.crypto.trust import TrustError
-from lichen.ipv6.addr import upstream_addr_for_key
-
-# RFC 7967 No-Response option value 26 (= 2 + 8 + 16) suppresses every 2.xx,
-# 4.xx and 5.xx response. Spec 18.4.1: an SOS message with a missing,
-# malformed or invalid origin signature is SILENTLY DROPPED — the receiver
-# sends no error response (prevents attacker key/IID enumeration).
-_SILENT_DROP_NO_RESPONSE = 26
-
-
-def _silent_drop() -> Message:
-    """Build the spec-18.4.1 silent-drop response (no CoAP error sent)."""
-    return Message(code=aiocoap.CHANGED, no_response=_SILENT_DROP_NO_RESPONSE)
 
 MAX_ROLLCALLS = 256
 MAX_ROLLCALL_TIMEOUT_S = 7 * 86400
 MAX_CHECKINS = 256  # Maximum stored check-ins
+
+# RFC 7967 No-Response option bitmask: suppress 2.xx/4.xx/5.xx responses.
+# Spec 18.4.1: missing/malformed/invalid SOS origin signatures are silently
+# dropped, so bad-signature paths return this instead of 4.01.
+_NO_RESPONSE_OPT = 26
 
 # SOS rate limiting per spec (per-source limits)
 SOS_COOLDOWN_S = 600  # 10-minute cooldown period per source
@@ -48,18 +41,18 @@ SOS_BURST_MAX = 2  # Max messages per cooldown period ("Burst allowance: 2")
 # core alert dict (spec 18.4.1 signs only the alert payload).
 _SOS_ENVELOPE_FIELDS = frozenset({"pubkey", "sig"})
 
-
-def _origin_addr_for_key(pubkey: bytes) -> bytes:
-    """Origin transcript address: upstream AddrForKey (16 octets).
-
-    Spec 18.4.1 signs over "the originator's 16-octet primary 02xx address
-    preserved end to end", which per the settled upstream-yggdrasil-addressing
-    decision is AddrForKey(Ed25519PublicKey) -- not derivable from the IID.
-    """
-    return upstream_addr_for_key(pubkey).packed
-
 # Valid check-in status values per spec 18.6.1
 CHECKIN_STATUS_VALUES = frozenset({"ok", "help", "delayed"})
+
+
+def _silent_drop() -> Message:
+    """Build the "no response" reply for silently dropped SOS messages.
+
+    aiocoap renders this as a response carrying the RFC 7967 No-Response
+    option, which the requesting side discards; nothing else crosses the
+    wire, matching spec 18.4.1's silent-drop requirement.
+    """
+    return Message(no_response=_NO_RESPONSE_OPT)
 
 
 class SosResource(resource.ObservableResource):
@@ -75,9 +68,8 @@ class SosResource(resource.ObservableResource):
     {"from","t"} core fields).  Per spec 18.4.1 the origin signature is
     REQUIRED: the pubkey must derive to the claimed node IID, the Schnorr48
     signature must verify over the canonical CBOR of the core alert dict,
-    and the origin sequence must strictly advance; messages with a missing,
-    malformed, or invalid origin signature are silently dropped (no response,
-    RFC 7967 no_response).
+    and the origin sequence must strictly advance; anything else is silently
+    dropped with no response (RFC 7967 No-Response option).
     **DELETE** cancels.  **GET** and **Observe** expose the current state to all
     subscribers so neighbouring nodes can relay/escalate the alert.
 
@@ -252,11 +244,10 @@ class SosResource(resource.ObservableResource):
             or timestamp < 0
         ):
             return Message(code=aiocoap.BAD_REQUEST)
-        # Spec 18.4.1: SOS MUST carry a valid origin signature; messages with
-        # a missing, malformed, or invalid origin signature are SILENTLY
-        # DROPPED (no response, not an error code). The envelope carries the
-        # signer's pubkey (32 B) and the wire origin signature (8 B seq +
-        # 48 B sig).
+        # Spec 18.4.1: SOS MUST carry a valid origin signature; unsigned or
+        # invalid messages are silently dropped with no response (RFC 7967
+        # No-Response option). The envelope carries the signer's pubkey
+        # (32 B) and the wire origin signature (8 B seq + 48 B sig).
         pubkey = body.get("pubkey")
         sig_blob = body.get("sig")
         if not isinstance(pubkey, bytes) or len(pubkey) != 32 or not isinstance(sig_blob, bytes):
@@ -269,12 +260,7 @@ class SosResource(resource.ObservableResource):
         if _pubkey_to_iid(pubkey) != iid:
             return _silent_drop()
         core_alert = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
-        # Merge resolution: keep HEAD's _origin_addr_for_key (upstream
-        # AddrForKey per the settled upstream-yggdrasil-addressing decision,
-        # same helper render_delete uses) over the other parent's inline
-        # yggdrasil_address(...).packed; both derive the identical address,
-        # and the helper is this file's single documented form.
-        origin_addr = _origin_addr_for_key(pubkey)
+        origin_addr = yggdrasil_address(pubkey).packed
         if not verify_sos_origin(
             pubkey, origin_addr, canonicalize_sos_payload(core_alert), origin_sig
         ):
@@ -324,7 +310,7 @@ class SosResource(resource.ObservableResource):
         if _pubkey_to_iid(pubkey) != active_iid:
             return _silent_drop()
         core_cancel = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
-        origin_addr = _origin_addr_for_key(pubkey)
+        origin_addr = yggdrasil_address(pubkey).packed
         if not verify_sos_origin(
             pubkey, origin_addr, canonicalize_sos_payload(core_cancel), origin_sig
         ):
@@ -347,8 +333,7 @@ class SosResource(resource.ObservableResource):
         # SECURITY: Require active alert to cancel
         if not self._active or self._from is None:
             return Message(code=aiocoap.NOT_FOUND)
-        # SECURITY: Require signed payload for authentication; unsigned or
-        # invalid envelopes are silently dropped (spec 18.4.1)
+        # SECURITY: Require signed payload for authentication
         if not request.payload:
             return _silent_drop()
         try:
@@ -372,16 +357,7 @@ class SosResource(resource.ObservableResource):
             return _silent_drop()
         # SECURITY: Verify signature over canonical cancel payload
         core_cancel = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
-        # Merge resolution: both parents implement spec-18.4.1 silent drop for
-        # every auth failure; keep the _silent_drop() helper (this file's
-        # single documented form, used by render_post/_cancel_from_body and
-        # the replay gate below) over HEAD's raw Message(no_response=26),
-        # which re-hardcodes the _SILENT_DROP_NO_RESPONSE magic number. For
-        # the address keep _origin_addr_for_key (upstream AddrForKey per the
-        # settled upstream-yggdrasil-addressing decision, matching
-        # render_post/_cancel_from_body) over the other parent's inline
-        # yggdrasil_address(...).packed; both derive the identical address.
-        origin_addr = _origin_addr_for_key(pubkey)
+        origin_addr = yggdrasil_address(pubkey).packed
         if not verify_sos_origin(
             pubkey, origin_addr, canonicalize_sos_payload(core_cancel), origin_sig
         ):
