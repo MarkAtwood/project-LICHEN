@@ -213,7 +213,15 @@ pub fn verify_sos_origin(
 
 /// Verify and gate in one step: the signature is only accepted when both
 /// the Schnorr48 check passes **and** the sequence strictly advances the
-/// origin (fail closed otherwise — including when the gate is capacity-exhausted).
+/// origin. Fail closed on a bad signature, a non-advancing sequence, or an
+/// unknown origin at zero capacity. A *new* origin at capacity evicts the
+/// least-recently-accepted entry and is accepted (the gate is bounded, not
+/// fail-closed for new origins).
+///
+/// **Eviction discards replay state:** if an origin is evicted, it is
+/// treated as new on reappearance — previously-seen (including lower)
+/// sequences become acceptable again. Anti-replay is guaranteed only while
+/// an origin remains tracked.
 #[cfg(all(feature = "schnorr", feature = "alloc"))]
 pub fn verify_sos_origin_gated(
     tracker: &mut OriginSequenceTracker,
@@ -288,6 +296,17 @@ mod tests {
     }
 
     #[test]
+    fn tracker_u64_max_first_seq_locks_origin_out() {
+        // Boundary: a first-seen u64::MAX is accepted, and nothing can ever
+        // strictly advance past it — the origin is locked out for good.
+        let mut t = OriginSequenceTracker::new(SOS_ORIGIN_GATE_DEFAULT_CAPACITY);
+        let origin = [0xCC; 16];
+        assert!(t.accept(&origin, u64::MAX));
+        assert!(!t.accept(&origin, u64::MAX));
+        assert_eq!(t.last_seen(&origin), Some(u64::MAX));
+    }
+
+    #[test]
     fn tracker_zero_capacity_fails_closed() {
         let mut t = OriginSequenceTracker::new(0);
         assert!(!t.accept(&[1; 16], 1));
@@ -308,7 +327,6 @@ mod tests {
     #[cfg(feature = "schnorr")]
     mod schnorr_tests {
         use super::*;
-        use crate::keys::Seed;
 
         fn make_keypair() -> (crate::keys::PrivateKey, crate::keys::PublicKey) {
             crate::schnorr::derive_keypair(&crate::keys::Seed::new([0x42; 32]))
