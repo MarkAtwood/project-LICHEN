@@ -162,8 +162,9 @@ bool lichen_rpl_root_send_dio(struct lichen_rpl_root *root)
 	 * milliseconds, NOT Imin/1000. CONFIG_LICHEN_RPL_TRICKLE_IMIN_MS is a
 	 * millisecond value (default 4000), so advertise floor(log2(ms)) and
 	 * clamp into the runtime-acceptable range [1, 30] (dodag.c rejects
-	 * dio_int_min >= 31). 4000 ms -> 12, matching the 1<<12 = 4096 ms
-	 * Trickle Imin the runtime and the Rust/Python stacks actually run. */
+	 * dio_int_min >= 31). floor(log2(4000)) = 11, so receivers derive
+	 * 1<<11 = 2048 ms. (The previous /1000 advertised 4 = 16 ms, ~250x
+	 * off.) An exact power-of-two Imin (e.g. 4096) yields an exact match. */
 	uint8_t imin_log2 = 0;
 	uint32_t imin_ms = CONFIG_LICHEN_RPL_TRICKLE_IMIN_MS;
 	while (imin_ms > 1U) {
