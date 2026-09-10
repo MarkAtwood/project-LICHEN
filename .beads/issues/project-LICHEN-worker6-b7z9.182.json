@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.182",
+  "title": "[spec-gap][R-SCHC-019] C stack declares SCHC_RETRANSMISSION_TIMEOUT_S 10 but no C code enforces it",
+  "description": "Spec-coverage sweep of spec/appendix-schc.md (R-SCHC-019, docs/spec-coverage/appendix-schc.md, flagged F1). Requirement: SCHC fragmentation profile RETX=10s (spec/appendix-schc.md lines 8, 56, 60; draft-lichen-schc-lora-00.md 5.1 'Retransmission timer | 10 seconds, fixed'; constants.toml [schc.fragment] retransmission_timeout_s=10). Classification: implemented+tested in Rust (RETRANSMISSION_TIMEOUT_S=10 fragment.rs:18-19, attempt abort fragment.rs:2277-2303, test authenticated_fixed_retransmission_timer_is_exact_and_bounded fragment.rs:3908-3938) and Python (fragment.py:56, tests test_fragment.py:770-795); implemented+untested in C: lichen/subsys/lichen/schc/include/lichen/schc.h:107 declares the constant, but rg over all of lichen/ finds no .c/.h/app/test use site. The generic engine (lichen/subsys/schc/schc.c SENDER_RETRANSMIT) bounds attempts (SCHC_FRAGMENT_MAX_ATTEMPTS 4u) but owns no time constant; the lichen session layer enforces ACK budget 4 (LICHEN_SCHC_MAX_ACK_RESPONSES 4U, schc_session_control.h:64) and 60s hold-down but not the 10s sender timer. Risk: a C sender integrated without a caller-provided timer never retransmits, breaking ACK-on-Error convergence. Suggested placement: enforce the 10s retransmission deadline in the lichen SCHC session wrapper (alongside schc_session_control's hold-down), or document caller-owned timing explicitly in the appendix/03-adaptation and add an integration test proving the app layer supplies it.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T00:35:35.722427982Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T00:35:35.722427982Z",
+  "labels": [
+    "schc",
+    "spec-gap",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.182",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-10T00:35:35.860369791Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
