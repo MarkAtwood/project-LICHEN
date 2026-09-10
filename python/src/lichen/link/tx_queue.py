@@ -36,7 +36,9 @@ TX_QUEUE_CAPACITY = 4
 # Default deadlines in milliseconds (spec/appendix-bufferbloat.md)
 DEADLINE_SOS_MS = 2000  # P0: Emergency - transmit ASAP
 DEADLINE_ROUTING_MS = 5000  # P1: Routing control (DIO/DAO)
-DEADLINE_ACK_MS = 5000  # P1: Link-layer ACKs (alias for ROUTING)
+DEADLINE_ACK_MS = 10000  # P1: Link-layer ACK/NACKs (spec B.2: 10 s; Priority.ACK
+# aliases ROUTING for queue ordering, but the spec ACK deadline is its own
+# constant — callers pass it as an explicit deadline_ms)
 DEADLINE_URGENT_MS = 30000  # P2: Time-sensitive app traffic
 DEADLINE_APP_MS = 60000  # P3: Normal application data
 DEADLINE_BULK_MS = 120000  # P4: Bulk/firmware - can wait
@@ -149,6 +151,8 @@ class TxReservation:
             on_owning_loop = False
             if loop is not None:
                 try:
+                    # loop is self._future_loop (aliased above); both merge
+                    # sides were semantically identical — keep the local form.
                     on_owning_loop = asyncio.get_running_loop() is loop
                 except RuntimeError:
                     on_owning_loop = False  # no running loop here: foreign
