@@ -35,11 +35,16 @@ from lichen.coap.udp_server import bind_coap_udp
 from lichen.crypto.identity import _pubkey_to_iid, yggdrasil_address
 from lichen.crypto.schnorr48 import derive_keypair
 from lichen.crypto.trust import TrustEntry, TrustLevel, TrustStore
+from lichen.ipv6.addr import upstream_addr_for_key
 
 # Deterministic signer identity; /sos requires origin signatures (spec 18.4.1),
 # so the POSTing node's EUI-64 must be the one its pubkey derives to.
 _SOS_PRIV, _SOS_PUB = derive_keypair(bytes(range(64, 96)))
 _EUI = _pubkey_to_iid(_SOS_PUB)
+# Spec 18.4.2 wire form: the originator's full 0200:: address string; the
+# resource's accounting/state key is its packed form (spec 18.4.1).
+_ADDR = upstream_addr_for_key(_SOS_PUB)
+_ADDR_HEX = _ADDR.packed.hex()
 _T0 = 1_700_000_000.0
 
 # Interface override for the real-socket SOS multicast test (R-12-036). When
@@ -116,7 +121,7 @@ def _signed_body(
     **overrides: object,
 ) -> bytes:
     """Build a spec-18.4.1 signed /sos POST body."""
-    core: dict[str, object] = {"from": _EUI.hex(), "t": t}
+    core: dict[str, object] = {"from": str(_ADDR), "t": t}
     core.update(overrides)
     sig = sign_sos_origin(priv, pub, _origin_addr(pub), seq, core)
     return cbor2.dumps({**core, "pubkey": pub, "sig": sig.to_bytes()})
@@ -172,11 +177,11 @@ class TestSosGet:
     async def test_active_after_activate(self) -> None:
         client, server, sos = await _setup()
         try:
-            sos.activate(_EUI, _T0)
+            sos.activate(_ADDR.packed, _T0)
             resp = await client.request(Message(code=GET, uri="coap://srv/sos")).response
             state = cbor2.loads(resp.payload)
             assert state["active"] is True
-            assert state["from"] == _EUI.hex()
+            assert state["from"] == _ADDR_HEX
             assert state["t"] == pytest.approx(_T0)
         finally:
             await client.shutdown()
@@ -185,7 +190,7 @@ class TestSosGet:
     async def test_idle_after_cancel(self) -> None:
         client, server, sos = await _setup()
         try:
-            sos.activate(_EUI, _T0)
+            sos.activate(_ADDR.packed, _T0)
             sos.cancel()
             resp = await client.request(Message(code=GET, uri="coap://srv/sos")).response
             state = cbor2.loads(resp.payload)
@@ -227,7 +232,7 @@ class TestSosPutDelete:
             ).response
             assert resp.code == aiocoap.CHANGED
             assert sos._active is True
-            assert sos._from == _EUI.hex()
+            assert sos._from == _ADDR_HEX
         finally:
             await client.shutdown()
             await server.shutdown()
@@ -276,7 +281,7 @@ class TestSosPutDelete:
         client, server, sos = await _setup()
         try:
             # "t" as string instead of numeric
-            body = cbor2.dumps({"from": _EUI.hex(), "t": "not-a-number"})
+            body = cbor2.dumps({"from": str(_ADDR), "t": "not-a-number"})
             resp = await client.request(
                 Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
             ).response
@@ -304,7 +309,7 @@ class TestSosPutDelete:
                         0x70,  # text(16)
                     ]
                 )
-                + _EUI.hex().encode()
+                + _ADDR_HEX.encode()
                 + bytes(
                     [
                         0x61,
@@ -421,16 +426,16 @@ class TestSosRateLimiting:
     def test_first_request_allowed(self) -> None:
         """First request from a source should always be allowed."""
         sos = SosResource()
-        assert sos.check_rate_limit(_EUI.hex()) is True
+        assert sos.check_rate_limit(_ADDR_HEX) is True
 
     def test_second_within_period_is_burst_allowed(self) -> None:
         """Second request inside an open cooldown period is the burst allowance."""
         current_time = _T0
         sos = SosResource(time_func=lambda: current_time)
-        sos._record_request(_EUI.hex())
+        sos._record_request(_ADDR_HEX)
         current_time = _T0 + 1
         sos._time_func = lambda: current_time
-        assert sos.check_rate_limit(_EUI.hex()) is True
+        assert sos.check_rate_limit(_ADDR_HEX) is True
 
     def test_rate_limit_entries_bounded(self) -> None:
         """Minted-identity floods cannot grow the rate-limit dict (TOFU)."""
@@ -447,22 +452,22 @@ class TestSosRateLimiting:
         current_time = _T0
         sos = SosResource(time_func=lambda: current_time)
         # Fill the period: original + one burst, both at t0.
-        sos._record_request(_EUI.hex())
-        sos._record_request(_EUI.hex())
+        sos._record_request(_ADDR_HEX)
+        sos._record_request(_ADDR_HEX)
         # Request 5 minutes later should be blocked (burst budget spent)
         current_time = _T0 + 300  # 5 minutes
         sos._time_func = lambda: current_time
-        assert sos.check_rate_limit(_EUI.hex()) is False
+        assert sos.check_rate_limit(_ADDR_HEX) is False
 
     def test_burst_retry_after_anchors_on_period_start(self) -> None:
         """4.29 retry_after counts down to period_start + cooldown."""
         current_time = _T0
         sos = SosResource(time_func=lambda: current_time)
-        sos._record_request(_EUI.hex())  # period starts at t0
-        sos._record_request(_EUI.hex())  # burst consumes the budget
+        sos._record_request(_ADDR_HEX)  # period starts at t0
+        sos._record_request(_ADDR_HEX)  # burst consumes the budget
         current_time = _T0 + 300
         sos._time_func = lambda: current_time
-        allowed, retry_after, reason = sos.evaluate_rate_limit(_EUI.hex())
+        allowed, retry_after, reason = sos.evaluate_rate_limit(_ADDR_HEX)
         assert (allowed, retry_after, reason) == (False, 300, "cooldown_active")
 
     def test_request_after_cooldown_allowed(self) -> None:
@@ -470,21 +475,21 @@ class TestSosRateLimiting:
         current_time = _T0
         sos = SosResource(time_func=lambda: current_time)
         # First request
-        sos._record_request(_EUI.hex())
+        sos._record_request(_ADDR_HEX)
         # Request 11 minutes later should be allowed
         current_time = _T0 + 660  # 11 minutes
         sos._time_func = lambda: current_time
-        assert sos.check_rate_limit(_EUI.hex()) is True
+        assert sos.check_rate_limit(_ADDR_HEX) is True
 
     def test_cooldown_boundary_is_inclusive_from_period_start(self) -> None:
         """A request exactly at period_start + cooldown opens a new period."""
         current_time = _T0
         sos = SosResource(time_func=lambda: current_time)
-        sos._record_request(_EUI.hex())
-        sos._record_request(_EUI.hex())  # burst consumes the budget
+        sos._record_request(_ADDR_HEX)
+        sos._record_request(_ADDR_HEX)  # burst consumes the budget
         current_time = _T0 + SOS_COOLDOWN_S
         sos._time_func = lambda: current_time
-        allowed, _retry, reason = sos.evaluate_rate_limit(_EUI.hex())
+        allowed, _retry, reason = sos.evaluate_rate_limit(_ADDR_HEX)
         assert (allowed, reason) == (True, "cooldown_elapsed")
 
     def test_hourly_max_enforced(self) -> None:
@@ -493,12 +498,12 @@ class TestSosRateLimiting:
         sos = SosResource(time_func=lambda: current_time)
         # Make 3 requests, each spaced > 10 min apart
         for i in range(SOS_HOURLY_MAX):
-            assert sos.check_rate_limit(_EUI.hex()) is True
-            sos._record_request(_EUI.hex())
+            assert sos.check_rate_limit(_ADDR_HEX) is True
+            sos._record_request(_ADDR_HEX)
             current_time = _T0 + (i + 1) * 620  # 10+ min apart
             sos._time_func = lambda ct=current_time: ct
         # 4th request should be blocked even though cooldown passed
-        assert sos.check_rate_limit(_EUI.hex()) is False
+        assert sos.check_rate_limit(_ADDR_HEX) is False
 
     def test_hourly_window_slides(self) -> None:
         """After an hour, oldest request expires and new one is allowed."""
@@ -506,16 +511,16 @@ class TestSosRateLimiting:
         sos = SosResource(time_func=lambda: current_time)
         # Make 3 requests
         for i in range(SOS_HOURLY_MAX):
-            sos._record_request(_EUI.hex())
+            sos._record_request(_ADDR_HEX)
             current_time = _T0 + (i + 1) * 620
             sos._time_func = lambda ct=current_time: ct
         # 4th blocked
-        assert sos.check_rate_limit(_EUI.hex()) is False
+        assert sos.check_rate_limit(_ADDR_HEX) is False
         # Move past 1 hour from first request
         current_time = _T0 + 3601
         sos._time_func = lambda: current_time
         # Now allowed (first request expired)
-        assert sos.check_rate_limit(_EUI.hex()) is True
+        assert sos.check_rate_limit(_ADDR_HEX) is True
 
     def test_different_sources_independent(self) -> None:
         """Rate limits are per-source; different sources don't interfere."""
@@ -553,7 +558,7 @@ class TestSosSignatureEnforcement:
 
     async def test_unsigned_post_dropped(self) -> None:
         sos = _sos_resource()
-        body = cbor2.dumps({"from": _EUI.hex(), "t": _T0})
+        body = cbor2.dumps({"from": str(_ADDR), "t": _T0})
         resp = await sos.render_post(_request(body))
         _assert_silently_dropped(resp)
         assert sos._active is False
@@ -695,7 +700,7 @@ class TestSosMulticast:
             )
             assert resp.code == aiocoap.CHANGED
             assert sos._active is True
-            assert sos._from == _EUI.hex()
+            assert sos._from == _ADDR_HEX
         finally:
             await client.shutdown()
             await server.shutdown()
@@ -816,7 +821,7 @@ class TestSosObserve:
             assert cbor2.loads(first.payload)["active"] is False
 
             obs_iter = req.observation.__aiter__()
-            sos.activate(_EUI, _T0)
+            sos.activate(_ADDR.packed, _T0)
             note = await asyncio.wait_for(obs_iter.__anext__(), timeout=5.0)
             assert cbor2.loads(note.payload)["active"] is True
         finally:
@@ -826,7 +831,7 @@ class TestSosObserve:
     async def test_observe_notified_on_cancel(self) -> None:
         client, server, sos = await _setup()
         try:
-            sos.activate(_EUI, _T0)
+            sos.activate(_ADDR.packed, _T0)
 
             req = client.request(Message(code=GET, observe=0, uri="coap://srv/sos"))
             await req.response
@@ -842,7 +847,7 @@ class TestSosObserve:
     async def test_observe_notified_on_retrigger(self) -> None:
         client, server, sos = await _setup()
         try:
-            sos.activate(_EUI, _T0)
+            sos.activate(_ADDR.packed, _T0)
 
             req = client.request(Message(code=GET, observe=0, uri="coap://srv/sos"))
             await req.response

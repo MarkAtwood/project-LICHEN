@@ -90,7 +90,7 @@ from lichen.crypto.group_oscore import (
     pairwise_unwrap,
     pairwise_wrap,
 )
-from lichen.crypto.identity import _pubkey_to_iid
+from lichen.crypto.identity import _pubkey_to_iid, yggdrasil_address
 from lichen.crypto.oscore import MemorySecurityContext
 from lichen.crypto.schnorr48 import derive_keypair
 from lichen.crypto.schnorr48 import sign as schnorr_sign
@@ -100,7 +100,7 @@ from lichen.crypto.trust import (
     TrustLevel,
     TrustStore,
 )
-from lichen.ipv6.addr import make_link_local, upstream_addr_for_key
+from lichen.ipv6.addr import make_link_local
 from lichen.rpl.dao_origin import DAO_ORIGIN_DOMAIN
 from lichen.senml.codec import SenmlRecord
 from lichen.senml.codec import pack as senml_pack
@@ -145,13 +145,9 @@ def _identity() -> tuple[bytes, bytes, bytes]:
     return priv, pub, _pubkey_to_iid(pub)
 
 
-def _origin_addr(iid: bytes) -> IPv6Address:
-    return IPv6Address(bytes([0x02, 0x00]) + bytes(6) + iid)
-
-
 def _sos_payload_dict(ts: int = 1716742800) -> dict[str, Any]:
-    _, pub, iid = _identity()
-    return {"type": "sos", "node": str(_origin_addr(iid)), "ts": ts}
+    _, pub, _ = _identity()
+    return {"type": "sos", "node": str(yggdrasil_address(pub)), "ts": ts}
 
 
 async def _stack(
@@ -293,15 +289,21 @@ class TestAnnounceSignedDataVectors:
 
 
 def _signed_sos_body(
-    source_hex: str,
     ts: float,
     priv: bytes,
     pub: bytes,
     seq: int = 1,
+    *,
+    node: str | None = None,
 ) -> bytes:
-    """Build a spec-18.4.1 signed POST /sos body for *source_hex*."""
-    core = {"node": source_hex, "ts": ts}
-    addr = upstream_addr_for_key(pub)
+    """Build a spec-18.4.1 signed POST /sos body for *pub*'s AddrForKey.
+
+    The origin address is the signing pubkey's real AddrForKey (spec 18.4.2);
+    the ``node`` field defaults to that address's string form. Passing an
+    explicit *node* claims a different address (binding-gate test cases).
+    """
+    addr = yggdrasil_address(pub)
+    core = {"node": node if node is not None else str(addr), "ts": ts}
     sig = sign_sos_origin(priv, pub, addr, seq, core)
     return cbor2.dumps({**core, "pubkey": pub, "sig": sig.to_bytes()})
 
@@ -312,7 +314,7 @@ class TestSosSignatureVectors:
         assert vec["expected"]["accept"] is True and vec["expected"]["relay"] is True
         priv, pub, iid = _identity()
         payload = _sos_payload_dict()
-        addr = _origin_addr(iid)
+        addr = yggdrasil_address(pub)
         payload_cbor = canonicalize_sos_payload(payload)
         origin_sig = sign_sos_origin(priv, pub, addr, 1, payload)
         assert verify_sos_origin(pub, addr.packed, payload_cbor, origin_sig) is True
@@ -322,8 +324,8 @@ class TestSosSignatureVectors:
 
     async def test_signed_sos_accepted_by_resource(self) -> None:
         """Spec 18.4.1 gate: a validly signed SOS activates with 2.04."""
-        priv, pub, iid = _identity()
-        source = iid.hex()
+        priv, pub, _ = _identity()
+        source = yggdrasil_address(pub).packed.hex()
         sos = SosResource(time_func=_Clock())
         client, server = await _stack(sos_resource=sos)
         try:
@@ -331,7 +333,7 @@ class TestSosSignatureVectors:
                 Message(
                     code=aiocoap.POST,
                     uri="coap://srv/sos",
-                    payload=_signed_sos_body(source, 1716742800, priv, pub),
+                    payload=_signed_sos_body(1716742800, priv, pub),
                     content_format=60,
                 )
             ).response
@@ -354,7 +356,9 @@ class TestSosSignatureVectors:
                         Message(
                             code=aiocoap.POST,
                             uri="coap://srv/sos",
-                            payload=cbor2.dumps({"node": "0011223344556677", "ts": 1716742800}),
+                            payload=cbor2.dumps(
+                                {"node": str(yggdrasil_address(_identity()[1])), "ts": 1716742800}
+                            ),
                             content_format=60,
                         )
                     ).response,
@@ -364,14 +368,15 @@ class TestSosSignatureVectors:
             await _teardown(client, server)
 
     async def test_wrong_key_sos_dropped_by_binding_gate(self) -> None:
-        """A pubkey that does not derive to the claimed IID is silently dropped."""
+        """A pubkey whose AddrForKey is not the claimed address is dropped."""
         signer_priv, signer_pub = derive_keypair(bytes.fromhex("b" * 62 + "10"))
-        _, _, iid = _identity()
+        _, victim_pub, _ = _identity()
         sos = SosResource(time_func=_Clock())
         client, server = await _stack(sos_resource=sos)
         try:
-            # Signature is valid for B's key but B's key derives to B's IID:
-            # the binding gate fires and the message is SILENTLY dropped.
+            # Signature is valid for B's key but B's AddrForKey is not the
+            # claimed (victim's) address: the binding gate fires and the
+            # message is SILENTLY dropped (spec 18.4.1).
             with pytest.raises(asyncio.TimeoutError):
                 await asyncio.wait_for(
                     client.request(
@@ -379,7 +384,10 @@ class TestSosSignatureVectors:
                             code=aiocoap.POST,
                             uri="coap://srv/sos",
                             payload=_signed_sos_body(
-                                iid.hex(), 1716742800, signer_priv, signer_pub
+                                1716742800,
+                                signer_priv,
+                                signer_pub,
+                                node=str(yggdrasil_address(victim_pub)),
                             ),
                             content_format=60,
                         )
@@ -394,7 +402,7 @@ class TestSosSignatureVectors:
         assert vec["signature"] == "00" * 48
         _, pub, _ = _identity()
         payload_cbor = canonicalize_sos_payload(_sos_payload_dict())
-        transcript = compute_sos_transcript(_origin_addr(_pubkey_to_iid(pub)), 0, payload_cbor)
+        transcript = compute_sos_transcript(yggdrasil_address(pub), 0, payload_cbor)
         # The zero-challenge early-rejection gate refuses the all-zero signature
         # before any point arithmetic, returning a plain False (no error path).
         assert schnorr_verify(pub, transcript, bytes.fromhex(vec["signature"])) is False
@@ -404,7 +412,7 @@ class TestSosSignatureVectors:
         assert vec["signature_length"] == len(bytes.fromhex(vec["signature"]))
         _, pub, _ = _identity()
         transcript = compute_sos_transcript(
-            _origin_addr(_pubkey_to_iid(pub)), 0, canonicalize_sos_payload(_sos_payload_dict())
+            yggdrasil_address(pub), 0, canonicalize_sos_payload(_sos_payload_dict())
         )
         assert schnorr_verify(pub, transcript, bytes.fromhex(vec["signature"])) is False
         with pytest.raises(ValueError, match="56 bytes"):
@@ -418,10 +426,13 @@ class TestSosSignatureVectors:
         priv_a, pub_a, iid_a = _identity()
         signer_b_priv, signer_b_pub = derive_keypair(bytes.fromhex("b" * 62 + "10"))
         payload = _sos_payload_dict()
-        sig_b = sign_sos_origin(signer_b_priv, signer_b_pub, _origin_addr(iid_a), 1, payload)
+        sig_b = sign_sos_origin(signer_b_priv, signer_b_pub, yggdrasil_address(pub_a), 1, payload)
         # Signature valid for B's key must fail under A's pubkey...
         payload_cbor_a = canonicalize_sos_payload(payload)
-        assert verify_sos_origin(pub_a, _origin_addr(iid_a).packed, payload_cbor_a, sig_b) is False
+        assert (
+            verify_sos_origin(pub_a, yggdrasil_address(pub_a).packed, payload_cbor_a, sig_b)
+            is False
+        )
         # ...and B's key cannot claim A's IID (trust-binding gate). B's pubkey
         # derives to its own IID, so the derivation gate fires first.
         store = TrustStore()
@@ -432,10 +443,10 @@ class TestSosSignatureVectors:
     def test_signature_covers_entire_payload(self) -> None:
         vec = _vec(SOS_SIGNATURE, "sos_signature_covers_payload")
         assert vec["expected"]["modification_detected"] is True
-        priv, pub, iid = _identity()
+        priv, pub, _ = _identity()
         payload = {**_sos_payload_dict(), "msg": "Injured, need evac"}
-        origin_sig = sign_sos_origin(priv, pub, _origin_addr(iid), 1, payload)
-        addr = _origin_addr(iid)
+        origin_sig = sign_sos_origin(priv, pub, yggdrasil_address(pub), 1, payload)
+        addr = yggdrasil_address(pub)
         assert verify_sos_origin(pub, addr.packed, canonicalize_sos_payload(payload), origin_sig)
         for field, value in (("ts", 1716742801), ("msg", "hoax"), ("type", "cancel")):
             tampered = dict(payload)
@@ -473,8 +484,8 @@ class TestSosSignatureVectors:
     def test_silent_drop_surfaces_plain_bools_not_errors(self) -> None:
         vec = _vec(SOS_SIGNATURE, "sos_silent_drop_rationale")
         assert vec["expected"]["error_response_on_invalid"] is False
-        _, pub, iid = _identity()
-        transcript = compute_sos_transcript(_origin_addr(iid), 0, b"")
+        _, pub, _ = _identity()
+        transcript = compute_sos_transcript(yggdrasil_address(pub), 0, b"")
         # Every failure mode is a quiet False; nothing raises toward the caller.
         assert schnorr_verify(pub, transcript, b"\x00" * 48) is False
         assert schnorr_verify(b"\x02" * 32, transcript, b"\x00" * 48) is False
@@ -490,8 +501,8 @@ class TestSosSignatureVectors:
         assert SOS_ORIGIN_DOMAIN != DAO_ORIGIN_DOMAIN
         assert DAO_ORIGIN_DOMAIN.decode() == vec["different_from"]
         # Cross-protocol reuse fails both ways.
-        priv, pub, iid = _identity()
-        addr = _origin_addr(iid)
+        priv, pub, _ = _identity()
+        addr = yggdrasil_address(pub)
         payload_cbor = canonicalize_sos_payload({"type": "cancel", "node": str(addr), "ts": 7})
         seq_wire = (1).to_bytes(8, "big")
         dao_material = DAO_ORIGIN_DOMAIN + addr.packed + seq_wire + payload_cbor
@@ -525,8 +536,8 @@ class TestSosSignatureVectors:
         vec = _vec(SOS_SIGNATURE, "wrong_domain_rejected")
         assert vec["correct_domain"] == SOS_ORIGIN_DOMAIN.decode()
         assert vec["used_domain"] == DAO_ORIGIN_DOMAIN.decode()
-        priv, pub, iid = _identity()
-        addr = _origin_addr(iid)
+        priv, pub, _ = _identity()
+        addr = yggdrasil_address(pub)
         payload_cbor = canonicalize_sos_payload({"type": "sos", "node": str(addr), "ts": 1})
         dao_transcript = hashlib.sha512(
             DAO_ORIGIN_DOMAIN + addr.packed + (1).to_bytes(8, "big") + payload_cbor
@@ -622,14 +633,14 @@ class TestSosRateLimitingVectors:
         clock = _Clock()
         sos = SosResource(time_func=clock)
         assert sos.check_rate_limit("0011223344556677") is True
-        priv, pub, iid = _identity()
+        priv, pub, _ = _identity()
         client, server = await _stack(sos_resource=sos)
         try:
             response = await client.request(
                 Message(
                     code=aiocoap.POST,
                     uri="coap://srv/sos",
-                    payload=_signed_sos_body(iid.hex(), 1716742800, priv, pub),
+                    payload=_signed_sos_body(1716742800, priv, pub),
                     content_format=60,
                 )
             ).response
@@ -677,19 +688,20 @@ class TestSosRateLimitingVectors:
         assert allowed is False
         assert retry_after == vec["expected"]["retry_after_s"] == 300
         # Same scenario over the wire with a real signing identity.
-        priv, pub, iid = _identity()
+        priv, pub, _ = _identity()
+        source_key = yggdrasil_address(pub).packed.hex()
         client, server = await _stack(sos_resource=sos)
         try:
             clock.t = 0.0
-            sos._record_request(iid.hex())
+            sos._record_request(source_key)
             clock.t = vec["last_sos_uptime_ms"] / 1000
-            sos._record_request(iid.hex())
+            sos._record_request(source_key)
             clock.t = vec["current_uptime_ms"] / 1000
             response = await client.request(
                 Message(
                     code=aiocoap.POST,
                     uri="coap://srv/sos",
-                    payload=_signed_sos_body(iid.hex(), 1716742800, priv, pub, seq=3),
+                    payload=_signed_sos_body(1716742800, priv, pub, seq=3),
                     content_format=60,
                 )
             ).response
@@ -729,21 +741,22 @@ class TestSosRateLimitingVectors:
         assert reason == vec["expected"]["reason"] == "hourly_limit_exceeded"
         # Same scenario over the wire with a real signing identity: the
         # fourth signed POST gets 4.29 (unsigned would be dropped earlier).
-        priv, pub, iid = _identity()
+        priv, pub, _ = _identity()
+        source_key = yggdrasil_address(pub).packed.hex()
         client, server = await _stack(sos_resource=sos)
         try:
             clock.t = 0.0
-            sos._record_request(iid.hex())
+            sos._record_request(source_key)
             clock.t = 620.0
-            sos._record_request(iid.hex())
+            sos._record_request(source_key)
             clock.t = vec["last_sos_uptime_ms"] / 1000
-            sos._record_request(iid.hex())
+            sos._record_request(source_key)
             clock.t = vec["current_uptime_ms"] / 1000
             response = await client.request(
                 Message(
                     code=aiocoap.POST,
                     uri="coap://srv/sos",
-                    payload=_signed_sos_body(iid.hex(), 1716742800, priv, pub, seq=4),
+                    payload=_signed_sos_body(1716742800, priv, pub, seq=4),
                     content_format=60,
                 )
             ).response
