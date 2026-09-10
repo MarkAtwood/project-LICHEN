@@ -11,6 +11,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 /* Nullability annotations for pointer safety (Clang/GCC compatibility) */
 #ifndef __has_feature
@@ -31,12 +32,14 @@ extern "C" {
 
 #define LICHEN_L2_DISPATCH_SCHC 0x14U
 #define LICHEN_L2_DISPATCH_ROUTING 0x15U
+#define LICHEN_L2_DISPATCH_SOS 0x16U
 #define LICHEN_L2_ROUTING_TYPE_ANNOUNCE 0x01U
 
 enum lichen_l2_payload_kind {
 	LICHEN_L2_PAYLOAD_UNKNOWN = 0,
 	LICHEN_L2_PAYLOAD_SCHC = 1,
 	LICHEN_L2_PAYLOAD_ROUTING = 2,
+	LICHEN_L2_PAYLOAD_SOS = 3,
 };
 
 static inline enum lichen_l2_payload_kind
@@ -52,7 +55,34 @@ lichen_l2_payload_classify(const uint8_t *_Nullable payload, size_t len)
 	if (payload[0] == LICHEN_L2_DISPATCH_ROUTING) {
 		return LICHEN_L2_PAYLOAD_ROUTING;
 	}
+	if (payload[0] == LICHEN_L2_DISPATCH_SOS) {
+		return LICHEN_L2_PAYLOAD_SOS;
+	}
 	return LICHEN_L2_PAYLOAD_UNKNOWN;
+}
+
+/**
+ * Wrap a canonical SOS CBOR alert in its authenticated L2 namespace.
+ *
+ * Authentication and transmission are performed by the L2 sender; this
+ * helper only constructs the dispatch-prefixed inner payload.
+ */
+static inline int
+lichen_l2_wrap_sos_payload(const uint8_t *_Nullable cbor, size_t cbor_len,
+			   uint8_t *_Nullable out, size_t out_len,
+			   size_t *_Nullable written)
+{
+	if (written == NULL || out == NULL || cbor_len == 0U ||
+	    (cbor == NULL && cbor_len != 0U) ||
+	    cbor_len == SIZE_MAX || out_len < cbor_len + 1U) {
+		return -1;
+	}
+	out[0] = LICHEN_L2_DISPATCH_SOS;
+	if (cbor_len != 0U) {
+		memcpy(&out[1], cbor, cbor_len);
+	}
+	*written = cbor_len + 1U;
+	return 0;
 }
 
 static inline const uint8_t *_Nullable
