@@ -27,17 +27,17 @@ from lichen.loadng.messages import (
     to_icmpv6,
 )
 
-ORIG = IPv6Address("fd00::1")
-DEST = IPv6Address("fd00::2")
-BROKEN = IPv6Address("fd00::9")
+ORIG = IPv6Address("0200::1")
+DEST = IPv6Address("0200::2")
+BROKEN = IPv6Address("0200::9")
 
 # Spec 10.3/10.4/10.6 ICMPv6 body (Type is the ICMPv6 code, not in the body):
 # RREQ/RREP = flags(1) hop(1) seq(2) originator(16) destination(16) [sig]
 # RERR      = flags(1) error_code(1) unreachable(16) [sig]
 # Address literals are RFC 4291 packed form, independent of the codec.
-ORIG_WIRE = bytes.fromhex("fd000000000000000000000000000001")
-DEST_WIRE = bytes.fromhex("fd000000000000000000000000000002")
-BROKEN_WIRE = bytes.fromhex("fd000000000000000000000000000009")
+ORIG_WIRE = bytes.fromhex("02000000000000000000000000000001")
+DEST_WIRE = bytes.fromhex("02000000000000000000000000000002")
+BROKEN_WIRE = bytes.fromhex("02000000000000000000000000000009")
 # Spec 10.3 / draft-lichen-schnorr-00: SIG is 48 bytes. Literal hex so a
 # SIGNATURE_LENGTH change cannot silently resize this fixture.
 SIG_WIRE = bytes.fromhex(
@@ -362,8 +362,8 @@ def test_rreq_from_bytes_parses_unsigned_hex_wire() -> None:
         "02"  # flags
         "08"  # hop_limit
         "012c"  # seq_num 300
-        "fd000000000000000000000000000001"  # originator fd00::1
-        "fd000000000000000000000000000002"  # destination fd00::2
+        "02000000000000000000000000000001"  # originator 0200::1
+        "02000000000000000000000000000002"  # destination 0200::2
     )
     assert len(wire) == RREQ_RREP_PREFIX
     parsed = RREQ.from_bytes(wire)
@@ -381,8 +381,8 @@ def test_rrep_from_bytes_parses_unsigned_hex_wire() -> None:
         "01"  # flags
         "03"  # hop_count
         "0007"  # seq_num
-        "fd000000000000000000000000000001"  # originator fd00::1
-        "fd000000000000000000000000000002"  # destination fd00::2
+        "02000000000000000000000000000001"  # originator 0200::1
+        "02000000000000000000000000000002"  # destination 0200::2
     )
     assert len(wire) == RREQ_RREP_PREFIX
     parsed = RREP.from_bytes(wire)
@@ -398,7 +398,7 @@ def test_rerr_from_bytes_parses_unsigned_hex_wire() -> None:
     wire = bytes.fromhex(
         "80"  # flags
         "02"  # error_code
-        "fd000000000000000000000000000009"  # unreachable fd00::9
+        "02000000000000000000000000000009"  # unreachable 0200::9
     )
     assert len(wire) == RERR_PREFIX
     parsed = RERR.from_bytes(wire)
@@ -483,7 +483,7 @@ def test_from_icmpv6_parses_hand_built_bodies() -> None:
     # flags/hop are not dataclass defaults; flags are not equal to the ICMPv6
     # code (RREQ=0, RREP=1, RERR=2) so a flags-from-code bug would fail.
     rreq_body = bytes.fromhex(
-        "0208012cfd000000000000000000000000000001fd000000000000000000000000000002"
+        "0208012c0200000000000000000000000000000102000000000000000000000000000002"
     )
     rreq = from_icmpv6(Icmpv6Message(type=158, code=LoadngCode.RREQ, body=rreq_body))
     assert isinstance(rreq, RREQ)
