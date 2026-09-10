@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-o4zi",
+  "title": "R-07-031 follow-up: wire C congestion into CoAP server path + Rust server-side 5.03 duty-cycle builder",
+  "description": "Deferred from b7z9.138 (threshold constants now fixed to 500/800/950 with strict \u003e950 for Exhausted, matching spec 07 10.2.4 + Python params.py + Rust duty_cycle.rs). Remaining: (1) C lichen_congestion_level_from_usage / lichen_duty_congestion_response still have NO production caller — wire congestion state into the C CoAP server request path (related: b7z9.45 C 5.03 emission + sender backoff); (2) Rust lacks a server-side duty-cycle 5.03 CBOR builder mirroring python params.py:239-292 congestion_service_unavailable (only generic service_unavailable in rust/lichen-gateway/src/resources.rs:1137-1140 for capability-table-full).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T02:24:34.326461919Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T02:24:34.326461919Z",
+  "labels": [
+    "coap",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-o4zi",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.138",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T02:24:34.450887812Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
