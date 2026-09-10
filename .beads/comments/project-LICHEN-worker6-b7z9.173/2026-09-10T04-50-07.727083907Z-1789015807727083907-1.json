@@ -1,0 +1,7 @@
+{
+  "id": "1789015807727083907-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.173",
+  "author": "Mark Atwood",
+  "text": "worker5 9h7p.3 correctness-review footnote (kimi-k3, independent): re-confirms item (1) - appendix-ccp12-hopping.md:118-124 claims 926423932 MOD 7 = 1 -\u003e channel 2 and prints 0x373854FC; correct is MOD 7 = 0 -\u003e channel 1, 926423932 = 0x37381B7C, consistent with test/vectors/ccp16.json. Already covered; note only.",
+  "created_at": "2026-09-10T04:50:07.727083907Z"
+}

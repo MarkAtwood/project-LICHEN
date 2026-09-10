@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-xa9w",
+  "title": "test_fleet_guards: 048n reproduction mode vacuous on hosts without a UTF-8 folding locale",
+  "description": "Security pass of 048n codereview (kimi-k3): scripts/test_fleet_guards_cycle_min.py:27,83-89 — the collation folding of multibyte digits into [0-9] requires a UTF-8 locale with glibc iso14651 collation (e.g. en_US.UTF-8); under C/POSIX (and byte-ordered C.UTF-8) ranges are codepoint-ordered and even the OLD pattern rejects. The BASH_ENV stub only runs 'shopt -u globasciiranges' and the test inherits ambient os.environ, so on a host whose LANG/LC_ALL lacks a folding locale (typical minimal CI containers) test_rejects_all_bad_forms_with_globasciiranges_off passes vacuously without exercising the 048n defect condition. Fix: stub should export LC_ALL=en_US.UTF-8 (or first available folding locale) with an explicit skip-if-unavailable, so the regression condition is guaranteed rather than host-dependent.",
+  "status": "in_progress",
+  "priority": 3,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T04:52:59.744894701Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T04:54:30.187136805Z",
+  "started_at": "2026-09-10T04:54:30.187136805Z",
+  "lease_expires_at": "2026-09-10T04:59:30.187136805Z",
+  "heartbeat_at": "2026-09-10T04:54:30.187136805Z",
+  "labels": [
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-xa9w",
+      "depends_on_id": "project-LICHEN-worker6-048n",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T04:52:59.86202356Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

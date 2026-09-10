@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-p6vc",
+  "title": "test_fleet_guards: test_accepted_values_are_digit_pure_form is tautological",
+  "description": "Edge pass of 048n codereview (kimi-k3): scripts/test_fleet_guards_cycle_min.py:92-98 — the test asserts properties of the ACCEPTED_VALUES constant against itself and never exercises the script or the pattern; it cannot fail for any implementation change (would pass even if the guard rejected 1/10/1440), providing false coverage while claiming to be an oracle. Fix: delete it, or make it real (assert the guard's form filter accepts these values via a probe that stops before the loop).",
+  "status": "in_progress",
+  "priority": 4,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T04:53:00.51501052Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T04:54:30.692793828Z",
+  "started_at": "2026-09-10T04:54:30.692793828Z",
+  "lease_expires_at": "2026-09-10T04:59:30.692793828Z",
+  "heartbeat_at": "2026-09-10T04:54:30.692793828Z",
+  "labels": [
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-p6vc",
+      "depends_on_id": "project-LICHEN-worker6-048n",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T04:53:00.63684581Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

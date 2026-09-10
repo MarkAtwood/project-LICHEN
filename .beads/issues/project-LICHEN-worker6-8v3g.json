@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-8v3g",
+  "title": "Security review pass: LICHEN_CCP_TIME_SYNC beacon/GPS time-sync path",
+  "description": "Follow-up from cbyn (verify-and-close): the configurable time-sync path (beacon SFN with GPS stratum-0 priority, RTC fallback) indexed under CONFIG_LICHEN_CCP_TIME_SYNC has not had a security pass. Scope: lichen/subsys/lichen/l2/lichen_l2_rx.c, lichen/subsys/lichen/coap/coap_dtn.c, link.h usage sites. Kconfig help claims SECURITY: signed beacons only - verify enforcement.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T04:52:01.813763103Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T04:52:01.813763103Z",
+  "labels": [
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-8v3g",
+      "depends_on_id": "project-LICHEN-cbyn",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T04:52:01.930604409Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
