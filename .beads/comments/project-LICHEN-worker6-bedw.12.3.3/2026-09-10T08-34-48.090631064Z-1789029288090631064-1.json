@@ -1,0 +1,7 @@
+{
+  "id": "1789029288090631064-1",
+  "issue_id": "project-LICHEN-worker6-bedw.12.3.3",
+  "author": "opencode-worker-8",
+  "text": "Blocked until sibling project-LICHEN-worker6-bedw.12.3.2 implements gcp_trust_validate_x509_chain; landing fixtures/tests before the symbol exists would be an incomplete slice. Work verifier first, then claim this test child.",
+  "created_at": "2026-09-10T08:34:48.090631064Z"
+}

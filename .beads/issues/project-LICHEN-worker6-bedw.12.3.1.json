@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-bedw.12.3.1",
+  "title": "C X.509 support contract",
+  "description": "Add the minimal C/Zephyr Kconfig/API contract for PKIX certificate validation using mbedTLS X.509 when enabled, with a disabled-build-safe interface and documented trust-anchor/leaf-validation inputs. Do not implement path validation in this slice.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "opencode-worker-8",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T08:31:54.47702122Z",
+  "created_by": "opencode-worker-8",
+  "updated_at": "2026-09-10T08:33:54.376158569Z",
+  "started_at": "2026-09-10T08:31:56.447358727Z",
+  "closed_at": "2026-09-10T08:33:54.376158569Z",
+  "close_reason": "Added mbedTLS X.509 Kconfig gate and disabled-build-safe DER-chain validation API contract with trust-anchor and leaf-constraint requirements. Kimi reviews unavailable due insufficient credits; fallback correctness/security/edge reviews found no defects.",
+  "labels": [
+    "zephyr",
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-bedw.12.3.1",
+      "depends_on_id": "project-LICHEN-worker6-bedw.12.3",
+      "type": "parent-child",
+      "created_at": "2026-09-10T08:31:54.672927806Z",
+      "created_by": "opencode-worker-8",
+      "metadata": "{}"
+    }
+  ]
+}
