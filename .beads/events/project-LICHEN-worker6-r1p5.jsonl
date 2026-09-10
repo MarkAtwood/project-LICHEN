@@ -1,0 +1,2 @@
+{"id":"01a08a60-6fa6-714a-9daa-f7dcde48c73e","issue_id":"project-LICHEN-worker6-r1p5","event_type":"created","actor":"opencode-worker-8","old_value":"","new_value":"","created_at":"2026-09-10T08:12:50.982085499Z"}
+{"id":"01a08a6b-76b6-7acf-84b9-1d6fc94c4ec8","issue_id":"project-LICHEN-worker6-r1p5","event_type":"closed","actor":"opencode-worker-8","old_value":"","new_value":"Renamed C queue-full statistic to packets_backpressure and updated implementation/test.","created_at":"2026-09-10T08:24:53.686711319Z"}

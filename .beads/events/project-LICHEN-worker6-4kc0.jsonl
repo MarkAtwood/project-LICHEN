@@ -1,0 +1,2 @@
+{"id":"01a08a63-0639-7e27-b3c7-330f3e4eb3f1","issue_id":"project-LICHEN-worker6-4kc0","event_type":"created","actor":"opencode-worker-8","old_value":"","new_value":"","created_at":"2026-09-10T08:15:40.601929368Z"}
+{"id":"01a08a6b-8159-74a0-95c9-146f4d8aeb1f","issue_id":"project-LICHEN-worker6-4kc0","event_type":"closed","actor":"opencode-worker-8","old_value":"","new_value":"Clarified forwarding callback as local observability only.","created_at":"2026-09-10T08:24:56.409306447Z"}

@@ -1,0 +1,2 @@
+{"id":"01a08a68-aa41-7beb-816f-067926ea8051","issue_id":"project-LICHEN-worker6-1xxh","event_type":"created","actor":"opencode-worker-8","old_value":"","new_value":"","created_at":"2026-09-10T08:21:50.273783001Z"}
+{"id":"01a08a6b-8932-71e9-a7d4-9c8783b3c49d","issue_id":"project-LICHEN-worker6-1xxh","event_type":"closed","actor":"opencode-worker-8","old_value":"","new_value":"Kept Rust backpressure counter private behind an accessor.","created_at":"2026-09-10T08:24:58.418126301Z"}

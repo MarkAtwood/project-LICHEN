@@ -1,0 +1,4 @@
+{"id":"01a08a6c-7d47-7ca8-b081-ef60e5880ead","issue_id":"project-LICHEN-worker6-bedw.12.2","event_type":"created","actor":"opencode-worker-8","old_value":"","new_value":"","created_at":"2026-09-10T08:26:00.90383123Z"}
+{"id":"01a08a6c-7d4c-77f9-b8c3-fa1a3f9cc062","issue_id":"project-LICHEN-worker6-bedw.12.2","event_type":"label_added","actor":"opencode-worker-8","comment":"Added label: rust","created_at":"2026-09-10T08:26:00.90852444Z"}
+{"id":"01a08a6c-7d51-72a1-9853-2b55758f841e","issue_id":"project-LICHEN-worker6-bedw.12.2","event_type":"label_added","actor":"opencode-worker-8","comment":"Added label: security","created_at":"2026-09-10T08:26:00.913174978Z"}
+{"id":"01a08a6c-7d55-7bb4-b063-74850f3c7591","issue_id":"project-LICHEN-worker6-bedw.12.2","event_type":"label_added","actor":"opencode-worker-8","comment":"Added label: spec-gap","created_at":"2026-09-10T08:26:00.917769987Z"}

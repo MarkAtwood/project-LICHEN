@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-worker6-8pyh",
+  "title": "Refresh bufferbloat coverage documentation",
+  "description": "Review finding for b7z9.144: docs/spec-coverage appendix files and test/vectors/README retain nacks_sent, NACK behavior, and obsolete B.2.x section references after local-only backpressure decision. Update traceability prose to current section 4 and actual implementation evidence.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T08:15:40.227410654Z",
+  "created_by": "opencode-worker-8",
+  "updated_at": "2026-09-10T08:24:55.770359391Z",
+  "closed_at": "2026-09-10T08:24:55.770359391Z",
+  "close_reason": "Refreshed bufferbloat coverage documentation and vector index.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-8pyh",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.144",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T08:15:40.394879908Z",
+      "created_by": "opencode-worker-8",
+      "metadata": "{}"
+    }
+  ]
+}

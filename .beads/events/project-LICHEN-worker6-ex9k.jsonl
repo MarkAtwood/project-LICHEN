@@ -1,0 +1,2 @@
+{"id":"01a08a63-0358-7896-8169-b381e5b0f4af","issue_id":"project-LICHEN-worker6-ex9k","event_type":"created","actor":"opencode-worker-8","old_value":"","new_value":"","created_at":"2026-09-10T08:15:39.864564925Z"}
+{"id":"01a08a6b-7c74-7cf8-99fd-58bc50897a15","issue_id":"project-LICHEN-worker6-ex9k","event_type":"closed","actor":"opencode-worker-8","old_value":"","new_value":"Added Rust local backpressure counter and focused assertion.","created_at":"2026-09-10T08:24:55.156852015Z"}

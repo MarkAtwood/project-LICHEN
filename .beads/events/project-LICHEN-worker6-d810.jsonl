@@ -1,0 +1,2 @@
+{"id":"01a08a68-a8ab-711b-9d92-a395058962bb","issue_id":"project-LICHEN-worker6-d810","event_type":"created","actor":"opencode-worker-8","old_value":"","new_value":"","created_at":"2026-09-10T08:21:49.867074957Z"}
+{"id":"01a08a6b-8673-7caf-a080-17ef5a3ddbab","issue_id":"project-LICHEN-worker6-d810","event_type":"closed","actor":"opencode-worker-8","old_value":"","new_value":"Removed protocol-transmission authorization from callback documentation.","created_at":"2026-09-10T08:24:57.715832394Z"}

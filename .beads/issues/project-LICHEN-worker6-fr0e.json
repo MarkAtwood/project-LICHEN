@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-worker6-fr0e",
+  "title": "Remove stale NACK semantics from backpressure docs",
+  "description": "Review finding for b7z9.144: Python forwarding module, tests, and vector generator retain stale claims that local backpressure sends an upstream NACK. Update prose only and preserve callback behavior.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T08:12:50.59422233Z",
+  "created_by": "opencode-worker-8",
+  "updated_at": "2026-09-10T08:24:52.984733272Z",
+  "closed_at": "2026-09-10T08:24:52.984733272Z",
+  "close_reason": "Updated Python forwarding documentation and tests to describe local backpressure only.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-fr0e",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.144",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T08:12:50.754513339Z",
+      "created_by": "opencode-worker-8",
+      "metadata": "{}"
+    }
+  ]
+}

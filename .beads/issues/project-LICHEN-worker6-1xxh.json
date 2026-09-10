@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-worker6-1xxh",
+  "title": "Avoid Rust stats struct compatibility break",
+  "description": "Final robustness review finding for b7z9.144: adding packets_backpressure as a public ForwardStats field breaks downstream struct literals. Keep the counter private and expose an accessor instead; C field rename is intentional semantic API change.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T08:21:50.268251373Z",
+  "created_by": "opencode-worker-8",
+  "updated_at": "2026-09-10T08:24:58.412637859Z",
+  "closed_at": "2026-09-10T08:24:58.412637859Z",
+  "close_reason": "Kept Rust backpressure counter private behind an accessor.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-1xxh",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.144",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T08:21:50.427122482Z",
+      "created_by": "opencode-worker-8",
+      "metadata": "{}"
+    }
+  ]
+}

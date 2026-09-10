@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-worker6-zm5f",
+  "title": "Correct final backpressure traceability",
+  "description": "Final review finding for b7z9.144: vector names ForwardingResult instead of BufferResult; logging requirement is assigned to section 4 though logging is section 5 and implementation levels differ. Correct metadata without adding logging behavior.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T08:21:49.446244547Z",
+  "created_by": "opencode-worker-8",
+  "updated_at": "2026-09-10T08:24:57.105568112Z",
+  "closed_at": "2026-09-10T08:24:57.105568112Z",
+  "close_reason": "Corrected vector enum and section-specific diagnostic traceability.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-zm5f",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.144",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T08:21:49.616047647Z",
+      "created_by": "opencode-worker-8",
+      "metadata": "{}"
+    }
+  ]
+}

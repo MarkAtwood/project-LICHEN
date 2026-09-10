@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-bedw.12.1",
+  "title": "Python X.509 chain validation",
+  "description": "Implement cryptography.x509 chain validation against configured trust anchors. Validate signatures/path to anchor, reject invalid chains and issuer-DN-only authorization, and enforce leaf basicConstraints CA=false plus digitalSignature keyUsage. Add independent tests with committed certificate fixtures or generated known vectors.",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "opencode-worker-8",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T08:26:00.345985169Z",
+  "created_by": "opencode-worker-8",
+  "updated_at": "2026-09-10T08:26:02.212935617Z",
+  "started_at": "2026-09-10T08:26:02.212935617Z",
+  "lease_expires_at": "2026-09-10T08:31:02.212935617Z",
+  "heartbeat_at": "2026-09-10T08:26:02.212935617Z",
+  "labels": [
+    "python",
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-bedw.12.1",
+      "depends_on_id": "project-LICHEN-worker6-bedw.12",
+      "type": "parent-child",
+      "created_at": "2026-09-10T08:26:00.53630189Z",
+      "created_by": "opencode-worker-8",
+      "metadata": "{}"
+    }
+  ]
+}
