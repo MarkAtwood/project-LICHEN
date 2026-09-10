@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <zephyr/kernel.h>
+#include <zephyr/sys/util.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/net/socket.h>
 #include <zephyr/net/coap.h>
@@ -503,10 +504,9 @@ static int sos_post(struct coap_resource *resource,
 		return -ENOENT; /* silent drop: bad signature */
 	}
 
-	/* Per-origin monotonic Origin Sequence gate (spec 18.4.1): accept a
-	 * sequence only if it strictly exceeds the highest already accepted
-	 * from this origin, closing replay of stale-but-valid captures.
-	 * Enforced before rate limiting so a replay does not spend budget. */
+	/* Per-origin monotonic Origin Sequence gate + rate limit (spec
+	 * 18.4.1), keyed by the origin node IID. Gate enforced before rate
+	 * limiting so a replay does not spend budget. */
 	struct sos_origin_entry *origin =
 		sos_origin_table_lookup(&s_sos_origins, node_iid);
 	if (origin == NULL) {
@@ -520,9 +520,7 @@ static int sos_post(struct coap_resource *resource,
 	}
 
 	/* R-12-036/037/038: per-origin rate limits (10-min cooldown,
-	 * 3/hour) on monotonic uptime gate rebroadcast. Keyed per origin so
-	 * one chatty origin cannot consume another's budget. Violations are
-	 * dropped and logged without relaying. */
+	 * 3/hour) on monotonic uptime gate rebroadcast. */
 	struct sos_ratelimit_config rl_config;
 
 	sos_ratelimit_config_init(&rl_config);
@@ -536,13 +534,19 @@ static int sos_post(struct coap_resource *resource,
 			remaining_ms);
 		return -ENOENT; /* drop, do not relay */
 	}
-	sos_ratelimit_record(&origin->rl, now_ms);
-	origin->last_seq = origin_sig.origin_sequence;
-	origin->accepted = true;
 
-	return lichen_coap_respond(resource, request, addr, addr_len,
-				   COAP_RESPONSE_CODE_CHANGED,
-				   CBOR_CONTENT_FORMAT, NULL, 0);
+	/* Commit sequence + rate-limit state only after the response is
+	 * sent, so a failed respond does not burn the origin's sequence or
+	 * budget (CoAP CON retransmits the same sequence). */
+	int rc = lichen_coap_respond(resource, request, addr, addr_len,
+				     COAP_RESPONSE_CODE_CHANGED,
+				     CBOR_CONTENT_FORMAT, NULL, 0);
+	if (rc >= 0) {
+		sos_ratelimit_record(&origin->rl, now_ms);
+		origin->last_seq = origin_sig.origin_sequence;
+		origin->accepted = true;
+	}
+	return rc;
 }
 
 static int sos_get(struct coap_resource *resource,

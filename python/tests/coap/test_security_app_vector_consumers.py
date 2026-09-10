@@ -47,6 +47,7 @@ All former divergences from bead project-LICHEN-worker6-a6qg have been resolved:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import time
@@ -99,7 +100,7 @@ from lichen.crypto.trust import (
     TrustLevel,
     TrustStore,
 )
-from lichen.ipv6.addr import make_link_local
+from lichen.ipv6.addr import make_link_local, upstream_addr_for_key
 from lichen.rpl.dao_origin import DAO_ORIGIN_DOMAIN
 from lichen.senml.codec import SenmlRecord
 from lichen.senml.codec import pack as senml_pack
@@ -300,7 +301,7 @@ def _signed_sos_body(
 ) -> bytes:
     """Build a spec-18.4.1 signed POST /sos body for *source_hex*."""
     core = {"node": source_hex, "ts": ts}
-    addr = IPv6Address(b"\x02\x00" + b"\x00" * 6 + bytes.fromhex(source_hex))
+    addr = upstream_addr_for_key(pub)
     sig = sign_sos_origin(priv, pub, addr, seq, core)
     return cbor2.dumps({**core, "pubkey": pub, "sig": sig.to_bytes()})
 
@@ -346,35 +347,43 @@ class TestSosSignatureVectors:
         sos = SosResource(time_func=_Clock())
         client, server = await _stack(sos_resource=sos)
         try:
-            response = await client.request(
-                Message(
-                    code=aiocoap.POST,
-                    uri="coap://srv/sos",
-                    payload=cbor2.dumps({"node": "0011223344556677", "ts": 1716742800}),
-                    content_format=60,
+            # Silent drop: no response at all (not even an error code).
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(
+                    client.request(
+                        Message(
+                            code=aiocoap.POST,
+                            uri="coap://srv/sos",
+                            payload=cbor2.dumps({"node": "0011223344556677", "ts": 1716742800}),
+                            content_format=60,
+                        )
+                    ).response,
+                    timeout=1.0,
                 )
-            ).response
-            assert response.code.is_successful() is False
         finally:
             await _teardown(client, server)
 
     async def test_wrong_key_sos_dropped_by_binding_gate(self) -> None:
-        """A pubkey that does not derive to the claimed IID is dropped."""
+        """A pubkey that does not derive to the claimed IID is silently dropped."""
         signer_priv, signer_pub = derive_keypair(bytes.fromhex("b" * 62 + "10"))
         _, _, iid = _identity()
         sos = SosResource(time_func=_Clock())
         client, server = await _stack(sos_resource=sos)
         try:
-            response = await client.request(
-                Message(
-                    code=aiocoap.POST,
-                    uri="coap://srv/sos",
-                    payload=_signed_sos_body(iid.hex(), 1716742800, signer_priv, signer_pub),
-                    content_format=60,
+            # Signature is valid for B's key but B's key derives to B's IID:
+            # the binding gate fires and the message is SILENTLY dropped.
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(
+                    client.request(
+                        Message(
+                            code=aiocoap.POST,
+                            uri="coap://srv/sos",
+                            payload=_signed_sos_body(iid.hex(), 1716742800, signer_priv, signer_pub),
+                            content_format=60,
+                        )
+                    ).response,
+                    timeout=1.0,
                 )
-            ).response
-            # Signature is valid for B's key but B's key derives to B's IID.
-            assert response.code.is_successful() is False
         finally:
             await _teardown(client, server)
 

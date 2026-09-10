@@ -34,6 +34,7 @@ from lichen.coap.transport import InMemoryNetwork, create_lichen_context
 from lichen.coap.udp_server import bind_coap_udp
 from lichen.crypto.identity import _pubkey_to_iid
 from lichen.crypto.schnorr48 import derive_keypair
+from lichen.ipv6.addr import upstream_addr_for_key
 
 # Deterministic signer identity; /sos requires origin signatures (spec 18.4.1),
 # so the POSTing node's EUI-64 must be the one its pubkey derives to.
@@ -102,8 +103,9 @@ def _find_multicast_interface() -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _origin_addr(iid: bytes) -> IPv6Address:
-    return IPv6Address(b"\x02\x00" + b"\x00" * 6 + iid)
+def _origin_addr(pub: bytes) -> IPv6Address:
+    """Origin transcript address: upstream AddrForKey (upstream-yggdrasil-addressing)."""
+    return upstream_addr_for_key(pub)
 
 
 def _signed_body(
@@ -117,7 +119,7 @@ def _signed_body(
     """Build a spec-18.4.1 signed /sos POST body."""
     core: dict[str, object] = {"from": _EUI.hex(), "t": t}
     core.update(overrides)
-    sig = sign_sos_origin(priv, pub, _origin_addr(_EUI), seq, core)
+    sig = sign_sos_origin(priv, pub, _origin_addr(pub), seq, core)
     return cbor2.dumps({**core, "pubkey": pub, "sig": sig.to_bytes()})
 
 
@@ -536,10 +538,15 @@ class TestSosSignatureEnforcement:
         client, server, sos = await _setup()
         try:
             body = cbor2.dumps({"from": _EUI.hex(), "t": _T0})
-            resp = await client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
-            ).response
-            assert resp.code.is_successful() is False
+            # Spec 18.4.1: missing origin signature is SILENTLY dropped (no
+            # error response, no activation).
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(
+                    client.request(
+                        Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
+                    ).response,
+                    timeout=1.0,
+                )
             assert sos._active is False
         finally:
             await client.shutdown()
@@ -551,10 +558,19 @@ class TestSosSignatureEnforcement:
             body = bytearray(_signed_body())
             # Flip a bit late in the payload (inside the 48-byte sig).
             body[-1] ^= 0x01
-            resp = await client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=bytes(body), content_format=60)
-            ).response
-            assert resp.code.is_successful() is False
+            # Spec 18.4.1: invalid origin signature is SILENTLY dropped.
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(
+                    client.request(
+                        Message(
+                            code=POST,
+                            uri="coap://srv/sos",
+                            payload=bytes(body),
+                            content_format=60,
+                        )
+                    ).response,
+                    timeout=1.0,
+                )
             assert sos._active is False
         finally:
             await client.shutdown()
@@ -565,11 +581,15 @@ class TestSosSignatureEnforcement:
         try:
             other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
             body = _signed_body(priv=other_priv, pub=other_pub)
-            resp = await client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
-            ).response
-            # Other key does not derive to the claimed IID: binding gate fires.
-            assert resp.code.is_successful() is False
+            # Other key does not derive to the claimed IID: binding gate fires
+            # and the message is SILENTLY dropped.
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(
+                    client.request(
+                        Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
+                    ).response,
+                    timeout=1.0,
+                )
             assert sos._active is False
         finally:
             await client.shutdown()
