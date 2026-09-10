@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-nomm",
+  "title": "zt3c.7 slice B: drop ULA + pin Yggdrasil 02xx-only primary unicast (from slice A inventory)",
+  "description": "Parent: project-LICHEN-zt3c.7. Land the minimal code/spec change removing ULA and hardening to 0200::/7 primary (link-local fe80 + 02xx). Update Kconfig/addressing config and routing decisions on the slice-A inventory. Add global-routing vectors only if required; otherwise file a dedicated follow-up.",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T05:01:46.726843144Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T05:03:30.772118081Z",
+  "started_at": "2026-09-10T05:03:30.772118081Z",
+  "lease_expires_at": "2026-09-10T05:08:30.772118081Z",
+  "heartbeat_at": "2026-09-10T05:03:30.772118081Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-nomm",
+      "depends_on_id": "project-LICHEN-zt3c.7",
+      "type": "parent-child",
+      "created_at": "2026-09-10T05:02:15.866505626Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
