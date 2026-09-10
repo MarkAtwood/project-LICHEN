@@ -53,6 +53,10 @@ ICMPv6-layer routing protocol.
   with rings 8/15 vestigial? The appendix and 05-routing §10.7 still present
   rings 8/15 as functional. C's `MAX_HOP_LIMIT - hop_limit` cost vs python's
   `INITIAL_HOP_LIMIT - hop_limit` also cannot both be right.
+- Resolution (2026-09-10, bead project-LICHEN-worker6-b7z9.194): receivers
+  accept RREQs from every ring; reverse cost derives as
+  `MAX_HOP_LIMIT - hop_limit` (no wire-format change). Spec 05-routing §10.3
+  and appendix B2.5 amended; python converged to the C policy.
 
 ## R-LOADNG-002/003 — RREQ_WAIT_TIME 5000 ms and RREQ_RETRIES 3 cross-stack wiring (B2.1)
 
