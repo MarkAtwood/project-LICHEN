@@ -176,10 +176,17 @@ class SosResource(resource.ObservableResource):
     def _state_payload(self) -> bytes:
         return cbor2.dumps({"active": self._active, "from": self._from, "t": self._t})
 
-    def activate(self, from_eui64: bytes, t: float) -> None:
-        """Activate SOS from *from_eui64* at time *t* and notify observers."""
+    def activate(self, from_addr: bytes, t: float) -> None:
+        """Activate SOS from *from_addr* at time *t* and notify observers.
+
+        *from_addr* is the full 16-byte packed 0200:: AddrForKey origin address
+        (spec 18.4.1), not an IID/EUI-64. The cancel/DELETE paths re-derive and
+        compare 16 bytes, so a shorter value would make the alert uncancellable.
+        """
+        if len(from_addr) != 16:
+            raise ValueError("SOS origin address must be 16 bytes (0200:: AddrForKey)")
         self._active = True
-        self._from = from_eui64.hex()
+        self._from = from_addr.hex()
         self._t = t
         self.updated_state()
 

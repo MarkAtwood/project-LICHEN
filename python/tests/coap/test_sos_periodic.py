@@ -45,7 +45,7 @@ def harness():
 @pytest.mark.asyncio
 async def test_activation_starts_boost_timer(harness) -> None:
     clock, resource, driver, pulses = harness
-    resource.activate(bytes.fromhex("0011223344556677"), clock.t)
+    resource.activate(bytes.fromhex("02001111222233334444555566667777"), clock.t)
     driver.tick()
     assert driver._last_boost == clock.t
     assert len(pulses) == 1  # activation notified once
@@ -54,7 +54,7 @@ async def test_activation_starts_boost_timer(harness) -> None:
 @pytest.mark.asyncio
 async def test_beacon_boost_at_30s_boundary(harness) -> None:
     clock, resource, driver, pulses = harness
-    resource.activate(bytes.fromhex("0011223344556677"), clock.t)
+    resource.activate(bytes.fromhex("02001111222233334444555566667777"), clock.t)
     driver.tick()
     base = len(pulses)
     clock.advance(BEACON_BOOST_INTERVAL_S - 1)
@@ -73,7 +73,7 @@ async def test_beacon_boost_at_30s_boundary(harness) -> None:
 @pytest.mark.asyncio
 async def test_auto_timeout_cancels_at_4h(harness) -> None:
     clock, resource, driver, _pulses = harness
-    resource.activate(bytes.fromhex("0011223344556677"), clock.t)
+    resource.activate(bytes.fromhex("02001111222233334444555566667777"), clock.t)
     driver.tick()
     clock.advance(SOS_AUTO_TIMEOUT_S - 1)
     driver.tick()
@@ -98,14 +98,14 @@ async def test_auto_cancel_then_reactivate_restarts_timers(harness) -> None:
     """Auto-cancel clears the edge state: a manual re-activate before the
     next tick is detected as a fresh activation with a full 4h window."""
     clock, resource, driver, pulses = harness
-    resource.activate(bytes.fromhex("0011223344556677"), clock.t)
+    resource.activate(bytes.fromhex("02001111222233334444555566667777"), clock.t)
     driver.tick()
     clock.advance(SOS_AUTO_TIMEOUT_S + 1)
     driver.tick()
     assert not resource._active  # auto-cancelled
     # Manual re-activate immediately after auto-cancel.
     clock.advance(1)
-    resource.activate(bytes.fromhex("0011223344556677"), clock.t)
+    resource.activate(bytes.fromhex("02001111222233334444555566667777"), clock.t)
     driver.tick()
     assert resource._active  # fresh activation detected, not auto-cancelled
     # The new SOS has a full 4h window: still active 1s before it expires.
@@ -122,11 +122,11 @@ async def test_drift_of_activation_edge_resets_timeout(harness) -> None:
     """Cancel+re-activate within one tick interval resets the 4h window
     from the re-activation (edge detection treats it as fresh)."""
     clock, resource, driver, _pulses = harness
-    resource.activate(bytes.fromhex("0011223344556677"), clock.t)
+    resource.activate(bytes.fromhex("02001111222233334444555566667777"), clock.t)
     driver.tick()
     resource.cancel()
     clock.advance(60)
-    resource.activate(bytes.fromhex("0011223344556677"), clock.t)
+    resource.activate(bytes.fromhex("02001111222233334444555566667777"), clock.t)
     driver.tick()
     # 2h into the second activation: still active (fresh 4h window).
     clock.advance(2 * 3600)
