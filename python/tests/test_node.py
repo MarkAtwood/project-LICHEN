@@ -1196,6 +1196,7 @@ async def test_peer_schc_transmit_uses_link_issued_fragment_batch(
         dst_addr: bytes,
         addr_mode: AddrMode,
         priority: Priority,
+        deadline_ms: int | None = None,
     ) -> bool:
         sent.append((payload, dst_addr, addr_mode, priority))
         return True
@@ -1225,6 +1226,7 @@ async def test_peer_schc_single_frame_uses_exact_extended_next_hop(
         dst_addr: bytes,
         addr_mode: AddrMode,
         priority: Priority,
+        deadline_ms: int | None = None,
     ) -> bool:
         sent.append((payload, dst_addr, addr_mode, priority))
         return True
@@ -1261,6 +1263,7 @@ async def test_canonical_peer_database_drives_link_local_lookup_and_extended_tar
         dst_addr: bytes,
         addr_mode: AddrMode,
         priority: Priority,
+        deadline_ms: int | None = None,
     ) -> bool:
         sent.append((payload, dst_addr, addr_mode, priority))
         return True
@@ -1321,6 +1324,7 @@ async def test_fragment_sender_outputs_target_peer_with_control_priority(
         dst_addr: bytes,
         addr_mode: AddrMode,
         priority: Priority,
+        deadline_ms: int | None = None,
     ) -> bool:
         sent.append((payload, dst_addr, addr_mode, priority))
         return True
@@ -1358,6 +1362,7 @@ async def test_reassembly_response_targets_authenticated_peer_at_ack_priority(
         dst_addr: bytes,
         addr_mode: AddrMode,
         priority: Priority,
+        deadline_ms: int | None = None,
     ) -> bool:
         sent.append((payload, dst_addr, addr_mode, priority))
         return True
@@ -1410,6 +1415,7 @@ async def test_fragment_sender_timeout_retries_are_driven_to_terminal_abort(
         _dst_addr: bytes,
         _addr_mode: AddrMode,
         _priority: Priority,
+        deadline_ms: int | None = None,
     ) -> bool:
         sent.append(payload)
         return True
@@ -1463,6 +1469,7 @@ async def test_fragment_sender_ack_success_stops_retransmission_timer(
         _dst_addr: bytes,
         _addr_mode: AddrMode,
         _priority: Priority,
+        deadline_ms: int | None = None,
     ) -> bool:
         return True
 
@@ -1527,6 +1534,7 @@ async def test_fragment_retry_timer_is_paused_until_repair_batch_finishes(
         _dst_addr: bytes,
         _addr_mode: AddrMode,
         _priority: Priority,
+        deadline_ms: int | None = None,
     ) -> bool:
         if payload == repair:
             repair_started.set()
@@ -1581,6 +1589,7 @@ async def test_fragment_repair_radio_failure_sends_terminal_abort(
         _dst_addr: bytes,
         _addr_mode: AddrMode,
         _priority: Priority,
+        deadline_ms: int | None = None,
     ) -> bool:
         sent.append(payload)
         return payload == sender_abort(0x78)
@@ -1629,6 +1638,7 @@ async def test_fragment_shutdown_cancels_driver_and_sends_abort(
         _dst_addr: bytes,
         _addr_mode: AddrMode,
         _priority: Priority,
+        deadline_ms: int | None = None,
     ) -> bool:
         sent.append(payload)
         return True
@@ -1677,6 +1687,7 @@ async def test_shutdown_during_initial_fragment_batch_reports_failure_and_stops_
         _dst_addr: bytes,
         _addr_mode: AddrMode,
         _priority: Priority,
+        deadline_ms: int | None = None,
     ) -> bool:
         sent.append(payload)
         if payload == b"initial-1":
@@ -1712,25 +1723,30 @@ async def test_inbound_reassembly_inactivity_abort_uses_authenticated_destinatio
     peer = PeerIdentity.from_pubkey(peer_identity.pubkey)
     destination = iid_to_eui64(peer.iid)
     wire = receiver_abort(0x78)
-    sent: list[tuple[bytes, bytes, AddrMode, Priority]] = []
+    sent: list[tuple[bytes, bytes, AddrMode, Priority, int | None]] = []
     monkeypatch.setattr(
         node.link,
         "expire_authenticated_schc_reassembly",
         lambda: [(peer.pubkey, destination, wire)],
     )
+    # Sentinel deadline pins the wiring: ACK/NACK sends must pass the link's
+    # explicit 10s ACK deadline (spec B.2, bead b7z9.142).
+    sentinel_deadline = 987_654_321
+    monkeypatch.setattr(node.link, "ack_deadline_ms", lambda: sentinel_deadline)
 
     async def send(
         payload: bytes,
         dst_addr: bytes,
         addr_mode: AddrMode,
         priority: Priority,
+        deadline_ms: int | None = None,
     ) -> bool:
-        sent.append((payload, dst_addr, addr_mode, priority))
+        sent.append((payload, dst_addr, addr_mode, priority, deadline_ms))
         return True
 
     monkeypatch.setattr(node.link, "send", send)
     await node._send_expired_reassembly_aborts()
-    assert sent == [(wire, destination, AddrMode.EXTENDED, Priority.ACK)]
+    assert sent == [(wire, destination, AddrMode.EXTENDED, Priority.ACK, sentinel_deadline)]
 
 
 @pytest.mark.asyncio

@@ -164,4 +164,3 @@ class TestAckDeadline:
         current = 1_000_000
         monkeypatch.setattr(link_layer.tx_queue, "_clock", lambda: current)
         assert link_layer.ack_deadline_ms() == current + 10000
-
