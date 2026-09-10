@@ -72,7 +72,7 @@ impl GeoCoords {
 /// A next-hop gradient toward a destination (spec 11.1).
 #[derive(Debug, Clone)]
 pub struct GradientEntry {
-    /// Destination IID or full IPv6 address (last 8 bytes for IID).
+    /// Full IPv6 destination address.
     pub destination: [u8; 16],
     /// Link-local address of next-hop neighbor.
     pub next_hop: [u8; 16],
@@ -350,6 +350,19 @@ mod tests {
         let found = table.lookup(&link_local(1), 1000).unwrap();
         assert_eq!(found.hop_count, 3);
         assert_eq!(found.seq_num, 100);
+    }
+
+    #[test]
+    fn lookup_matches_full_routable_destination() {
+        let mut table = GradientTable::new(10);
+        let mut entry = make_entry(1, 2, 3, 100, GradientSource::Announce);
+        entry.destination = [
+            0x02, 0x00, 0x00, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa,
+            0xbb, 0xcc,
+        ];
+        let destination = entry.destination;
+        assert!(table.update(entry, 1000));
+        assert!(table.lookup(&destination, 1000).is_some());
     }
 
     #[test]
