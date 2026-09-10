@@ -151,9 +151,10 @@ class TestAckDeadline:
     """bead b7z9.142: ACK/NACK sends use the spec's explicit 10s deadline."""
 
     def test_ack_deadline_ms_uses_queue_clock_and_spec_constant(
-        self, link_layer: LinkLayer
+        self, link_layer: LinkLayer, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        now = link_layer.tx_queue.now()
+        now = 5_000_000
+        monkeypatch.setattr(link_layer.tx_queue, "_clock", lambda: now)
         deadline = link_layer.ack_deadline_ms()
         # Independent oracle: spec/appendix-bufferbloat.md B.2 says 10 s.
         assert deadline - now == 10000
