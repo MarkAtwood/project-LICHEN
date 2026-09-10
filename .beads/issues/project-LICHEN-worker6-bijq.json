@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-bijq",
+  "title": "Stale SCHC '18-33 bytes' figures in README.md:52 and AGENTS.md:123 vs normative 23/37",
+  "description": "Found during 3x codereview of b7z9.205. README.md:52 says 'SCHC compresses baseline IPv6+UDP headers to 18-33 bytes' and AGENTS.md:123 says 'Baseline IPv6/UDP headers compress from 48 bytes to 18-33 bytes'. Both contradict the normative spec/03-adaptation.md 5.3 figures (Rule 0 link-local IPv6+UDP+CoAP = 23 bytes, Rule 1 Yggdrasil = 37 bytes; uncompressed base 52 bytes, not 48). Project docs, not normative spec, so P3. Fix: update both to 23/37 with Yggdrasil terminology. Discovered-from project-LICHEN-worker6-b7z9.205.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T02:32:51.071671166Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T02:32:51.071671166Z",
+  "labels": [
+    "schc"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-bijq",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.205",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T02:32:51.189797944Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

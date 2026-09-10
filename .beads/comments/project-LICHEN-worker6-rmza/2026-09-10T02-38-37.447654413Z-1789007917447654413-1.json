@@ -1,0 +1,7 @@
+{
+  "id": "1789007917447654413-1",
+  "issue_id": "project-LICHEN-worker6-rmza",
+  "author": "Mark Atwood",
+  "text": "Codereview pass-3 (edge, kimi-k3) of 2ehk adds impact evidence: the guards loop runs for weeks; if $STATE vanishes mid-run (tmp cleaner, manual cleanup), _write_baseline crashes every cycle -\u003e empty WASTE -\u003e WARN spam and evaluation never resumes until script restart — unrecoverable in place. Fix suggestion: os.makedirs(state_dir, exist_ok=True) in _write_baseline before writing (or mkdir -p \"$STATE\" inside the loop).",
+  "created_at": "2026-09-10T02:38:37.447654413Z"
+}
