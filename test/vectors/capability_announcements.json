@@ -9,7 +9,7 @@
     "signature_input": "SHA256(CBOR(Sig_structure))",
     "generator_command": "python3 test/vectors/generate_capability_announcements.py",
     "cross_check": "independent PyNaCl-backed reference_schnorr48.py",
-    "announcer_iid": "low 8 bytes of upstream yggdrasil-go AddrForKey(pubkey); generator reimplementation anchored at runtime to the pinned upstream_addr_for_key vector in yggdrasil_address.json"
+    "announcer_iid": "canonical link-local IID: SHA-512(pubkey)[0:8] with U/L cleared (spec 06-security.md 8.5/8.12); the routable upstream AddrForKey embeds no IID (spec/decisions.jsonl upstream-yggdrasil-addressing)"
   },
   "constants": {
     "algorithm": {
@@ -38,7 +38,7 @@
       "coverage": "capability_announcement_cose_sign1",
       "signing_seed": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "public_key": "207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6",
-      "announcer_iid": "0ed144787022f9dc",
+      "announcer_iid": "7159bd633b2e9120",
       "capabilities": 1,
       "capabilities_bits": {
         "egress": true,
@@ -54,27 +54,27 @@
         "alg_name": "Schnorr48-Ed25519"
       },
       "unprotected_header_decoded": {
-        "kid": "0ed144787022f9dc"
+        "kid": "7159bd633b2e9120"
       },
-      "payload_cbor": "a6010102400300041a67748580050106480ed144787022f9dc",
+      "payload_cbor": "a6010102400300041a67748580050106487159bd633b2e9120",
       "payload_decoded": {
         "1_capabilities": 1,
         "2_prefix": "",
         "3_prefix_len": 0,
         "4_expiry": 1735689600,
         "5_seq": 1,
-        "6_announcer_iid": "0ed144787022f9dc"
+        "6_announcer_iid": "7159bd633b2e9120"
       },
-      "sig_structure": "846a5369676e61747572653147a1013a00010000405819a6010102400300041a67748580050106480ed144787022f9dc",
+      "sig_structure": "846a5369676e61747572653147a1013a00010000405819a6010102400300041a67748580050106487159bd633b2e9120",
       "sig_structure_layout": {
         "context": "Signature1",
         "protected": "a1013a00010000",
         "external_aad": "",
-        "payload": "a6010102400300041a67748580050106480ed144787022f9dc"
+        "payload": "a6010102400300041a67748580050106487159bd633b2e9120"
       },
-      "sig_structure_hash": "f54f64c41792c65923421fae8b3d4a1b53a6d971ab496a224e444791f6427d10",
-      "signature": "c143608eea6387d73c1963d78b1bacd0ff3ead7d60c563571334cd947095139d221dabd2e0b08f5125644f557eb94508",
-      "cose_sign1": "d28447a1013a00010000a104480ed144787022f9dc5819a6010102400300041a67748580050106480ed144787022f9dc5830c143608eea6387d73c1963d78b1bacd0ff3ead7d60c563571334cd947095139d221dabd2e0b08f5125644f557eb94508",
+      "sig_structure_hash": "f6dca086ed7f5caaa9826f50c4c47fcea7d4f914ef4d12be99d0b58751de3c60",
+      "signature": "0b711231c44ed34bf21587dee1b6959e4fcc2bf1ed61ea2cc021cd939adfa1a67361762fc203d93ce8254abb85efb607",
+      "cose_sign1": "d28447a1013a00010000a104487159bd633b2e91205819a6010102400300041a67748580050106487159bd633b2e912058300b711231c44ed34bf21587dee1b6959e4fcc2bf1ed61ea2cc021cd939adfa1a67361762fc203d93ce8254abb85efb607",
       "expected": {
         "signature_valid": true,
         "algorithm_valid": true,
@@ -87,7 +87,7 @@
       "coverage": "capability_announcement_cose_sign1",
       "signing_seed": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "public_key": "207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6",
-      "announcer_iid": "0ed144787022f9dc",
+      "announcer_iid": "7159bd633b2e9120",
       "capabilities": 2,
       "capabilities_bits": {
         "egress": false,
@@ -103,27 +103,27 @@
         "alg_name": "Schnorr48-Ed25519"
       },
       "unprotected_header_decoded": {
-        "kid": "0ed144787022f9dc"
+        "kid": "7159bd633b2e9120"
       },
-      "payload_cbor": "a601020248fd00000000000000031840041a67748580050106480ed144787022f9dc",
+      "payload_cbor": "a601020248fd00000000000000031840041a67748580050106487159bd633b2e9120",
       "payload_decoded": {
         "1_capabilities": 2,
         "2_prefix": "fd00000000000000",
         "3_prefix_len": 64,
         "4_expiry": 1735689600,
         "5_seq": 1,
-        "6_announcer_iid": "0ed144787022f9dc"
+        "6_announcer_iid": "7159bd633b2e9120"
       },
-      "sig_structure": "846a5369676e61747572653147a1013a00010000405822a601020248fd00000000000000031840041a67748580050106480ed144787022f9dc",
+      "sig_structure": "846a5369676e61747572653147a1013a00010000405822a601020248fd00000000000000031840041a67748580050106487159bd633b2e9120",
       "sig_structure_layout": {
         "context": "Signature1",
         "protected": "a1013a00010000",
         "external_aad": "",
-        "payload": "a601020248fd00000000000000031840041a67748580050106480ed144787022f9dc"
+        "payload": "a601020248fd00000000000000031840041a67748580050106487159bd633b2e9120"
       },
-      "sig_structure_hash": "df414690f62ad420f042aa9dc6d4fbffb9868a1f93f12b06000d5171b04a51c8",
-      "signature": "ba34aa42fbc60b71deb149acc404f3654c86ccab285bb75c75bfb5a779977614a4f7c9051556406564e1b10c63c76d08",
-      "cose_sign1": "d28447a1013a00010000a104480ed144787022f9dc5822a601020248fd00000000000000031840041a67748580050106480ed144787022f9dc5830ba34aa42fbc60b71deb149acc404f3654c86ccab285bb75c75bfb5a779977614a4f7c9051556406564e1b10c63c76d08",
+      "sig_structure_hash": "659e5d7a422fc4bff5ca94750df9eec4c796603b6a29c62f74d6b59a1d94c47a",
+      "signature": "7ce2d3b9b00cc13996b6dcb92c40b2e264823f799c91ef26209d7ff6fb9847e9a99f25533a31bae19719149c0602730c",
+      "cose_sign1": "d28447a1013a00010000a104487159bd633b2e91205822a601020248fd00000000000000031840041a67748580050106487159bd633b2e912058307ce2d3b9b00cc13996b6dcb92c40b2e264823f799c91ef26209d7ff6fb9847e9a99f25533a31bae19719149c0602730c",
       "expected": {
         "signature_valid": true,
         "algorithm_valid": true,
@@ -136,7 +136,7 @@
       "coverage": "capability_announcement_cose_sign1",
       "signing_seed": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "public_key": "207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6",
-      "announcer_iid": "0ed144787022f9dc",
+      "announcer_iid": "7159bd633b2e9120",
       "capabilities": 3,
       "capabilities_bits": {
         "egress": true,
@@ -152,27 +152,27 @@
         "alg_name": "Schnorr48-Ed25519"
       },
       "unprotected_header_decoded": {
-        "kid": "0ed144787022f9dc"
+        "kid": "7159bd633b2e9120"
       },
-      "payload_cbor": "a601030246fd0000000000031830041a67748580050106480ed144787022f9dc",
+      "payload_cbor": "a601030246fd0000000000031830041a67748580050106487159bd633b2e9120",
       "payload_decoded": {
         "1_capabilities": 3,
         "2_prefix": "fd0000000000",
         "3_prefix_len": 48,
         "4_expiry": 1735689600,
         "5_seq": 1,
-        "6_announcer_iid": "0ed144787022f9dc"
+        "6_announcer_iid": "7159bd633b2e9120"
       },
-      "sig_structure": "846a5369676e61747572653147a1013a00010000405820a601030246fd0000000000031830041a67748580050106480ed144787022f9dc",
+      "sig_structure": "846a5369676e61747572653147a1013a00010000405820a601030246fd0000000000031830041a67748580050106487159bd633b2e9120",
       "sig_structure_layout": {
         "context": "Signature1",
         "protected": "a1013a00010000",
         "external_aad": "",
-        "payload": "a601030246fd0000000000031830041a67748580050106480ed144787022f9dc"
+        "payload": "a601030246fd0000000000031830041a67748580050106487159bd633b2e9120"
       },
-      "sig_structure_hash": "0a2e668ed796f5b06e26c1373806af25695fba1afe5ae5cb1872c943b550e24a",
-      "signature": "a76bd1b78a7b74de214afdbafce7876f19d4d8f5ac5996299b1fa167214c39f185171a1f7f10478adc51ea6c17618e01",
-      "cose_sign1": "d28447a1013a00010000a104480ed144787022f9dc5820a601030246fd0000000000031830041a67748580050106480ed144787022f9dc5830a76bd1b78a7b74de214afdbafce7876f19d4d8f5ac5996299b1fa167214c39f185171a1f7f10478adc51ea6c17618e01",
+      "sig_structure_hash": "6e7e3d2929de24aa04a6326746b541be3b235826c76433335fb4f6824d1dd6c9",
+      "signature": "2c10177f728d9829fc31f84b93b094ce41fab7bc6698119af6b5d3ff4bd38e5faaf2a0bc9eb6c87071b707955c39c108",
+      "cose_sign1": "d28447a1013a00010000a104487159bd633b2e91205820a601030246fd0000000000031830041a67748580050106487159bd633b2e912058302c10177f728d9829fc31f84b93b094ce41fab7bc6698119af6b5d3ff4bd38e5faaf2a0bc9eb6c87071b707955c39c108",
       "expected": {
         "signature_valid": true,
         "algorithm_valid": true,
@@ -185,7 +185,7 @@
       "coverage": "capability_announcement_cose_sign1",
       "signing_seed": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "public_key": "207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6",
-      "announcer_iid": "0ed144787022f9dc",
+      "announcer_iid": "7159bd633b2e9120",
       "capabilities": 0,
       "capabilities_bits": {
         "egress": false,
@@ -201,27 +201,27 @@
         "alg_name": "Schnorr48-Ed25519"
       },
       "unprotected_header_decoded": {
-        "kid": "0ed144787022f9dc"
+        "kid": "7159bd633b2e9120"
       },
-      "payload_cbor": "a6010002400300041a67748580050106480ed144787022f9dc",
+      "payload_cbor": "a6010002400300041a67748580050106487159bd633b2e9120",
       "payload_decoded": {
         "1_capabilities": 0,
         "2_prefix": "",
         "3_prefix_len": 0,
         "4_expiry": 1735689600,
         "5_seq": 1,
-        "6_announcer_iid": "0ed144787022f9dc"
+        "6_announcer_iid": "7159bd633b2e9120"
       },
-      "sig_structure": "846a5369676e61747572653147a1013a00010000405819a6010002400300041a67748580050106480ed144787022f9dc",
+      "sig_structure": "846a5369676e61747572653147a1013a00010000405819a6010002400300041a67748580050106487159bd633b2e9120",
       "sig_structure_layout": {
         "context": "Signature1",
         "protected": "a1013a00010000",
         "external_aad": "",
-        "payload": "a6010002400300041a67748580050106480ed144787022f9dc"
+        "payload": "a6010002400300041a67748580050106487159bd633b2e9120"
       },
-      "sig_structure_hash": "30005833354b01fdce936dd308960589e984d2502b9800676e5674f661538c70",
-      "signature": "01b21043f98f44c808b343d2025f86f3a90823a0654d5fa665cccd2fe202e5939e1d3cec757297016de25b9a00e2a406",
-      "cose_sign1": "d28447a1013a00010000a104480ed144787022f9dc5819a6010002400300041a67748580050106480ed144787022f9dc583001b21043f98f44c808b343d2025f86f3a90823a0654d5fa665cccd2fe202e5939e1d3cec757297016de25b9a00e2a406",
+      "sig_structure_hash": "9606c5e9fd07277f13aa54fb6f233ca3c53fde1a7a22ba059de7670d82890a82",
+      "signature": "0ef516413227ff637dd8aac474adf68096e6320a3b5fdf5feb4665a3905ad3fa1fd6b10818b3c796d9ea952a44ad4f03",
+      "cose_sign1": "d28447a1013a00010000a104487159bd633b2e91205819a6010002400300041a67748580050106487159bd633b2e912058300ef516413227ff637dd8aac474adf68096e6320a3b5fdf5feb4665a3905ad3fa1fd6b10818b3c796d9ea952a44ad4f03",
       "expected": {
         "signature_valid": true,
         "algorithm_valid": true,
@@ -234,7 +234,7 @@
       "coverage": "capability_announcement_cose_sign1",
       "signing_seed": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "public_key": "207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6",
-      "announcer_iid": "0ed144787022f9dc",
+      "announcer_iid": "7159bd633b2e9120",
       "capabilities": 1,
       "capabilities_bits": {
         "egress": true,
@@ -250,27 +250,27 @@
         "alg_name": "Schnorr48-Ed25519"
       },
       "unprotected_header_decoded": {
-        "kid": "0ed144787022f9dc"
+        "kid": "7159bd633b2e9120"
       },
-      "payload_cbor": "a6010102400300041a67748580051affffffff06480ed144787022f9dc",
+      "payload_cbor": "a6010102400300041a67748580051affffffff06487159bd633b2e9120",
       "payload_decoded": {
         "1_capabilities": 1,
         "2_prefix": "",
         "3_prefix_len": 0,
         "4_expiry": 1735689600,
         "5_seq": 4294967295,
-        "6_announcer_iid": "0ed144787022f9dc"
+        "6_announcer_iid": "7159bd633b2e9120"
       },
-      "sig_structure": "846a5369676e61747572653147a1013a0001000040581da6010102400300041a67748580051affffffff06480ed144787022f9dc",
+      "sig_structure": "846a5369676e61747572653147a1013a0001000040581da6010102400300041a67748580051affffffff06487159bd633b2e9120",
       "sig_structure_layout": {
         "context": "Signature1",
         "protected": "a1013a00010000",
         "external_aad": "",
-        "payload": "a6010102400300041a67748580051affffffff06480ed144787022f9dc"
+        "payload": "a6010102400300041a67748580051affffffff06487159bd633b2e9120"
       },
-      "sig_structure_hash": "c988a36cc729259ced03b7ce72cd6e1f50b0d346b070c913f9c1b4cafa42ecb8",
-      "signature": "c073148e97b5c6c0cf7738770ba4f8785a23757658800450f072fb33cefa9fafcf5bd8307257a143362d676770c2480a",
-      "cose_sign1": "d28447a1013a00010000a104480ed144787022f9dc581da6010102400300041a67748580051affffffff06480ed144787022f9dc5830c073148e97b5c6c0cf7738770ba4f8785a23757658800450f072fb33cefa9fafcf5bd8307257a143362d676770c2480a",
+      "sig_structure_hash": "c1049146470e87d920463e3e19eec7ae3657422a593f61d76ff1db45d0adf9f5",
+      "signature": "c0788703da4f68953db73a225fa4ba4c155c2ea6e5156039617432e450db48121bff82c3469254c6e0faedd03d43e40e",
+      "cose_sign1": "d28447a1013a00010000a104487159bd633b2e9120581da6010102400300041a67748580051affffffff06487159bd633b2e91205830c0788703da4f68953db73a225fa4ba4c155c2ea6e5156039617432e450db48121bff82c3469254c6e0faedd03d43e40e",
       "expected": {
         "signature_valid": true,
         "algorithm_valid": true,
@@ -283,7 +283,7 @@
       "coverage": "capability_announcement_cose_sign1",
       "signing_seed": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "public_key": "207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6",
-      "announcer_iid": "0ed144787022f9dc",
+      "announcer_iid": "7159bd633b2e9120",
       "capabilities": 2,
       "capabilities_bits": {
         "egress": false,
@@ -299,27 +299,27 @@
         "alg_name": "Schnorr48-Ed25519"
       },
       "unprotected_header_decoded": {
-        "kid": "0ed144787022f9dc"
+        "kid": "7159bd633b2e9120"
       },
-      "payload_cbor": "a601020250fd001234567890abcdef1234567890ab031880041a67748580050106480ed144787022f9dc",
+      "payload_cbor": "a601020250fd001234567890abcdef1234567890ab031880041a67748580050106487159bd633b2e9120",
       "payload_decoded": {
         "1_capabilities": 2,
         "2_prefix": "fd001234567890abcdef1234567890ab",
         "3_prefix_len": 128,
         "4_expiry": 1735689600,
         "5_seq": 1,
-        "6_announcer_iid": "0ed144787022f9dc"
+        "6_announcer_iid": "7159bd633b2e9120"
       },
-      "sig_structure": "846a5369676e61747572653147a1013a0001000040582aa601020250fd001234567890abcdef1234567890ab031880041a67748580050106480ed144787022f9dc",
+      "sig_structure": "846a5369676e61747572653147a1013a0001000040582aa601020250fd001234567890abcdef1234567890ab031880041a67748580050106487159bd633b2e9120",
       "sig_structure_layout": {
         "context": "Signature1",
         "protected": "a1013a00010000",
         "external_aad": "",
-        "payload": "a601020250fd001234567890abcdef1234567890ab031880041a67748580050106480ed144787022f9dc"
+        "payload": "a601020250fd001234567890abcdef1234567890ab031880041a67748580050106487159bd633b2e9120"
       },
-      "sig_structure_hash": "21acf381b58021d0b8f503123b64e6951b3833be2e434db3678b69e051b07647",
-      "signature": "5ba58529c3f2f62cf3be31ea63ce0a49d9e64105e518dd4bcd814b61bd8671f15678d83b17bbd32f852d337c023d480e",
-      "cose_sign1": "d28447a1013a00010000a104480ed144787022f9dc582aa601020250fd001234567890abcdef1234567890ab031880041a67748580050106480ed144787022f9dc58305ba58529c3f2f62cf3be31ea63ce0a49d9e64105e518dd4bcd814b61bd8671f15678d83b17bbd32f852d337c023d480e",
+      "sig_structure_hash": "9c6d763d2962dec51fffc8e77a8807b534a516df1e4a7e550dff9469603ca268",
+      "signature": "187a92ad4aa5130a224bd1f648ebf928538a6c7de0f1d06917176bee101bc29dc68134c31316faf93d1e5a157d629d08",
+      "cose_sign1": "d28447a1013a00010000a104487159bd633b2e9120582aa601020250fd001234567890abcdef1234567890ab031880041a67748580050106487159bd633b2e91205830187a92ad4aa5130a224bd1f648ebf928538a6c7de0f1d06917176bee101bc29dc68134c31316faf93d1e5a157d629d08",
       "expected": {
         "signature_valid": true,
         "algorithm_valid": true,
@@ -332,7 +332,7 @@
       "coverage": "capability_announcement_cose_sign1",
       "signing_seed": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "public_key": "207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6",
-      "announcer_iid": "0ed144787022f9dc",
+      "announcer_iid": "7159bd633b2e9120",
       "capabilities": 1,
       "capabilities_bits": {
         "egress": true,
@@ -348,27 +348,27 @@
         "alg_name": "Schnorr48-Ed25519"
       },
       "unprotected_header_decoded": {
-        "kid": "0ed144787022f9dc"
+        "kid": "7159bd633b2e9120"
       },
-      "payload_cbor": "a6010102400300041af4865700050106480ed144787022f9dc",
+      "payload_cbor": "a6010102400300041af4865700050106487159bd633b2e9120",
       "payload_decoded": {
         "1_capabilities": 1,
         "2_prefix": "",
         "3_prefix_len": 0,
         "4_expiry": 4102444800,
         "5_seq": 1,
-        "6_announcer_iid": "0ed144787022f9dc"
+        "6_announcer_iid": "7159bd633b2e9120"
       },
-      "sig_structure": "846a5369676e61747572653147a1013a00010000405819a6010102400300041af4865700050106480ed144787022f9dc",
+      "sig_structure": "846a5369676e61747572653147a1013a00010000405819a6010102400300041af4865700050106487159bd633b2e9120",
       "sig_structure_layout": {
         "context": "Signature1",
         "protected": "a1013a00010000",
         "external_aad": "",
-        "payload": "a6010102400300041af4865700050106480ed144787022f9dc"
+        "payload": "a6010102400300041af4865700050106487159bd633b2e9120"
       },
-      "sig_structure_hash": "729fa19dff68543b968d55cfca55c4aef134ec290039281d653d4da50535ea2a",
-      "signature": "f0502512f8ba5ee8fb0fdc07fcee6c77b8edc69985d0e863cf372508dc0e3c32b27aacf15b1b8dfdbfa28acb672d2603",
-      "cose_sign1": "d28447a1013a00010000a104480ed144787022f9dc5819a6010102400300041af4865700050106480ed144787022f9dc5830f0502512f8ba5ee8fb0fdc07fcee6c77b8edc69985d0e863cf372508dc0e3c32b27aacf15b1b8dfdbfa28acb672d2603",
+      "sig_structure_hash": "d7fe834c25a94387fa80fa1f949089474bdc190d428ec3e8a687347d9169aab1",
+      "signature": "a5dd69618e4b96de13363fca70be24921d65776e8d6f2dfd65b821b4e126abc2a64e380b18bbc5cdb8716257c3dd5b08",
+      "cose_sign1": "d28447a1013a00010000a104487159bd633b2e91205819a6010102400300041af4865700050106487159bd633b2e91205830a5dd69618e4b96de13363fca70be24921d65776e8d6f2dfd65b821b4e126abc2a64e380b18bbc5cdb8716257c3dd5b08",
       "expected": {
         "signature_valid": true,
         "algorithm_valid": true,
@@ -381,7 +381,7 @@
       "coverage": "capability_announcement_cose_sign1",
       "signing_seed": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "public_key": "207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6",
-      "announcer_iid": "0ed144787022f9dc",
+      "announcer_iid": "7159bd633b2e9120",
       "capabilities": 255,
       "capabilities_bits": {
         "egress": true,
@@ -397,27 +397,27 @@
         "alg_name": "Schnorr48-Ed25519"
       },
       "unprotected_header_decoded": {
-        "kid": "0ed144787022f9dc"
+        "kid": "7159bd633b2e9120"
       },
-      "payload_cbor": "a60118ff02400300041a67748580050106480ed144787022f9dc",
+      "payload_cbor": "a60118ff02400300041a67748580050106487159bd633b2e9120",
       "payload_decoded": {
         "1_capabilities": 255,
         "2_prefix": "",
         "3_prefix_len": 0,
         "4_expiry": 1735689600,
         "5_seq": 1,
-        "6_announcer_iid": "0ed144787022f9dc"
+        "6_announcer_iid": "7159bd633b2e9120"
       },
-      "sig_structure": "846a5369676e61747572653147a1013a0001000040581aa60118ff02400300041a67748580050106480ed144787022f9dc",
+      "sig_structure": "846a5369676e61747572653147a1013a0001000040581aa60118ff02400300041a67748580050106487159bd633b2e9120",
       "sig_structure_layout": {
         "context": "Signature1",
         "protected": "a1013a00010000",
         "external_aad": "",
-        "payload": "a60118ff02400300041a67748580050106480ed144787022f9dc"
+        "payload": "a60118ff02400300041a67748580050106487159bd633b2e9120"
       },
-      "sig_structure_hash": "0f1d3bdfbe00d738af30b111b46615f71f7695f5fa41a12bd045d5db06026d05",
-      "signature": "3c1fc90628c8fb0127a72239ece2abf6b92a1ed0fd34c99cda0a80d2676ff30a6d9440913ad1c44fc47c6db5d4141f04",
-      "cose_sign1": "d28447a1013a00010000a104480ed144787022f9dc581aa60118ff02400300041a67748580050106480ed144787022f9dc58303c1fc90628c8fb0127a72239ece2abf6b92a1ed0fd34c99cda0a80d2676ff30a6d9440913ad1c44fc47c6db5d4141f04",
+      "sig_structure_hash": "f893bfcf7cdd68c63b21010bfbc1ef95b0c7e53f52830a3c1f36a79fe118c074",
+      "signature": "2b2d468205b5c5406e9cebe949fade366b623b3ac907de4fed2b654366b45ad8421d8688abf80ee803c25c74b58e9201",
+      "cose_sign1": "d28447a1013a00010000a104487159bd633b2e9120581aa60118ff02400300041a67748580050106487159bd633b2e912058302b2d468205b5c5406e9cebe949fade366b623b3ac907de4fed2b654366b45ad8421d8688abf80ee803c25c74b58e9201",
       "expected": {
         "signature_valid": true,
         "algorithm_valid": true,
@@ -430,14 +430,14 @@
       "coverage": "capability_announcement_validation",
       "signing_seed": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "public_key": "207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6",
-      "kid_iid": "0ed144787022f9dc",
-      "payload_iid": "2cb63afcb945a6c0",
+      "kid_iid": "7159bd633b2e9120",
+      "payload_iid": "44239d70e6e2b302",
       "protected_header": "a1013a00010000",
-      "payload_cbor": "a6010102400300041a67748580050106482cb63afcb945a6c0",
-      "sig_structure": "846a5369676e61747572653147a1013a00010000405819a6010102400300041a67748580050106482cb63afcb945a6c0",
-      "sig_structure_hash": "cd27e74e8e0401cd747b30184da0b7fe89adcb71b89f1b0df5bd231b9c6b1d9f",
-      "signature": "9bb113a30bcb0576ea55bb515526e241a6b1af16cf98ea3ae474abeaa83e4b4f7ae96b909f03fae1cd1694eaaad01f0a",
-      "cose_sign1": "d28447a1013a00010000a104480ed144787022f9dc5819a6010102400300041a67748580050106482cb63afcb945a6c058309bb113a30bcb0576ea55bb515526e241a6b1af16cf98ea3ae474abeaa83e4b4f7ae96b909f03fae1cd1694eaaad01f0a",
+      "payload_cbor": "a6010102400300041a677485800501064844239d70e6e2b302",
+      "sig_structure": "846a5369676e61747572653147a1013a00010000405819a6010102400300041a677485800501064844239d70e6e2b302",
+      "sig_structure_hash": "7da9f90af7392aaa13420b9b2d75c234d2c2702eeb2d3851506f60c7f94e50cb",
+      "signature": "932f9df5393b4cc2a66564aa341bd86b5d99c696808fc2faa1bdbb70768e3c6bcb04623bb80b83c9246c7260f0a4cb0f",
+      "cose_sign1": "d28447a1013a00010000a104487159bd633b2e91205819a6010102400300041a677485800501064844239d70e6e2b3025830932f9df5393b4cc2a66564aa341bd86b5d99c696808fc2faa1bdbb70768e3c6bcb04623bb80b83c9246c7260f0a4cb0f",
       "expected": {
         "signature_valid": true,
         "iid_match": false,
