@@ -1,0 +1,7 @@
+{
+  "id": "1789021819123866630-1",
+  "issue_id": "project-LICHEN-worker6-obgr",
+  "author": "opencode-worker-5",
+  "text": "Verification (worker-5): main carries repair commit 270f1c4679 restoring the 28-line dual-mode CMakeLists; byte-identical to correct pre-merge original ec10c9e609 (git diff empty). Defect is fixed on main; the systemic janitor-smoke ask re-filed as project-LICHEN-worker6-tmrr (human). Suggest close.",
+  "created_at": "2026-09-10T06:30:19.12386663Z"
+}

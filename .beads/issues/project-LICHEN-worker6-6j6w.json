@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-6j6w",
   "title": "shared_vectors.rs: l2_payload test missing sos kind arm (panics on sos_alert_dispatch)",
   "description": "3x codereview on b7z9.120 (correctness finding 1, P1): rust/lichen-link/tests/shared_vectors.rs:819-830 test_l2_payload_vectors match on vector.kind had no \"sos\" arm, so the new sos_alert_dispatch vector hit the _ catch-all and failed the shared-vector test. Fixed in this diff: added \"sos\" =\u003e Some(0x16) arm (0x14/0x15 literal style).",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-10T06:03:02.099316885Z",
   "created_by": "opencode-worker-3",
-  "updated_at": "2026-09-10T06:03:02.099316885Z",
+  "updated_at": "2026-09-10T06:32:17.157635917Z",
+  "closed_at": "2026-09-10T06:32:17.157635917Z",
+  "close_reason": "Verified fixed on HEAD (009095c96c): rust/lichen-link/tests/shared_vectors.rs:822 now has the \"sos\" =\u003e Some(0x16) arm; shared_vectors test passes 4/4 including sos_alert_dispatch.",
   "labels": [
     "rust"
   ],

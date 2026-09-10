@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-ikfb",
   "title": "sos_signature.json: valid vector kept conflicting sender_iid placeholder",
   "description": "3x codereview on b7z9.121.5 (all 3 passes converged): test/vectors/sos_signature.json sos_valid_signature_accept pinned real pubkey whose derived IID is ed4242ead4ac6948 but kept sender_iid '0011223344556677' with expected accept=true — contradicting the sibling sos_wrong_key_signature_drop vector's binding-gate rejection of the same pair. Fixed in this diff: sender_iid set to ed4242ead4ac6948.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-10T05:34:17.173137938Z",
   "created_by": "opencode-worker-3",
-  "updated_at": "2026-09-10T05:34:17.173137938Z",
+  "updated_at": "2026-09-10T06:32:13.086907148Z",
+  "closed_at": "2026-09-10T06:32:13.086907148Z",
+  "close_reason": "Verified fixed on HEAD (fc4841402d): sos_valid_signature_accept sender_iid is now ed4242ead4ac6948, matching the pinned pubkey's derived IID — no longer contradicts the sibling wrong-key vector's binding gate.",
   "labels": [
     "apps"
   ],

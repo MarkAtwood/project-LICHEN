@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-tmrr",
+  "title": "[human] Janitor needs post-merge smoke gate (union-corruption catcher)",
+  "description": "From project-LICHEN-worker6-obgr: two concrete merge-union corruptions now in evidence (lichen/tests/schc_failure_tracker/CMakeLists.txt 48-line duplicate-block file on main; python/src/lichen/link/tx_queue.py __init__ tail spliced into now() dead code -\u003e 12 red tests, fixed as yhbl). Systemic ask carried over from obgr: merge janitor should run a cheap post-merge smoke before landing — e.g. cmake configure of changed test dirs, py_compile of changed .py files, or at minimum flag files whose post-merge line count exceeds both parents. Fleet/janitor tooling decision; needs Mark's call on which gate(s) to wire.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T06:29:49.065635062Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-09-10T06:29:49.065635062Z",
+  "labels": [
+    "human",
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-tmrr",
+      "depends_on_id": "project-LICHEN-worker6-obgr",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T06:29:49.212938299Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

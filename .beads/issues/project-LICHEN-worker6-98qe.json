@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-98qe",
+  "title": "SOS positive-control GETs need wait_for timeout (93s stall on regression)",
+  "description": "Edge review of a2w2 fix: the added positive-control GETs in test_non_post_dropped_over_stack (python/tests/coap/test_sos_resource.py ~lines 615, 632) await .response with no timeout. If the SUT wedges, aiocoap CON retransmission exhaustion takes ~93s (MAX_TRANSMIT_WAIT) before RequestTimedOut, and no pytest-timeout is configured — a regression stalls the suite instead of failing fast. Fix: wrap both control GETs in asyncio.wait_for(..., timeout=...) matching the 1.0s discipline of the drop wait at line ~628.",
+  "status": "closed",
+  "priority": 4,
+  "issue_type": "task",
+  "assignee": "opencode-worker-2",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T06:25:56.210997472Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-09-10T06:28:23.485119976Z",
+  "started_at": "2026-09-10T06:26:23.389535609Z",
+  "closed_at": "2026-09-10T06:28:23.485119976Z",
+  "close_reason": "Fixed: both positive-control GETs in test_non_post_dropped_over_stack wrapped in asyncio.wait_for(timeout=1.0), matching the drop probe's discipline — a wedged SUT now fails in ~1s instead of stalling ~93s in aiocoap CON retransmission. No shield on the GETs (they should be cancelled on timeout, unlike the drop probe where timeout is the expected oracle). 116/116 pass, ruff clean. Review (consolidated 3-aspect pass on the 4-line diff): PASS.",
+  "labels": [
+    "python",
+    "tests"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-98qe",
+      "depends_on_id": "project-LICHEN-worker6-a2w2",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T06:25:56.425686153Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

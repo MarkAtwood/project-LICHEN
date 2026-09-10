@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-bedw.19",
   "title": "[spec-gap] X.509 profile test vectors absent from test/vectors/ (appendix section 9 promise)",
   "description": "spec/appendix-x509-cert-profile.md section 9: test vectors for chain validation and cross-signing are tracked separately and will live in test/vectors/. Also sections 4 and 5 give worked encodings (SAN DER 87 10 02 0F FD FC FB FA F9 F8 F7 F6 F5 F4 F3 F2 F1 F0; role extnValue 04 04 03 02 07 80 etc.) that should be pinned. Classification: not-implemented (no x509/certificate corpus in test/vectors). Suggested placement: test/vectors/x509_cert_profile.json + schema.json entry + generator generate_x509_cert_profile.py with --check freshness command (pattern: gcp_slot_claim_cose_sign1); oracles: pinned upstream AddrForKey anchor (yggdrasil_address.json), pyca/cryptography, openssl for DER byte-equality.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-10T01:32:03.60176469Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-10T06:04:47.842070953Z",
+  "updated_at": "2026-09-10T06:26:26.334887743Z",
+  "closed_at": "2026-09-10T06:26:26.334887743Z",
+  "close_reason": "Landed: test/vectors/x509_cert_profile.json + .schema.json + generate_x509_cert_profile.py (11 cases: Ed25519 SPKI, SAN value/extension critical+non-critical, role OID + 5 extnValue combos + empty-BIT-STRING unasserted case), README entry, freshness test test_x509_cert_profile_vectors_are_fresh. Oracles: pinned upstream AddrForKey (yggdrasil_address.json#upstream_addr_for_key — settled form, NOT the appendix's pre-migration SHA-512 text), pyca/cryptography DER cross-checks for SPKI+SAN, spec section-5 worked table vs independent bit-packing (loud mismatch = generation failure), UUID-arc decimal cross-check. No lichen imports. 3x codereview (kimi-k3): correctness PASS after fixing 2 latent der_oid defects (assert precedence, first-subidentifier base-128; output bytes unchanged); security pass — vectors clean, spec-gap filed as w8g9 (appendix normative text still SHA-512-profile, incl. section-8-step-4 verifier binding that would reject these certs); edge pass — no P0-P2, 4 findings filed: nkuh (der_len long-form untested, P3), upku (--check mislabels safety errors, P4), wwel (oracle loader diagnosability, P4), v9rs (schema hardening nits, P4). Verification: freshness + schema-policy tests pass (2/2), ruff clean; full test_vectors.py suite shows only pre-existing failures (dao_origin 43, density_adaptive missing file, stale yggdrasil/x25519 lower-64==IID assertions) unchanged from HEAD baseline. Note: generator --check CLI and atomic writes fail on THIS host due to group-writable test/vectors with extra group member (langwei) tripping atomic_json's user-private-group check — affects all vector generators equally, pre-existing environment issue; freshness verified via the in-process pytest path. Commits: 005f70eec1 (+ edccabdbcd absorbed README/test_vectors edits).",
   "labels": [
     "security",
     "spec-gap"

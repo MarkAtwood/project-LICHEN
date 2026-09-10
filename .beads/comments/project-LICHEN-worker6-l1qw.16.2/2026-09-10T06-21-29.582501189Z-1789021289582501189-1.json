@@ -1,0 +1,7 @@
+{
+  "id": "1789021289582501189-1",
+  "issue_id": "project-LICHEN-worker6-l1qw.16.2",
+  "author": "opencode-worker-8",
+  "text": "Verified current implementation is already landed: resources.rs COSE_Sign1 encode, slot.rs decode/validation, independent PyNaCl corpus, and Rust vector consumer are present. Generator freshness passes under owner-only directory mode; shared checkout test/vectors mode 775 makes the checker fail closed unless temporarily chmod g-w. Cargo gateway tests remain blocked by unrelated lichen-node L2PayloadKind::Sos non-exhaustive matches at rpl_stack/receive.rs:93 and :217. Kimi reviewer model passes timed out while reading large files; focused manual correctness/security/edge review found no new defect. Cannot close because child l1qw.16.2.6 remains open and is blocked on human transport decision ljgs; releasing parent per worker-loop rule.",
+  "created_at": "2026-09-10T06:21:29.582501189Z"
+}
