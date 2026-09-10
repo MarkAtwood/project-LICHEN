@@ -144,8 +144,8 @@ All methods populate a unified gradient table. No flooding for unicast traffic.
 ### Compression
 
 SCHC (RFC 8724) compresses headers. A typical CoAP request:
-- Uncompressed: 60+ bytes (IPv6 + UDP + CoAP)
-- Compressed: about 41 bytes for native-address traffic in the baseline
+- Uncompressed: 52 bytes of headers (IPv6 + UDP + CoAP)
+- Compressed: 23 bytes (link-local, Rule 0) or 37 bytes (Yggdrasil, Rule 1) in the baseline
 
 ### Security
 
