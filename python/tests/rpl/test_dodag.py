@@ -25,7 +25,7 @@ from lichen.rpl.dodag import (
     version_is_newer,
     versions_incomparable,
 )
-from lichen.rpl.messages import DIO
+from lichen.rpl.messages import DIO, DodagConfig, RplOptionType
 
 DODAG_ID = "0200::1"
 
@@ -54,6 +54,16 @@ def test_root_construction() -> None:
     assert root.is_root()
     assert root.get_rank() == ROOT_RANK  # 256
     assert root.is_joined()
+
+
+def test_build_dio_includes_dodag_configuration() -> None:
+    dio = DodagState.as_root(0, DODAG_ID, 1).build_dio()
+
+    config_options = [
+        option for option in dio.options if option.type == RplOptionType.DODAG_CONFIGURATION
+    ]
+    assert len(config_options) == 1
+    assert DodagConfig.from_option(config_options[0]) == DodagConfig()
 
 
 def test_root_ignores_dio() -> None:

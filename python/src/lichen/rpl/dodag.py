@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Literal
 
 from lichen.ipv6 import routing_key
 from lichen.ipv6.packet import IPv6Header
-from lichen.rpl.messages import DIO, DIO_FLAG_GATEWAY_CENTRIC
+from lichen.rpl.messages import DIO, DIO_FLAG_GATEWAY_CENTRIC, DodagConfig
 from lichen.rpl.root_signature import verify_dodagid_binding
 from lichen.schc.context import versions_compatible
 from lichen.schc.rules import RULE_SET_VERSION, SCHC_RULE_VERSION_TYPE, SchcRuleVersionOption
@@ -371,6 +371,7 @@ class DodagState:
                 grounded=self.grounded,
                 mode_of_operation=1,
                 flags=DIO_FLAG_GATEWAY_CENTRIC if self.gateway_centric else 0,
+                options=[DodagConfig(gateway_centric=self.gateway_centric).to_option()],
             )
 
     def process_dio(self, dio: DIO, neighbor_id: IPv6Address | str, link_etx: float = 1.0) -> None:
