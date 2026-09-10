@@ -162,12 +162,12 @@ int lichen_identity_ygg_addr_from_ed25519(const uint8_t *pubkey,
 	return -EINVAL;
 }
 
-int lichen_key_store_get(const uint8_t iid[LICHEN_KEY_IID_LEN],
-			 struct lichen_key_entry *entry)
+size_t lichen_key_store_list(struct lichen_key_entry *entries,
+			     size_t max_entries)
 {
-	ARG_UNUSED(iid);
-	ARG_UNUSED(entry);
-	return -ENOENT;
+	ARG_UNUSED(entries);
+	ARG_UNUSED(max_entries);
+	return 0U;
 }
 
 uint8_t lichen_tunnel_auth_coap_code(uint16_t coap_code)
