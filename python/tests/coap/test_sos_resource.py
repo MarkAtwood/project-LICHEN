@@ -581,6 +581,48 @@ class TestSosSignatureEnforcement:
         _assert_silently_dropped(resp)
 
 
+class TestSosNonConfirmableSilentDrop:
+    """SOS silent drop on the NON (non-confirmable) transport path.
+
+    Every other _assert_silently_dropped case calls render_post() directly,
+    which bypasses the message manager entirely and so exercises no
+    transport branch. Real LoRa and multicast traffic is non-confirmable
+    (NON): for those, aiocoap's message manager takes the no-ACK-pending
+    full-drop branch and sends nothing back. The CON-vs-NON divergence lives
+    entirely in the message manager, so only an over-stack test can reach it
+    (a direct render_post call never touches transport);
+    transport_tuning=Unreliable selects NON without the deprecated mtype=
+    kwarg (mirrors the multicast test).
+    """
+
+    async def test_non_post_dropped_over_stack(self) -> None:
+        """End-to-end NON drop across the in-memory CoAP stack.
+
+        On NON a silent drop sends no response at all (there is no ACK to
+        carry the No-Response option), so the drop is observed as the
+        request's response future never resolving within a short window,
+        with the resource left inactive. A spurious response would arrive in
+        microseconds over the in-memory fabric and fail the wait fast.
+        """
+        client, server, sos = await _setup()
+        try:
+            body = cbor2.dumps({"from": _EUI.hex(), "t": _T0})
+            req = Message(
+                code=POST,
+                uri="coap://srv/sos",
+                payload=body,
+                content_format=60,
+                transport_tuning=aiocoap.Unreliable,
+            )
+            response_fut = client.request(req).response
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(asyncio.shield(response_fut), timeout=1.0)
+            assert sos._active is False
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+
 class TestSosTrustStoreGate:
     """POST /sos trust-store gate (spec 18.4.1 + 8.7 TOFU).
 
