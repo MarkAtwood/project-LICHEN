@@ -38,6 +38,7 @@
 #include <lichen/sos_alert.h>
 #include <lichen/sos_origin.h>
 #include <lichen/sos_origin_table.h>
+#include <lichen/link_ctx.h>
 #include <lichen/schnorr48.h>
 #include <lichen/coap_keys.h>
 #include <lichen/sos_ratelimit.h>
@@ -494,10 +495,12 @@ static int sos_post(struct coap_resource *resource,
 		return -ENOENT; /* silent drop: unknown pubkey */
 	}
 
-	/* Origin signature verify (R-12-034: invalid -> silent drop). The
-	 * origin IPv6 is the node IID in the LICHEN native 02xx profile. */
-	uint8_t origin_ipv6[16] = { 0x02 };
-	memcpy(&origin_ipv6[8], node_iid, 8);
+	/* Origin signature verify (R-12-034: invalid -> silent drop). */
+	uint8_t origin_ipv6[16];
+	if (lichen_identity_ygg_addr_from_ed25519(key_entry.pubkey,
+						 origin_ipv6) != 0) {
+		return -ENOENT;
+	}
 	if (!sos_origin_verify(key_entry.pubkey, origin_ipv6, payload, cbor_len,
 			       &origin_sig)) {
 		return -ENOENT; /* silent drop: bad signature */
