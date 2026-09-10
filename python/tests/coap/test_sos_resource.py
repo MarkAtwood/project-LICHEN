@@ -9,7 +9,6 @@ import math
 import os
 import socket
 import time
-from ipaddress import IPv6Address
 
 import aiocoap
 import cbor2
@@ -32,13 +31,15 @@ from lichen.coap.resources.emergency import (
 from lichen.coap.sos_origin import sign_sos_origin
 from lichen.coap.transport import InMemoryNetwork, create_lichen_context
 from lichen.coap.udp_server import bind_coap_udp
-from lichen.crypto.identity import _pubkey_to_iid
+from lichen.crypto.identity import _pubkey_to_iid, yggdrasil_address
 from lichen.crypto.schnorr48 import derive_keypair
 
 # Deterministic signer identity; /sos requires origin signatures (spec 18.4.1),
-# so the POSTing node's EUI-64 must be the one its pubkey derives to.
+# so the POSTing node's 0200:: address must be its pubkey's AddrForKey
+# (spec 18.4.2).
 _SOS_PRIV, _SOS_PUB = derive_keypair(bytes(range(64, 96)))
 _EUI = _pubkey_to_iid(_SOS_PUB)
+_ADDR = yggdrasil_address(_SOS_PUB)
 _T0 = 1_700_000_000.0
 
 # Interface override for the real-socket SOS multicast test (R-12-036). When
@@ -102,10 +103,6 @@ def _find_multicast_interface() -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _origin_addr(iid: bytes) -> IPv6Address:
-    return IPv6Address(b"\x02\x00" + b"\x00" * 6 + iid)
-
-
 def _signed_body(
     t: float = _T0,
     seq: int = 1,
@@ -114,10 +111,15 @@ def _signed_body(
     pub: bytes = _SOS_PUB,
     **overrides: object,
 ) -> bytes:
-    """Build a spec-18.4.1 signed /sos POST body."""
-    core: dict[str, object] = {"from": _EUI.hex(), "t": t}
+    """Build a spec-18.4.1 signed /sos POST body.
+
+    The origin address is the signing pubkey's real AddrForKey (spec 18.4.2);
+    the ``from`` field is that address's string form.
+    """
+    addr = yggdrasil_address(pub)
+    core: dict[str, object] = {"from": str(addr), "t": t}
     core.update(overrides)
-    sig = sign_sos_origin(priv, pub, _origin_addr(_EUI), seq, core)
+    sig = sign_sos_origin(priv, pub, addr, seq, core)
     return cbor2.dumps({**core, "pubkey": pub, "sig": sig.to_bytes()})
 
 
@@ -154,11 +156,11 @@ class TestSosGet:
     async def test_active_after_activate(self) -> None:
         client, server, sos = await _setup()
         try:
-            sos.activate(_EUI, _T0)
+            sos.activate(_ADDR.packed, _T0)
             resp = await client.request(Message(code=GET, uri="coap://srv/sos")).response
             state = cbor2.loads(resp.payload)
             assert state["active"] is True
-            assert state["from"] == _EUI.hex()
+            assert state["from"] == _ADDR.packed.hex()
             assert state["t"] == pytest.approx(_T0)
         finally:
             await client.shutdown()
@@ -167,7 +169,7 @@ class TestSosGet:
     async def test_idle_after_cancel(self) -> None:
         client, server, sos = await _setup()
         try:
-            sos.activate(_EUI, _T0)
+            sos.activate(_ADDR.packed, _T0)
             sos.cancel()
             resp = await client.request(Message(code=GET, uri="coap://srv/sos")).response
             state = cbor2.loads(resp.payload)
@@ -209,7 +211,7 @@ class TestSosPutDelete:
             ).response
             assert resp.code == aiocoap.CHANGED
             assert sos._active is True
-            assert sos._from == _EUI.hex()
+            assert sos._from == _ADDR.packed.hex()
         finally:
             await client.shutdown()
             await server.shutdown()
@@ -258,7 +260,7 @@ class TestSosPutDelete:
         client, server, sos = await _setup()
         try:
             # "t" as string instead of numeric
-            body = cbor2.dumps({"from": _EUI.hex(), "t": "not-a-number"})
+            body = cbor2.dumps({"from": str(_ADDR), "t": "not-a-number"})
             resp = await client.request(
                 Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
             ).response
@@ -274,6 +276,11 @@ class TestSosPutDelete:
         try:
             # CBOR bignum tag (tag 2) for a huge integer that would cause OverflowError
             # This tests that CBOR tags are properly rejected
+            from_text = str(_ADDR).encode()
+            if len(from_text) < 24:
+                from_header = bytes([0x60 + len(from_text)])  # short-form text
+            else:
+                from_header = bytes([0x78, len(from_text)])  # text(8-bit length)
             bignum_cbor = (
                 bytes(
                     [
@@ -283,10 +290,10 @@ class TestSosPutDelete:
                         0x72,
                         0x6F,
                         0x6D,  # "from"
-                        0x70,  # text(16)
                     ]
                 )
-                + _EUI.hex().encode()
+                + from_header
+                + from_text
                 + bytes(
                     [
                         0x61,
@@ -535,7 +542,7 @@ class TestSosSignatureEnforcement:
     async def test_unsigned_post_dropped(self) -> None:
         client, server, sos = await _setup()
         try:
-            body = cbor2.dumps({"from": _EUI.hex(), "t": _T0})
+            body = cbor2.dumps({"from": str(_ADDR), "t": _T0})
             resp = await client.request(
                 Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
             ).response
@@ -564,11 +571,13 @@ class TestSosSignatureEnforcement:
         client, server, sos = await _setup()
         try:
             other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
-            body = _signed_body(priv=other_priv, pub=other_pub)
+            # Claim _SOS_PUB's address but sign with the other key: the other
+            # key's AddrForKey does not match the claimed address.
+            body = _signed_body(priv=other_priv, pub=other_pub, **{"from": str(_ADDR)})
             resp = await client.request(
                 Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
             ).response
-            # Other key does not derive to the claimed IID: binding gate fires.
+            # Other key does not derive to the claimed address: binding gate fires.
             assert resp.code.is_successful() is False
             assert sos._active is False
         finally:
@@ -649,7 +658,7 @@ class TestSosMulticast:
             )
             assert resp.code == aiocoap.CHANGED
             assert sos._active is True
-            assert sos._from == _EUI.hex()
+            assert sos._from == _ADDR.packed.hex()
         finally:
             await client.shutdown()
             await server.shutdown()
@@ -770,7 +779,7 @@ class TestSosObserve:
             assert cbor2.loads(first.payload)["active"] is False
 
             obs_iter = req.observation.__aiter__()
-            sos.activate(_EUI, _T0)
+            sos.activate(_ADDR.packed, _T0)
             note = await asyncio.wait_for(obs_iter.__anext__(), timeout=5.0)
             assert cbor2.loads(note.payload)["active"] is True
         finally:
@@ -780,7 +789,7 @@ class TestSosObserve:
     async def test_observe_notified_on_cancel(self) -> None:
         client, server, sos = await _setup()
         try:
-            sos.activate(_EUI, _T0)
+            sos.activate(_ADDR.packed, _T0)
 
             req = client.request(Message(code=GET, observe=0, uri="coap://srv/sos"))
             await req.response
@@ -796,7 +805,7 @@ class TestSosObserve:
     async def test_observe_notified_on_retrigger(self) -> None:
         client, server, sos = await _setup()
         try:
-            sos.activate(_EUI, _T0)
+            sos.activate(_ADDR.packed, _T0)
 
             req = client.request(Message(code=GET, observe=0, uri="coap://srv/sos"))
             await req.response

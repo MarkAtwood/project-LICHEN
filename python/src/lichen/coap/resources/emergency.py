@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import math
 import time
+from ipaddress import IPv6Address
 from typing import Any
 
 import aiocoap
@@ -20,7 +21,7 @@ from lichen.coap.sos_origin import (
     canonicalize_sos_payload,
     verify_sos_origin,
 )
-from lichen.crypto.identity import _pubkey_to_iid
+from lichen.crypto.identity import _pubkey_to_iid, yggdrasil_address
 from lichen.crypto.trust import TrustError
 
 MAX_ROLLCALLS = 256
@@ -45,16 +46,17 @@ class SosResource(resource.ObservableResource):
 
     State is a CBOR map::
 
-        {"active": true, "from": "<hex-eui64>", "t": <float>}  # active
-        {"active": false, "from": null, "t": null}              # idle
+        {"active": true, "from": "<hex addr>", "t": <float>}  # active
+        {"active": false, "from": null, "t": null}             # idle
 
     **POST** activates with ``{"type":"sos", "node":..., "ts":...}`` plus the
     origin-signature envelope ``{"pubkey": <32B>, "sig": <56B>}`` (or legacy
-    {"from","t"} core fields).  Per spec 18.4.1 the origin signature is
-    REQUIRED: the pubkey must derive to the claimed node IID, the Schnorr48
-    signature must verify over the canonical CBOR of the core alert dict,
-    and the origin sequence must strictly advance; anything else is dropped
-    with 4.01.
+    {"from","t"} core fields).  Per spec 18.4.2 the node field is the
+    originator's full ``0200::`` IPv6 address string.  Per spec 18.4.1 the
+    origin signature is REQUIRED: the claimed address must equal the
+    pubkey's upstream Yggdrasil ``AddrForKey``, the Schnorr48 signature must
+    verify over the canonical CBOR of the core alert dict, and the origin
+    sequence must strictly advance; anything else is dropped with 4.01.
     **DELETE** cancels.  **GET** and **Observe** expose the current state to all
     subscribers so neighbouring nodes can relay/escalate the alert.
 
@@ -83,7 +85,7 @@ class SosResource(resource.ObservableResource):
                        18.4.1 ("rate limiting uses monotonic uptime").
             trust_store: Optional TrustStore for TOFU pinning of verified
                          origin pubkeys. When None, only cryptographic
-                         verification (key-to-IID binding + signature) is
+                         verification (key-to-address binding + signature) is
                          enforced.
         """
         super().__init__()
@@ -216,11 +218,13 @@ class SosResource(resource.ObservableResource):
             pass  # support other types per spec in future
         if from_hex is None or timestamp is None:
             return Message(code=aiocoap.BAD_REQUEST)
-        if (
-            not isinstance(from_hex, str)
-            or len(from_hex) != 16
-            or any(char not in "0123456789abcdefABCDEF" for char in from_hex)
-        ):
+        # Spec 18.4.2: the node field is the originator's full 0200:: IPv6
+        # address string (colon-separated); bare IID hex is no longer accepted.
+        if not isinstance(from_hex, str):
+            return Message(code=aiocoap.BAD_REQUEST)
+        try:
+            parsed = IPv6Address(from_hex)
+        except ValueError:
             return Message(code=aiocoap.BAD_REQUEST)
         if (
             isinstance(timestamp, bool)
@@ -240,22 +244,25 @@ class SosResource(resource.ObservableResource):
             origin_sig = SosOriginSignature.from_bytes(sig_blob)
         except ValueError:
             return Message(code=aiocoap.UNAUTHORIZED)
-        iid = bytes.fromhex(from_hex.lower())
-        if _pubkey_to_iid(pubkey) != iid:
+        # Binding gate: the claimed node address is attacker-supplied, so the
+        # binding MUST come from the verified pubkey's own AddrForKey.
+        origin_addr = yggdrasil_address(pubkey)
+        if parsed != origin_addr:
             return Message(code=aiocoap.UNAUTHORIZED)
         core_alert = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
-        origin_addr = b"\x02\x00" + b"\x00" * 6 + iid
         if not verify_sos_origin(
-            pubkey, origin_addr, canonicalize_sos_payload(core_alert), origin_sig
+            pubkey, origin_addr.packed, canonicalize_sos_payload(core_alert), origin_sig
         ):
             return Message(code=aiocoap.UNAUTHORIZED)
         if self._trust_store is not None:
             try:
-                self._trust_store.verify_or_pin(pubkey, iid)
+                self._trust_store.verify_or_pin(pubkey, _pubkey_to_iid(pubkey))
             except TrustError:
                 return Message(code=aiocoap.UNAUTHORIZED)
         # Replay gate: only strictly advancing sequences may activate.
-        source_key = from_hex.lower()
+        # Accounting keys are the canonical packed form of the full 16-byte
+        # origin address (spec 18.4.1; no IID extraction).
+        source_key = parsed.packed.hex()
         last_seq = self._sequences.last_seen(source_key)
         if last_seq is not None and origin_sig.origin_sequence <= last_seq:
             return Message(code=aiocoap.UNAUTHORIZED)
@@ -271,7 +278,7 @@ class SosResource(resource.ObservableResource):
             return msg
         self._sequences.accept(source_key, origin_sig.origin_sequence)
         self._record_request(source_key)
-        self.activate(bytes.fromhex(from_hex), timestamp)
+        self.activate(parsed.packed, timestamp)
         return Message(code=CHANGED)
 
     def _cancel_from_body(self, body: dict[Any, Any]) -> Message:
@@ -290,16 +297,15 @@ class SosResource(resource.ObservableResource):
             origin_sig = SosOriginSignature.from_bytes(sig_blob)
         except ValueError:
             return Message(code=aiocoap.UNAUTHORIZED)
-        active_iid = bytes.fromhex(self._from.lower())
-        if _pubkey_to_iid(pubkey) != active_iid:
+        active_addr = bytes.fromhex(self._from)
+        if yggdrasil_address(pubkey).packed != active_addr:
             return Message(code=aiocoap.UNAUTHORIZED)
         core_cancel = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
-        origin_addr = b"\x02\x00" + b"\x00" * 6 + active_iid
         if not verify_sos_origin(
-            pubkey, origin_addr, canonicalize_sos_payload(core_cancel), origin_sig
+            pubkey, active_addr, canonicalize_sos_payload(core_cancel), origin_sig
         ):
             return Message(code=aiocoap.UNAUTHORIZED)
-        source_key = self._from.lower()
+        source_key = self._from
         last_seq = self._sequences.last_seen(source_key)
         if last_seq is not None and origin_sig.origin_sequence <= last_seq:
             return Message(code=aiocoap.UNAUTHORIZED)
@@ -311,8 +317,8 @@ class SosResource(resource.ObservableResource):
         """DELETE /sos cancels an active alert. Requires origin authentication.
 
         Only the originator of the active alert may cancel it. The request must
-        carry a valid origin-signature envelope (pubkey + sig) and the pubkey
-        must derive to the IID of the active SOS originator.
+        carry a valid origin-signature envelope (pubkey + sig) and the pubkey's
+        AddrForKey must equal the full origin address of the active alert.
         """
         # SECURITY: Require active alert to cancel
         if not self._active or self._from is None:
@@ -336,18 +342,17 @@ class SosResource(resource.ObservableResource):
         except ValueError:
             return Message(code=aiocoap.UNAUTHORIZED)
         # SECURITY: Verify requester is the originator of the active alert
-        active_iid = bytes.fromhex(self._from.lower())
-        if _pubkey_to_iid(pubkey) != active_iid:
+        active_addr = bytes.fromhex(self._from)
+        if yggdrasil_address(pubkey).packed != active_addr:
             return Message(code=aiocoap.UNAUTHORIZED)
         # SECURITY: Verify signature over canonical cancel payload
         core_cancel = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
-        origin_addr = b"\x02\x00" + b"\x00" * 6 + active_iid
         if not verify_sos_origin(
-            pubkey, origin_addr, canonicalize_sos_payload(core_cancel), origin_sig
+            pubkey, active_addr, canonicalize_sos_payload(core_cancel), origin_sig
         ):
             return Message(code=aiocoap.UNAUTHORIZED)
         # SECURITY: Replay gate for cancel requests
-        source_key = self._from.lower()
+        source_key = self._from
         last_seq = self._sequences.last_seen(source_key)
         if last_seq is not None and origin_sig.origin_sequence <= last_seq:
             return Message(code=aiocoap.UNAUTHORIZED)
