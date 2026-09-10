@@ -4,14 +4,10 @@
 //! Cross-validation of the Dead Drop domain model against shared vectors.
 //!
 //! Vectors in `test/vectors/deaddrop.json` are derived independently of both
-//! implementations (RFC 7252 / RFC 8613 / RFC 8428). Two vector pins are
-//! known-divergent from spec 18.9 and the Python oracle; see beads
-//! project-LICHEN-worker6-44m9 (human decision pending):
+//! implementations (RFC 7252 / RFC 8613 / RFC 8428). One post-success vector
+//! remains divergent from spec 18.9/LCI 17.5.8:
 //!
-//! * `rate_limit_rejection` pins 163 (5.03); spec 18.9 mandates 4.29 with
-//!   `Retry-After` for rate limits (the Python oracle returns 157). The
-//!   implementation follows the spec.
-//! * post-success vectors pin 69 (2.05); spec 18.9/LCI 17.5.8 mandate
+//! * post-success vectors pin 69 (2.05); the spec mandates
 //!   2.01 Created (65) with `Location-Path` (the Python oracle returns
 //!   CREATED). The implementation follows spec + Python.
 //!
@@ -339,10 +335,7 @@ fn oscore_wrapped_dead_drop_matches_vector() {
 fn rate_limit_rejection_matches_vector() {
     let vectors = load_vectors();
     let v = vec_by_name(&vectors, "rate_limit_rejection");
-    // Divergence: vector pins 163 (5.03); spec 18.9 mandates 4.29 (157) with
-    // Retry-After for rate limits, which is what the Python oracle emits and
-    // what this implementation returns. Bead project-LICHEN-worker6-44m9.
-    assert_eq!(v["expected"]["response_code"].as_u64(), Some(163));
+    assert_eq!(v["expected"]["response_code"].as_u64(), Some(157));
 
     let clock = TestClock::new();
     let mut s = store(STORAGE_LEAF, &clock);
