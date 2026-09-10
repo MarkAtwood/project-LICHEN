@@ -8,7 +8,8 @@
     "sig_structure": "[\"Signature1\", protected, h\"\", payload] per RFC 9052",
     "signature_input": "SHA256(CBOR(Sig_structure))",
     "generator_command": "python3 test/vectors/generate_capability_announcements.py",
-    "cross_check": "independent PyNaCl-backed reference_schnorr48.py"
+    "cross_check": "independent PyNaCl-backed reference_schnorr48.py",
+    "announcer_iid": "canonical link-local IID: SHA-512(pubkey)[0:8] with U/L cleared (spec 06-security.md 8.5/8.12); the routable upstream AddrForKey embeds no IID (spec/decisions.jsonl upstream-yggdrasil-addressing)"
   },
   "constants": {
     "algorithm": {

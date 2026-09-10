@@ -14,7 +14,6 @@
 - key_rotation_attestation: COSE_Sign1 key rotation attestations (spec 8.7.4)
 """
 
-from .schnorr48 import SCHNORR48_ED25519_ALG
 from .capability_announcements import (
     Capability,
     CapabilityAnnouncement,
@@ -74,6 +73,7 @@ from .root_dio_signature import (
     decode_root_dio_signature,
     verify_root_dio_signature,
 )
+from .schnorr48 import SCHNORR48_ED25519_ALG
 from .trust import (
     DerivationMismatchError,
     KeyMismatchError,

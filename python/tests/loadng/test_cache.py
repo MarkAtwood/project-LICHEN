@@ -10,7 +10,7 @@ import pytest
 
 from lichen.loadng.cache import RouteCache, RouteEntry
 
-DEST = IPv6Address("fd00::100")
+DEST = IPv6Address("0200::100")
 HOP = IPv6Address("fe80::a")
 
 
@@ -28,7 +28,7 @@ def test_add_and_lookup() -> None:
 
 
 def test_lookup_missing() -> None:
-    assert RouteCache().lookup("fd00::dead") is None
+    assert RouteCache().lookup("0200::dead") is None
 
 
 def test_add_replaces_existing() -> None:
@@ -57,12 +57,12 @@ def test_refresh_extends_validity() -> None:
 
 
 def test_refresh_missing_returns_false() -> None:
-    assert RouteCache().refresh("fd00::dead", now=0) is False
+    assert RouteCache().refresh("0200::dead", now=0) is False
 
 
 def test_lru_eviction() -> None:
     cache = RouteCache(max_entries=2)
-    d1, d2, d3 = IPv6Address("fd00::1"), IPv6Address("fd00::2"), IPv6Address("fd00::3")
+    d1, d2, d3 = IPv6Address("0200::1"), IPv6Address("0200::2"), IPv6Address("0200::3")
     cache.add(_entry(dest=d1))
     cache.add(_entry(dest=d2))
     cache.lookup(d1)  # touch d1 -> d2 is now LRU

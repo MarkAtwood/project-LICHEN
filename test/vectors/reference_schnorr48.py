@@ -7,6 +7,11 @@ This module intentionally imports no ``lichen`` package.  It implements the
 algorithm in draft-lichen-schnorr-00 directly with libsodium group/scalar
 operations so vector generation does not reuse the signer or identity code
 being tested by Python and Rust consumers.
+
+Routable addresses use the upstream yggdrasil-go ``AddrForKey`` bit-packing
+(spec/decisions.jsonl ``upstream-yggdrasil-addressing``), validated against
+the pinned anchor in yggdrasil_address.json; the SHA-512-derived ``iid`` is
+retained only for link-local/kid purposes.
 """
 
 from __future__ import annotations
@@ -43,40 +48,39 @@ def _canonical_scalar(value: bytes) -> bytes:
     return (int.from_bytes(value, "little") % _GROUP_ORDER).to_bytes(32, "little")
 
 
-def _addr_for_key(pubkey: bytes) -> bytes:
-    """Upstream Yggdrasil ``AddrForKey`` byte-for-byte (yggdrasil-go@422836ee
-    src/address/address.go; settled ``upstream-yggdrasil-addressing``
-    decision in spec/decisions.jsonl). Bit-invert the key; addr[0]=0x02;
-    addr[1] = leading-1 count mod 256; skip leading 1s + the first 0
-    separator bit; pack the rest MSB-first into whole bytes, discarding the
-    trailing partial byte; copy into addr[2:16], zero tail. No hashing.
+def addr_for_key(public_key: bytes) -> bytes:
+    """Derive the upstream yggdrasil-go ``AddrForKey`` for an Ed25519 public key.
+
+    Bit-invert the 32-byte key, count the leading 1 bits into ``addr[1]``,
+    drop those 1s and the first 0 bit, then bit-pack the remaining bits
+    MSB-first into ``addr[2:16]``.  No hashing is involved.  Mirrors
+    yggdrasil-go ``src/address/address.go`` ``AddrForKey`` byte-for-byte.
     """
-    inv = bytes(b ^ 0xFF for b in pubkey)
-    addr = bytearray(16)
-    addr[0] = 0x02
-    temp = bytearray()
-    done = False
+    if len(public_key) != 32:
+        raise ValueError("Ed25519 public key must be exactly 32 bytes")
+    inverted = bytes(b ^ 0xFF for b in public_key)
+    total_bits = len(inverted) * 8
     ones = 0
-    cur = 0
+    while ones < total_bits and (inverted[ones // 8] >> (7 - (ones % 8))) & 1:
+        ones += 1
+    packed = bytearray(14)
+    acc = 0
     nbits = 0
-    for idx in range(8 * len(inv)):
-        bit = (inv[idx // 8] >> (7 - (idx % 8))) & 0x01
-        if not done:
-            if bit:
-                ones = (ones + 1) & 0xFF
-                continue
-            done = True  # first leading 0 bit: separator, skipped
-            continue
-        cur = (cur << 1) | bit
+    pos = 0
+    for i in range(ones + 1, total_bits):
+        bit = (inverted[i // 8] >> (7 - (i % 8))) & 1
+        acc = (acc << 1) | bit
         nbits += 1
         if nbits == 8:
+            if pos < len(packed):
+                packed[pos] = acc
+            pos += 1
+            acc = 0
             nbits = 0
-            temp.append(cur)
-            cur = 0
-    addr[1] = ones
-    n = min(len(temp), 14)
-    addr[2 : 2 + n] = temp[:n]
-    return bytes(addr)
+    return bytes((0x02, ones & 0xFF)) + bytes(packed)
+
+
+upstream_addr_for_key = addr_for_key
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,7 +107,7 @@ class ReferenceIdentity:
         digest = hashlib.sha512(public).digest()
         iid = bytearray(digest[:8])
         iid[0] &= 0xFD
-        return cls(bytes(seed), private, public, bytes(iid), _addr_for_key(public))
+        return cls(bytes(seed), private, public, bytes(iid), addr_for_key(public))
 
 
 def sign(identity: ReferenceIdentity, message: bytes) -> bytes:
@@ -164,7 +168,9 @@ def signature_transcript(wire_without_mic: bytes, destination_length: int) -> by
 __all__ = [
     "LINK_SIGNATURE_DOMAIN",
     "ReferenceIdentity",
+    "addr_for_key",
     "sign",
     "signature_transcript",
+    "upstream_addr_for_key",
     "verify",
 ]

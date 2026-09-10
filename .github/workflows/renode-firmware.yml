@@ -15,6 +15,9 @@ on:
     - cron: '0 3 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 # Run actual Zephyr firmware in Renode emulator with lichen-sim RF simulation.
 # This tests the full stack: C firmware -> SPI -> SX1262 -> lichen-sim -> other nodes
 

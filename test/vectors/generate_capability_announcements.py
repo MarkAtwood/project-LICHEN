@@ -121,12 +121,19 @@ def _vector(
 ) -> dict[str, object]:
     """Generate a single capability announcement vector."""
     identity = ReferenceIdentity.from_seed(seed)
+    # announcer_iid/kid = the canonical link-local IID: SHA-512(pubkey)[0:8]
+    # with the U/L bit cleared (spec 06-security.md 8.5 "MUST be SHA-512",
+    # 8.12). The upstream-yggdrasil-addressing decision (spec/decisions.jsonl)
+    # settles that the routable 02xx address embeds NO IID, so slicing 8 bytes
+    # out of AddrForKey here has no identity meaning; the reversed derivation
+    # (0ed14478...) was a merge-corruption regression (b8i2).
+    announcer_iid = identity.iid
 
     # Build COSE components
     protected = _build_protected_header()
-    unprotected = _build_unprotected_header(identity.iid)
+    unprotected = _build_unprotected_header(announcer_iid)
     payload = _build_payload(
-        capabilities, prefix, prefix_len, expiry, seq, identity.iid
+        capabilities, prefix, prefix_len, expiry, seq, announcer_iid
     )
 
     # Compute signature per RFC 9052
@@ -144,7 +151,7 @@ def _vector(
         # Identity inputs
         "signing_seed": seed.hex(),
         "public_key": identity.pubkey.hex(),
-        "announcer_iid": identity.iid.hex(),
+        "announcer_iid": announcer_iid.hex(),
         # Payload fields
         "capabilities": capabilities,
         "capabilities_bits": {
@@ -162,7 +169,7 @@ def _vector(
             "alg_name": "Schnorr48-Ed25519",
         },
         "unprotected_header_decoded": {
-            "kid": identity.iid.hex(),
+            "kid": announcer_iid.hex(),
         },
         "payload_cbor": payload.hex(),
         "payload_decoded": {
@@ -171,7 +178,7 @@ def _vector(
             "3_prefix_len": prefix_len,
             "4_expiry": expiry,
             "5_seq": seq,
-            "6_announcer_iid": identity.iid.hex(),
+            "6_announcer_iid": announcer_iid.hex(),
         },
         # Signature computation
         "sig_structure": sig_structure.hex(),
@@ -213,10 +220,12 @@ def _different_signer_vector() -> dict[str, object]:
     identity = ReferenceIdentity.from_seed(SEED)
     different_seed = bytes.fromhex("fedcba9876543210" * 4)
     different_identity = ReferenceIdentity.from_seed(different_seed)
+    kid_iid = identity.iid
+    payload_iid = different_identity.iid
 
     # Build with different_identity's IID in payload but sign with identity
     protected = _build_protected_header()
-    unprotected = _build_unprotected_header(identity.iid)
+    unprotected = _build_unprotected_header(kid_iid)
     # Payload claims to be from different_identity
     payload = _build_payload(
         CAP_BIT_EGRESS,
@@ -224,7 +233,7 @@ def _different_signer_vector() -> dict[str, object]:
         0,
         1735689600,
         1,
-        different_identity.iid,  # Mismatched!
+        payload_iid,  # Mismatched!
     )
 
     sig_structure = _build_sig_structure(protected, payload)
@@ -238,8 +247,8 @@ def _different_signer_vector() -> dict[str, object]:
         "coverage": "capability_announcement_validation",
         "signing_seed": SEED.hex(),
         "public_key": identity.pubkey.hex(),
-        "kid_iid": identity.iid.hex(),
-        "payload_iid": different_identity.iid.hex(),
+        "kid_iid": kid_iid.hex(),
+        "payload_iid": payload_iid.hex(),
         "protected_header": protected.hex(),
         "payload_cbor": payload.hex(),
         "sig_structure": sig_structure.hex(),
@@ -275,6 +284,12 @@ def document() -> dict[str, object]:
                 "python3 test/vectors/generate_capability_announcements.py"
             ),
             "cross_check": "independent PyNaCl-backed reference_schnorr48.py",
+            "announcer_iid": (
+                "canonical link-local IID: SHA-512(pubkey)[0:8] with U/L "
+                "cleared (spec 06-security.md 8.5/8.12); the routable "
+                "upstream AddrForKey embeds no IID (spec/decisions.jsonl "
+                "upstream-yggdrasil-addressing)"
+            ),
         },
         "constants": {
             "algorithm": {

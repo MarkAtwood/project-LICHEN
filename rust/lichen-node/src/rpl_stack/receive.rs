@@ -143,7 +143,13 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                     RplReceiveOutcome::AnnouncementRejected(AnnounceRejectReason::Malformed),
                 )))
             }
-            L2PayloadKind::Unknown => Err(RplReceiveError::Receive(RxError::SchcDecompress)),
+            // SOS (0x16) is a defined L2 dispatch but neither RPL/routing nor
+            // SCHC; the RPL stack does not handle it, so it fails closed here
+            // exactly like an unknown dispatch. SOS relay/budget handling
+            // lives in the application/link path, not RPL.
+            L2PayloadKind::Sos | L2PayloadKind::Unknown => {
+                Err(RplReceiveError::Receive(RxError::SchcDecompress))
+            }
         }
     }
 
@@ -336,7 +342,12 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                     AnnounceRejectReason::Malformed,
                 )))
             }
-            L2PayloadKind::Unknown => Err(RplReceiveError::Receive(RxError::SchcDecompress)),
+            // SOS (0x16): defined L2 dispatch but not RPL/routing or SCHC;
+            // fail closed like an unknown dispatch (see the matching arm in
+            // the border-ingress path above).
+            L2PayloadKind::Sos | L2PayloadKind::Unknown => {
+                Err(RplReceiveError::Receive(RxError::SchcDecompress))
+            }
         }
     }
 
@@ -586,9 +597,19 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 let RplRole::Root(rx) = &mut self.role else {
                     return Ok(RplReceiveOutcome::Dao(DaoHandlingOutcome::RouteRejected));
                 };
-                // The DAO source is the origin's routable /128, which does
-                // not embed the origin IID under upstream AddrForKey (i72x.2);
-                // resolve the signer key through the pinned table instead.
+                // Merge resolution (HEAD over beads-worker-2 + beads-worker-7):
+                // the DAO source is the origin's routable 02xx /128 (spec
+                // 05-routing §8.6), which under upstream AddrForKey embeds no
+                // IID (i72x.2), so the pinned key resolves by full-address
+                // match — never by slicing the low 64 bits. All three parents
+                // implement this same lookup: HEAD's and worker-2's duplicate
+                // announce-table methods (`pinned_pubkey_for_routable`,
+                // `pinned_pubkey_for_addr`) and worker-7's inline
+                // `pinned_pubkeys_snapshot` + `ygg_addr_from_pubkey` scan. The
+                // shared `_routable` method is kept because the already-merged
+                // node.rs DAO-admission path uses it; worker-7's inline scan
+                // is the identical comparison, consolidated into the one
+                // shared implementation of the trust-base correlation.
                 let admitted = self
                     .announces
                     .pinned_pubkey_for_routable(&source)
@@ -751,22 +772,51 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         }
 
         // Replay: root_seq must strictly exceed the cached high-water mark.
-        // The mark is persisted BEFORE the in-memory cache is admitted: an
-        // unpersisted mark must never verify, because the reboot boundary
-        // would reopen the replay window (worker6-eebl). A storage fault is
-        // a local failure, not a forgery: degrade to baseline (treat as
-        // unsigned, L679) rather than rejecting the DIO, and leave the
-        // in-memory cache untouched so a healthy redelivery can verify.
+        // Merge resolution (HEAD + beads-worker-2): a tracked key's
+        // replay/regression is forgery and hard-Rejects (worker-2
+        // cached()-pre-check); a NEW key that no longer fits in the table
+        // degrades to the L679 baseline (worker-2 rationale: mapping capacity
+        // to Reject would let an on-link adversary hard-Reject a genuine new
+        // root's first signed DIO — punishing the signed option itself). The
+        // mark is persisted BEFORE the in-memory cache is admitted (HEAD,
+        // worker6-eebl): an unpersisted mark must never verify, because the
+        // reboot boundary would reopen the replay window. A storage fault is
+        // a local failure, not a forgery: degrade to baseline and leave the
+        // in-memory cache untouched so a healthy redelivery can verify. For
+        // a tracked key the pre-check above rejects any non-increasing
+        // root_seq, so accept() cannot fail; for an untracked key its only
+        // failure is capacity, which degrades per the rationale above.
+        let cached = self
+            .root_seqs
+            .cached(decoded.payload.dodag_id, decoded.payload.instance);
+        if let Some(cached) = cached {
+            if decoded.payload.root_seq <= cached {
+                return DioRootSigOutcome::Reject;
+            }
+        }
         let mut proposed = self.root_seqs.clone();
-        if proposed
-            .accept(
-                decoded.payload.dodag_id,
-                decoded.payload.instance,
-                decoded.payload.root_seq,
-            )
-            .is_err()
-        {
-            return DioRootSigOutcome::Reject;
+        use lichen_rpl::root_seq_cache::RootSeqReject;
+        match proposed.accept(
+            decoded.payload.dodag_id,
+            decoded.payload.instance,
+            decoded.payload.root_seq,
+        ) {
+            Ok(()) => {}
+            Err(RootSeqReject::Replay | RootSeqReject::Regression) => {
+                return DioRootSigOutcome::Reject;
+            }
+            Err(RootSeqReject::Capacity) => {
+                // Full table, untracked key: fail-closed Reject is correct
+                // for tracked keys (replay/regression, handled above), but
+                // hard-rejecting a NEW DODAG's first genuine signed DIO
+                // punishes the legitimate root — unsigned, the identical
+                // DIO would baseline-process (L679 floor). Degrade to the
+                // unsigned baseline instead; replay protection for the
+                // cached keys is untouched. (An attacker with a TOFU-pinned
+                // key can otherwise fill the table across instance IDs and
+                // turn the signature option into a self-DoS for new roots.)
+                return DioRootSigOutcome::Baseline;
+            }
         }
         let Ok(current) = proposed.persist(&mut self.storage, self.root_seq_store) else {
             return DioRootSigOutcome::Baseline;

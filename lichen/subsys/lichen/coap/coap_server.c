@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <zephyr/kernel.h>
+#include <zephyr/sys/util.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/net/socket.h>
 #include <zephyr/net/coap.h>
@@ -34,6 +35,7 @@
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_ip.h>
 #include <lichen/coap_server.h>
+#include <lichen/link_ctx.h>
 #include <lichen/senml.h>
 #include <lichen/sos_alert.h>
 #include <lichen/sos_origin.h>
@@ -433,14 +435,81 @@ static uint8_t hex_nibble(char c)
 	return 0xFF;
 }
 
-/* Extract the 8-byte node IID from the alert's hex node string. */
-static void alert_node_iid(const struct sos_alert *alert, uint8_t out[8])
+/* Parse the alert's node string (8 colon-separated hex groups, validated
+ * by the SOS codec) into the 16-byte origin IPv6 address. Each group is
+ * 1-4 hex digits and zero-extends to 2 octets. Spec 18.4.2: the node
+ * field is the originator's full 0200:: address; spec 18.4.1 keys SOS
+ * accounting by the full 16 bytes and forbids IID extraction. */
+static int sos_node_string_to_addr(const char *node, uint8_t out[16])
 {
-	for (size_t i = 0; i < 8; i++) {
-		char hi = alert->node[2 * i];
-		char lo = alert->node[2 * i + 1];
-		out[i] = (uint8_t)((hex_nibble(hi) << 4) | hex_nibble(lo));
+	const char *p = node;
+	size_t octets = 0;
+
+	if (node == NULL || out == NULL) {
+		return -EINVAL;
 	}
+	while (*p) {
+		unsigned int value = 0;
+		unsigned int digits = 0;
+
+		if (octets == 16) {
+			return -EINVAL; /* 9th group would overflow out[] */
+		}
+		while (*p && *p != ':') {
+			uint8_t nib = hex_nibble(*p++);
+
+			if (nib == 0xFF || digits == 4) {
+				return -EINVAL;
+			}
+			digits++;
+			value = (value << 4) | nib;
+		}
+		if (digits == 0) {
+			return -EINVAL;
+		}
+		out[octets++] = (uint8_t)(value >> 8);
+		out[octets++] = (uint8_t)(value & 0xFFU);
+		if (*p == ':') {
+			p++;
+		}
+	}
+	return octets == 16 ? 0 : -EINVAL;
+}
+
+/* Find the pinned key whose upstream AddrForKey(pubkey) equals addr.
+ * The alert's node string is attacker-supplied, so the trust anchor is
+ * the pinned pubkey, not the string: the origin address is accepted only
+ * when it is the pinned key's own AddrForKey (upstream-yggdrasil-addressing;
+ * mirrors the Rust AnnounceProcessor::pinned_pubkey_for_addr pattern). */
+#define SOS_PIN_SCAN_MAX 16
+
+static int pinned_key_for_addr(const uint8_t addr[16],
+			       struct lichen_key_entry *entry)
+{
+	struct lichen_key_entry snapshot[SOS_PIN_SCAN_MAX];
+	size_t count;
+
+	if (addr == NULL || entry == NULL) {
+		return -EINVAL;
+	}
+	/* SOS_PIN_SCAN_MAX matches the store's Kconfig range cap
+	 * (CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES range 4..16), so the
+	 * snapshot is always complete; raise both together if that
+	 * ceiling ever moves. */
+	count = lichen_key_store_list(snapshot, ARRAY_SIZE(snapshot));
+	for (size_t i = 0; i < count; i++) {
+		uint8_t derived[16];
+
+		if (lichen_identity_ygg_addr_from_ed25519(snapshot[i].pubkey,
+							  derived) != 0) {
+			continue;
+		}
+		if (memcmp(derived, addr, sizeof(derived)) == 0) {
+			*entry = snapshot[i];
+			return 0;
+		}
+	}
+	return -ENOENT;
 }
 
 /* Per-origin SOS accounting (spec 18.4.1, R-12-036/037/048): one table,
@@ -481,33 +550,39 @@ static int sos_post(struct coap_resource *resource,
 		return -ENOENT; /* silent drop: unparseable payload */
 	}
 
-	/* Resolve the sender's pinned key from the key store keyed by the
-	 * alert's node IID. This layer is lookup-only (no TOFU pinning);
-	 * sos_signature.json sos_unknown_pubkey_tofu acceptance requires the
-	 * pin path, so an unknown pubkey is silently dropped here until that
-	 * wiring lands (tracked separately). */
-	uint8_t node_iid[8];
-	alert_node_iid(&alert, node_iid);
+	/* Spec 18.4.1/18.4.2: the alert's node field is the originator's
+	 * full 0200:: address string, and the SOS accounting key is the
+	 * full 16-byte origin address (IID extraction is forbidden). This
+	 * layer is lookup-only (no TOFU pinning); sos_signature.json
+	 * sos_unknown_pubkey_tofu acceptance requires the pin path, so an
+	 * unknown origin is silently dropped here until that wiring lands
+	 * (tracked separately). */
+	uint8_t origin_ipv6[16];
+	if (sos_node_string_to_addr(alert.node, origin_ipv6) != 0) {
+		return -ENOENT; /* silent drop: malformed node string */
+	}
 
 	struct lichen_key_entry key_entry;
-	if (lichen_key_store_get(node_iid, &key_entry) != 0) {
-		return -ENOENT; /* silent drop: unknown pubkey */
+	if (pinned_key_for_addr(origin_ipv6, &key_entry) != 0) {
+		return -ENOENT; /* silent drop: unknown origin address */
 	}
 
 	/* Origin signature verify (R-12-034: invalid -> silent drop). The
-	 * origin IPv6 is the node IID in the LICHEN native 02xx profile. */
-	uint8_t origin_ipv6[16] = { 0x02 };
-	memcpy(&origin_ipv6[8], node_iid, 8);
+	 * transcript origin IPv6 is the pinned key's upstream Yggdrasil
+	 * AddrForKey (settled upstream-yggdrasil-addressing decision) -
+	 * byte-identical to the address the node string had to match in
+	 * pinned_key_for_addr, so the claimed origin and the verified
+	 * signer cannot diverge. */
 	if (!sos_origin_verify(key_entry.pubkey, origin_ipv6, payload, cbor_len,
 			       &origin_sig)) {
 		return -ENOENT; /* silent drop: bad signature */
 	}
 
 	/* Per-origin monotonic Origin Sequence gate + rate limit (spec
-	 * 18.4.1), keyed by the origin node IID. Gate enforced before rate
-	 * limiting so a replay does not spend budget. */
+	 * 18.4.1), keyed by the full 16-byte origin address. Gate enforced
+	 * before rate limiting so a replay does not spend budget. */
 	struct sos_origin_entry *origin =
-		sos_origin_table_lookup(&s_sos_origins, node_iid);
+		sos_origin_table_lookup(&s_sos_origins, origin_ipv6);
 	if (origin == NULL) {
 		return -ENOENT;
 	}

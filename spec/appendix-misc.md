@@ -35,7 +35,7 @@ Response:
 | Topology | Mesh (RPL) | Mesh (flood) | Mesh (path) | Star |
 | IP Support | Full IPv6 | None | None | IPv6 (SCHC) |
 | Max Hops | Unlimited* | 7 | 63 | 1 |
-| Header Overhead | 18-33 bytes baseline | 16 bytes | 6 bytes | 13 bytes |
+| Header Overhead | 23-37 bytes baseline | 16 bytes | 6 bytes | 13 bytes |
 | Authentication | Ed25519 | None/Ed25519 | HMAC | AES-CMAC |
 | Encryption | OSCORE | AES-256-CTR | AES-128-ECB | AES-128 |
 | Forward Secrecy | No** | No | No | No |

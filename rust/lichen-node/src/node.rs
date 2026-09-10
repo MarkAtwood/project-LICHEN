@@ -215,7 +215,7 @@ impl Node {
             // ULA (0xfd) is not answered: under the single-primary model
             // (spec/05-routing.md:30) ULA is external, not mesh-local (i72x.4).
             // The 2000::/3 arm is equally promiscuous; both arms become an
-            // exact check against this node's 0200::/7 AddrForKey identity
+            // exact check against this node's 0200::/8 AddrForKey identity
             // once i72x.2 lands the NodeId accessor (tracked in beads).
             if dst_bytes == self.node_id.link_local_addr().0 || (dst_bytes[0] & 0xe0) == 0x20 {
                 return self.reply_echo_ipv6(ipv6, reply);
@@ -402,9 +402,12 @@ impl RplNode {
         now_ms: u64,
         dao_admission: &lichen_rpl::routing::DaoAdmissionState,
     ) -> DaoHandlingOutcome {
-        // The DAO origin is the origin's routable /128, which embeds no IID
-        // post-AddrForKey (i72x.2): resolve the pin by full address, not by
-        // slicing the low half (which can collide with another peer's IID).
+        // The DAO origin is the origin's routable /128 (its primary 02xx
+        // address, spec 05-routing §8.6), which embeds no IID post-AddrForKey
+        // (i72x.2): resolve the pin by full-address match against every pinned
+        // identity's AddrForKey, not by slicing the low half (which can collide
+        // with another peer's IID), then fall back to the bounded snapshot
+        // (which re-verifies the signature).
         let pinned_key = announces.pinned_pubkey_for_routable(&origin).or_else(|| {
             resolve_dao_signer_from_bounded_snapshot(
                 dao_bytes,
@@ -565,7 +568,7 @@ impl RplNode {
 
                 match icmp_code {
                     rpl_code::DIO => {
-                        if !source_matches_sender_iid(&sender_addr, &sender_iid) {
+                        if !control_source_matches_sender_iid(&sender_addr, &sender_iid) {
                             return (0, RplEvent::None);
                         }
                         if n < body_offset + RPL_DIO_BASE_LEN {
@@ -669,7 +672,7 @@ impl RplNode {
                         }
                     }
                     rpl_code::DIS => {
-                        if !source_matches_sender_iid(&sender_addr, &sender_iid) {
+                        if !control_source_matches_sender_iid(&sender_addr, &sender_iid) {
                             return (0, RplEvent::None);
                         }
                         return (0, RplEvent::DisReceived);
@@ -776,9 +779,22 @@ impl RplNode {
     }
 }
 
+/// Link-local frame sources MUST embed the authenticated sender IID in the
+/// IID half (spec §6.2: fe80:: + key-derived IID). Routable 02xx sources do
+/// NOT embed an IID after the upstream-AddrForKey migration (settled
+/// decision): their lower half is bit-packed key material, so no IID
+/// comparison is meaningful for them.
 #[cfg(feature = "std")]
 fn source_matches_sender_iid(source: &[u8; 16], sender_iid: &[u8; 8]) -> bool {
     source[8..] == *sender_iid
+}
+
+/// The DIO/DIS control-plane source binding: only link-local sources can be
+/// bound to the authenticated sender IID; other sources rely on the DIO
+/// payload's own authenticated evidence (version authorization, root sig).
+#[cfg(feature = "std")]
+fn control_source_matches_sender_iid(source: &[u8; 16], sender_iid: &[u8; 8]) -> bool {
+    source[..8] == [0xfe, 0x80, 0, 0, 0, 0, 0, 0] && source_matches_sender_iid(source, sender_iid)
 }
 
 #[cfg(feature = "std")]
@@ -888,6 +904,21 @@ mod tests {
             &source,
             &[0x02, 0, 0, 0, 0, 0, 0, 3]
         ));
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn control_source_binding_is_link_local_only() {
+        let source = NodeId([0x02, 0, 0, 0, 0, 0, 0, 2]).link_local_addr().0;
+        let source_iid: [u8; 8] = source[8..].try_into().unwrap();
+        assert!(control_source_matches_sender_iid(&source, &source_iid));
+        // Routable 02xx sources embed no IID after the upstream migration;
+        // they must NOT be bound to the sender IID, and must NOT be
+        // mistaken for a bound link-local either.
+        let mut routable = [0u8; 16];
+        routable[0] = 0x02;
+        assert!(!control_source_matches_sender_iid(&routable, &source_iid));
+        assert!(!control_source_matches_sender_iid(&source, &[0x03; 8]));
     }
 
     #[cfg(feature = "std")]
@@ -1065,7 +1096,7 @@ mod tests {
         use lichen_link::{identity::Identity, keys::Seed, link_layer::LinkLayer};
         use lichen_rpl::routing::DaoAdmissionState;
 
-        let root_id = NodeId([0x02, 0, 0, 0, 0, 0, 0, 1]);
+        let root_identity = Identity::from_seed(Seed::new([1; 32]));
         let parent_identity = Identity::from_seed(Seed::new([2; 32]));
         let leaf_identity = Identity::from_seed(Seed::new([3; 32]));
         let mut parent_eui64 = parent_identity.iid;
@@ -1074,7 +1105,9 @@ mod tests {
         leaf_eui64[0] ^= 0x02;
         let parent_id = NodeId(parent_eui64);
         let leaf_id = NodeId(leaf_eui64);
-        let root_addr = native(root_id);
+        // The DODAG id is the root's upstream routable address (settled
+        // upstream-yggdrasil-addressing), not ULA (not assigned).
+        let root_addr = lichen_core::addr::ygg_addr_from_pubkey(root_identity.pubkey.as_bytes());
         let parent_addr =
             lichen_core::addr::ygg_addr_from_pubkey(parent_identity.pubkey.as_bytes());
         let leaf_addr = lichen_core::addr::ygg_addr_from_pubkey(leaf_identity.pubkey.as_bytes());
@@ -1091,7 +1124,7 @@ mod tests {
             .admit(&mut root_storage, *leaf_identity.pubkey.as_bytes())
             .unwrap();
         let mut root = RplNode {
-            node: Node::new(root_id),
+            node: Node::new(NodeId(root_identity.iid)),
             router: root_router,
         };
         let mut parent = RplNode {
@@ -1307,7 +1340,7 @@ mod tests {
         use lichen_link::{identity::Identity, keys::Seed, link_layer::LinkLayer};
         use lichen_rpl::routing::DaoAdmissionState;
 
-        let root_id = NodeId([0x02, 0, 0, 0, 0, 0, 0, 1]);
+        let root_identity = Identity::from_seed(Seed::new([1; 32]));
         let parent_identity = Identity::from_seed(Seed::new([2; 32]));
         let leaf_identity = Identity::from_seed(Seed::new([3; 32]));
         let mut parent_eui64 = parent_identity.iid;
@@ -1316,12 +1349,14 @@ mod tests {
         leaf_eui64[0] ^= 0x02;
         let parent_id = NodeId(parent_eui64);
         let leaf_id = NodeId(leaf_eui64);
-        let root_addr = native(root_id);
+        // The DODAG id is the root's upstream routable address (settled
+        // upstream-yggdrasil-addressing), not ULA (not assigned).
+        let root_addr = lichen_core::addr::ygg_addr_from_pubkey(root_identity.pubkey.as_bytes());
         let parent_addr =
             lichen_core::addr::ygg_addr_from_pubkey(parent_identity.pubkey.as_bytes());
         let leaf_addr = lichen_core::addr::ygg_addr_from_pubkey(leaf_identity.pubkey.as_bytes());
         // §8.7.2 delegated prefix advertised alongside the leaf's own /128.
-        // Routed /64s come from SubnetForKey space (0300::/8), not ULA
+        // Routed /64s come from SubnetForKey space (0300::/8) instead of ULA
         // (spec/05-routing.md:30, upstream-yggdrasil-addressing).
         let delegated_prefix = [0x03, 0x00, 0, 0, 0, 0, 0, 0x64, 0, 0, 0, 0, 0, 0, 0, 0];
 
@@ -1338,7 +1373,7 @@ mod tests {
             .admit(&mut root_storage, *leaf_identity.pubkey.as_bytes())
             .unwrap();
         let mut root = RplNode {
-            node: Node::new(root_id),
+            node: Node::new(NodeId(root_identity.iid)),
             router: root_router,
         };
         // The root delegates the /64 to the leaf's public key (§8.7.2), so

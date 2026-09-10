@@ -305,6 +305,23 @@ class TestPriorityOrdering:
 class TestDeadlineExpiry:
     """Tests for time-based packet expiry."""
 
+    def test_ack_deadline_constant_is_spec_ten_seconds(self):
+        """spec B.2: ACK/NACK deadline is its own 10s constant (bead b7z9.142).
+
+        Independent oracle: the value comes from spec/appendix-bufferbloat.md
+        and the shared vectors (tx_queue_expiry.json), not from the code.
+        """
+        assert DEADLINE_ACK_MS == 10000
+        assert DEADLINE_ACK_MS != DEADLINE_ROUTING_MS
+
+    def test_now_returns_queue_clock(self):
+        """TxQueue.now() exposes the injected clock for explicit deadlines."""
+        clock = FakeClock(1234)
+        q = TxQueue(clock=clock)
+        assert q.now() == 1234
+        clock.advance(5)
+        assert q.now() == 1239
+
     def test_default_deadline_sos(self):
         """SOS packets (P0) get 2s default deadline - transmit ASAP."""
         clock = FakeClock(0)
@@ -340,8 +357,10 @@ class TestDeadlineExpiry:
 
         q.push(b"ack", priority=Priority.ACK)
 
-        # Advance past deadline (ACK is alias for ROUTING, so same deadline)
-        clock.advance(DEADLINE_ACK_MS + 1)
+        # Advance just past the boundary (ACK is alias for ROUTING, so the
+        # queue default is ROUTING's 5s; the spec's 10s DEADLINE_ACK_MS is
+        # passed explicitly by ACK senders, pinned in test_ack_deadline_ms).
+        clock.advance(DEADLINE_ROUTING_MS + 1)
 
         assert q.pop() is None
         assert q.stats.packets_dropped_deadline == 1

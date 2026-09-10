@@ -464,6 +464,9 @@ fn router_rejects_unauthorized_version_wrap_from_127_to_zero() {
 #[test]
 fn root_authorized_version_propagates_across_two_hops_and_tampering_fails() {
     // UPSTREAM-AddrForKey variant (i72x.2): shared corpus flips in i72x.6.
+    // Merge note: beads-worker-7 hardcoded the same seed-0x61 identity; the
+    // committed fixture wins because it also pins root_pubkey/dodag_id
+    // byte-equality below (the independent upstream conformance oracle).
     let document: serde_json::Value = serde_json::from_str(include_str!(
         "../../tests/dodag_version_authorization_upstream.json"
     ))
@@ -514,7 +517,7 @@ fn root_authorized_version_propagates_across_two_hops_and_tampering_fails() {
         .unwrap();
     assert_eq!(
         root_authorization,
-        hex::decode(&vector["option"].as_str().unwrap()[4..]).unwrap()
+        canonical_version_authorization_option()[2..]
     );
     let relayed_authorization = OptionIter::new(Dio::options_tail(&relay_wire[..relay_len]))
         .find_map(|option| {
@@ -541,11 +544,20 @@ fn root_authorized_version_propagates_across_two_hops_and_tampering_fails() {
     assert_eq!(leaf.dodag.version, 1);
 }
 
-/// Canonical root-signed option from `test/vectors/dodag_version_authorization.json`.
+/// Canonical root-signed option. The shared corpus
+/// `test/vectors/dodag_version_authorization.json` still signs the legacy
+/// native DODAGID with instance 1 (stale until i72x.6); the pinned vector
+/// in `tests/dodag_version_authorization_upstream.json` is the same option
+/// shape over the UPSTREAM DODAGID for the seed-0x61 root at
+/// RPL_INSTANCE_ID 0 (the Rust constant), produced with the Python
+/// schnorr48 oracle — the same oracle class the corpus uses — and
+/// cross-checked against the Rust signer (byte-identical), never derived
+/// from the Rust verifier alone.
 fn canonical_version_authorization_option() -> Vec<u8> {
     // UPSTREAM-AddrForKey variant (i72x.2): the shared corpus still pins the
     // rejected native-profile DODAGID for the Python consumer; it flips when
-    // the Python derivation migrates (i72x.6).
+    // the Python derivation migrates (i72x.6). Same bytes as the hardcoded
+    // literal beads-worker-7 carried; the fixture keeps one source of truth.
     let document: serde_json::Value = serde_json::from_str(include_str!(
         "../../tests/dodag_version_authorization_upstream.json"
     ))
@@ -879,6 +891,27 @@ fn spoofed_dao_target_is_rejected_before_replay_state_changes() {
         root.lookup_route(Ipv6Addr::from(target)),
         Some([Ipv6Addr::from(target)].as_slice())
     );
+}
+
+#[test]
+fn direct_child_gate_fires_on_routable_upstream_addresses() {
+    // ssg9 regression: post-i72x.2 the DAO transit parent and the DODAG ID
+    // are both upstream AddrForKey /128s with no IID in the low half. The
+    // direct-child anti-spoof gate must therefore match by exact equality.
+    // A spoofed (wrong) sender must be rejected and a correct sender accepted.
+    let root_addr = test_origin(1);
+    let target = test_origin(2);
+    let relay = test_origin(9); // routable but not the origin
+    let mut sender = DaoManager::new(target.into(), RPL_INSTANCE_ID, root_addr.into());
+    let dao = sender.build_dao(root_addr.into());
+    let mut root = Router::new_root(root_addr);
+
+    // Spoofed routable sender (relay claims to forward the child's DAO).
+    assert!(!root.process_dao_at_ms(&dao, target, relay, 0));
+    assert!(root.lookup_route(Ipv6Addr::from(target)).is_none());
+    // Correct sender (origin == source) is accepted.
+    assert!(root.process_dao_at_ms(&dao, target, target, 0));
+    assert_eq!(root.lookup_route(Ipv6Addr::from(target)), Some([Ipv6Addr::from(target)].as_slice()));
 }
 
 #[test]

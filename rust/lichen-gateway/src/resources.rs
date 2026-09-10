@@ -1157,10 +1157,14 @@ pub const CONTENT_FORMAT_SENML_CBOR: u16 = 112;
 pub struct GatewayCoordinator {
     /// This gateway's info.
     pub info: GatewayInfo,
-    /// This gateway's key-derived IID. Kept separately from `info.iid` (the
-    /// routable address): under upstream AddrForKey the address's low half is
-    /// not the IID (i72x.2).
-    pub own_iid: [u8; 8],
+    /// This gateway's canonical identity IID (SHA-512(pubkey)[0:8], U/L
+    /// cleared). Stored separately from `info.iid` because `info.iid` holds the
+    /// routable upstream AddrForKey /128 whose low half is bit-packed key
+    /// material, NOT this IID (i72x.2). On-wire slot-claim kid, tunnel-auth
+    /// egress IID, GCP OSCORE sender/recipient ids, and IID-ordering
+    /// tiebreaks all bind identity by this SHA-512 IID; slicing it out of the
+    /// routable address never matches the peer's derivation.
+    identity_iid: [u8; 8],
     /// Validated capability announcements (spec 8.12, bounded LRU).
     pub capability_table: crate::capability::CapabilityTable,
     /// Node registry.
@@ -1662,18 +1666,18 @@ impl GatewayCoordinator {
     /// Create an explicitly ephemeral coordinator for tests/simulations.
     pub fn new_ephemeral(
         iid: [u8; 16],
-        own_iid: [u8; 8],
+        identity_iid: [u8; 8],
         slots_per_superframe: u32,
         max_gateways: usize,
     ) -> Result<Self, slot::SlotError> {
         let verifier = slot::SlotClaimVerifier::new_ephemeral(max_gateways)?;
-        Self::with_verifier(iid, own_iid, slots_per_superframe, verifier, None)
+        Self::with_verifier(iid, identity_iid, slots_per_superframe, verifier, None)
     }
 
     /// Provision new durable replay state. Existing files fail closed.
     pub fn provision_persistent(
         iid: [u8; 16],
-        own_iid: [u8; 8],
+        identity_iid: [u8; 8],
         slots_per_superframe: u32,
         max_gateways: usize,
         replay_path: &Path,
@@ -1685,7 +1689,7 @@ impl GatewayCoordinator {
         }
         let verifier = slot::SlotClaimVerifier::new_ephemeral(max_gateways)?;
         let mut coordinator =
-            Self::with_verifier(iid, own_iid, slots_per_superframe, verifier, None)?;
+            Self::with_verifier(iid, identity_iid, slots_per_superframe, verifier, None)?;
         save_coordinator_state_atomic(
             replay_path,
             &coordinator.info.iid,
@@ -1711,7 +1715,7 @@ impl GatewayCoordinator {
     /// minimum generation floor before serving coordination resources.
     pub fn load_persistent(
         iid: [u8; 16],
-        own_iid: [u8; 8],
+        identity_iid: [u8; 8],
         slots_per_superframe: u32,
         max_gateways: usize,
         replay_path: &Path,
@@ -1729,7 +1733,7 @@ impl GatewayCoordinator {
         )?;
         let mut coordinator = Self::with_verifier(
             iid,
-            own_iid,
+            identity_iid,
             slots_per_superframe,
             restored.verifier,
             Some(SlotReplayPersistence {
@@ -1743,9 +1747,17 @@ impl GatewayCoordinator {
         Ok(coordinator)
     }
 
+    /// This gateway's canonical identity IID (SHA-512(pubkey)[0:8], U/L
+    /// cleared) for on-wire identity binding: slot-claim kid, tunnel-auth
+    /// egress IID, GCP OSCORE ids, and IID tiebreaks. Distinct from the
+    /// routable address in `info.iid` (see the `identity_iid` field note).
+    pub fn own_identity_iid(&self) -> [u8; 8] {
+        self.identity_iid
+    }
+
     fn with_verifier(
         iid: [u8; 16],
-        own_iid: [u8; 8],
+        identity_iid: [u8; 8],
         slots_per_superframe: u32,
         verifier: slot::SlotClaimVerifier,
         replay_persistence: Option<SlotReplayPersistence>,
@@ -1799,7 +1811,7 @@ impl GatewayCoordinator {
 
         Ok(Self {
             info: GatewayInfo::new(iid),
-            own_iid,
+            identity_iid,
             node_registry: NodeRegistry::new(),
             channel_map: ChannelMap { channels },
             capability_table: crate::capability::CapabilityTable::new(),
@@ -1834,7 +1846,7 @@ impl GatewayCoordinator {
         }
         let claim = slot::RawSlotClaim::from_cose(envelope, self.slots_per_superframe)
             .map_err(|_| ResourceError::InvalidCbor)?;
-        let own_iid = self.own_iid;
+        let own_iid: [u8; 8] = self.own_identity_iid();
         if *claim.gateway_iid() != own_iid {
             return Err(ResourceError::InvalidFieldType("gateway_iid"));
         }
@@ -1912,16 +1924,21 @@ impl GatewayCoordinator {
     pub fn authorize_egress(
         &mut self,
         inner_source: [u8; 16],
+        inner_destination: [u8; 16],
         destination_is_mesh: bool,
-        route: &[[u8; 8]],
+        route: &[[u8; 16]],
     ) -> Result<(), tunnel_auth::TunnelAuthError> {
         self.tunnel_auth.authorize_decapsulation(
             tunnel_auth::DecapsulationRequest {
                 direction: tunnel_auth::TunnelDirection::MeshToExternal,
                 inner_source,
+                inner_destination,
                 source_is_mesh: true,
                 destination_is_mesh,
                 route,
+                // This gateway is the egress; the route must terminate at
+                // its own primary address.
+                egress_addr: self.info.iid,
             },
             u64::try_from(unix_now()).unwrap_or(0),
         )
@@ -1946,9 +1963,10 @@ impl GatewayCoordinator {
             public_key: &PublicKey::new(*pubkey),
             oscore_authenticated: oscore_verified,
         };
-        // Egress identity: the low 8 bytes of the gateway's key-derived
-        // native address (same derivation as record_own_claim_envelope).
-        let own_iid = self.own_iid;
+        // Egress identity: the gateway's canonical SHA-512 identity IID (the
+        // peer derives it the same way; the routable AddrForKey low half is
+        // bit-packed key material, not this IID).
+        let own_iid: [u8; 8] = self.own_identity_iid();
         let now = u64::try_from(unix_now()).unwrap_or(0);
         match self
             .tunnel_auth
@@ -2119,7 +2137,7 @@ impl GatewayCoordinator {
         if !overlap.is_empty() {
             // Conflict resolution: lowest IID wins (GCP-6.3)
             // Use slot module's comparison function for consistent IID ordering
-            let our_iid = self.own_iid;
+            let our_iid: [u8; 8] = self.own_identity_iid();
             let their_iid = *claim.gateway_iid();
 
             if slot::compare_iids(&our_iid, &their_iid) == std::cmp::Ordering::Less {
@@ -2362,9 +2380,12 @@ mod tests {
     use schnorr48::derive_keypair;
 
     fn coordinator(iid: [u8; 16]) -> GatewayCoordinator {
-        // Fixture addresses are arbitrary byte patterns, not key-derived;
-        // keep the low half as the test IID (pre-migration semantics).
-        GatewayCoordinator::new_ephemeral(iid, iid[8..16].try_into().unwrap(), 60, 64).unwrap()
+        // The conflict tiebreak compares own_identity_iid against the claim's
+        // gateway_iid; keep the coordinator's identity IID == the address's
+        // low half so the test's chosen address (e.g. all-0xff for the
+        // highest IID) drives the intended win/lose outcome.
+        let identity_iid: [u8; 8] = iid[8..].try_into().unwrap();
+        GatewayCoordinator::new_ephemeral(iid, identity_iid, 60, 64).unwrap()
     }
 
     /// Build a spec GCP-6.5 COSE_Sign1 slot-claim envelope signed by the seed's
@@ -3028,9 +3049,10 @@ mod tests {
         let sealing_seed = [0x71; 32];
         let mut local_address = [0u8; 16];
         local_address[8..].fill(0xff);
+        let local_iid: [u8; 8] = local_address[8..].try_into().unwrap();
         let mut coordinator = GatewayCoordinator::provision_persistent(
             local_address,
-            local_address[8..16].try_into().unwrap(),
+            local_iid,
             60,
             4,
             &state_path,
@@ -3059,7 +3081,7 @@ mod tests {
 
         let mut restored = GatewayCoordinator::load_persistent(
             local_address,
-            local_address[8..16].try_into().unwrap(),
+            local_iid,
             60,
             4,
             &state_path,
@@ -3144,9 +3166,10 @@ mod tests {
         let sealing_seed = [0x74; 32];
         let mut local_address = [0u8; 16];
         local_address[8..].fill(0x01);
+        let local_iid: [u8; 8] = local_address[8..].try_into().unwrap();
         let mut coordinator = GatewayCoordinator::provision_persistent(
             local_address,
-            local_address[8..16].try_into().unwrap(),
+            local_iid,
             60,
             4,
             &state_path,
@@ -3188,7 +3211,7 @@ mod tests {
         drop(coordinator);
         let mut restored = GatewayCoordinator::load_persistent(
             local_address,
-            local_address[8..16].try_into().unwrap(),
+            local_iid,
             60,
             4,
             &state_path,
@@ -3219,8 +3242,14 @@ mod tests {
         // — byte-for-byte the envelope recorded via
         // record_own_claim_envelope (C claim_store_cose parity: the
         // winner's stored COSE_Sign1 with no Content-Format option).
-        let (a_priv, a_pub) = derive_keypair(&Seed::new([0x77; 32]));
-        let (b_priv, b_pub) = derive_keypair(&Seed::new([0x41; 32]));
+        // Seeds 0x00/0x03 are chosen so the two identity planes DISAGREE on
+        // the ordering: by SHA-512 IID 0x00 < 0x03, but by routable-AddrForKey
+        // low half 0x03 < 0x00 (verified: iid[0..4] 7dd5.. vs e003.., ygg
+        // low[0..4] de94.. vs 7a72..). A tiebreak on the wrong plane would
+        // flip the winner, so the win-arm assertion below is decisive against
+        // an info.iid[8..16] regression (7ecb.3).
+        let (a_priv, a_pub) = derive_keypair(&Seed::new([0x00; 32]));
+        let (b_priv, b_pub) = derive_keypair(&Seed::new([0x03; 32]));
         let a_pubkey = *a_pub.as_bytes();
         let b_pubkey = *b_pub.as_bytes();
         let a_iid = crate::trust::iid_from_pubkey(&a_pubkey);
@@ -3229,12 +3258,28 @@ mod tests {
         // from the derived (hash) IIDs rather than assuming an ordering.
         let (own_priv, own_pub, own_iid, peer_pubkey, peer_seed) =
             if slot::compare_iids(&a_iid, &b_iid) == std::cmp::Ordering::Less {
-                (a_priv, a_pub, a_iid, b_pubkey, [0x41; 32])
+                (a_priv, a_pub, a_iid, b_pubkey, [0x03; 32])
             } else {
-                (b_priv, b_pub, b_iid, a_pubkey, [0x77; 32])
+                (b_priv, b_pub, b_iid, a_pubkey, [0x00; 32])
             };
-        let mut address = [0u8; 16];
-        address[8..].copy_from_slice(&own_iid);
+        // Pin the decisive property: the two identity planes must DISAGREE on
+        // the own-vs-peer ordering, so a tiebreak that (re)grabs
+        // info.iid[8..16] picks the wrong winner and fails this test.
+        let (peer_pub, peer_iid) = if own_iid == a_iid {
+            (b_pub, b_iid)
+        } else {
+            (a_pub, a_iid)
+        };
+        let address = lichen_core::addr::ygg_addr_from_pubkey(own_pub.as_bytes());
+        let peer_address = lichen_core::addr::ygg_addr_from_pubkey(peer_pub.as_bytes());
+        assert_ne!(
+            slot::compare_iids(&own_iid, &peer_iid),
+            slot::compare_iids(
+                &address[8..16].try_into().unwrap(),
+                &peer_address[8..16].try_into().unwrap()
+            ),
+            "fixture must disagree across planes: IID plane vs routable low half"
+        );
         let mut coordinator = GatewayCoordinator::new_ephemeral(address, own_iid, 60, 4).unwrap();
         coordinator.info.slot_map = SlotMap {
             mode: AllocationMode::Contiguous,
@@ -3264,10 +3309,15 @@ mod tests {
 
     #[test]
     fn record_own_claim_envelope_rejects_foreign_iid_and_oversize() {
-        let mut address = [0u8; 16];
-        address[8..].fill(0x02);
-        let mut coordinator = GatewayCoordinator::new_ephemeral(address, address[8..16].try_into().unwrap(), 60, 4)
-            .unwrap();
+        // Realistic identity: routable /128 from AddrForKey (low half is NOT
+        // the SHA-512 IID, i72x.2); the coordinator's own IID is derived from
+        // the same key. The prior `[0;8] || iid` fabrication equated the two
+        // planes and masked the binding this test pins.
+        let (_own_priv, own_pub) = derive_keypair(&Seed::new([0x23; 32]));
+        let address = lichen_core::addr::ygg_addr_from_pubkey(own_pub.as_bytes());
+        let own_iid = crate::trust::iid_from_pubkey(own_pub.as_bytes());
+        let mut coordinator =
+            GatewayCoordinator::new_ephemeral(address, own_iid, 60, 4).unwrap();
         // Well-formed envelope whose kid is not this gateway's IID: never
         // echoed (the echo goes to a peer, so unbound bytes are refused).
         let (foreign, _pubkey) = signed_slot_claim([0x41; 32], vec![1], 4, 0);
@@ -3285,10 +3335,14 @@ mod tests {
 
     #[test]
     fn post_slots_silently_discards_oversize_peer_claim() {
-        let mut address = [0u8; 16];
-        address[8..].fill(0x02);
-        let mut coordinator = GatewayCoordinator::new_ephemeral(address, address[8..16].try_into().unwrap(), 60, 4)
-            .unwrap();
+        // Realistic identity (AddrForKey routable + derived SHA-512 IID);
+        // the oversized-payload discard is orthogonal but must not depend on
+        // the old low-half==IID fabrication.
+        let (_own_priv, own_pub) = derive_keypair(&Seed::new([0x25; 32]));
+        let address = lichen_core::addr::ygg_addr_from_pubkey(own_pub.as_bytes());
+        let own_iid = crate::trust::iid_from_pubkey(own_pub.as_bytes());
+        let mut coordinator =
+            GatewayCoordinator::new_ephemeral(address, own_iid, 60, 4).unwrap();
         let peer_pubkey = [0x43; 32];
         let response = coordinator.handle_post_slots(
             &vec![0xa1; OWN_CLAIM_COSE_MAX + 1],

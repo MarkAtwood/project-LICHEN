@@ -154,12 +154,20 @@ int __wrap_coap_oscore_authorize_mutating(struct coap_resource *resource,
 /* Stubs for symbols coap_server.c references from unlinked modules   */
 /* ------------------------------------------------------------------ */
 
-int lichen_key_store_get(const uint8_t iid[LICHEN_KEY_IID_LEN],
-			 struct lichen_key_entry *entry)
+int lichen_identity_ygg_addr_from_ed25519(const uint8_t *pubkey,
+					  uint8_t ygg_addr[16])
 {
-	ARG_UNUSED(iid);
-	ARG_UNUSED(entry);
-	return -ENOENT;
+	ARG_UNUSED(pubkey);
+	ARG_UNUSED(ygg_addr);
+	return -EINVAL;
+}
+
+size_t lichen_key_store_list(struct lichen_key_entry *entries,
+			     size_t max_entries)
+{
+	ARG_UNUSED(entries);
+	ARG_UNUSED(max_entries);
+	return 0U;
 }
 
 uint8_t lichen_tunnel_auth_coap_code(uint16_t coap_code)

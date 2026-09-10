@@ -120,7 +120,7 @@ Physical:     LoRa CSS (SX126x/SX127x)
 
 1. **Ed25519 truncated signatures (32 bytes)** - Non-standard but necessary for LoRa bandwidth. Security analysis required.
 
-2. **SCHC compression** - Baseline IPv6/UDP headers compress from 48 bytes to 18-33 bytes. Rules are pre-provisioned, not negotiated.
+2. **SCHC compression** - Baseline IPv6/UDP/CoAP headers compress from 52 bytes to 23 bytes (link-local, Rule 0) or 37 bytes (Yggdrasil, Rule 1). Rules are pre-provisioned, not negotiated.
 
 3. **RPL Non-Storing Mode** - Border router holds all routes, uses 6LoRH source routing for downward traffic.
 
@@ -806,9 +806,8 @@ Use RFC 2119 keywords (MUST, SHOULD, MAY) consistently.
 
 ## Open Questions (Check Before Implementing)
 
-1. **SCHC rule distribution** - Pre-provisioned vs. negotiated
-2. **Time synchronization** - NTP over CoAP, GPS, or piggyback on DIO?
-3. **DANE record format** - Exact TLSA record structure for `_25519._mesh.<name>`
+1. **Time synchronization** - NTP over CoAP, GPS, or piggyback on DIO?
+2. **DANE record format** - Exact TLSA record structure for `_25519._mesh.<name>`
 
 Check `bd list` for issues tracking these decisions.
 

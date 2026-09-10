@@ -357,7 +357,8 @@ class Router:
         dodag: RPL DODAG state for upward routing.
         loadng: LOADng router for reactive discovery.
         mesh_prefixes: Set of IPv6 prefixes that are "mesh-local".
-            Why a set: Nodes may be part of multiple prefixes (ULA + GUA).
+            Why a set: The primary mesh prefix (0200::/8) plus optional
+            upstream GUA 2000::/3 prefixes; ULA is not mesh-local.
         pending_queue: Packets waiting for route discovery.
             Why dict by destination: Multiple packets may be queued for same dest.
         max_pending_per_dest: Max packets to queue per destination.

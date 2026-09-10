@@ -5,8 +5,10 @@
 from __future__ import annotations
 
 import math
+import re
 import time
 from collections import OrderedDict
+from ipaddress import IPv6Address
 from typing import Any
 
 import aiocoap
@@ -22,6 +24,7 @@ from lichen.coap.sos_origin import (
     verify_sos_origin,
 )
 from lichen.crypto.identity import _pubkey_to_iid, yggdrasil_address
+from lichen.crypto.key_persistence import TrustStorePersistenceError
 from lichen.crypto.trust import TrustError
 
 MAX_ROLLCALLS = 256
@@ -30,11 +33,6 @@ MAX_CHECKINS = 256  # Maximum stored check-ins
 # Bounded like OriginSequenceTracker.max_origins: rate-limit dicts grow per
 # minted TOFU identity without bound without this cap.
 MAX_RATE_LIMIT_SOURCES = 256
-
-# RFC 7967 No-Response option bitmask: suppress 2.xx/4.xx/5.xx responses.
-# Spec 18.4.1: missing/malformed/invalid SOS origin signatures are silently
-# dropped, so bad-signature paths return this instead of 4.01.
-_NO_RESPONSE_OPT = 26
 
 # SOS rate limiting per spec (per-source limits)
 SOS_COOLDOWN_S = 600  # 10-minute cooldown period per source
@@ -45,8 +43,17 @@ SOS_BURST_MAX = 2  # Max messages per cooldown period ("Burst allowance: 2")
 # core alert dict (spec 18.4.1 signs only the alert payload).
 _SOS_ENVELOPE_FIELDS = frozenset({"pubkey", "sig"})
 
+# Spec 18.4.2 node field: exactly 8 colon-separated groups of 1-4 hex digits
+# (full IPv6 notation, no :: compression) - identical to the C codec.
+_SOS_NODE_RE = re.compile(r"^[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){7}$")
+
 # Valid check-in status values per spec 18.6.1
 CHECKIN_STATUS_VALUES = frozenset({"ok", "help", "delayed"})
+
+# RFC 7967 No-Response option bitmask: suppress 2.xx/4.xx/5.xx responses.
+# Spec 18.4.1: missing/malformed/invalid SOS origin signatures are silently
+# dropped, so bad-signature paths return this instead of 4.01.
+_NO_RESPONSE_OPT = 26
 
 
 def _silent_drop() -> Message:
@@ -56,7 +63,7 @@ def _silent_drop() -> Message:
     the RFC 7967 No-Response option. For CON requests it substitutes an empty
     ACK to complete the related message exchange; for NON requests (e.g. the
     ff02::1 multicast SOS path) the reply simply never reaches the wire. Either
-    path conveys no code/payload to the requester — which is what spec 18.4.1
+    path conveys no code/payload to the requester -- which is what spec 18.4.1
     mandates for the envelope-validation silent drop.
     """
     return Message(no_response=_NO_RESPONSE_OPT)
@@ -67,16 +74,19 @@ class SosResource(resource.ObservableResource):
 
     State is a CBOR map::
 
-        {"active": true, "from": "<hex-eui64>", "t": <float>}  # active
-        {"active": false, "from": null, "t": null}              # idle
+        {"active": true, "from": "<32-hex origin addr>", "t": <float>}  # active
+        {"active": false, "from": null, "t": null}             # idle
 
     **POST** activates with ``{"type":"sos", "node":..., "ts":...}`` plus the
     origin-signature envelope ``{"pubkey": <32B>, "sig": <56B>}`` (or legacy
-    {"from","t"} core fields).  Per spec 18.4.1 the origin signature is
-    REQUIRED: the pubkey must derive to the claimed node IID, the Schnorr48
-    signature must verify over the canonical CBOR of the core alert dict,
-    and the origin sequence must strictly advance; anything else is silently
-    dropped with no response (RFC 7967 No-Response option).
+    {"from","t"} core fields).  Per spec 18.4.2 the node field is the
+    originator's full ``0200::`` IPv6 address string.  Per spec 18.4.1 the
+    origin signature is REQUIRED: the claimed address must equal the
+    pubkey's upstream Yggdrasil ``AddrForKey``, the Schnorr48 signature must
+    verify over the canonical CBOR of the core alert dict, and the origin
+    sequence must strictly advance; messages with a missing, malformed, or
+    invalid origin signature are silently dropped (no response, RFC 7967
+    No-Response option).
     **DELETE** cancels.  **GET** and **Observe** expose the current state to all
     subscribers so neighbouring nodes can relay/escalate the alert.
 
@@ -105,7 +115,7 @@ class SosResource(resource.ObservableResource):
                        18.4.1 ("rate limiting uses monotonic uptime").
             trust_store: Optional TrustStore for TOFU pinning of verified
                          origin pubkeys. When None, only cryptographic
-                         verification (key-to-IID binding + signature) is
+                         verification (key-to-address binding + signature) is
                          enforced.
         """
         super().__init__()
@@ -204,10 +214,18 @@ class SosResource(resource.ObservableResource):
     def _state_payload(self) -> bytes:
         return cbor2.dumps({"active": self._active, "from": self._from, "t": self._t})
 
-    def activate(self, from_eui64: bytes, t: float) -> None:
-        """Activate SOS from *from_eui64* at time *t* and notify observers."""
+    def activate(self, origin_addr: bytes, t: float) -> None:
+        """Activate SOS from *origin_addr* at time *t* and notify observers.
+
+        *origin_addr* is the full 16-byte packed 0200:: AddrForKey origin
+        address (spec 18.4.1), not an IID/EUI-64. The state and every
+        cancel/DELETE path re-derive and compare 16 bytes, so a shorter
+        value would create an alert no valid cancel can ever match.
+        """
+        if len(origin_addr) != 16:
+            raise ValueError(f"origin_addr must be 16 bytes, got {len(origin_addr)}")
         self._active = True
-        self._from = from_eui64.hex()
+        self._from = origin_addr.hex()
         self._t = t
         self.updated_state()
 
@@ -246,11 +264,15 @@ class SosResource(resource.ObservableResource):
             pass  # support other types per spec in future
         if from_hex is None or timestamp is None:
             return Message(code=aiocoap.BAD_REQUEST)
-        if (
-            not isinstance(from_hex, str)
-            or len(from_hex) != 16
-            or any(char not in "0123456789abcdefABCDEF" for char in from_hex)
-        ):
+        # Spec 18.4.2: the node field is the originator's full 0200:: IPv6
+        # address string (colon-separated); bare IID hex is no longer accepted.
+        # The 8-group shape mirrors the C codec's validate_node_id so both
+        # implementations issue identical verdicts on the same wire bytes.
+        if not isinstance(from_hex, str) or not _SOS_NODE_RE.fullmatch(from_hex):
+            return Message(code=aiocoap.BAD_REQUEST)
+        try:
+            parsed = IPv6Address(from_hex)
+        except ValueError:  # pragma: no cover - regex already guarantees this
             return Message(code=aiocoap.BAD_REQUEST)
         if (
             isinstance(timestamp, bool)
@@ -260,9 +282,8 @@ class SosResource(resource.ObservableResource):
         ):
             return Message(code=aiocoap.BAD_REQUEST)
         # Spec 18.4.1: SOS MUST carry a valid origin signature; unsigned or
-        # invalid messages are silently dropped with no response (RFC 7967
-        # No-Response option). The envelope carries the signer's pubkey
-        # (32 B) and the wire origin signature (8 B seq + 48 B sig).
+        # invalid messages are dropped. The envelope carries the signer's
+        # pubkey (32 B) and the wire origin signature (8 B seq + 48 B sig).
         pubkey = body.get("pubkey")
         sig_blob = body.get("sig")
         if not isinstance(pubkey, bytes) or len(pubkey) != 32 or not isinstance(sig_blob, bytes):
@@ -271,22 +292,26 @@ class SosResource(resource.ObservableResource):
             origin_sig = SosOriginSignature.from_bytes(sig_blob)
         except ValueError:
             return _silent_drop()
-        iid = bytes.fromhex(from_hex.lower())
-        if _pubkey_to_iid(pubkey) != iid:
+        # Binding gate: the claimed node address is attacker-supplied, so the
+        # binding MUST come from the verified pubkey's own AddrForKey.
+        origin_addr = yggdrasil_address(pubkey)
+        if parsed != origin_addr:
             return _silent_drop()
         core_alert = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
-        origin_addr = yggdrasil_address(pubkey).packed
         if not verify_sos_origin(
-            pubkey, origin_addr, canonicalize_sos_payload(core_alert), origin_sig
+            pubkey, origin_addr.packed, canonicalize_sos_payload(core_alert), origin_sig
         ):
             return _silent_drop()
         if self._trust_store is not None:
             try:
-                self._trust_store.verify_or_pin(pubkey, iid)
-            except TrustError:
+                self._trust_store.verify_or_pin(pubkey, _pubkey_to_iid(pubkey))
+            except (TrustError, TrustStorePersistenceError):
+                # Persistence failures fail closed: no pin, no reply.
                 return _silent_drop()
         # Replay gate: only strictly advancing sequences may activate.
-        source_key = from_hex.lower()
+        # Accounting keys are the canonical packed form of the full 16-byte
+        # origin address (spec 18.4.1; no IID extraction).
+        source_key = parsed.packed.hex()
         last_seq = self._sequences.last_seen(source_key)
         if last_seq is not None and origin_sig.origin_sequence <= last_seq:
             return _silent_drop()
@@ -302,7 +327,7 @@ class SosResource(resource.ObservableResource):
             return msg
         self._sequences.accept(source_key, origin_sig.origin_sequence)
         self._record_request(source_key)
-        self.activate(bytes.fromhex(from_hex), timestamp)
+        self.activate(parsed.packed, timestamp)
         return Message(code=CHANGED)
 
     def _cancel_from_body(self, body: dict[Any, Any]) -> Message:
@@ -321,16 +346,15 @@ class SosResource(resource.ObservableResource):
             origin_sig = SosOriginSignature.from_bytes(sig_blob)
         except ValueError:
             return _silent_drop()
-        active_iid = bytes.fromhex(self._from.lower())
-        if _pubkey_to_iid(pubkey) != active_iid:
+        active_addr = bytes.fromhex(self._from)
+        if yggdrasil_address(pubkey).packed != active_addr:
             return _silent_drop()
         core_cancel = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
-        origin_addr = yggdrasil_address(pubkey).packed
         if not verify_sos_origin(
-            pubkey, origin_addr, canonicalize_sos_payload(core_cancel), origin_sig
+            pubkey, active_addr, canonicalize_sos_payload(core_cancel), origin_sig
         ):
             return _silent_drop()
-        source_key = self._from.lower()
+        source_key = self._from
         last_seq = self._sequences.last_seen(source_key)
         if last_seq is not None and origin_sig.origin_sequence <= last_seq:
             return _silent_drop()
@@ -342,8 +366,8 @@ class SosResource(resource.ObservableResource):
         """DELETE /sos cancels an active alert. Requires origin authentication.
 
         Only the originator of the active alert may cancel it. The request must
-        carry a valid origin-signature envelope (pubkey + sig) and the pubkey
-        must derive to the IID of the active SOS originator.
+        carry a valid origin-signature envelope (pubkey + sig) and the pubkey's
+        AddrForKey must equal the full origin address of the active alert.
         """
         # SECURITY: Require active alert to cancel
         if not self._active or self._from is None:
@@ -367,18 +391,17 @@ class SosResource(resource.ObservableResource):
         except ValueError:
             return _silent_drop()
         # SECURITY: Verify requester is the originator of the active alert
-        active_iid = bytes.fromhex(self._from.lower())
-        if _pubkey_to_iid(pubkey) != active_iid:
+        active_addr = bytes.fromhex(self._from)
+        if yggdrasil_address(pubkey).packed != active_addr:
             return _silent_drop()
         # SECURITY: Verify signature over canonical cancel payload
         core_cancel = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
-        origin_addr = yggdrasil_address(pubkey).packed
         if not verify_sos_origin(
-            pubkey, origin_addr, canonicalize_sos_payload(core_cancel), origin_sig
+            pubkey, active_addr, canonicalize_sos_payload(core_cancel), origin_sig
         ):
             return _silent_drop()
         # SECURITY: Replay gate for cancel requests
-        source_key = self._from.lower()
+        source_key = self._from
         last_seq = self._sequences.last_seen(source_key)
         if last_seq is not None and origin_sig.origin_sequence <= last_seq:
             return _silent_drop()

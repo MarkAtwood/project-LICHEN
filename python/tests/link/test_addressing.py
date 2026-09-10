@@ -122,7 +122,7 @@ class TestElidedDerivation:
             derive_elided_destination(bytes([0x15, 0x01, 0x02]))
 
     def test_unknown_dispatch_raises(self) -> None:
-        with pytest.raises(ValueError, match="unknown dispatch"):
+        with pytest.raises(ValueError, match="cannot derive destination"):
             derive_elided_destination(bytes([0x99, 0x00]))
 
     def test_resolve_none_is_broadcast(self) -> None:

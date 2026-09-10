@@ -14,6 +14,9 @@ set(TRACKER_SOURCE ${CMAKE_CURRENT_LIST_DIR}/../../subsys/lichen/schc/schc_failu
 set(SCHC_INCLUDE ${CMAKE_CURRENT_LIST_DIR}/../../subsys/lichen/schc/include)
 
 if(DEFINED ENV{ZEPHYR_BASE})
+  # src/main.c targets the current 2-arg tracker API (see the merge note in
+  # schc_failure_tracker.h); the tracker itself comes from the
+  # CONFIG_LICHEN_SCHC-gated schc library.
   target_sources(app PRIVATE src/main.c)
 else()
   add_executable(schc_failure_tracker src/main.c ${TRACKER_SOURCE})

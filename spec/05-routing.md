@@ -466,8 +466,9 @@ Prefix)`. In the no-ULA 02xx model, all nodes use self-derived primary 02xx
 addresses; prefix advertisement is not used for DODAG formation. The Prefix MUST
 have every bit after Prefix Length cleared. Target senders MUST use the minimum
 number of prefix octets and set reserved flags and unused prefix bits to zero.
-As required by RFC 6550, receivers MUST ignore reserved flags and bits beyond
-Prefix Length, then canonicalize the internal key. Receivers MUST reject
+Receivers MUST ignore bits beyond Prefix Length, then canonicalize the internal
+key. The reserved RPL Target Flags octet MUST be zero; a nonzero value rejects
+the DAO before route-state mutation (Section 8.6). Receivers MUST reject
 truncated prefixes and prefix lengths greater than 128 without mutating
 DAOSequence replay or routing state. Link-layer replay state is updated
 independently after link authentication.
@@ -1495,6 +1496,13 @@ RREQ is flooded. Each node:
 2. If I have gradient to destination → send RREP (intermediate reply)
 3. If seen before (originator + seq) → drop
 4. Otherwise → record reverse gradient, decrement hop limit, rebroadcast
+
+Receivers MUST accept RREQs with any wire-legal Hop Limit (0..MAX_HOP_LIMIT),
+including floods from every expanding-ring attempt (B2.5 ring sizes 4, 8, 15).
+The reverse-gradient cost for a received RREQ derives as
+`MAX_HOP_LIMIT - Hop Limit`. This cost is monotonic in hops traversed within
+a ring but is not comparable across rings; exact traversed-hop reporting
+would require a wire-format change.
 
 Implementations MUST rate-limit RREQ processing to at most 10 per minute per
 source IID and 30 per minute globally. RREQs exceeding these limits MUST be

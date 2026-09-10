@@ -22,15 +22,37 @@ THRESHOLD_CPC = 3.0
 SNAPSHOT_NAME = "burn-snapshot.json"
 
 
+def _coerce_count(v: object) -> int | None:
+    """Validate a raw JSON counter and coerce to non-negative int, or None.
+
+    Coercion happens only after the RAW value is validated: bools (an int
+    subclass), non-numeric shapes, and negatives — including fractional
+    negatives in (-1, 0) that int() truncates to 0 — must never pass as
+    valid (v0gm). Integral floats are tolerated (legacy snapshots).
+    """
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        n = v
+    elif isinstance(v, float):
+        if not v.is_integer():
+            return None  # fractional counters are corrupt, not truncatable
+        n = int(v)
+    else:
+        return None  # str/list/dict/None are never coerced silently
+    return n if n >= 0 else None
+
+
 def _load_baseline(path: str) -> dict | None:
     """Return {'usage': int, 'ts': int} or None if missing/corrupt/absurd."""
     try:
         with open(path) as f:
             d = json.load(f)
-        b = {"usage": int(d["usage"]), "ts": int(d["ts"])}
-        if b["usage"] < 0 or b["ts"] < 0:
+        usage = _coerce_count(d["usage"])
+        ts = _coerce_count(d["ts"])
+        if usage is None or ts is None:
             return None  # semantically absurd values are corrupt
-        return b
+        return {"usage": usage, "ts": ts}
     except Exception:
         return None
 
@@ -58,6 +80,10 @@ def update(
     cost-per-close was computed (then 'burn', 'closes', 'cpc', 'cpc_str',
     'over' are present).
     """
+    # Self-heal: the guards loop runs for weeks; if the state dir vanishes
+    # mid-run (tmp cleaner, manual cleanup), recreate it instead of crashing
+    # every cycle until restart (rmza).
+    os.makedirs(state_dir, exist_ok=True)
     path = os.path.join(state_dir, SNAPSHOT_NAME)
     if used <= 0:
         # Provider call failed (total_used prints 0 on error): an invalid

@@ -1,7 +1,7 @@
 {
   "$schema": "./schema.json",
   "format_version": 2,
-  "description": "Root authorization validation vectors (spec 8.2, 8.4). Tests DODAGID == AddrForKey(root_pubkey) binding and Schnorr48 signature verification. Covers valid root, invalid signature, DODAGID mismatch (impersonation), and pubkey validation. Expected results are fixed literals independently checked with test/vectors/reference_schnorr48.py and direct SHA-512 address derivation.",
+  "description": "Root authorization validation vectors (spec 8.2, 8.4). Tests DODAGID == AddrForKey(root_pubkey) binding and Schnorr48 signature verification. Covers valid root, invalid signature, DODAGID mismatch (impersonation), and pubkey validation. Fixed literals are independently checked with reference_schnorr48.py and the upstream AddrForKey bit-packing oracle (test/vectors/yggdrasil_address.json anchor).",
   "vectors": [
     {
       "name": "valid_signature_and_dodagid",
@@ -10,8 +10,8 @@
       "pubkey_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
       "message_hex": "44494f3a20444f44414720636f6e6669672c2052504c496e7374616e636549443d307830312c2056657273696f6e3d3432",
       "signature_hex": "a6e0ae614c9e8fce02ccbe52f98b31aa68b894db24b4d6fd8e6de22c784d7de4a7d3ed4919d97721df4a38edc1ad410a",
-      "dodagid_hex": "02ed4242ead4ac69ed4242ead4ac6948",
-      "dodagid_str": "2ed:4242:ead4:ac69:ed42:42ea:d4ac:6948",
+      "dodagid_hex": "02062f7c200618f7a0f14791738c5a1f",
+      "dodagid_str": "206:2f7c:2006:18f7:a0f1:4791:738c:5a1f",
       "expected_valid": true,
       "expected_error": null
     },
@@ -22,8 +22,8 @@
       "pubkey_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
       "message_hex": "44494f3a20444f44414720636f6e6669672c2052504c496e7374616e636549443d307830312c2056657273696f6e3d3432",
       "signature_hex": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-      "dodagid_hex": "02ed4242ead4ac69ed4242ead4ac6948",
-      "dodagid_str": "2ed:4242:ead4:ac69:ed42:42ea:d4ac:6948",
+      "dodagid_hex": "02062f7c200618f7a0f14791738c5a1f",
+      "dodagid_str": "206:2f7c:2006:18f7:a0f1:4791:738c:5a1f",
       "expected_valid": false,
       "expected_error": "signature_invalid"
     },
@@ -34,9 +34,9 @@
       "pubkey_hex": "bafc71bead3ac5e4b63e9c8216ee71a34aaec65722eedbca728b4e9b3ccce396",
       "message_hex": "44494f3a20444f44414720636f6e6669672c2052504c496e7374616e636549443d307830312c2056657273696f6e3d3432",
       "signature_hex": "269c8c7d89b45a154228f55099a8d0586bd1d4ef34ed47d4e4e8c0d0e0015e674b7a63e0baf80030e6a0bf3f1877f703",
-      "dodagid_hex": "02ed4242ead4ac69ed4242ead4ac6948",
-      "dodagid_str": "2ed:4242:ead4:ac69:ed42:42ea:d4ac:6948",
-      "attacker_real_dodagid_hex": "024e0a9a8c0ff3c74c0a9a8c0ff3c70a",
+      "dodagid_hex": "02062f7c200618f7a0f14791738c5a1f",
+      "dodagid_str": "206:2f7c:2006:18f7:a0f1:4791:738c:5a1f",
+      "attacker_real_dodagid_hex": "02008a071c82a58a74369382c6fbd223",
       "expected_valid": false,
       "expected_error": "dodagid_mismatch"
     },
@@ -48,8 +48,8 @@
       "signed_message_hex": "44494f3a20444f44414720636f6e6669672c2052504c496e7374616e636549443d307830312c2056657273696f6e3d3432",
       "message_hex": "44494f3a20444f44414720636f6e6669672c2052504c496e7374616e636549443d307846462c2056657273696f6e3d3939",
       "signature_hex": "a6e0ae614c9e8fce02ccbe52f98b31aa68b894db24b4d6fd8e6de22c784d7de4a7d3ed4919d97721df4a38edc1ad410a",
-      "dodagid_hex": "02ed4242ead4ac69ed4242ead4ac6948",
-      "dodagid_str": "2ed:4242:ead4:ac69:ed42:42ea:d4ac:6948",
+      "dodagid_hex": "02062f7c200618f7a0f14791738c5a1f",
+      "dodagid_str": "206:2f7c:2006:18f7:a0f1:4791:738c:5a1f",
       "expected_valid": false,
       "expected_error": "signature_invalid"
     },
@@ -59,7 +59,7 @@
       "pubkey_hex": "00000000000000000000000000000000",
       "message_hex": "44494f3a20444f44414720636f6e6669672c2052504c496e7374616e636549443d307830312c2056657273696f6e3d3432",
       "signature_hex": "a6e0ae614c9e8fce02ccbe52f98b31aa68b894db24b4d6fd8e6de22c784d7de4a7d3ed4919d97721df4a38edc1ad410a",
-      "dodagid_hex": "02ed4242ead4ac69ed4242ead4ac6948",
+      "dodagid_hex": "02062f7c200618f7a0f14791738c5a1f",
       "expected_valid": false,
       "expected_error": "pubkey_invalid"
     },
@@ -70,8 +70,8 @@
       "pubkey_hex": "248acbdbaf9e050196de704bea2d68770e519150d103b587dae2d9cad53dd930",
       "message_hex": "44494f3a20696e7374616e63653d312c2076657273696f6e3d312c2072616e6b3d323536",
       "signature_hex": "bb26c33f7e41a8873e2e7dfa13e4bdfbb93d33db18764e1efbf8cf1de04e215296b1fcba170612f3a28863ff770a3604",
-      "dodagid_hex": "0211e78d239a106f11e78d239a106fdb",
-      "dodagid_str": "211:e78d:239a:106f:11e7:8d23:9a10:6fdb",
+      "dodagid_hex": "0202dba9a122830fd7f3490c7da0ae94",
+      "dodagid_str": "202:dba9:a122:830f:d7f3:490c:7da0:ae94",
       "expected_valid": true,
       "expected_error": null
     },
@@ -81,7 +81,7 @@
       "pubkey_hex": "248acbdbaf9e050196de704bea2d68770e519150d103b587dae2d9cad53dd930",
       "message_hex": "44494f3a20444f44414720636f6e6669672c2052504c496e7374616e636549443d307830312c2056657273696f6e3d3432",
       "signature_hex": "a6e0ae614c9e8fce02ccbe52f98b31aa68b894db24b4d6fd8e6de22c784d7de4a7d3ed4919d97721df4a38edc1ad410a",
-      "dodagid_hex": "0211e78d239a106f11e78d239a106fdb",
+      "dodagid_hex": "0202dba9a122830fd7f3490c7da0ae94",
       "expected_valid": false,
       "expected_error": "signature_invalid"
     }

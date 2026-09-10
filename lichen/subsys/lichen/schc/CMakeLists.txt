@@ -17,7 +17,6 @@ zephyr_library_sources(
   schc_session_authority.c
   schc_session_rx.c
   schc_session_control.c
-  schc_authority.c
 )
 
 zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)

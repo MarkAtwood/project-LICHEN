@@ -30,13 +30,14 @@ Trust and validation posture:
   the local route cache, and duplicate/stale replays within the suppression
   window are dropped, so injected or delayed replies do not amplify along the
   reverse path (project-LICHEN-worker6-tiw8).
-- RREQ hop_limit values above INITIAL_HOP_LIMIT are handler-rejected with no
-  state change. They are wire-legal (appendix B2.5 expanding-ring search
-  originates floods at 8 and 15, and messages.py accepts up to
-  MAX_HOP_LIMIT), but the reverse-route cost derivation
-  ``INITIAL_HOP_LIMIT - hop_limit`` is meaningless for larger rings, so until
-  messages carry traversed-hop data they are dropped cleanly instead of being
-  mis-costed (project-LICHEN-worker6-0tk2).
+- RREQs from any expanding-ring attempt (appendix B2.5 hop limits 4, 8, 15)
+  are accepted. The reverse-route cost derives as ``MAX_HOP_LIMIT -
+  hop_limit`` (spec 10.3, cross-stack policy converged in
+  project-LICHEN-worker6-b7z9.194 to match C), which stays non-negative for
+  every wire-legal value and stays monotonic in traversed hops within a ring.
+  Hop limits outside the wire-legal 0..MAX_HOP_LIMIT range remain
+  handler-rejected with no state change (project-LICHEN-worker6-0tk2 crash
+  guard).
 
 Known limitation (project-LICHEN-f9mx): RrepResult.forward_next_hop may be
 stale by transmission time due to cache mutations.
@@ -75,8 +76,8 @@ class RreqResult:
     reply_next_hop: IPv6Address | None = None
     forward: RREQ | None = None
     # Handler-reject outcome for inputs this router refuses before any state
-    # change (malformed or unsupported, e.g. hop_limit above the base flood
-    # size; see module docstring). Distinct from ``suppressed``, which means
+    # change (malformed, e.g. hop_limit outside the wire-legal 0..MAX_HOP_LIMIT
+    # range; see module docstring). Distinct from ``suppressed``, which means
     # "duplicate of a recently seen RREQ".
     dropped: bool = False
 
@@ -146,13 +147,15 @@ class LoadngRouter:
 
     def process_rreq(self, rreq: RREQ, from_neighbor: IPv6Address | str, now: int) -> RreqResult:
         from_neighbor = routing_key(from_neighbor)
-        # Handler-reject hop limits outside the base flood size before any
+        # Handler-reject hop limits outside the wire-legal range before any
         # state changes (project-LICHEN-worker6-0tk2): the reverse-route cost
-        # below derives distance as INITIAL_HOP_LIMIT - hop_limit, which goes
-        # negative for the wire-legal expanding-ring values 5..15 (appendix
-        # B2.5). Not suppressed (this is not a duplicate), not seen-marked,
-        # nothing installed.
-        if not 0 <= rreq.hop_limit <= INITIAL_HOP_LIMIT:
+        # below must never see a negative or over-range distance. Expanding-
+        # ring floods at hop_limit up to MAX_HOP_LIMIT (appendix B2.5) are
+        # accepted; their cost derives as MAX_HOP_LIMIT - hop_limit (spec
+        # 10.3, converged across stacks in project-LICHEN-worker6-b7z9.194).
+        # Not suppressed (this is not a duplicate), not seen-marked, nothing
+        # installed.
+        if not 0 <= rreq.hop_limit <= MAX_HOP_LIMIT:
             return RreqResult(dropped=True)
         if rreq.originator == self.node_address:
             return RreqResult(suppressed=True)  # echo of our own RREQ
@@ -161,7 +164,9 @@ class LoadngRouter:
         self._mark_seen(rreq, now)
 
         # Reverse route back toward the originator, used to return the RREP.
-        actual_hops = INITIAL_HOP_LIMIT - rreq.hop_limit
+        # Cost is MAX_HOP_LIMIT - hop_limit (spec 10.3): non-negative for
+        # every accepted ring and monotonic in hops traversed within a ring.
+        actual_hops = MAX_HOP_LIMIT - rreq.hop_limit
         self.cache.add(
             RouteEntry(
                 destination=rreq.originator,

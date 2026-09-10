@@ -21,14 +21,37 @@ import enum
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-TX_QUEUE_SIZE = 4
+# Single source of truth for the spec deadline/capacity constants is the
+# runtime queue (bead b7z9.142): this reference oracle imports them so the
+# vector tests pin the values the runtime actually ships, and the two
+# modules can never drift again (the runtime had DEADLINE_ACK_MS=5000 while
+# this module and the vectors had the spec's 10000).
+from lichen.link.tx_queue import (
+    DEADLINE_ACK_MS,
+    DEADLINE_APP_MS,
+    DEADLINE_BULK_MS,
+    DEADLINE_ROUTING_MS,
+    DEADLINE_SOS_MS,
+    DEADLINE_URGENT_MS,
+    TX_QUEUE_CAPACITY,
+)
 
-DEADLINE_SOS_MS = 2000
-DEADLINE_ROUTING_MS = 5000
-DEADLINE_ACK_MS = 10000
-DEADLINE_URGENT_MS = 30000
-DEADLINE_NORMAL_MS = 60000
-DEADLINE_BULK_MS = 120000
+TX_QUEUE_SIZE = TX_QUEUE_CAPACITY
+
+# Vector/spec naming (tx_queue_expiry.json) for the application-data deadline.
+DEADLINE_NORMAL_MS = DEADLINE_APP_MS
+
+# Re-exported so the vector tests pin the runtime's shipped constants via
+# this oracle module (and F401 stays quiet on the intentional re-exports).
+__all__ = [
+    "DEADLINE_ACK_MS",
+    "DEADLINE_BULK_MS",
+    "DEADLINE_NORMAL_MS",
+    "DEADLINE_ROUTING_MS",
+    "DEADLINE_SOS_MS",
+    "DEADLINE_URGENT_MS",
+    "TX_QUEUE_SIZE",
+]
 
 
 class Priority(enum.IntEnum):

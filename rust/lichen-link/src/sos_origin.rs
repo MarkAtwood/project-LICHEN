@@ -241,7 +241,7 @@ mod tests {
     use super::*;
 
     fn hex_to_bytes<const N: usize>(hex: &str) -> [u8; N] {
-        let v: Vec<u8> = (0..hex.len())
+        let v: std::vec::Vec<u8> = (0..hex.len())
             .step_by(2)
             .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
             .collect();
@@ -256,13 +256,14 @@ mod tests {
         assert_eq!(SOS_ORIGIN_DOMAIN.len(), 20);
         assert_eq!(SOS_ORIGIN_DOMAIN.as_slice(), b"LICHEN-SOS-ORIGIN-v1");
         let hex = "4c494348454e2d534f532d4f524947494e2d7631";
-        let expected: Vec<u8> = (0..hex.len())
+        let expected: std::vec::Vec<u8> = (0..hex.len())
             .step_by(2)
             .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
             .collect();
         assert_eq!(SOS_ORIGIN_DOMAIN.as_slice(), expected.as_slice());
     }
 
+    #[cfg(feature = "alloc")]
     #[test]
     fn tracker_accepts_strictly_advancing_sequences() {
         let mut t = OriginSequenceTracker::new(SOS_ORIGIN_GATE_DEFAULT_CAPACITY);
@@ -275,6 +276,7 @@ mod tests {
         assert_eq!(t.last_seen(&[0xBB; 16]), None); // unseen origin unaffected
     }
 
+    #[cfg(feature = "alloc")]
     #[test]
     fn tracker_bound_evicts_least_recently_accepted() {
         let mut t = OriginSequenceTracker::new(2);
@@ -295,6 +297,7 @@ mod tests {
         assert_eq!(t.last_seen(&c), Some(99));
     }
 
+    #[cfg(feature = "alloc")]
     #[test]
     fn tracker_u64_max_first_seq_locks_origin_out() {
         // Boundary: a first-seen u64::MAX is accepted, and nothing can ever
@@ -306,6 +309,7 @@ mod tests {
         assert_eq!(t.last_seen(&origin), Some(u64::MAX));
     }
 
+    #[cfg(feature = "alloc")]
     #[test]
     fn tracker_zero_capacity_fails_closed() {
         let mut t = OriginSequenceTracker::new(0);

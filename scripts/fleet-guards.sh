@@ -8,6 +8,18 @@
 set -u
 REPO="/home/mark/Developer/lichen-workspace/project-LICHEN"
 CYCLE_MIN="${1:-10}"
+case "$CYCLE_MIN" in ''|*[!0123456789]*|0*) echo "fleet-guards: cycle_minutes must be a positive integer without leading zeros (got '$CYCLE_MIN')" >&2; exit 1;; esac
+# The digit check is an explicit list, not a range: [0-9] is collation-
+# dependent under UTF-8 locales (with globasciiranges off it folds multibyte
+# digits, so Arabic-Indic/fullwidth/Devanagari digits pass the form filter
+# and die later in arithmetic). An explicit list matches by membership, not
+# collation order. (c5s6, 048n)
+# Magnitude cap: the pattern constrains form only; 64-bit wraparound turns a
+# huge digit string into a negative (sleep fails instantly -> hot loop on the
+# metered credits API) or an epoch-scale sleep (guards silently hang). Length
+# check first: bash test errors on values past INTMAX (rc 2 = condition false,
+# guard silently bypassed), so only <=4-digit strings reach the numeric test. (c5s6)
+if [ ${#CYCLE_MIN} -gt 4 ] || [ "$CYCLE_MIN" -gt 1440 ]; then echo "fleet-guards: cycle_minutes must be <= 1440 (got '$CYCLE_MIN')" >&2; exit 1; fi
 export BEADS_DIR="$REPO/.beads"
 cd "$REPO" || exit 1
 STATE="/tmp/fleet-driver-state"
@@ -25,6 +37,18 @@ for i in json.load(sys.stdin):
         if (now - c).total_seconds() <= 86400: n += 1
     except Exception: pass
 print(n)" 2>/dev/null || echo 0
+}
+
+# Escalate a failing waste-alarm helper to the queue, once per failure
+# episode (flag cleared on the first clean parse below). Log-only WARNs
+# would repeat every cycle with no durable record — the same silent-death
+# class the guards exist to prevent (lh2z).
+waste_helper_alarm() {
+    if [ ! -f "$REPO/.fleet-waste-helper" ]; then
+        date '+%F %T' > "$REPO/.fleet-waste-helper"
+        bd create --title="[ALARM] Waste alarm helper failing: fleet_burn.py empty/unparseable output" --description="The waste alarm and the burn marker are blind: scripts/fleet_burn.py produced empty or non-JSON output from the guards loop. Check the helper exists at \$REPO/scripts/fleet_burn.py and inspect the interpreter traceback captured in \$STATE/fleet_burn.err (guards log has the last stderr line per cycle). Alarm re-arms automatically after the first clean helper run." -t bug -p 1 --json >/dev/null 2>&1
+        echo "$(date '+%F %T') ALARM: waste alarm helper failing — bd issue filed"
+    fi
 }
 
 total_used() {
@@ -59,9 +83,18 @@ while :; do
     if [ -f "$REPO/.fleet-paused" ]; then
         PAUSE_AGE=$(( $(date +%s) - $(stat -c %Y "$REPO/.fleet-paused") ))
         if [ "$PAUSE_AGE" -gt 3600 ]; then
-            rm -f "$REPO/.fleet-paused"
+            rm -f "$REPO/.fleet-paused" "$REPO/.fleet-workers-paused"
             bd create --title="[ALARM] Pause expired after 60 min - auto-resumed" --description="Fleet pause outlived 60 minutes (${PAUSE_AGE}s). Auto-resumed by the guards loop; the operator who paused should verify their repair landed." -t bug -p 1 --json >/dev/null 2>&1
             echo "$(date '+%F %T') ALARM: pause expired (${PAUSE_AGE}s) — auto-resumed"
+        fi
+    fi
+
+    # Workers-pause expiry: same 60-min guard, independent of full pause
+    if [ -f "$REPO/.fleet-workers-paused" ]; then
+        WP_AGE=$(( $(date +%s) - $(stat -c %Y "$REPO/.fleet-workers-paused") ))
+        if [ "$WP_AGE" -gt 3600 ]; then
+            rm -f "$REPO/.fleet-workers-paused"
+            bd create --title="[ALARM] Workers-pause expired after 60 min - auto-resumed" --description="Workers-only pause outlived 60 minutes (${WP_AGE}s). Auto-resumed; merge drain should be checked." -t bug -p 1 --json >/dev/null 2>&1
         fi
     fi
 
@@ -83,19 +116,47 @@ while :; do
     # never evaluated — lh2z.) Logic lives in fleet_burn.py for testability.
     USED=$(total_used)
     NOW_S=$(date +%s)
-    WASTE=$(python3 "$REPO/scripts/fleet_burn.py" "$STATE" "$USED" "${CLOSES:-0}" "$NOW_S" 2>/dev/null)
-    W_EVAL=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('evaluated', False))" 2>/dev/null || echo False)
-    if [ "$W_EVAL" = "True" ]; then
-        W_BURN=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['burn'])")
-        W_CPC=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['cpc_str'])")
-        W_OVER=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['over'])")
-        echo "   cost-per-close (24h): \$$W_CPC (burn \$$W_BURN / $CLOSES)"
-        if [ "$W_OVER" = "True" ] && [ ! -f "$REPO/.fleet-waste" ]; then
-            date '+%F %T' > "$REPO/.fleet-waste"
-            bd create --title="[ALARM] Waste: cost-per-close \$$W_CPC exceeds \$3" --description="24h-window burn \$$W_BURN / $CLOSES closures = \$$W_CPC/close (baseline ~\$1.20). Spend buying less than half its normal function. Check: stalls? failed merge sessions? store conflicts degrading bd? self-modification issues?" -t bug -p 1 --json >/dev/null 2>&1
-            echo "   ALARM: waste signature — \$$W_CPC/close"
-        elif [ "$W_OVER" = "False" ]; then
-            rm -f "$REPO/.fleet-waste"
+    W_ERR="$STATE/fleet_burn.err"
+    # /tmp can lose $STATE mid-run (tmp cleaner, reboot). The 2> redirect
+    # opens BEFORE the helper runs, so without this re-creation the helper's
+    # own makedirs self-heal never executes and the waste guard stays blind
+    # (WASTE empty every cycle) until guards restart. (tpcn)
+    mkdir -p "$STATE"
+    WASTE=$(python3 "$REPO/scripts/fleet_burn.py" "$STATE" "$USED" "${CLOSES:-0}" "$NOW_S" 2>"$W_ERR")
+    W_EVAL=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('evaluated', False))" 2>/dev/null || echo PARSE_FAIL)
+    W_REASON=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('reason', ''))" 2>/dev/null)
+    W_HINT=$(tail -n 1 "$W_ERR" 2>/dev/null)
+    # invalid-observation = the provider credits call failed (total_used
+    # prints 0 on error). A permanent outage (rotated key, endpoint change)
+    # otherwise stays silent forever: no WARN, and the $2000 burn marker
+    # below — same dead USED — dies with it. Latch once per outage episode;
+    # cleared on the first valid observation below. (7djg)
+    if [ "$W_REASON" = "invalid-observation" ] && [ ! -f "$REPO/.fleet-provider-obs" ]; then
+        date '+%F %T' > "$REPO/.fleet-provider-obs"
+        bd create --title="[ALARM] Provider credits observations failing: waste alarm and burn marker blind" --description="total_used() is returning 0 (OpenRouter credits API unreachable, rotated key, or endpoint change). fleet_burn.py reports invalid-observation without touching the baseline; the waste alarm and the \$2000 burn marker evaluate nothing while this lasts. Check scripts/fleet-guards.sh total_used against ~/.config/opencode key and https://openrouter.ai/api/v1/credits. Alarm re-arms after the first valid observation." -t bug -p 1 --json >/dev/null 2>&1
+        echo "$(date '+%F %T') ALARM: provider observations invalid — waste alarm and burn marker blind"
+    fi
+    if [ -z "$WASTE" ]; then
+        waste_helper_alarm
+        echo "$(date '+%F %T') WARN: waste alarm skipped — fleet_burn.py produced no output (helper missing at $REPO/scripts/fleet_burn.py, or interpreter crash)${W_HINT:+ — last stderr: $W_HINT} [full stderr: $W_ERR]"
+    elif [ "$W_EVAL" = "PARSE_FAIL" ]; then
+        waste_helper_alarm
+        echo "$(date '+%F %T') WARN: waste alarm skipped — fleet_burn.py output not valid JSON${W_HINT:+ — last stderr: $W_HINT} [full stderr: $W_ERR]"
+    else
+        rm -f "$REPO/.fleet-waste-helper"
+        if [ "$W_REASON" != "invalid-observation" ]; then rm -f "$REPO/.fleet-provider-obs"; fi
+        if [ "$W_EVAL" = "True" ]; then
+            W_BURN=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['burn'])")
+            W_CPC=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['cpc_str'])")
+            W_OVER=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['over'])")
+            echo "   cost-per-close (24h): \$$W_CPC (burn \$$W_BURN / $CLOSES)"
+            if [ "$W_OVER" = "True" ] && [ ! -f "$REPO/.fleet-waste" ]; then
+                date '+%F %T' > "$REPO/.fleet-waste"
+                bd create --title="[ALARM] Waste: cost-per-close \$$W_CPC exceeds \$3" --description="24h-window burn \$$W_BURN / $CLOSES closures = \$$W_CPC/close (baseline ~\$1.20). Spend buying less than half its normal function. Check: stalls? failed merge sessions? store conflicts degrading bd? self-modification issues?" -t bug -p 1 --json >/dev/null 2>&1
+                echo "   ALARM: waste signature — \$$W_CPC/close"
+            elif [ "$W_OVER" = "False" ]; then
+                rm -f "$REPO/.fleet-waste"
+            fi
         fi
     fi
 

@@ -22,8 +22,13 @@ Known divergences (real behavior asserted; tracked in beads):
 - ``neighbors_cbor.json`` wraps entries in ``{"neighbors": [...]}``; the
   ``NeighborsResource`` producer emits a bare list. The LCI client accepts
   both shapes, so both are exercised.
-- ``sos_node_format`` positive examples use colon-hex IPv6 notation, while
-  ``SosResource``/``SosRelay`` require 16-char hex EUI-64 node identifiers.
+- ``sos_node_format`` positive examples use colon-hex IPv6 notation; per spec
+  18.4.2 ``SosResource`` accepts exactly that form (the originator's full
+  0200:: address string), so the 0200:: positive example now matches. The
+  second positive example (``fe80:...:0200:00ff:fe00:0001``) is link-local and
+  can never be accepted — the binding gate requires the primary 02xx
+  AddrForKey (spec 18.4.1), so that example remains divergent from the spec.
+  ``SosRelay`` dedup keys remain opaque node strings.
 - ``sos_seq_rollover`` expects uint8 wraparound (255->0) to be valid; the
   implementation uses 64-bit monotonic sequences for replay protection (spec
   18.4.1), so rollover at 255 is rejected as stale.
@@ -93,7 +98,7 @@ from lichen.coap.sos_origin import (
 )
 from lichen.coap.sos_relay import SosRelay, get_sos_id_from_payload
 from lichen.constants import PORT_MQTT_SN, SCHC_FRAGMENT_M, SCHC_FRAGMENT_N
-from lichen.crypto.identity import _pubkey_to_iid
+from lichen.crypto.identity import yggdrasil_address
 from lichen.crypto.schnorr48 import derive_keypair
 from lichen.schc.fragment import MAX_PACKET_SIZE, MAX_SCHC_PACKET, TILE_SIZE, WINDOW_SIZE
 from lichen.schc.rules import MO, UDP_PORT_RULE
@@ -118,9 +123,8 @@ def _make_signed_sos_body(
     if seed is None:
         seed = bytes(range(32))
     privkey, pubkey = derive_keypair(seed)
-    iid = _pubkey_to_iid(pubkey)
-    node_hex = iid.hex()
-    origin_address = IPv6Address(b"\x02\x00" + b"\x00" * 6 + iid)
+    origin_address = yggdrasil_address(pubkey)
+    node_hex = str(origin_address)
     payload = {"type": sos_type, "node": node_hex, "ts": ts}
     origin_sig = sign_sos_origin(privkey, pubkey, origin_address, origin_seq, payload)
     return {
@@ -444,10 +448,9 @@ def test_sos_seq_rollover_known_divergence() -> None:
 async def test_sos_node_format_invalid_examples_rejected(bad_node: str) -> None:
     """The invalid node examples are rejected by POST /sos.
 
-    The vector's positive examples use colon-hex IPv6 notation, but the
-    implementation's node identifiers are 16-char hex EUI-64 strings; the
-    positive half of this vector diverges and is documented in the module
-    docstring.
+    The vector's positive examples use colon-hex IPv6 notation, which per spec
+    18.4.2 is exactly the accepted node form (full 0200:: address string);
+    the signed positive path is covered via ``_make_signed_sos_body``.
     """
     vector = _case("sos_cbor.json", "sos_node_format")
     assert bad_node in vector["invalid_node_examples"]
@@ -467,8 +470,12 @@ async def test_sos_ts_semantics() -> None:
     assert response.code == CHANGED
     fresh = SosResource()
     privkey, pubkey = derive_keypair(bytes(range(32)))
-    iid = _pubkey_to_iid(pubkey)
-    missing_ts = {"type": "sos", "node": iid.hex(), "pubkey": pubkey, "sig": b"\x00" * 56}
+    missing_ts = {
+        "type": "sos",
+        "node": str(yggdrasil_address(pubkey)),
+        "pubkey": pubkey,
+        "sig": b"\x00" * 56,
+    }
     response = await fresh.render_post(Message(code=POST, payload=cbor2.dumps(missing_ts)))
     assert response.code == BAD_REQUEST
 

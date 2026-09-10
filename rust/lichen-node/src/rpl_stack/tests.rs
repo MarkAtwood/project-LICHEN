@@ -1150,12 +1150,19 @@ async fn multicast_dio_and_dis_are_received() {
     ));
 
     leaf.send_dis(root_addr).await.unwrap();
+    let outcome = root.receive(1, 1).await.unwrap();
     assert!(matches!(
-        root.receive(1, 1).await.unwrap(),
+        outcome,
         Some(RplReceiveOutcome::Rpl(RplEvent::DisReceived))
     ));
+    // The solicited DIS reply is re-targeted to RPL_ALL_NODES (spec 09
+    // 13.3), so the leaf hears it as a multicast DIO.
+    // The solicited DIS reply is re-targeted to RPL_ALL_NODES (spec 09
+    // 13.3), so the leaf hears it as a multicast DIO.
+    let leaf_outcome = leaf.receive(1, 1).await.unwrap();
+    std::eprintln!("LEAF DIO OUTCOME2: {:?}", leaf_outcome);
     assert!(matches!(
-        leaf.receive(1, 1).await.unwrap(),
+        leaf_outcome,
         Some(RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. }))
     ));
 }
@@ -3196,6 +3203,53 @@ fn valid_root_signature_gate_verifies_then_replay_rejects() {
 }
 
 #[test]
+fn full_root_seq_cache_degrades_new_dodag_to_baseline_not_reject() {
+    // THE PIN (r2oz): a full root-seq table must NOT hard-reject a NEW
+    // genuine DODAG's first signed DIO — unsigned, the identical DIO would
+    // baseline-process, so Capacity degrades to the unsigned floor instead
+    // of letting a TOFU-pinned attacker turn the 0x17 option into a
+    // self-DoS for new roots (16 filler instances fill the table).
+    use lichen_rpl::root_seq_cache::MAX_ROOT_SEQ_KEYS;
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    for i in 0..MAX_ROOT_SEQ_KEYS as u8 {
+        let mut filler = [0x99u8; 16];
+        filler[0] = i;
+        stack.root_seqs_mut().accept(filler, 0, 1).unwrap();
+    }
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Baseline);
+    // Nothing was admitted for the new DODAG: a later identical DIO
+    // degrades identically (consistent floor, no first-observer asymmetry).
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+    let again = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(again, DioRootSigOutcome::Baseline);
+}
+
+#[test]
+fn full_root_seq_cache_keeps_replay_protection_for_tracked_keys() {
+    // Companion pin (r2oz): degrading Capacity to Baseline must not weaken
+    // replay protection for keys already tracked when the table fills.
+    use lichen_rpl::root_seq_cache::MAX_ROOT_SEQ_KEYS;
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    // Track the vector DODAG first, then fill the remaining slots.
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Verified);
+    for i in 1..MAX_ROOT_SEQ_KEYS as u8 {
+        let mut filler = [0x99u8; 16];
+        filler[0] = i;
+        stack.root_seqs_mut().accept(filler, 0, 1).unwrap();
+    }
+    // Replay of the tracked key's last seq still rejects at capacity.
+    let replay = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(replay, DioRootSigOutcome::Reject);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), Some(1));
+}
+
+#[test]
 fn tampered_root_signature_rejects_even_when_expired() {
     // THE PIN (a): verify_signature runs BEFORE the expiry check, so a
     // forged signature cannot ride the expired->Baseline degrade: tampered
@@ -3290,6 +3344,40 @@ fn clock_equal_to_expiry_boundary_degrades_to_baseline() {
     let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
     assert_eq!(outcome, DioRootSigOutcome::Baseline);
     assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
+#[test]
+fn full_root_seq_cache_degrades_new_genuine_root_to_baseline_not_reject() {
+    // THE PIN (r2oz): a full RootSeqCache (16 attacker-filled keys) must not
+    // hard-Reject a NEW genuine root's first signed DIO — that punishes the
+    // signed option itself (self-DoS). The untracked key degrades to the
+    // unsigned baseline, while cached-key replay/regression stays Reject via
+    // the cached() pre-check.
+    use lichen_rpl::root_seq_cache::MAX_ROOT_SEQ_KEYS;
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    // Fill every slot with distinct (dodag_id, instance) keys that are NOT
+    // the genuine root's key.
+    for index in 0..MAX_ROOT_SEQ_KEYS {
+        let mut filler = [0u8; 16];
+        filler[15] = index as u8 + 1;
+        filler[14] = 0xF0; // keep clear of gate_dodag_id()'s low half
+        stack.root_seqs.accept(filler, 0, 1).unwrap();
+    }
+    // Sanity: the genuine root key is untracked and the table is full.
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+    // The genuine root's first signed DIO degrades to Baseline (processed on
+    // the link-layer floor), never Reject, and no seq is admitted.
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Baseline);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+    // The table is untouched: a tracked key still replay-rejects (fail closed
+    // for cached keys is preserved).
+    let mut tracked = [0u8; 16];
+    tracked[15] = 1;
+    tracked[14] = 0xF0;
+    assert_eq!(stack.root_seq_cached(tracked, 0), Some(1));
 }
 
 fn root_sig_vector_pubkey() -> PublicKey {
@@ -3471,3 +3559,4 @@ async fn root_dio_signature_roundtrip_produces_and_advances() {
         "second signed DIO must be admitted after seq advance: {outcome:?}"
     );
 }
+

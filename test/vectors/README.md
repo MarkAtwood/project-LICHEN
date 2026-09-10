@@ -23,7 +23,7 @@ Complete index of every vector file (excluding `schema.json` and the per-family 
 | `hash_32.json` | `lichen_hash_32` FNV-1a32 primitive (basis 0x811c9dc5) |
 | `oscore.json` | OSCORE key derivation, request/response protection, replay detection (RFC 8613) |
 | `schnorr48.json` | 48-byte Schnorr signatures per draft-lichen-schnorr-00 (Appendix A vectors) |
-| `x25519.json` | X25519/Ed25519 key derivation and RFC 8032 clamping. QUARANTINE NOTE: per-vector `iid`/`ygg_addr` fields encode the rejected SHA-512 native profile (legacy/ corpus); internal-consistency pins only, not addressing oracles — regenerate against upstream `AddrForKey` when migration lands |
+| `x25519.json` | X25519/Ed25519 key derivation and RFC 8032 clamping. QUARANTINE NOTE: per-vector `ygg_addr` field and the `ygg_addr[8:16]==iid` binding encode the rejected SHA-512 native address profile (legacy/ corpus); the `iid` is the retained link-local IID. Quarantined fields are internal-consistency pins only, not addressing oracles — regenerate against upstream `AddrForKey` when migration lands |
 
 ### Link Layer
 

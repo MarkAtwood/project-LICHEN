@@ -218,8 +218,14 @@ impl AnnounceProcessor {
         let access = self.access_counter;
 
         // Routable destination MUST be upstream AddrForKey(originator pubkey),
-        // not prefix++IID (the rejected LICHEN-native derivation).
-        let destination = lichen_core::addr::ygg_addr_from_pubkey(announce.pubkey);
+        // not prefix++IID (the rejected LICHEN-native derivation). The
+        // originator's pubkey was already authenticated above, so this
+        // derivation is bound to the verified identity.
+        // Merge note: both parents named the same function — lichen_link
+        // re-exports lichen_core::addr::ygg_addr_from_pubkey. Keep the
+        // canonical definition-site path used throughout this crate, and
+        // derive from the authenticated `pubkey` local (beads-worker-2).
+        let destination = lichen_core::addr::ygg_addr_from_pubkey(pubkey.as_bytes());
 
         let coords = GeoCoords::from_app_data(announce.app_data);
 
@@ -318,6 +324,20 @@ impl AnnounceProcessor {
         let state = self.trust_store.borrow_mut().load(iid).ok().flatten()?;
         let public_key = PublicKey::new(state.pubkey);
         (iid_from_pubkey(&public_key) == *iid).then_some(public_key)
+    }
+
+    /// Resolve a pinned public key by the peer's routable 02xx address
+    /// (upstream `AddrForKey`), not by IID. Post-AddrForKey the routable
+    /// address embeds no IID, so the only valid correlation is the full
+    /// address. Returns `None` when no pinned key derives the address.
+    pub fn pinned_pubkey_for_addr(&self, addr: &[u8; 16]) -> Option<PublicKey> {
+        for entry in self.pinned_keys.values() {
+            let public_key = PublicKey::new(entry.pubkey);
+            if lichen_link::ygg_addr_from_pubkey(public_key.as_bytes()) == *addr {
+                return Some(public_key);
+            }
+        }
+        None
     }
 
     /// Return a bounded, canonical snapshot for security-sensitive fallback
@@ -995,7 +1015,8 @@ mod tests {
         let from_neighbor = link_local(0xAA);
         processor.process(&announce, from_neighbor, 1000);
 
-        // Build expected destination address
+        // Build expected destination address: the originator's routable
+        // AddrForKey (matches the wire destination post-migration).
         let expected_dst = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
 
         let entry = processor.gradient_table_mut().lookup(&expected_dst, 1000);

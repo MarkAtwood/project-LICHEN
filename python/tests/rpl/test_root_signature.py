@@ -4,7 +4,8 @@
 
 import pytest
 
-from lichen.crypto.identity import Identity, yggdrasil_address
+from lichen.crypto.identity import Identity
+from lichen.ipv6.addr import upstream_addr_for_key
 from lichen.crypto.schnorr48 import sign
 from lichen.rpl.root_signature import (
     RootSignatureError,
@@ -23,7 +24,7 @@ class TestVerifyDodagidBinding:
         """Valid pubkey-DODAGID binding should return True."""
         seed = bytes(range(32))
         identity = Identity.from_seed(seed)
-        dodagid = yggdrasil_address(identity.pubkey)
+        dodagid = upstream_addr_for_key(identity.pubkey)
 
         assert verify_dodagid_binding(identity.pubkey, dodagid.packed) is True
         assert verify_dodagid_binding(identity.pubkey, dodagid) is True
@@ -62,7 +63,7 @@ class TestVerifyRootSignature:
         identity = Identity.from_seed(seed)
         message = b"test DIO message"
         signature = sign(identity.privkey, identity.pubkey, message)
-        dodagid = yggdrasil_address(identity.pubkey)
+        dodagid = upstream_addr_for_key(identity.pubkey)
 
         result = verify_root_signature(
             identity.pubkey, message, signature, dodagid.packed
@@ -78,7 +79,7 @@ class TestVerifyRootSignature:
         identity = Identity.from_seed(seed)
         message = b"test DIO message"
         bad_signature = bytes(48)  # All zeros
-        dodagid = yggdrasil_address(identity.pubkey)
+        dodagid = upstream_addr_for_key(identity.pubkey)
 
         result = verify_root_signature(
             identity.pubkey, message, bad_signature, dodagid.packed
@@ -124,7 +125,7 @@ class TestVerifyRootSignature:
         message1 = b"original message"
         message2 = b"tampered message"
         signature = sign(identity.privkey, identity.pubkey, message1)
-        dodagid = yggdrasil_address(identity.pubkey)
+        dodagid = upstream_addr_for_key(identity.pubkey)
 
         result = verify_root_signature(
             identity.pubkey, message2, signature, dodagid.packed
@@ -141,7 +142,7 @@ class TestDeriveDodagidFromPubkey:
         """Should derive correct DODAGID from pubkey."""
         seed = bytes(range(32))
         identity = Identity.from_seed(seed)
-        expected = yggdrasil_address(identity.pubkey)
+        expected = upstream_addr_for_key(identity.pubkey)
 
         result = derive_dodagid_from_pubkey(identity.pubkey)
 
@@ -196,7 +197,7 @@ class TestVectorGeneration:
             "pubkey": identity.pubkey.hex(),
             "message": b"other".hex(),
             "signature": signature.hex(),
-            "dodagid": yggdrasil_address(identity.pubkey).packed.hex(),
+            "dodagid": upstream_addr_for_key(identity.pubkey).packed.hex(),
             "valid": False,
             "error": "SIGNATURE_INVLAID",  # typo
         }
@@ -212,7 +213,7 @@ class TestVectorGeneration:
             "pubkey": identity.pubkey.hex(),
             "message": b"tampered".hex(),
             "signature": signature.hex(),
-            "dodagid": yggdrasil_address(identity.pubkey).packed.hex(),
+            "dodagid": upstream_addr_for_key(identity.pubkey).packed.hex(),
             "valid": False,
         }
 
@@ -227,7 +228,7 @@ class TestVectorGeneration:
             "pubkey": identity.pubkey.hex(),
             "message": b"msg".hex(),
             "signature": signature.hex(),
-            "dodagid": yggdrasil_address(identity.pubkey).packed.hex(),
+            "dodagid": upstream_addr_for_key(identity.pubkey).packed.hex(),
             "valid": True,
             "error": "DODAGID_MISMATCH",
         }
@@ -241,7 +242,7 @@ class TestVectorGeneration:
         base = {
             "description": "x",
             "pubkey": identity.pubkey.hex(),
-            "dodagid": yggdrasil_address(identity.pubkey).packed.hex(),
+            "dodagid": upstream_addr_for_key(identity.pubkey).packed.hex(),
             "binding_valid": True,
         }
         for extra in (
@@ -259,7 +260,7 @@ class TestVectorGeneration:
         identity = Identity.from_seed(seed)
         base = {
             "pubkey": identity.pubkey.hex(),
-            "dodagid": yggdrasil_address(identity.pubkey).packed.hex(),
+            "dodagid": upstream_addr_for_key(identity.pubkey).packed.hex(),
             "valid": True,
         }
         with pytest.raises(KeyError):
@@ -271,7 +272,7 @@ class TestVectorGeneration:
         identity = Identity.from_seed(seed)
         base = {
             "description": "x",
-            "dodagid": yggdrasil_address(identity.pubkey).packed.hex(),
+            "dodagid": upstream_addr_for_key(identity.pubkey).packed.hex(),
             "binding_valid": True,
         }
         with pytest.raises(ValueError, match="64 hex chars"):
@@ -334,7 +335,7 @@ class TestSecurityProperties:
         # Victim's identity
         victim_seed = bytes(range(32))
         victim = Identity.from_seed(victim_seed)
-        victim_dodagid = yggdrasil_address(victim.pubkey)
+        victim_dodagid = upstream_addr_for_key(victim.pubkey)
 
         # Attacker's identity
         attacker_seed = bytes([x ^ 0xFF for x in range(32)])
@@ -356,7 +357,7 @@ class TestSecurityProperties:
         """Legitimate root with matching pubkey/DODAGID should pass."""
         seed = bytes(range(32))
         identity = Identity.from_seed(seed)
-        dodagid = yggdrasil_address(identity.pubkey)
+        dodagid = upstream_addr_for_key(identity.pubkey)
         message = b"legitimate DIO with DODAG configuration"
         signature = sign(identity.privkey, identity.pubkey, message)
 
@@ -371,7 +372,7 @@ class TestSecurityProperties:
         """Should accept IPv6Address as DODAGID."""
         seed = bytes(range(32))
         identity = Identity.from_seed(seed)
-        dodagid = yggdrasil_address(identity.pubkey)
+        dodagid = upstream_addr_for_key(identity.pubkey)
         message = b"test"
         signature = sign(identity.privkey, identity.pubkey, message)
 

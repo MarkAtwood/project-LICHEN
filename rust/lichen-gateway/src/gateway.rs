@@ -1045,7 +1045,7 @@ impl Gateway {
     ) -> Result<Self, GatewayOpenError> {
         let root_addr = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
         let root_iid = lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes());
-        if coordinator.info.iid != root_addr {
+        if coordinator.info.iid != root_addr || coordinator.own_identity_iid() != root_iid {
             return Err(GatewayOpenError::RplProvision);
         }
         let dodag_id = root_addr;
@@ -1092,9 +1092,10 @@ impl Gateway {
     /// do not represent a persistent gateway deployment.
     pub fn new_ephemeral(identity: Identity, safe_epoch: u8) -> Result<Self, GatewayOpenError> {
         let root_addr = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
+        let identity_iid = lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes());
         let trust_store =
             TrustStore::new_ephemeral(64).map_err(|_| GatewayOpenError::RplProvision)?;
-        let coordinator = GatewayCoordinator::new_ephemeral(root_addr, identity.iid, 60, 64)
+        let coordinator = GatewayCoordinator::new_ephemeral(root_addr, identity_iid, 60, 64)
             .map_err(|_| GatewayOpenError::RplProvision)?;
         Self::new(identity, safe_epoch, trust_store, coordinator)
     }
@@ -1154,9 +1155,7 @@ impl Gateway {
         {
             return Err(SecureError::NoContext);
         }
-        // The OSCORE IDs derive from the key-derived IID; the routable
-        // address's low half is not the IID under upstream AddrForKey (i72x.2).
-        let local_iid: [u8; 8] = self.rpl_stack.local_iid();
+        let local_iid: [u8; 8] = self.coordinator.own_identity_iid();
         const OSCORE_ID_LEN: usize = 7;
         if context.sender_id() != &local_iid[..OSCORE_ID_LEN]
             || context.recipient_id() != &peer_iid[..OSCORE_ID_LEN]
@@ -1211,8 +1210,12 @@ impl Gateway {
         if peer_pubkeys.len() > MAX_GCP_OSCORE_CONTEXTS {
             return Err(GatewayFederationError::TooManyPeers);
         }
-        // Key-derived IID, not the low half of the routable address (i72x.2).
-        let local_iid: [u8; 8] = self.rpl_stack.local_iid();
+        // The OSCORE ids and the LocalPeer check bind the canonical identity
+        // IID (SHA-512(pubkey)[0:8]), not the routable address in
+        // coordinator.info.iid (upstream AddrForKey: its low half is
+        // bit-packed key material, never the IID). install_gcp_context
+        // cross-checks sender_id against the same identity IID.
+        let local_iid: [u8; 8] = self.coordinator.own_identity_iid();
         let mut contexts = Vec::with_capacity(peer_pubkeys.len());
         let mut peer_iids = Vec::with_capacity(peer_pubkeys.len());
         for pubkey in peer_pubkeys {
@@ -1391,7 +1394,8 @@ impl Gateway {
     /// is mesh-internal forwarding, not egress, and an unprovisioned table
     /// keeps the gate open (C `s_tunnel_ready == false` parity). Route
     /// evidence mirrors the C call site in `forwarding.c`: single-hop
-    /// `[egress_iid]` — this gateway is the egress. ponytail: multi-hop SRH
+    /// `[egress_addr]` — the gateway's own primary 02xx address; it is the
+    /// egress. ponytail: multi-hop SRH
     /// route extraction is not wired, so grants issued over longer routes
     /// fail closed here; upgrade path is SRH parsing at the node decap site.
     fn egress_tunnel_authorized(&mut self, received: &lichen_node::stack::ReceivedIpv6) -> bool {
@@ -1412,18 +1416,17 @@ impl Gateway {
         if self.coordinator.tunnel_auth_root().is_none() {
             return true;
         }
-        // Route evidence is this gateway's own IID — it is the egress — not
-        // the DODAG root IID, which may differ after a root rebind.
-        // Merge resolution: take the IID from the canonical key derivation,
-        // not the low half of `coordinator.info.iid` — after the upstream
-        // AddrForKey migration the routable address bit-packs the inverted
-        // key and does not embed the IID (i72x.2).
-        let egress_iid: [u8; 8] = self.rpl_stack.local_iid();
+        // Route evidence is this gateway's own primary address — it is the
+        // egress — not the DODAG root IID, which may differ after a root
+        // rebind. Spec 8.11 (post-AddrForKey): the route hash input is the
+        // full 16-byte hop addresses; a primary 02xx address embeds no IID,
+        // so the old own-IID route evidence cannot match any migrated grant.
+        let egress_addr: [u8; 16] = self.coordinator.info.iid;
         let inner_source: [u8; 16] = received.ipv6[8..24].try_into().expect("len checked");
-        let route = [egress_iid];
+        let route = [egress_addr];
         match self
             .coordinator
-            .authorize_egress(inner_source, false, &route)
+            .authorize_egress(inner_source, destination, false, &route)
         {
             Ok(()) => true,
             Err(error) => {
@@ -1997,6 +2000,109 @@ mod tests {
         Gateway::new_ephemeral(identity, 128).unwrap()
     }
 
+    #[test]
+    fn gateway_rejects_coordinator_with_mismatched_identity_iid() {
+        let identity = Identity::from_seed(Seed::new([0x42; 32]));
+        let address = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
+        let mut wrong_iid = identity.iid;
+        wrong_iid[0] ^= 0x80;
+        let coordinator = GatewayCoordinator::new_ephemeral(address, wrong_iid, 60, 64).unwrap();
+        let result = Gateway::new(
+            identity,
+            128,
+            TrustStore::new_ephemeral(8).unwrap(),
+            coordinator,
+        );
+        assert!(matches!(result, Err(GatewayOpenError::RplProvision)));
+    }
+
+    /// 7ecb(a): the local GCP identity must be the SHA-512 IID plane (same as
+    /// the peer's), not the routable /128's low half. Pre-fix the LocalPeer
+    /// guard compared the SHA-512 peer IID against the routable low half, so
+    /// provisioning the gateway's own key slipped through (failed open).
+    #[test]
+    fn provision_closed_federation_rejects_self_peering() {
+        let identity = Identity::from_seed(Seed::new([0x42; 32]));
+        let own_pubkey = *identity.pubkey.as_bytes();
+        let mut gateway = Gateway::new_ephemeral(identity, 128).unwrap();
+        let federation = PskFederation::new(&[0x01; 16], None, None).unwrap();
+        let result = gateway.provision_closed_federation(&federation, &[own_pubkey]);
+        assert!(
+            matches!(result, Err(GatewayFederationError::LocalPeer)),
+            "self-peering must be rejected, got {result:?}"
+        );
+    }
+
+    /// Build a durable (persistent-trust) gateway in a private temp dir, which
+    /// `provision_closed_federation` requires.
+    fn persistent_test_gateway(seed: [u8; 32], tag: &str) -> Gateway {
+        let suffix = PERSISTENT_TEST_PATH.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "lichen-gateway-gcp-mirror-{tag}-{}-{suffix}",
+            std::process::id()
+        ));
+        let floor_root = path.with_extension("floors");
+        private_test_dir(&path);
+        private_test_dir(&floor_root);
+        let identity = Identity::from_seed(Seed::new(seed));
+        let root = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
+        let sealing_seed = [0x5a; 32];
+        // Merge resolution: HEAD added the own_iid parameter to
+        // provision_persistent (tunnel-auth root binding); the branch's
+        // helper passed the pre-merge five-argument form.
+        let coordinator = GatewayCoordinator::provision_persistent(
+            root,
+            identity.iid,
+            60,
+            64,
+            &path.join("gateway-slot-replay.bin"),
+            &floor_root.join("gateway-slot-replay.generation"),
+            &sealing_seed,
+        )
+        .unwrap();
+        Gateway::new_persistent(
+            identity,
+            128,
+            TrustStore::new_ephemeral(8).unwrap(),
+            coordinator,
+            GatewayPersistence::new(
+                FileStorage::new(&path).unwrap(),
+                true,
+                path.clone(),
+                floor_root.clone(),
+                sealing_seed,
+            ),
+        )
+        .unwrap()
+    }
+
+    /// 7ecb(a): two gateways in one federation must be able to install a GCP
+    /// context for each other. `install_gcp_context` validates sender_id ==
+    /// local IID and recipient_id == peer IID, so mutual installation only
+    /// succeeds when both endpoints resolve to the same IID plane on both
+    /// gateways (self == SHA-512 IID, peer == SHA-512 IID).
+    #[test]
+    fn gcp_contexts_install_mutually_between_gateways() {
+        let alice_pubkey = *Identity::from_seed(Seed::new([0x0a; 32]))
+            .pubkey
+            .as_bytes();
+        let bob_pubkey = *Identity::from_seed(Seed::new([0x0b; 32]))
+            .pubkey
+            .as_bytes();
+        let mut alice = persistent_test_gateway([0x0a; 32], "alice");
+        let mut bob = persistent_test_gateway([0x0b; 32], "bob");
+        let federation = PskFederation::new(&[0x02; 16], None, None).unwrap();
+
+        alice
+            .provision_closed_federation(&federation, &[bob_pubkey])
+            .unwrap();
+        bob.provision_closed_federation(&federation, &[alice_pubkey])
+            .unwrap();
+
+        assert_eq!(alice.gcp_context_count(), 1);
+        assert_eq!(bob.gcp_context_count(), 1);
+    }
+
     fn l2_from_wire(wire: &[u8]) -> &[u8] {
         lichen_link::frame::LichenFrame::from_bytes(wire)
             .unwrap()
@@ -2411,7 +2517,10 @@ mod tests {
         assert_eq!(&buf[..2], &[0xc1, 60]);
         assert_eq!(encode_content_format_option(112, &mut buf), 2);
         assert_eq!(&buf[..2], &[0xc1, 112]);
-        assert_eq!(encode_content_format_option(u16::from(u8::MAX), &mut buf), 2);
+        assert_eq!(
+            encode_content_format_option(u16::from(u8::MAX), &mut buf),
+            2
+        );
         assert_eq!(&buf[..2], &[0xc1, 0xff]);
 
         // Values above u8::MAX use delta 12 + len 2 (0xc2), big-endian.
@@ -2454,7 +2563,13 @@ mod tests {
         private_test_dir(&path);
         let identity = Identity::from_seed(Seed::new([0x61; 32]));
         let root = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
-        let coordinator = GatewayCoordinator::new_ephemeral(root, identity.iid, 60, 8).unwrap();
+        let coordinator = GatewayCoordinator::new_ephemeral(
+            root,
+            lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes()),
+            60,
+            8,
+        )
+        .unwrap();
         let result = Gateway::new_persistent(
             identity,
             128,
@@ -2493,7 +2608,7 @@ mod tests {
         let trust = TrustStore::new_ephemeral(8).unwrap();
         let coordinator = GatewayCoordinator::provision_persistent(
             root,
-            identity.iid,
+            lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes()),
             60,
             64,
             &replay_path,
@@ -2580,7 +2695,7 @@ mod tests {
         .unwrap();
         let coordinator = GatewayCoordinator::load_persistent(
             root,
-            identity.iid,
+            lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes()),
             60,
             64,
             &replay_path,
@@ -2820,16 +2935,13 @@ mod tests {
         // Including root_addr would make the root its own first hop and violate
         // RFC 6554's prohibition on placing the IPv6 Source in the SRH path.
         let path = [relay_addr, node_addr];
-        gw.rpl_stack
-            .rpl_node_mut()
-            .router_mut()
-            .inject_route(
+        gw.rpl_stack.rpl_node_mut().router_mut().inject_route(
+            core::net::Ipv6Addr::from(node_addr),
+            &[
+                core::net::Ipv6Addr::from(relay_addr),
                 core::net::Ipv6Addr::from(node_addr),
-                &[
-                    core::net::Ipv6Addr::from(relay_addr),
-                    core::net::Ipv6Addr::from(node_addr),
-                ],
-            );
+            ],
+        );
 
         // Build IPv6 packet FROM root TO node_addr
         let payload = b"hello";

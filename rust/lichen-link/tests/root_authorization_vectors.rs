@@ -37,19 +37,7 @@ fn root_authorization_vectors_bind_signer_key_to_dodagid() {
         let pubkey = hex(&vector.pubkey_hex);
         let message = hex(&vector.message_hex);
         let signature = hex(&vector.signature_hex);
-        // The corpus's dodagid_hex still encodes the rejected SHA-512 native
-        // profile (i72x.6 regenerates the shared corpus once Python migrates).
-        // Translate the known native DODAGIDs to their upstream AddrForKey
-        // equivalents, pinned from the yggdrasil-go@422836ee reference
-        // implementation (external oracle, i72x.2).
         let dodag_id = hex(&vector.dodagid_hex);
-        let dodag_id = match vector.dodagid_hex.as_str() {
-            // 03a107bf..5531b8
-            "02ed4242ead4ac69ed4242ead4ac6948" => hex("02062f7c200618f7a0f14791738c5a1f"),
-            // 248acbdb..d53dd930
-            "0211e78d239a106f11e78d239a106fdb" => hex("0202dba9a122830fd7f3490c7da0ae94"),
-            _ => dodag_id,
-        };
         let actual = match (
             <[u8; 32]>::try_from(pubkey.as_slice()),
             <[u8; 48]>::try_from(signature.as_slice()),

@@ -140,6 +140,12 @@ int lichen_schc_tombstone_put(struct lichen_schc_session_table *table,
 		}
 	}
 
+	if (slot == NULL) {
+		/* Count and slot scan are independent (defense in depth): a
+		 * discrepancy must fail closed, not dereference NULL. */
+		return -ENOBUFS;
+	}
+
 	if (existing != NULL) {
 		/* Reterminal of the same session (e.g. an idempotent replay of a
 		 * terminal frame within the hold-down): the high-water is
@@ -226,6 +232,12 @@ int lichen_schc_floor_put(struct lichen_schc_session_table *table,
 			}
 		}
 		slot = &table->floors[lowest];
+	}
+
+	if (slot == NULL) {
+		/* Count and slot scan are independent (defense in depth): a
+		 * discrepancy must fail closed, not dereference NULL. */
+		return -ENOBUFS;
 	}
 
 	slot->key = *key;

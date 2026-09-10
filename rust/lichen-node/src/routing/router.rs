@@ -684,24 +684,44 @@ impl Router {
         };
         // A direct child signs its own DAO. Beyond one hop, L2 authentication
         // establishes only the forwarding neighbor, not the DAO originator.
-        if parents
-            .iter()
-            .any(|parent| same_interface(parent, &self.dodag_id))
-            && !same_interface(&authenticated_sender, &packet_source)
-        {
-            return false;
+        //
+        // Post-i72x.2 the DAO transit parent is the parent's routable /128
+        // (upstream AddrForKey; no IID embedded), so the parent match must be
+        // exact-equality against the DODAG ID (the root's routable address).
+        // The old `same_interface` low-half comparison was silently dead:
+        // `dodag_id[8..]` is bit-packed key material that never equals a
+        // parent address's low half, so the rejection never fired (ssg9).
+        // The `authenticated_sender` side mirrors node.rs's forwarder gate:
+        // routable senders match by exact address; a link-local sender still
+        // binds the packet source to the L2-authenticated sender IID.
+        if parents.iter().any(|parent| parent == &self.dodag_id) {
+            let source_bound_to_sender = if authenticated_sender[..8]
+                == [0xfe, 0x80, 0, 0, 0, 0, 0, 0]
+            {
+                same_interface(&authenticated_sender, &packet_source)
+            } else {
+                authenticated_sender == packet_source
+            };
+            if !source_bound_to_sender {
+                return false;
+            }
         }
 
         #[cfg(test)]
         {
             use lichen_link::{identity::Identity, keys::Seed};
+            // Post-i72x.2 the routable address embeds no IID, so the test
+            // identity must be recovered by the derived upstream address,
+            // not addr[8:16].
             let Some(identity) = (0u8..=u8::MAX)
                 .map(|seed| Identity::from_seed(Seed::new([seed; 32])))
-                // Match by link-local IID (fe80:: sources carry it in the low
-                // half) or by full routable address; upstream AddrForKey does
-                // not embed the IID (i72x.2).
                 .find(|identity| {
-                    identity.iid == packet_source[8..] || identity.ygg_addr == packet_source
+                    // The DAO source may be the originator's link-local
+                    // (SHA-512 IID tail) or its routable upstream
+                    // AddrForKey /128; match either form.
+                    lichen_link::ygg_addr_from_pubkey(identity.pubkey.as_bytes()) == packet_source
+                        || (packet_source.starts_with(&[0xfe, 0x80, 0, 0, 0, 0, 0, 0])
+                            && identity.iid == packet_source[8..])
                 })
             else {
                 return false;

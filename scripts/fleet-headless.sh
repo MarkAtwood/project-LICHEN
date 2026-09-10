@@ -24,6 +24,7 @@ STATE="/tmp/fleet-driver-state"
 SESSIONS="$STATE/sessions"
 mkdir -p "$STATE" "$SESSIONS"
 export BEADS_DIR="$REPO/.beads"
+export BEADS_ACTOR="opencode-worker-$N"  # per-worker attribution for the stall detector's close counting
 export PATH="$HOME/.opencode/bin:$PATH"
 cd "$WT" || exit 1
 
@@ -54,7 +55,7 @@ new_session() { rm -f "$SESSIONS/worker$N.sid" "$WT/SELF-REPORT-DEGENERATE"; }
 
 rounds=0
 while :; do
-    if [ -f "$REPO/.fleet-paused" ]; then sleep 60; continue; fi
+    if [ -f "$REPO/.fleet-paused" ] || [ -f "$REPO/.fleet-workers-paused" ]; then sleep 60; continue; fi
 
     # Round: fresh session or continue existing
     SID=$(sess_id)

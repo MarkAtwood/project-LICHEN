@@ -26,7 +26,7 @@ from lichen.rpl.dodag import (
     version_is_newer,
     versions_incomparable,
 )
-from lichen.rpl.messages import DIO
+from lichen.rpl.messages import DIO, DodagConfig, RplOptionType
 
 DODAG_ID = "0200::1"
 
@@ -900,3 +900,77 @@ def test_root_change_history_is_bounded() -> None:
     assert len(events) == ROOT_CHANGE_HISTORY_MAX
     for _previous, new in events:
         assert new in (IPv6Address(DODAG_ID), IPv6Address("200::99"))
+
+
+def test_build_dio_carries_dodag_config_option() -> None:
+    """Spec draft-lichen-rpl-lora-00 9.1 (R-RPL-032): every emitted DIO
+    carries the DODAG Configuration option with the shared stack defaults
+    (Rust DodagConfig::default in lichen-rpl/src/message.rs, C
+    lichen_rpl_dodag_config_init)."""
+    for node in (_node(), DodagState.as_root(0, DODAG_ID, 1)):
+        wire = node.build_dio().to_bytes()
+        parsed = DIO.from_bytes(wire)
+        configs = [
+            option
+            for option in parsed.options
+            if option.type == RplOptionType.DODAG_CONFIGURATION
+        ]
+        assert len(configs) == 1
+        config = DodagConfig.from_option(configs[0])
+        assert config.max_rank_increase == 2048
+        assert config.min_hop_rank_increase == 256
+        assert config.ocp == 1
+        assert config.dio_int_min == 12
+        assert config.dio_int_doublings == 8
+        assert config.dio_redundancy_const == 10
+        assert config.default_lifetime == 0xFF
+        assert config.lifetime_unit == 60
+        assert config.authentication_enabled is False
+        assert config.gateway_centric is False
+
+
+def test_build_dio_advertises_node_rank_configuration() -> None:
+    """A node configured with non-default rank parameters must advertise the
+    values it actually computes with (Rust set_rank_config parity,
+    rust/lichen-node/src/routing/router.rs:592-596)."""
+    node = DodagState(
+        rpl_instance_id=0,
+        dodag_id=DODAG_ID,
+        version=1,
+        min_hop_rank_increase=512,
+        max_rank_increase=4096,
+    )
+    wire = node.build_dio().to_bytes()
+    parsed = DIO.from_bytes(wire)
+    (option,) = [
+        o for o in parsed.options if o.type == RplOptionType.DODAG_CONFIGURATION
+    ]
+    config = DodagConfig.from_option(option)
+    assert config.min_hop_rank_increase == 512
+    assert config.max_rank_increase == 4096
+
+
+def test_dodag_rank_config_bounds_match_wire_and_rust_window() -> None:
+    """MHRI/MRI must be rejected at construction, not at emission: MRI is a
+    u16 on the wire and Rust set_rank_config (lichen-rpl/src/dodag.rs:333-335)
+    rejects DIOs advertising MHRI > INFINITE_RANK / 2."""
+    for bad_mhri in (0x8000, 0x1_0000):
+        with pytest.raises(ValueError, match="min_hop_rank_increase"):
+            DodagState(0, DODAG_ID, 1, min_hop_rank_increase=bad_mhri)
+    for bad_mri in (-1, 0x1_0000):
+        with pytest.raises(ValueError, match="max_rank_increase"):
+            DodagState(0, DODAG_ID, 1, max_rank_increase=bad_mri)
+    edge = DodagState(
+        rpl_instance_id=0,
+        dodag_id=DODAG_ID,
+        version=1,
+        min_hop_rank_increase=0x7FFF,
+        max_rank_increase=0xFFFF,
+    )
+    parsed = DIO.from_bytes(edge.build_dio().to_bytes())
+    (option,) = [
+        o for o in parsed.options if o.type == RplOptionType.DODAG_CONFIGURATION
+    ]
+    config = DodagConfig.from_option(option)
+    assert config.min_hop_rank_increase == 0x7FFF
+    assert config.max_rank_increase == 0xFFFF
