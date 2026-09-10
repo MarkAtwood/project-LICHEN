@@ -91,7 +91,7 @@ provisioning record:
   option and ciphertext payload travel verbatim in the tail after the
   residue, as with any rules-5/6 packet.
 - **GET /deaddrop (read):** Rule 5/6 when the request is OSCORE-protected
-  (private/group drops); Rule 0/1 is permitted for unprotected discovery of
+  (private/group drops); Rule 0/1 is permitted for unprotected reads of
   public drops only.
 - **Uri-Path `/deaddrop`:** CoAP option number 11, length 8, value
   `deaddrop`. In OSCORE-protected traffic (all POSTs, protected GETs) it is
