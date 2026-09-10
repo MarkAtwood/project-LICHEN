@@ -281,14 +281,6 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 return Some(RoutePlan {
                     next_hop,
                     source_route,
-                // The first hop is this node's direct neighbor, but post-AddrForKey
-                // it is a routable 02xx address with no embedded IID, so the L2
-                // destination resolves through the authenticated peer table.
-                return source_route.first().copied().and_then(|first| {
-                    Some(RoutePlan {
-                        next_hop: util::l2_destination(first, self.stack.link_ref())?,
-                        source_route,
-                    })
                 });
             }
         }

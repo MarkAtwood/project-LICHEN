@@ -3324,7 +3324,7 @@ fn verified_signed_dio_replay_rejects_after_reopen() {
         Stack::new(radio, node_identity.clone(), 129, 0),
         address(&node_identity, 1),
         dodag_id,
-        announces(dodag_id[..8].try_into().unwrap()),
+        announces(),
         storage,
     )
     .unwrap();
@@ -3385,7 +3385,7 @@ fn corrupt_root_seq_record_fails_provision_closed() {
         Stack::new(radio, node_identity, 129, 0),
         node_addr,
         dodag_id,
-        announces(dodag_id[..8].try_into().unwrap()),
+        announces(),
         storage,
     )
     .err()
