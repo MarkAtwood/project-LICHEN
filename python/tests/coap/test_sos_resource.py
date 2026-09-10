@@ -34,6 +34,7 @@ from lichen.coap.transport import InMemoryNetwork, create_lichen_context
 from lichen.coap.udp_server import bind_coap_udp
 from lichen.crypto.identity import _pubkey_to_iid, yggdrasil_address
 from lichen.crypto.schnorr48 import derive_keypair
+from lichen.crypto.trust import TrustEntry, TrustLevel, TrustStore
 
 # Deterministic signer identity; /sos requires origin signatures (spec 18.4.1),
 # so the POSTing node's EUI-64 must be the one its pubkey derives to.
@@ -578,6 +579,69 @@ class TestSosSignatureEnforcement:
         assert resp.code == aiocoap.CHANGED
         resp = await sos.render_post(_request(_signed_body(seq=8)))
         _assert_silently_dropped(resp)
+
+
+class TestSosTrustStoreGate:
+    """POST /sos trust-store gate (spec 18.4.1 + 8.7 TOFU).
+
+    With a trust_store wired, a signature-valid POST whose pubkey conflicts
+    with the pinned key for its IID is silently dropped (same No-Response
+    treatment as a bad signature), and a first-contact valid POST pins the
+    key and activates.
+    """
+
+    async def test_first_valid_signature_pins_and_activates(self) -> None:
+        store = TrustStore()
+        sos = SosResource(time_func=lambda: _T0, trust_store=store)
+        resp = await sos.render_post(_request(_signed_body()))
+        assert resp.code == aiocoap.CHANGED
+        assert sos._active is True
+        # TOFU: the signer's key is now pinned under its derived IID.
+        entry = store.get(_EUI)
+        assert entry is not None
+        assert entry.pubkey == _SOS_PUB
+        assert entry.trust_level is TrustLevel.TOFU
+
+    async def test_pinned_peer_reaccepted_on_advancing_sequence(self) -> None:
+        store = TrustStore()
+        sos = SosResource(time_func=lambda: _T0, trust_store=store)
+        assert (await sos.render_post(_request(_signed_body(seq=1)))).code == aiocoap.CHANGED
+        sos.cancel()
+        # Steady state: the same key on a strictly advancing sequence hits
+        # the existing-entry/pubkey-matches branch of verify_or_pin.
+        resp = await sos.render_post(_request(_signed_body(seq=2)))
+        assert resp.code == aiocoap.CHANGED
+        assert sos._active is True
+
+    async def test_forged_post_pins_nothing(self) -> None:
+        store = TrustStore()
+        sos = SosResource(time_func=lambda: _T0, trust_store=store)
+        # Pinning happens only AFTER signature verification: a bad-signature
+        # POST must be dropped without inserting a TOFU pin (store poisoning).
+        body = bytearray(_signed_body())
+        body[-1] ^= 0x01
+        resp = await sos.render_post(_request(bytes(body)))
+        _assert_silently_dropped(resp)
+        assert sos._active is False
+        assert store.get(_EUI) is None
+
+    async def test_pinned_key_conflict_dropped(self) -> None:
+        store = TrustStore()
+        sos = SosResource(time_func=lambda: _T0, trust_store=store)
+        resp = await sos.render_post(_request(_signed_body()))
+        assert resp.code == aiocoap.CHANGED
+        # Pin conflict: the store now maps the signer's IID to a DIFFERENT
+        # pubkey. No public TrustStore API can produce this state (anchors
+        # key under their own derived IID), so inject it directly - it
+        # models a second-preimage IID collision or a corrupt/compromised
+        # pin. A subsequent POST from the original key is cryptographically
+        # valid but mismatches the pin: KeyMismatchError -> silent drop.
+        _other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
+        store._entries[_EUI] = TrustEntry.from_pubkey(other_pub, TrustLevel.TOFU)
+        sos2 = SosResource(time_func=lambda: _T0, trust_store=store)
+        resp2 = await sos2.render_post(_request(_signed_body(seq=2)))
+        _assert_silently_dropped(resp2)
+        assert sos2._active is False
 
 
 class TestSosMulticast:
