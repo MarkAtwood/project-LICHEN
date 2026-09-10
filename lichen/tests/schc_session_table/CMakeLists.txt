@@ -6,6 +6,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(schc_session_table_test C)
 
+enable_testing()
+
 include(../cmake/test_common.cmake)
 
 add_executable(schc_session_table_test
@@ -18,3 +20,5 @@ target_include_directories(schc_session_table_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/include
 )
 lichen_test_target(schc_session_table_test)
+
+add_test(NAME schc_session_table COMMAND schc_session_table_test)
