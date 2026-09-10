@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-ln6h",
+  "title": "python/README.md:76 SCHC row stale: '60+ bytes to ~10 bytes' vs normative 52-\u003e23/37 (Rule 0/1)",
+  "description": "Found during edge-cases codereview pass of 7gfj (delegated to kimi-k3). python/README.md feature table SCHC row says 'IPv6+UDP+CoAP compression from 60+ bytes to ~10 bytes'. Both figures are wrong: uncompressed base is 52 bytes and no rule compresses below 21 bytes (minimum Rule 7 link-local residue), normative compressed figures are 23 bytes (Rule 0 link-local) or 37 bytes (Rule 1 Yggdrasil) per spec/03-adaptation.md 5.3. Stale on origin/main too (verified). Fix: reword the SCHC row to '52 bytes of headers to 23 bytes (link-local) / 37 bytes (Yggdrasil)' or equivalent normative phrasing. Also sweep python/README.md for other stale compression figures while there. Discovered-from project-LICHEN-worker6-7gfj.",
+  "status": "in_progress",
+  "priority": 3,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T03:21:19.713970467Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T03:28:57.301440943Z",
+  "started_at": "2026-09-10T03:28:57.301440943Z",
+  "lease_expires_at": "2026-09-10T03:33:57.301440943Z",
+  "heartbeat_at": "2026-09-10T03:28:57.301440943Z",
+  "labels": [
+    "schc"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ln6h",
+      "depends_on_id": "project-LICHEN-worker6-7gfj",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T03:21:19.860521612Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-ot39",
+  "title": "[info] worker2 self-reported degenerate (headless, restarted)",
+  "description": "Worker2 touched SELF-REPORT-DEGENERATE during a headless round. Fresh session on next round.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T03:29:30.185675292Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T03:29:30.185675292Z"
+}
