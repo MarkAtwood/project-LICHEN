@@ -117,6 +117,29 @@ def test_corrupt_snapshot_reestablishes_baseline(tmp_path: Path) -> None:
     assert _read(tmp_path) == {"usage": 100, "ts": T0}
 
 
+def test_negative_usage_baseline_is_corrupt(tmp_path: Path) -> None:
+    (tmp_path / SNAP).write_text(json.dumps({"usage": -5, "ts": T0}))
+    r = fleet_burn.update(str(tmp_path), used=100, closes=50, now=T0)
+    assert r == {"evaluated": False, "reason": "baseline-established"}
+    assert _read(tmp_path) == {"usage": 100, "ts": T0}
+
+
+def test_negative_ts_baseline_is_corrupt(tmp_path: Path) -> None:
+    (tmp_path / SNAP).write_text(json.dumps({"usage": 100, "ts": -1}))
+    r = fleet_burn.update(str(tmp_path), used=100, closes=50, now=T0)
+    assert r == {"evaluated": False, "reason": "baseline-established"}
+    assert _read(tmp_path) == {"usage": 100, "ts": T0}
+
+
+def test_future_baseline_ts_reestablishes_instead_of_suppressing(tmp_path: Path) -> None:
+    # Clock stepped backwards (or NTP correction planted a future ts):
+    # negative age must re-establish, not treat as mid-window forever.
+    fleet_burn.update(str(tmp_path), used=100, closes=50, now=T0 + 86500)
+    r = fleet_burn.update(str(tmp_path), used=110, closes=50, now=T0)
+    assert r == {"evaluated": False, "reason": "baseline-reestablished-clock"}
+    assert _read(tmp_path) == {"usage": 110, "ts": T0}
+
+
 def test_no_tmp_files_linger_after_update(tmp_path: Path) -> None:
     fleet_burn.update(str(tmp_path), used=100, closes=50, now=T0)
     fleet_burn.update(str(tmp_path), used=200, closes=50, now=T0 + 86500)
