@@ -20,12 +20,17 @@ from lichen.coap.sos_origin import (
     canonicalize_sos_payload,
     verify_sos_origin,
 )
-from lichen.crypto.identity import _pubkey_to_iid
+from lichen.crypto.identity import _pubkey_to_iid, yggdrasil_address
 from lichen.crypto.trust import TrustError
 
 MAX_ROLLCALLS = 256
 MAX_ROLLCALL_TIMEOUT_S = 7 * 86400
 MAX_CHECKINS = 256  # Maximum stored check-ins
+
+# RFC 7967 No-Response option bitmask: suppress 2.xx/4.xx/5.xx responses.
+# Spec 18.4.1: missing/malformed/invalid SOS origin signatures are silently
+# dropped, so bad-signature paths return this instead of 4.01.
+_NO_RESPONSE_OPT = 26
 
 # SOS rate limiting per spec (per-source limits)
 SOS_COOLDOWN_S = 600  # 10-minute cooldown period per source
@@ -38,6 +43,16 @@ _SOS_ENVELOPE_FIELDS = frozenset({"pubkey", "sig"})
 
 # Valid check-in status values per spec 18.6.1
 CHECKIN_STATUS_VALUES = frozenset({"ok", "help", "delayed"})
+
+
+def _silent_drop() -> Message:
+    """Build the "no response" reply for silently dropped SOS messages.
+
+    aiocoap renders this as a response carrying the RFC 7967 No-Response
+    option, which the requesting side discards; nothing else crosses the
+    wire, matching spec 18.4.1's silent-drop requirement.
+    """
+    return Message(no_response=_NO_RESPONSE_OPT)
 
 
 class SosResource(resource.ObservableResource):
@@ -53,8 +68,8 @@ class SosResource(resource.ObservableResource):
     {"from","t"} core fields).  Per spec 18.4.1 the origin signature is
     REQUIRED: the pubkey must derive to the claimed node IID, the Schnorr48
     signature must verify over the canonical CBOR of the core alert dict,
-    and the origin sequence must strictly advance; anything else is dropped
-    with 4.01.
+    and the origin sequence must strictly advance; anything else is silently
+    dropped with no response (RFC 7967 No-Response option).
     **DELETE** cancels.  **GET** and **Observe** expose the current state to all
     subscribers so neighbouring nodes can relay/escalate the alert.
 
@@ -230,35 +245,36 @@ class SosResource(resource.ObservableResource):
         ):
             return Message(code=aiocoap.BAD_REQUEST)
         # Spec 18.4.1: SOS MUST carry a valid origin signature; unsigned or
-        # invalid messages are dropped. The envelope carries the signer's
-        # pubkey (32 B) and the wire origin signature (8 B seq + 48 B sig).
+        # invalid messages are silently dropped with no response (RFC 7967
+        # No-Response option). The envelope carries the signer's pubkey
+        # (32 B) and the wire origin signature (8 B seq + 48 B sig).
         pubkey = body.get("pubkey")
         sig_blob = body.get("sig")
         if not isinstance(pubkey, bytes) or len(pubkey) != 32 or not isinstance(sig_blob, bytes):
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         try:
             origin_sig = SosOriginSignature.from_bytes(sig_blob)
         except ValueError:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         iid = bytes.fromhex(from_hex.lower())
         if _pubkey_to_iid(pubkey) != iid:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         core_alert = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
-        origin_addr = b"\x02\x00" + b"\x00" * 6 + iid
+        origin_addr = yggdrasil_address(pubkey).packed
         if not verify_sos_origin(
             pubkey, origin_addr, canonicalize_sos_payload(core_alert), origin_sig
         ):
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         if self._trust_store is not None:
             try:
                 self._trust_store.verify_or_pin(pubkey, iid)
             except TrustError:
-                return Message(code=aiocoap.UNAUTHORIZED)
+                return _silent_drop()
         # Replay gate: only strictly advancing sequences may activate.
         source_key = from_hex.lower()
         last_seq = self._sequences.last_seen(source_key)
         if last_seq is not None and origin_sig.origin_sequence <= last_seq:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         # Check rate limit before activating
         allowed, retry_after, _reason = self.evaluate_rate_limit(source_key)
         if not allowed:
@@ -285,24 +301,24 @@ class SosResource(resource.ObservableResource):
         pubkey = body.get("pubkey")
         sig_blob = body.get("sig")
         if not isinstance(pubkey, bytes) or len(pubkey) != 32 or not isinstance(sig_blob, bytes):
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         try:
             origin_sig = SosOriginSignature.from_bytes(sig_blob)
         except ValueError:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         active_iid = bytes.fromhex(self._from.lower())
         if _pubkey_to_iid(pubkey) != active_iid:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         core_cancel = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
-        origin_addr = b"\x02\x00" + b"\x00" * 6 + active_iid
+        origin_addr = yggdrasil_address(pubkey).packed
         if not verify_sos_origin(
             pubkey, origin_addr, canonicalize_sos_payload(core_cancel), origin_sig
         ):
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         source_key = self._from.lower()
         last_seq = self._sequences.last_seen(source_key)
         if last_seq is not None and origin_sig.origin_sequence <= last_seq:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         self._sequences.accept(source_key, origin_sig.origin_sequence)
         self.cancel()
         return Message(code=aiocoap.CHANGED)
@@ -319,7 +335,7 @@ class SosResource(resource.ObservableResource):
             return Message(code=aiocoap.NOT_FOUND)
         # SECURITY: Require signed payload for authentication
         if not request.payload:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         try:
             body = _decode_single_cbor(request.payload)
         except (ValueError, OverflowError, cbor2.CBORDecodeError):
@@ -330,27 +346,27 @@ class SosResource(resource.ObservableResource):
         pubkey = body.get("pubkey")
         sig_blob = body.get("sig")
         if not isinstance(pubkey, bytes) or len(pubkey) != 32 or not isinstance(sig_blob, bytes):
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         try:
             origin_sig = SosOriginSignature.from_bytes(sig_blob)
         except ValueError:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         # SECURITY: Verify requester is the originator of the active alert
         active_iid = bytes.fromhex(self._from.lower())
         if _pubkey_to_iid(pubkey) != active_iid:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         # SECURITY: Verify signature over canonical cancel payload
         core_cancel = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
-        origin_addr = b"\x02\x00" + b"\x00" * 6 + active_iid
+        origin_addr = yggdrasil_address(pubkey).packed
         if not verify_sos_origin(
             pubkey, origin_addr, canonicalize_sos_payload(core_cancel), origin_sig
         ):
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         # SECURITY: Replay gate for cancel requests
         source_key = self._from.lower()
         last_seq = self._sequences.last_seen(source_key)
         if last_seq is not None and origin_sig.origin_sequence <= last_seq:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         self._sequences.accept(source_key, origin_sig.origin_sequence)
         self.cancel()
         return Message(code=aiocoap.DELETED)
