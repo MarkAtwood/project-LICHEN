@@ -543,8 +543,8 @@ def generate() -> DaoVectorDocument:
                 previous=prior_42,
             ),
             rejected(
-                "reject_fresh_cross_prefix_target",
-                "fresh_cross_prefix_target",
+                "reject_fresh_cross_prefix_iid_mismatch",
+                "fresh_cross_prefix_iid_mismatch",
                 dao(target(ORIGIN), transit(PARENT_1)),
                 51,
                 "iid_mismatch",

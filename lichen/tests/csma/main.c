@@ -126,6 +126,25 @@ static void test_errors_and_invalid_transitions(void)
 	assert(state.backoff_exponent == 0U && state.retries == 0U);
 }
 
+static void test_completion_contention_can_be_recovered(void)
+{
+	struct lichen_csma csma;
+	uint32_t delay;
+
+	lichen_csma_init(&csma);
+	assert(lichen_csma_start(&csma, 0U, NULL, NULL, &delay) ==
+	       LICHEN_CSMA_RESULT_BACKOFF);
+	assert(lichen_csma_cad_begin(&csma) == 0);
+	assert(lichen_csma_cad_complete(&csma, 0, false, NULL, NULL, &delay) ==
+	       LICHEN_CSMA_RESULT_TX_ALLOWED);
+
+	atomic_store_explicit(&csma.locked, true, memory_order_release);
+	assert(lichen_csma_tx_complete(&csma, 0) == -EBUSY);
+	atomic_store_explicit(&csma.locked, false, memory_order_release);
+	assert(lichen_csma_reset(&csma) == 0);
+	assert(snapshot(&csma).phase == LICHEN_CSMA_IDLE);
+}
+
 struct blocking_rng {
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
@@ -279,6 +298,7 @@ int main(void)
 	test_canonical_backoff_and_clear();
 	test_exponent_mapping_timeout_and_exhaustion();
 	test_errors_and_invalid_transitions();
+	test_completion_contention_can_be_recovered();
 	test_concurrent_cancel();
 	test_acquire_clear_busy_timeout_error_and_cancel();
 	return 0;

@@ -18,6 +18,7 @@ const DENSITY_LOW: u8 = 5;
 const SNR_CRITICAL: i8 = -5;
 const SNR_POOR: i8 = 0;
 const SNR_GOOD: i8 = 8;
+const UPGRADE_COUNT_THRESHOLD: u8 = 3;
 const LOAD_HIGH: u32 = FP_SCALE * 4 / 5;
 const LOAD_REBALANCE: u32 = FP_SCALE * 2 / 5;
 /// Spec 2a.8 floor d threshold: LoadFactor >= 0.8 (Q16.16, ceil).
@@ -408,6 +409,8 @@ pub struct RfHealthMetrics {
     pub density: u8,
     /// Load factor in Q16.16 (0 = idle, FP_SCALE = 1.0). From hash or metrics.
     load_factor_fp: u32,
+    /// Consecutive good-SNR, low-density evaluations required before SF-1.
+    upgrade_count: u8,
 }
 
 impl RfHealthMetrics {
@@ -421,6 +424,7 @@ impl RfHealthMetrics {
             snr: SnrStats::new(),
             density: 0,
             load_factor_fp: 0,
+            upgrade_count: 0,
         }
     }
 
@@ -634,7 +638,7 @@ impl RfHealthMetrics {
     /// per-neighbor EMA loss (Q16.16). Returns (sf, tx_allowed).
     #[inline]
     pub fn adaptive_sf_select(
-        &self,
+        &mut self,
         assigned_sf: Option<u8>,
         utilization: Option<u32>,
         ema_loss_fp: Option<u32>,
@@ -662,10 +666,17 @@ impl RfHealthMetrics {
         if self.density > DENSITY_HIGH || util > util_thresh_150 {
             sf = sf.saturating_add(2).min(12);
         }
-        // Step 4: good SNR and low density allow SF -1 (unconditional,
-        // matching python ccp.py; the mode gate was a pre-2a.8-reconciliation
-        // divergence).
+        // Step 4: good SNR and low density allow SF -1 only after the
+        // adjudicated consecutive-cycle hysteresis threshold.
         if snr_ema > SNR_GOOD && self.density < DENSITY_LOW {
+            self.upgrade_count = self
+                .upgrade_count
+                .saturating_add(1)
+                .min(UPGRADE_COUNT_THRESHOLD);
+        } else {
+            self.upgrade_count = 0;
+        }
+        if self.upgrade_count >= UPGRADE_COUNT_THRESHOLD {
             sf = sf.saturating_sub(1).max(7);
         }
         // Step 5: high loss OR load factor > 0.8 triggers SF +1
@@ -781,12 +792,12 @@ mod tests {
         let (sf, _) = m.adaptive_sf_select(Some(9), None, None);
         assert_eq!(sf, 11);
 
-        // Floor (d): load_factor_fp >= 52429 floors at 11.
+        // Floor (d): load_factor_fp >= 52429 floors at 11 after step 5.
         let mut m = RfHealthMetrics::new();
         m.record_rx(10);
         m.record_load_factor(52429);
         let (sf, _) = m.adaptive_sf_select(Some(11), None, None);
-        assert_eq!(sf, 11);
+        assert_eq!(sf, 12);
     }
 
     #[test]
@@ -796,12 +807,14 @@ mod tests {
         m.record_rx(10);
         m.record_load_factor(52429);
         let (sf, _) = m.adaptive_sf_select(Some(11), None, None);
-        assert_eq!(sf, 11);
+        assert_eq!(sf, 12);
 
         let mut m = RfHealthMetrics::new();
         m.record_rx(10);
         m.record_load_factor(52428);
-        // No floor at 52428: step 4 (good SNR, low density) applies -1.
+        // No floor at 52428: step 4 applies -1 after three good cycles.
+        let _ = m.adaptive_sf_select(Some(9), None, None);
+        let _ = m.adaptive_sf_select(Some(9), None, None);
         let (sf, _) = m.adaptive_sf_select(Some(9), None, None);
         assert_eq!(sf, 8);
     }
@@ -986,6 +999,8 @@ mod tests {
         m.record_rx(12);
         m.record_load_factor(0);
         assert_eq!(m.adaptive_sf(), 9);
+        let _ = m.adaptive_sf_select(None, None, None);
+        let _ = m.adaptive_sf_select(None, None, None);
         let (sf, allowed) = m.adaptive_sf_select(None, None, None);
         assert_eq!(sf, 9);
         assert!(allowed);
@@ -1087,9 +1102,27 @@ mod tests {
         m.record_density(2);
         m.record_rx(15);
         m.record_load_factor(0);
+        let _ = m.adaptive_sf_select(Some(8), None, None);
+        let _ = m.adaptive_sf_select(Some(8), None, None);
         let (sf, allowed) = m.adaptive_sf_select(Some(8), None, None);
         assert_eq!(sf, 7);
         assert!(allowed);
+    }
+
+    #[test]
+    fn adaptive_sf_upgrade_requires_three_qualifying_cycles() {
+        let mut m = RfHealthMetrics::new();
+        m.record_density(2);
+        m.record_rx(15);
+
+        assert_eq!(m.adaptive_sf_select(Some(8), None, None).0, 8);
+        assert_eq!(m.adaptive_sf_select(Some(8), None, None).0, 8);
+        assert_eq!(m.adaptive_sf_select(Some(8), None, None).0, 7);
+
+        m.record_density(5);
+        assert_eq!(m.adaptive_sf_select(Some(8), None, None).0, 8);
+        m.record_density(2);
+        assert_eq!(m.adaptive_sf_select(Some(8), None, None).0, 8);
     }
 
     #[test]
@@ -1101,7 +1134,7 @@ mod tests {
         // fresh metrics exercise the empty-SnrStats `avg() -> None`
         // default (snr_ema unwrap_or(0)); renamed to resolve the
         // duplicate test name.
-        let m = RfHealthMetrics::new();
+        let mut m = RfHealthMetrics::new();
         // Neutral conditions: no step raises or lowers SF, so the
         // returned value is the clamped baseline itself.
         let (sf0, allowed0) = m.adaptive_sf_select(Some(0), None, None);
@@ -1181,6 +1214,8 @@ mod tests {
                 .get("ema_loss_permille")
                 .and_then(|x| x.as_f64())
                 .map(|l| (l * FP_SCALE as f64 / 1000.0) as u32);
+            let _ = m.adaptive_sf_select(assigned, util_fp, loss_fp);
+            let _ = m.adaptive_sf_select(assigned, util_fp, loss_fp);
             let (sf_sel, allowed) = m.adaptive_sf_select(assigned, util_fp, loss_fp);
             assert_eq!(sf_sel, exp_sf);
             assert!(allowed);

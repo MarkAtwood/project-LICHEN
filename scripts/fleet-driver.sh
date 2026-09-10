@@ -64,7 +64,10 @@ worker_cmd() {  # worker8 is the hard-bead lane on a stronger model
 }
 while :; do
     if [ -f "$REPO_ROOT/.fleet-paused" ]; then
-        PAUSE_AGE=$(( $(date +%s) - $(stat -c %Y "$REPO_ROOT/.fleet-paused") ))
+        if ! PAUSE_MTIME=$(stat -c %Y "$REPO_ROOT/.fleet-paused" 2>/dev/null); then
+            continue
+        fi
+        PAUSE_AGE=$(( $(date +%s) - PAUSE_MTIME ))
         if [ "$PAUSE_AGE" -gt 3600 ]; then
             rm -f "$REPO_ROOT/.fleet-paused"
             BEADS_DIR="$BEADS_DIR" bd create --title="[ALARM] Pause expired after 60 min - auto-resumed" --description="A fleet-pause marker outlived 60 minutes (age: ${PAUSE_AGE}s). The pause protocol exists for short repairs; an orphaned pause is pure waste (2026-09-09: 2 hours lost this way). Auto-resumed; the operator who paused should verify their repair landed." -t bug -p 1 --json >/dev/null 2>&1

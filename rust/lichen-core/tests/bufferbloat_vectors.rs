@@ -99,6 +99,68 @@ fn forwarding_buffer_oracle_matches_spec_b2() {
     assert_eq!(u64_field(oracle, "total_capacity"), 16);
 }
 
+#[test]
+fn forwarding_vectors_have_independent_operation_expectations() {
+    let document = parse(FORWARD_JSON);
+    assert_eq!(document["vector_type"], "forwarding_buffer");
+    assert_eq!(u64_field(&document, "format_version"), 1);
+
+    let vectors = document["vectors"].as_array().expect("vectors");
+    assert!(!vectors.is_empty());
+    for vector in vectors {
+        let name = vector["name"].as_str().expect("vector name");
+        let operation = vector["operation"].as_str().expect("operation");
+        let expected = &vector["expected"];
+        match operation {
+            "try_buffer" => {
+                let inputs = &vector["inputs"];
+                assert!(inputs["packet_id"].is_string(), "{name}: packet_id");
+                assert!(inputs["source_iid"].is_string(), "{name}: source_iid");
+                assert!(inputs["now_ms"].is_u64(), "{name}: now_ms");
+                assert!(inputs["deadline_ms"].is_u64(), "{name}: deadline_ms");
+                assert!(matches!(
+                    expected["result"].as_str(),
+                    Some("ACCEPTED") | Some("BACKPRESSURE") | Some("EVICTED")
+                ));
+            }
+            "expire_old" => {
+                assert!(vector["inputs"]["now_ms"].is_u64(), "{name}: now_ms");
+                assert!(expected["expired_count"].is_u64(), "{name}: expired_count");
+            }
+            "dequeue" => {
+                assert!(
+                    vector["inputs"]["source_iid"].is_string(),
+                    "{name}: source_iid"
+                );
+                assert!(
+                    expected["packet_id"].is_string() || expected["result"].is_null(),
+                    "{name}: dequeue expectation"
+                );
+            }
+            "get_stats" => {
+                for field in [
+                    "total_packets",
+                    "sources",
+                    "max_sources",
+                    "max_per_source",
+                    "accepted",
+                    "backpressure",
+                    "expired",
+                    "evicted",
+                ] {
+                    assert!(expected[field].is_u64(), "{name}: {field}");
+                }
+            }
+            "fill_to_capacity" => {
+                for field in ["total_packets", "source_count", "accepted"] {
+                    assert!(expected[field].is_u64(), "{name}: {field}");
+                }
+            }
+            other => panic!("unexpected forwarding operation {other}"),
+        }
+    }
+}
+
 const CONGESTION_JSON: &str = include_str!("../../../test/vectors/bufferbloat_congestion.json");
 
 #[test]
@@ -128,7 +190,10 @@ fn b5_congestion_vectors_match_spec_testing_table() {
             "fairness" => {
                 assert_eq!(u64_field(case, "max_packets_per_source"), 2);
                 assert_eq!(u64_field(case, "max_forwarding_sources"), 8);
-                assert_eq!(case["expected"], "nack_when_source_full");
+                assert_eq!(
+                    case["expected"],
+                    "local_backpressure_recorded_when_source_full"
+                );
             }
             other => panic!("unexpected congestion vector {other}"),
         }

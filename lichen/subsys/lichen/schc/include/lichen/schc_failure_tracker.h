@@ -61,7 +61,7 @@ struct lichen_schc_failure_tracker {
 };
 
 /**
- * @brief Construct a bounded tracker (zero threshold is invalid).
+ * @brief Construct a bounded tracker (zero threshold disables tracking).
  */
 void lichen_schc_failure_tracker_init(struct lichen_schc_failure_tracker *t,
 				      uint16_t threshold);

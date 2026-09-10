@@ -32,7 +32,7 @@
       "scenario": "fairness",
       "max_packets_per_source": 2,
       "max_forwarding_sources": 8,
-      "expected": "nack_when_source_full"
+      "expected": "local_backpressure_recorded_when_source_full"
     }
   ]
 }

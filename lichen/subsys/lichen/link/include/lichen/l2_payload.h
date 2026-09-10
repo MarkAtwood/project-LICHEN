@@ -11,6 +11,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 /* Nullability annotations for pointer safety (Clang/GCC compatibility) */
 #ifndef __has_feature
@@ -61,6 +62,30 @@ lichen_l2_payload_classify(const uint8_t *_Nullable payload, size_t len)
 		return LICHEN_L2_PAYLOAD_SOS;
 	}
 	return LICHEN_L2_PAYLOAD_UNKNOWN;
+}
+
+/**
+ * Wrap a canonical SOS CBOR alert in its authenticated L2 namespace.
+ *
+ * Authentication and transmission are performed by the L2 sender; this
+ * helper only constructs the dispatch-prefixed inner payload.
+ */
+static inline int
+lichen_l2_wrap_sos_payload(const uint8_t *_Nullable cbor, size_t cbor_len,
+			   uint8_t *_Nullable out, size_t out_len,
+			   size_t *_Nullable written)
+{
+	if (written == NULL || out == NULL || cbor_len == 0U ||
+	    (cbor == NULL && cbor_len != 0U) ||
+	    cbor_len == SIZE_MAX || out_len < cbor_len + 1U) {
+		return -1;
+	}
+	out[0] = LICHEN_L2_DISPATCH_SOS;
+	if (cbor_len != 0U) {
+		memcpy(&out[1], cbor, cbor_len);
+	}
+	*written = cbor_len + 1U;
+	return 0;
 }
 
 static inline const uint8_t *_Nullable

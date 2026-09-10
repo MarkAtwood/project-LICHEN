@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
-"""Tests for forwarding buffer with per-source limits and backpressure (B.2.4, B.3.2).
+"""Tests for forwarding buffer with per-source limits and local backpressure.
 
 Why these tests: The forwarding buffer prevents relay monopolization by chatty sources.
 Bugs here mean:
@@ -128,7 +128,7 @@ class TestForwardingBufferBasic:
 
 
 class TestPerSourceLimits:
-    """Tests for per-source packet limits and backpressure (B.2.4)."""
+    """Tests for per-source packet limits and backpressure."""
 
     def test_accept_up_to_limit(self):
         """Accept packets up to per-source limit (default 2)."""
@@ -142,7 +142,7 @@ class TestPerSourceLimits:
         assert buf.count_for_source(iid(1)) == 2
 
     def test_backpressure_at_limit(self):
-        """BACKPRESSURE returned when source hits limit (triggers NACK)."""
+        """BACKPRESSURE returned when source hits limit."""
         buf = ForwardingBuffer()
 
         buf.try_buffer(b"p1", iid(1), now_ms=0, deadline_ms=10000)
@@ -381,7 +381,7 @@ def _load_oracle_vectors() -> dict:
 
 
 class TestOracleForwardingBuffer:
-    """Oracle tests per spec appendix-bufferbloat.md B.3.2 Forwarding Buffer.
+    """Oracle tests per spec appendix-bufferbloat.md Forwarding Buffer.
 
     Each test validates implementation behavior against the independent oracle
     defined in test/vectors/forwarding_buffer.json. The vectors are the
@@ -439,7 +439,7 @@ class TestOracleForwardingBuffer:
         assert buf.total_count() == expected["state"]["stats"]["total_packets"]
 
     def test_oracle_backpressure_at_limit(self, vectors):
-        """Oracle: Third packet from same source triggers backpressure (NACK)."""
+        """Oracle: Third packet from same source records backpressure locally."""
         vec = next(v for v in vectors["vectors"] if v["name"] == "backpressure_at_per_source_limit")
         inputs = vec["inputs"]
         expected = vec["expected"]
@@ -637,16 +637,16 @@ class TestOracleForwardingBuffer:
         assert buf.stats.packets_accepted == expected["accepted"]
 
 
-# --- B.2.5 No Silent Drops: on_drop callback tests ---
+# --- Section 4 No Silent Drops: on_drop callback tests ---
 from lichen.link.forwarding_buffer import DropReason  # noqa: E402
 
 
 class TestNoSilentDrops:
-    """Tests for B.2.5 No Silent Drops: on_drop callback mechanism.
+    """Tests for section 4 No Silent Drops: on_drop callback mechanism.
 
-    Spec: appendix-bufferbloat.md section 5 "No Silent Drops" requires:
+    Spec: appendix-bufferbloat.md section 4 "Explicit Backpressure" requires:
     - Return error to local sender (covered by QueueFullError in tx_queue.py)
-    - NACK to mesh source (if routable) - enabled by on_drop callback
+    - Record forwarding drops locally when no eligible response exists
     - Log queue-full events for diagnostics (covered by logging)
     """
 
@@ -730,7 +730,7 @@ class TestNoSilentDrops:
         assert buf.stats.packets_backpressure == 1
 
     def test_callback_receives_correct_source_iid(self):
-        """on_drop receives the correct source_iid for routing NACK."""
+        """on_drop receives the correct source_iid for local handling."""
         dropped: list[tuple[bytes, bytes, DropReason]] = []
 
         def record_drop(source_iid: bytes, data: bytes, reason: DropReason) -> None:
@@ -745,4 +745,4 @@ class TestNoSilentDrops:
         buf.try_buffer(b"s2_p1", iid(99), now_ms=1, deadline_ms=10000)
 
         assert len(dropped) == 1
-        assert dropped[0][0] == iid(42)  # Correct source for NACK routing
+        assert dropped[0][0] == iid(42)  # Correct source for local handling

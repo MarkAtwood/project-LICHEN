@@ -101,7 +101,7 @@ fi
 
 TOTAL=$((ZEPHYR_NODES + RUST_NODES + PYTHON_NODES))
 
-if ! [[ "$RENODE_PORT_BASE" =~ ^[0-9]+$ ]] || \
+if ! [[ "$RENODE_PORT_BASE" =~ ^[0123456789]+$ ]] || \
    [[ $RENODE_PORT_BASE -lt 1024 ]] || \
    [[ $((RENODE_PORT_BASE + ZEPHYR_NODES)) -gt 65536 ]]; then
     log_error "RENODE_PORT_BASE must reserve one valid unprivileged TCP port per Zephyr node"

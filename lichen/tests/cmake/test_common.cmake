@@ -67,6 +67,7 @@ function(lichen_test_target target)
     set(_san_flags "")
 
     if(LICHEN_TEST_ASAN)
+        set(CMAKE_REQUIRED_LINK_OPTIONS "-fsanitize=address")
         check_c_compiler_flag("-fsanitize=address" _has_asan)
         if(_has_asan)
             list(APPEND _san_flags "-fsanitize=address")

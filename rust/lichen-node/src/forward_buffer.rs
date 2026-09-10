@@ -2,8 +2,8 @@
 //!
 //! Relay nodes buffer packets for forwarding. Per-source limits prevent one
 //! chatty node from monopolizing relay capacity. When a source exceeds its
-//! quota, packets are rejected with [`ForwardError::QueueFull`] and a NACK
-//! should be sent upstream.
+//! quota, packets are rejected with [`ForwardError::QueueFull`] and recorded
+//! locally when no eligible protocol failure response exists.
 //!
 //! ```text
 //! MAX_FORWARDING_SOURCES = 8
@@ -27,7 +27,7 @@ pub const MAX_PACKETS_PER_SOURCE: usize = 2;
 #[non_exhaustive]
 pub enum ForwardError {
     /// Source has reached MAX_PACKETS_PER_SOURCE limit.
-    /// A NACK should be sent upstream.
+    /// The forwarding drop is recorded locally by the caller.
     QueueFull,
     /// No packet found for the given source or criteria.
     NotFound,
@@ -87,6 +87,7 @@ impl ForwardEntry {
 #[derive(Debug)]
 pub struct ForwardBuffer {
     entries: Vec<ForwardEntry>,
+    packets_backpressure: usize,
 }
 
 #[cfg(feature = "std")]
@@ -95,6 +96,7 @@ impl ForwardBuffer {
     pub fn new() -> Self {
         Self {
             entries: Vec::with_capacity(MAX_FORWARDING_SOURCES * MAX_PACKETS_PER_SOURCE),
+            packets_backpressure: 0,
         }
     }
 
@@ -103,8 +105,9 @@ impl ForwardBuffer {
     /// # Errors
     ///
     /// Returns [`ForwardError::QueueFull`] if the source already has
-    /// `MAX_PACKETS_PER_SOURCE` packets queued. The caller SHOULD send
-    /// a NACK upstream when this occurs.
+    /// `MAX_PACKETS_PER_SOURCE` packets queued. The caller records the
+    /// forwarding drop locally unless an existing protocol permits an
+    /// eligible failure response.
     pub fn queue(
         &mut self,
         packet: Vec<u8>,
@@ -119,6 +122,7 @@ impl ForwardBuffer {
         // Check per-source limit
         let source_count = self.count_for_source(&source_iid);
         if source_count >= MAX_PACKETS_PER_SOURCE {
+            self.packets_backpressure += 1;
             return Err(ForwardError::QueueFull);
         }
 
@@ -244,7 +248,13 @@ impl ForwardBuffer {
             total_packets,
             distinct_sources,
             oldest_queued_ms: oldest_ms,
+            packets_backpressure: self.packets_backpressure,
         }
+    }
+
+    /// Number of packets rejected by the per-source limit.
+    pub fn packets_backpressure(&self) -> usize {
+        self.packets_backpressure
     }
 
     /// Evict the oldest packet overall (used when source limit reached).
@@ -281,6 +291,8 @@ pub struct ForwardStats {
     pub distinct_sources: usize,
     /// Timestamp of oldest queued packet (if any).
     pub oldest_queued_ms: Option<u32>,
+    /// Number of packets rejected by the per-source limit.
+    pub packets_backpressure: usize,
 }
 
 #[cfg(all(test, feature = "std"))]
@@ -329,6 +341,7 @@ mod tests {
         assert_eq!(err, ForwardError::QueueFull);
 
         assert_eq!(buf.count_for_source(&iid), 2);
+        assert_eq!(buf.packets_backpressure(), 1);
     }
 
     #[test]

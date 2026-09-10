@@ -55,6 +55,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use lichen_oscore::Context as OscoreContext;
 use sha2::{Digest, Sha512};
+use x509_parser::extensions::{GeneralName, ParsedExtension};
+use x509_parser::prelude::{parse_x509_certificate, X509Certificate};
 use zeroize::Zeroizing;
 
 // Re-export Schnorr types from lichen-link
@@ -185,6 +187,8 @@ pub enum TrustError {
     GenerationExhausted,
     /// A durable trust-store I/O operation failed.
     StorageIo(String),
+    /// A configured PKIX chain is malformed or violates RFC 5280 constraints.
+    InvalidCertificate(String),
 }
 
 impl std::fmt::Display for TrustError {
@@ -218,11 +222,162 @@ impl std::fmt::Display for TrustError {
             ),
             Self::GenerationExhausted => write!(f, "trust-store generation exhausted"),
             Self::StorageIo(message) => write!(f, "trust-store I/O failed: {message}"),
+            Self::InvalidCertificate(message) => write!(f, "invalid PKIX certificate: {message}"),
         }
     }
 }
 
 impl std::error::Error for TrustError {}
+
+/// Validate a leaf-first DER X.509 chain against configured DER trust anchors.
+///
+/// The final chain certificate must be byte-for-byte equal to a configured
+/// anchor. Every child is linked by issuer/subject name and verified with the
+/// issuer public key; names alone never authorize a certificate.
+pub fn validate_pkix_chain(chain: &[&[u8]], trust_anchors: &[&[u8]]) -> Result<(), TrustError> {
+    if chain.len() < 2 {
+        return Err(TrustError::InvalidCertificate(
+            "chain must contain a leaf and issuer".into(),
+        ));
+    }
+
+    let certificates = chain
+        .iter()
+        .map(|der| {
+            parse_x509_certificate(der)
+                .map(|(_, certificate)| certificate)
+                .map_err(|error| TrustError::InvalidCertificate(error.to_string()))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let anchor = chain.last().expect("chain length checked");
+    if !trust_anchors.iter().any(|configured| configured == anchor) {
+        return Err(TrustError::InvalidCertificate(
+            "chain does not terminate at a configured trust anchor".into(),
+        ));
+    }
+
+    let leaf = &certificates[0];
+    let basic_constraints = leaf
+        .basic_constraints()
+        .map_err(|error| TrustError::InvalidCertificate(error.to_string()))?
+        .ok_or_else(|| TrustError::InvalidCertificate("leaf lacks basicConstraints".into()))?;
+    if basic_constraints.value.ca {
+        return Err(TrustError::InvalidCertificate(
+            "leaf basicConstraints CA must be false".into(),
+        ));
+    }
+    let key_usage = leaf
+        .key_usage()
+        .map_err(|error| TrustError::InvalidCertificate(error.to_string()))?
+        .ok_or_else(|| TrustError::InvalidCertificate("leaf lacks keyUsage".into()))?;
+    if !key_usage.value.digital_signature() {
+        return Err(TrustError::InvalidCertificate(
+            "leaf keyUsage lacks digitalSignature".into(),
+        ));
+    }
+    validate_leaf_san_binding(leaf)?;
+
+    for index in 0..certificates.len() - 1 {
+        let certificate = &certificates[index];
+        let issuer = &certificates[index + 1];
+        if certificate.tbs_certificate.issuer != issuer.tbs_certificate.subject {
+            return Err(TrustError::InvalidCertificate(
+                "issuer and subject names do not form a chain".into(),
+            ));
+        }
+        certificate
+            .verify_signature(Some(&issuer.tbs_certificate.subject_pki))
+            .map_err(|error| TrustError::InvalidCertificate(error.to_string()))?;
+
+        if index > 0 {
+            let constraints = certificate
+                .basic_constraints()
+                .map_err(|error| TrustError::InvalidCertificate(error.to_string()))?
+                .ok_or_else(|| {
+                    TrustError::InvalidCertificate("issuer lacks basicConstraints".into())
+                })?;
+            if !constraints.value.ca {
+                return Err(TrustError::InvalidCertificate(
+                    "issuer basicConstraints CA must be true".into(),
+                ));
+            }
+            let usage = certificate
+                .key_usage()
+                .map_err(|error| TrustError::InvalidCertificate(error.to_string()))?
+                .ok_or_else(|| TrustError::InvalidCertificate("issuer lacks keyUsage".into()))?;
+            if !usage.value.key_cert_sign() {
+                return Err(TrustError::InvalidCertificate(
+                    "issuer keyUsage lacks keyCertSign".into(),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_leaf_san_binding(leaf: &X509Certificate<'_>) -> Result<(), TrustError> {
+    if leaf.subject_pki.algorithm.algorithm.to_id_string() != "1.3.101.112" {
+        return Err(TrustError::InvalidCertificate(
+            "leaf subject key must be Ed25519".into(),
+        ));
+    }
+    let public_key = leaf.subject_pki.subject_public_key.data.as_ref();
+    let public_key: &[u8; 32] = public_key.try_into().map_err(|_| {
+        TrustError::InvalidCertificate("leaf Ed25519 public key must be 32 bytes".into())
+    })?;
+    let expected = ygg_addr_from_pubkey(public_key);
+    let mut san_extensions = leaf.extensions().iter().filter(|extension| {
+        matches!(
+            extension.parsed_extension(),
+            ParsedExtension::SubjectAlternativeName(_)
+        )
+    });
+    let extension = san_extensions.next();
+    if san_extensions.next().is_some() {
+        return Err(TrustError::InvalidCertificate(
+            "leaf certificate contains duplicate SAN extensions".into(),
+        ));
+    }
+    let Some(extension) = extension else {
+        return Err(TrustError::InvalidCertificate(
+            "leaf certificate SAN is required".into(),
+        ));
+    };
+    let subject_empty = leaf.subject().iter_attributes().next().is_none();
+    if extension.critical != subject_empty {
+        return Err(TrustError::InvalidCertificate(
+            "leaf certificate SAN criticality is invalid".into(),
+        ));
+    }
+    let ParsedExtension::SubjectAlternativeName(san) = extension.parsed_extension() else {
+        unreachable!("extension was selected by its parsed type");
+    };
+    let mut native_count = 0;
+    for name in &san.general_names {
+        match name {
+            GeneralName::DNSName(_) | GeneralName::RFC822Name(_) | GeneralName::URI(_) => {
+                return Err(TrustError::InvalidCertificate(
+                    "leaf certificate SAN contains a forbidden name".into(),
+                ));
+            }
+            GeneralName::IPAddress(address) if address.len() == 16 && address[0] == 0x02 => {
+                native_count += 1;
+                if *address != expected.as_slice() {
+                    return Err(TrustError::InvalidCertificate(
+                        "leaf certificate SAN address does not match subject key".into(),
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+    if native_count != 1 {
+        return Err(TrustError::InvalidCertificate(
+            "leaf certificate SAN must contain one native address".into(),
+        ));
+    }
+    Ok(())
+}
 
 // ─── TOFU Result ─────────────────────────────────────────────────────────────
 
@@ -2552,5 +2707,131 @@ mod tests {
 
         // Verify master secrets match (same PSK)
         assert_eq!(alice_ctx.master_secret(), bob_ctx.master_secret());
+    }
+
+    fn pkix_chain(leaf_is_ca: bool) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        use rcgen::SanType;
+        use std::net::{IpAddr, Ipv6Addr};
+
+        pkix_chain_with_sans(
+            leaf_is_ca,
+            vec![SanType::IpAddress(IpAddr::V6(Ipv6Addr::from(hex!(
+                "0200514acffcfa9dea90556802586d37"
+            ))))],
+        )
+    }
+
+    fn pkix_chain_with_sans(
+        leaf_is_ca: bool,
+        subject_alt_names: Vec<rcgen::SanType>,
+    ) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        use rcgen::{BasicConstraints, CertificateParams, IsCa, KeyPair, KeyUsagePurpose};
+
+        let mut root_params = CertificateParams::new(vec!["root.example".into()]).unwrap();
+        root_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+        root_params.key_usages = vec![KeyUsagePurpose::KeyCertSign];
+        let root_key = KeyPair::generate().unwrap();
+        let root = root_params.self_signed(&root_key).unwrap();
+
+        let mut intermediate_params =
+            CertificateParams::new(vec!["intermediate.example".into()]).unwrap();
+        intermediate_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+        intermediate_params.key_usages = vec![KeyUsagePurpose::KeyCertSign];
+        let intermediate_key = KeyPair::generate().unwrap();
+        let intermediate = intermediate_params
+            .signed_by(&intermediate_key, &root, &root_key)
+            .unwrap();
+        let intermediate_der = intermediate.der().to_vec();
+
+        let mut leaf_params = CertificateParams::new(vec!["gateway.example".into()]).unwrap();
+        leaf_params.is_ca = if leaf_is_ca {
+            IsCa::Ca(BasicConstraints::Unconstrained)
+        } else {
+            IsCa::ExplicitNoCa
+        };
+        leaf_params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
+        leaf_params.subject_alt_names = subject_alt_names;
+        let leaf_key = KeyPair::from_pem(
+            "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIJ1hsZ3v/VpguoRK9JLsLMREScVpezJpGXA7rAMcrn9g\n-----END PRIVATE KEY-----",
+        )
+        .unwrap();
+        let leaf = leaf_params
+            .signed_by(&leaf_key, &intermediate, &intermediate_key)
+            .unwrap();
+        (leaf.der().to_vec(), intermediate_der, root.der().to_vec())
+    }
+
+    #[test]
+    fn pkix_validates_signature_chain_to_configured_anchor() {
+        let (leaf, intermediate, root) = pkix_chain(false);
+        validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]).unwrap();
+    }
+
+    #[test]
+    fn pkix_rejects_missing_san() {
+        let (leaf, intermediate, root) = pkix_chain_with_sans(false, Vec::new());
+        let result = validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]);
+        assert!(matches!(result, Err(TrustError::InvalidCertificate(_))));
+    }
+
+    #[test]
+    fn pkix_rejects_san_mismatch_and_duplicate_native_address() {
+        use rcgen::SanType;
+        use std::net::{IpAddr, Ipv6Addr};
+
+        let mismatch = SanType::IpAddress(IpAddr::V6(Ipv6Addr::LOCALHOST));
+        let (leaf, intermediate, root) = pkix_chain_with_sans(false, vec![mismatch]);
+        let result = validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]);
+        assert!(matches!(result, Err(TrustError::InvalidCertificate(_))));
+
+        let native = SanType::IpAddress(IpAddr::V6(Ipv6Addr::from(hex!(
+            "0200514acffcfa9dea90556802586d37"
+        ))));
+        let duplicate = SanType::IpAddress(IpAddr::V6(Ipv6Addr::from(hex!(
+            "0200514acffcfa9dea90556802586d37"
+        ))));
+        let (leaf, intermediate, root) = pkix_chain_with_sans(false, vec![native, duplicate]);
+        let result = validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]);
+        assert!(matches!(result, Err(TrustError::InvalidCertificate(_))));
+    }
+
+    #[test]
+    fn pkix_rejects_forbidden_san_name() {
+        use rcgen::SanType;
+
+        let (leaf, intermediate, root) = pkix_chain_with_sans(
+            false,
+            vec![SanType::DnsName("gateway.example".try_into().unwrap())],
+        );
+        let result = validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]);
+        assert!(matches!(result, Err(TrustError::InvalidCertificate(_))));
+    }
+
+    #[test]
+    fn pkix_ignores_non_native_ip_san() {
+        use rcgen::SanType;
+        use std::net::{IpAddr, Ipv6Addr};
+
+        let native = SanType::IpAddress(IpAddr::V6(Ipv6Addr::from(hex!(
+            "0200514acffcfa9dea90556802586d37"
+        ))));
+        let link_local = SanType::IpAddress(IpAddr::V6(Ipv6Addr::LOCALHOST));
+        let (leaf, intermediate, root) = pkix_chain_with_sans(false, vec![native, link_local]);
+        validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]).unwrap();
+    }
+
+    #[test]
+    fn pkix_rejects_unconfigured_anchor() {
+        let (leaf, intermediate, root) = pkix_chain(false);
+        let other_root = pkix_chain(false).2;
+        let result = validate_pkix_chain(&[&leaf, &intermediate, &root], &[&other_root]);
+        assert!(matches!(result, Err(TrustError::InvalidCertificate(_))));
+    }
+
+    #[test]
+    fn pkix_rejects_ca_leaf() {
+        let (leaf, intermediate, root) = pkix_chain(true);
+        let result = validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]);
+        assert!(matches!(result, Err(TrustError::InvalidCertificate(_))));
     }
 }

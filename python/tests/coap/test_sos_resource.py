@@ -694,6 +694,18 @@ class TestSosTrustStoreGate:
         assert resp.code == aiocoap.CHANGED
         assert sos._active is True
 
+    async def test_revoked_peer_is_silently_dropped(self) -> None:
+        store = TrustStore()
+        sos = SosResource(time_func=lambda: _T0, trust_store=store)
+        assert (await sos.render_post(_request(_signed_body(seq=1)))).code == aiocoap.CHANGED
+        assert store.revoke(_EUI) is True
+
+        fresh = SosResource(time_func=lambda: _T0, trust_store=store)
+        resp = await fresh.render_post(_request(_signed_body(seq=2)))
+
+        _assert_silently_dropped(resp)
+        assert fresh._active is False
+
     async def test_forged_post_pins_nothing(self) -> None:
         store = TrustStore()
         sos = SosResource(time_func=lambda: _T0, trust_store=store)

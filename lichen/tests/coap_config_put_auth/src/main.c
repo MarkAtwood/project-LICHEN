@@ -37,6 +37,7 @@
 
 /* Resource under test (COAP_RESOURCE_DEFINE in coap_server.c). */
 extern struct coap_resource lichen_server_config;
+extern struct coap_resource lichen_sos;
 
 /* ------------------------------------------------------------------ */
 /* Captured responses                                                  */
@@ -94,6 +95,20 @@ int coap_oscore_send_protected(struct coap_resource *resource,
 /* ------------------------------------------------------------------ */
 
 static bool mock_admin;
+static const uint8_t expected_origin_ipv6[16] = {
+	0x02, 0x00, 0x30, 0xad, 0x22, 0x1f, 0x03, 0x32,
+	0x2a, 0xdb, 0x90, 0x1f, 0x8b, 0x73, 0x16, 0x88,
+};
+static unsigned int sos_verify_calls;
+static bool sos_verify_address_ok;
+
+int lichen_identity_ygg_addr_from_ed25519(const uint8_t *pubkey,
+					  uint8_t ygg_addr[16])
+{
+	ARG_UNUSED(pubkey);
+	memcpy(ygg_addr, expected_origin_ipv6, sizeof(expected_origin_ipv6));
+	return 0;
+}
 
 bool lichen_coap_is_local_admin(const struct sockaddr *addr, socklen_t addr_len)
 {
@@ -154,14 +169,6 @@ int __wrap_coap_oscore_authorize_mutating(struct coap_resource *resource,
 /* Stubs for symbols coap_server.c references from unlinked modules   */
 /* ------------------------------------------------------------------ */
 
-int lichen_identity_ygg_addr_from_ed25519(const uint8_t *pubkey,
-					  uint8_t ygg_addr[16])
-{
-	ARG_UNUSED(pubkey);
-	ARG_UNUSED(ygg_addr);
-	return -EINVAL;
-}
-
 size_t lichen_key_store_list(struct lichen_key_entry *entries,
 			     size_t max_entries)
 {
@@ -181,10 +188,10 @@ uint8_t lichen_tunnel_auth_coap_code(uint16_t coap_code)
 int sos_origin_signature_parse(struct sos_origin_signature *out,
 			       const uint8_t *data, size_t len)
 {
-	ARG_UNUSED(out);
+	memset(out, 0, sizeof(*out));
 	ARG_UNUSED(data);
 	ARG_UNUSED(len);
-	return -EINVAL;
+	return 0;
 }
 
 bool sos_origin_verify(const uint8_t *pubkey,
@@ -194,11 +201,13 @@ bool sos_origin_verify(const uint8_t *pubkey,
 		       const struct sos_origin_signature *sig)
 {
 	ARG_UNUSED(pubkey);
-	ARG_UNUSED(origin_ipv6);
 	ARG_UNUSED(payload_cbor);
 	ARG_UNUSED(payload_len);
 	ARG_UNUSED(sig);
-	return false;
+	sos_verify_calls++;
+	sos_verify_address_ok = memcmp(origin_ipv6, expected_origin_ipv6,
+					 sizeof(expected_origin_ipv6)) == 0;
+	return sos_verify_address_ok;
 }
 
 int sos_alert_from_cbor(const uint8_t *buf, size_t buf_len,
@@ -206,8 +215,9 @@ int sos_alert_from_cbor(const uint8_t *buf, size_t buf_len,
 {
 	ARG_UNUSED(buf);
 	ARG_UNUSED(buf_len);
-	ARG_UNUSED(alert);
-	return -EINVAL;
+	memset(alert, 0, sizeof(*alert));
+	memcpy(alert->node, "0011223344556677", 17);
+	return 0;
 }
 
 void sos_ratelimit_config_init(struct sos_ratelimit_config *config)
@@ -272,6 +282,20 @@ static void init_put(struct coap_packet *request, uint8_t *buf,
 	request->max_len = request->offset;
 }
 
+static void init_sos(struct coap_packet *request, uint8_t *buf,
+			     size_t buf_size)
+{
+	static const uint8_t sos_body[56] = { 0xa0 };
+
+	zassert_ok(coap_packet_init(request, buf, (uint16_t)buf_size,
+				    COAP_VERSION_1, COAP_TYPE_CON, 0U, NULL,
+				    COAP_METHOD_POST, 0x4321U));
+	zassert_ok(coap_packet_append_payload_marker(request));
+	zassert_ok(coap_packet_append_payload(request, sos_body,
+					      sizeof(sos_body)));
+	request->max_len = request->offset;
+}
+
 static void init_global_addr(struct sockaddr_in6 *addr)
 {
 	memset(addr, 0, sizeof(*addr));
@@ -300,6 +324,8 @@ static void before(void *fixture)
 	memset(&protected_response, 0, sizeof(protected_response));
 	config_put_calls = 0U;
 	last_payload_len = 0U;
+	sos_verify_calls = 0U;
+	sos_verify_address_ok = false;
 	mock_admin = false;
 	authorize_mode = AUTH_MODE_REGRESSED;
 	/* Registers test_handlers in s_handlers. The service start inside
@@ -309,6 +335,22 @@ static void before(void *fixture)
 }
 
 ZTEST_SUITE(coap_config_put_auth, NULL, NULL, before, NULL, NULL);
+
+ZTEST(coap_config_put_auth, test_sos_uses_upstream_addr_for_key)
+{
+	struct coap_packet request;
+	struct sockaddr_in6 addr;
+	uint8_t request_buf[96];
+
+	init_sos(&request, request_buf, sizeof(request_buf));
+	init_global_addr(&addr);
+	(void)lichen_sos.post(&lichen_sos, &request, (struct sockaddr *)&addr,
+				      sizeof(addr));
+
+	zassert_equal(sos_verify_calls, 1U);
+	zassert_true(sos_verify_address_ok,
+			    "SOS origin verification must use AddrForKey(pubkey)");
+}
 
 /*
  * Core regression test for bead dsrv: even with the OSCORE helper in the

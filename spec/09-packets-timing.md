@@ -665,7 +665,7 @@ airtime is 2,295.808 ms and the minimum slot is 2,346 ms.
 The data window begins at the slot boundary and ends before the single trailing
 50 ms guard. Nodes MUST NOT transmit during the guard.
 
-Assignment: canonical rotating `(hash_32(EUI64) + u32(SFN)) mod N` or an explicit dynamic assignment via DIO/beacon; node confirms via DAO. Beacon carries SFN, slot bitmap, next-beacon time (see routing dispatch).
+Assignment: canonical rotating `(hash_32(EUI64) + u32(SFN)) mod N` or an explicit dynamic assignment via DIO/beacon; node confirms via DAO. Beacon carries SFN and the `slot_map` defined in 02a-coordinated-capacity.md section 2a.2.
 
 **SFN Modulo and Time-Provider Interaction:**
 

@@ -580,6 +580,17 @@ class TestAnnouncing:
         assert frame.payload.startswith(b"\x15\x01announce")
 
     @pytest.mark.asyncio
+    async def test_transmit_sos_wraps_canonical_alert(self, node: Node, radio: MockRadio):
+        """SOS sends use the dedicated L2 dispatch, not SCHC."""
+        alert = bytes.fromhex("a26274731a")
+        await node.transmit_sos(alert)
+
+        from lichen.link.frame import LichenFrame
+
+        frame = LichenFrame.from_bytes(radio.tx_history[0])
+        assert frame.payload == bytes.fromhex("16a26274731a")
+
+    @pytest.mark.asyncio
     async def test_announce_increments_seq(self, node: Node, radio: MockRadio):
         """Each announce increments seq_num."""
         await node._send_announce()

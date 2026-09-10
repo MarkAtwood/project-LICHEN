@@ -229,7 +229,7 @@ struct lichen_fwd_stats {
 	uint32_t packets_forwarded;      /**< Total packets successfully forwarded */
 	uint32_t packets_dropped_full;   /**< Dropped due to buffer full */
 	uint32_t packets_dropped_deadline; /**< Dropped due to deadline expiry */
-	uint32_t nacks_sent;             /**< NACK signals triggered */
+	uint32_t packets_backpressure;   /**< Rejected due to per-source limit */
 };
 #endif /* CONFIG_LICHEN_ROUTER_FORWARDING_BUFFER */
 

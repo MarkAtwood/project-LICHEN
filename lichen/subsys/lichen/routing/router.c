@@ -1503,7 +1503,7 @@ int lichen_router_fwd_enqueue(struct lichen_router *router,
 	 * monopolizing relay capacity */
 	if (src->packet_count >= CONFIG_LICHEN_ROUTER_MAX_PACKETS_PER_SOURCE) {
 		atomic_inc((atomic_t *)&router->fwd_stats.packets_dropped_full);
-		atomic_inc((atomic_t *)&router->fwd_stats.nacks_sent);
+		atomic_inc((atomic_t *)&router->fwd_stats.packets_backpressure);
 		return -ENOBUFS;
 	}
 

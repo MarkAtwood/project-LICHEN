@@ -66,13 +66,13 @@
     {
       "name": "rate_limit_rejection",
       "type": "rejection",
-      "description": "POST rejected due to rate limit (5.03). Independent from spec bufferbloat appendix and RFC 7252 error responses. No code oracle.",
+      "description": "POST rejected due to rate limit (4.29) with Retry-After. Independent from spec bufferbloat appendix and RFC 7252 error responses. No code oracle.",
       "recipient": "flooder123",
       "ciphertext": "deadbeefcafe",
       "ttl": 86400,
       "encoded": "4102000401b86465616464726f70",
       "expected": {
-        "response_code": 163,
+        "response_code": 157,
         "num_pending": 0
       }
     },

@@ -1,0 +1,67 @@
+{
+  "name": "deaddrop_schc",
+  "format_version": 2,
+  "description": "Independent /deaddrop SCHC compressed-packet vectors (appendix-schc.md A.4.1). POSTs use Rule 5/6 with OSCORE (Uri-Path and Content-Format 112 are Inner options encrypted in the ciphertext); public GETs use Rule 0/1 with Uri-Path carried verbatim in the tail. IPv6/UDP/CoAP and residues are encoded directly from the wire specification by this generator; the OSCORE ciphertext is pinned from deaddrop.json.",
+  "spec": "spec/appendix-schc.md A.4.1; spec/12-apps.md 18.9",
+  "source_vectors": [
+    "test/vectors/deaddrop.json"
+  ],
+  "generator": "test/vectors/generate_deaddrop_schc.py",
+  "vectors": [
+    {
+      "name": "deaddrop_post_linklocal",
+      "direction": "POST",
+      "rule_id": 5,
+      "scope": "link-local",
+      "protection": "oscore",
+      "coap_code": 2,
+      "message_id": 4660,
+      "ipv6_packet": "6000000000201140fe800000000000000000000000000001fe800000000000000000000000000002163316330020b84340021234920910fff0910ed7295e6ad4b54fc793154302ff",
+      "compressed": "05400000000000000001000000000000000233000848d0920910fff0910ed7295e6ad4b54fc793154302ff"
+    },
+    {
+      "name": "deaddrop_post_global",
+      "direction": "POST",
+      "rule_id": 6,
+      "scope": "yggdrasil",
+      "protection": "oscore",
+      "coap_code": 2,
+      "message_id": 4661,
+      "ipv6_packet": "6000000000201140027dd5cfc679ab637dd5cfc679ab634202f77a7baa1226b5f57a7baa1226b50c163316330020ba0040021235920910fff0910ed7295e6ad4b54fc793154302ff",
+      "compressed": "06407dd5cfc679ab637dd5cfc679ab6342f77a7baa1226b5f57a7baa1226b50c33000848d4920910fff0910ed7295e6ad4b54fc793154302ff"
+    },
+    {
+      "name": "deaddrop_get_protected_linklocal",
+      "direction": "GET",
+      "rule_id": 5,
+      "scope": "link-local",
+      "protection": "oscore",
+      "coap_code": 1,
+      "message_id": 4662,
+      "ipv6_packet": "6000000000201140fe800000000000000000000000000001fe800000000000000000000000000002163316330020b84240011236920910fff0910ed7295e6ad4b54fc793154302ff",
+      "compressed": "05400000000000000001000000000000000233000448d8920910fff0910ed7295e6ad4b54fc793154302ff"
+    },
+    {
+      "name": "deaddrop_get_public_linklocal",
+      "direction": "GET",
+      "rule_id": 0,
+      "scope": "link-local",
+      "protection": "plaintext",
+      "coap_code": 1,
+      "message_id": 4663,
+      "ipv6_packet": "6000000000151140fe800000000000000000000000000001fe8000000000000000000000000000021633163300151f8740011237b86465616464726f70",
+      "compressed": "00400000000000000001000000000000000233000448dcb86465616464726f70"
+    },
+    {
+      "name": "deaddrop_get_public_global",
+      "direction": "GET",
+      "rule_id": 1,
+      "scope": "yggdrasil",
+      "protection": "plaintext",
+      "coap_code": 1,
+      "message_id": 4664,
+      "ipv6_packet": "6000000000151140027dd5cfc679ab637dd5cfc679ab634202f77a7baa1226b5f57a7baa1226b50c163316330015214440011238b86465616464726f70",
+      "compressed": "01407dd5cfc679ab637dd5cfc679ab6342f77a7baa1226b5f57a7baa1226b50c33000448e0b86465616464726f70"
+    }
+  ]
+}

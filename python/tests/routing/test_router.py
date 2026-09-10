@@ -639,6 +639,57 @@ class TestBRMulticastFilter:
         assert decision == RouteDecision.DROP
 
 
+class TestForwardingAddressPolicy:
+    """Tests for the Rule 7 policy at the forwarding decision."""
+
+    @pytest.mark.parametrize(
+        "source",
+        ["::", "::1", "::ffff:192.0.2.1", "ff0e::1"],
+    )
+    def test_invalid_source_is_dropped(self, router: Router, source: str) -> None:
+        router.dodag = DodagState(
+            rpl_instance_id=1,
+            dodag_id="fd00::1",
+            version=1,
+            role=DodagRole.JOINED,
+            preferred_parent=IPv6Address("fe80::abcd"),
+        )
+
+        decision, next_hop = router.route(make_packet("2001:db8::1", source), now_ms=0)
+
+        assert (decision, next_hop) == (RouteDecision.DROP, None)
+
+    @pytest.mark.parametrize(
+        "destination",
+        ["::", "::1", "::ffff:192.0.2.1", "ff01::1", "ff0f::1"],
+    )
+    def test_invalid_destination_is_dropped(self, router: Router, destination: str) -> None:
+        router.dodag = DodagState(
+            rpl_instance_id=1,
+            dodag_id="fd00::1",
+            version=1,
+            role=DodagRole.JOINED,
+            preferred_parent=IPv6Address("fe80::abcd"),
+        )
+
+        decision, next_hop = router.route(make_packet(destination), now_ms=0)
+
+        assert (decision, next_hop) == (RouteDecision.DROP, None)
+
+    def test_global_multicast_destination_remains_forwardable(self, router: Router) -> None:
+        router.dodag = DodagState(
+            rpl_instance_id=1,
+            dodag_id="fd00::1",
+            version=1,
+            role=DodagRole.JOINED,
+            preferred_parent=IPv6Address("fe80::abcd"),
+        )
+
+        decision, next_hop = router.route(make_packet("ff0e::1"), now_ms=0)
+
+        assert (decision, next_hop) == (RouteDecision.FORWARD, IPv6Address("fe80::abcd"))
+
+
 class TestGPSRFallback:
     """Tests for GPSR geographic routing fallback (spec 9.7)."""
 

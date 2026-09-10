@@ -191,12 +191,12 @@ Complete index of every vector file (excluding `schema.json` and the per-family 
 
 | File | Covers |
 |------|--------|
-| `forwarding_buffer.json` | B.3.2 forwarding buffer per-source bounds (appendix-bufferbloat) |
-| `no_silent_drops.json` | B.2.5 drops must be explicit and counted |
-| `tx_queue_bounded.json` | B.2.1 bounded TX queue capacity and priority order |
-| `tx_queue_expiry.json` | B.2.2 time-based packet expiry/deadline |
-| `tx_queue_implementation.json` | B.3.1 TX queue implementation oracle |
-| `tx_queue_priority.json` | B.2.3 priority queuing, preemption, scheduling |
+| `forwarding_buffer.json` | Forwarding buffer per-source bounds (appendix-bufferbloat) |
+| `no_silent_drops.json` | Section 4 drops must be explicit and counted |
+| `tx_queue_bounded.json` | Bounded TX queue capacity and priority order |
+| `tx_queue_expiry.json` | Time-based packet expiry/deadline |
+| `tx_queue_implementation.json` | TX queue implementation oracle |
+| `tx_queue_priority.json` | Priority queuing, preemption, scheduling |
 
 ### Forwarding / Multicast / Misc Policy
 

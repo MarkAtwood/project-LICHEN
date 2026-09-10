@@ -283,6 +283,28 @@ pub enum RoutingHeaderSurvey {
     SourceRouted(SourceRouteView),
 }
 
+fn forwarding_address_policy_valid(source: &[u8; 16], destination: &[u8; 16]) -> bool {
+    let invalid_source = source.iter().all(|&byte| byte == 0);
+    let source_is_loopback = source[..15].iter().all(|&byte| byte == 0) && source[15] == 1;
+    let source_is_ipv4_mapped =
+        source[..10].iter().all(|&byte| byte == 0) && source[10..12] == [0xff, 0xff];
+    if invalid_source || source_is_loopback || source_is_ipv4_mapped || source[0] == 0xff {
+        return false;
+    }
+
+    let destination_is_unspecified = destination.iter().all(|&byte| byte == 0);
+    let destination_is_loopback =
+        destination[..15].iter().all(|&byte| byte == 0) && destination[15] == 1;
+    let destination_is_ipv4_mapped =
+        destination[..10].iter().all(|&byte| byte == 0) && destination[10..12] == [0xff, 0xff];
+    let destination_multicast_scope_invalid =
+        destination[0] == 0xff && !(2..=14).contains(&(destination[1] & 0x0f));
+    !destination_is_unspecified
+        && !destination_is_loopback
+        && !destination_is_ipv4_mapped
+        && !destination_multicast_scope_invalid
+}
+
 /// Validate the extension chain and locate any RPL source-routing header.
 ///
 /// Fails closed on: inconsistent payload length, an exhausted Hop Limit, an
@@ -308,7 +330,7 @@ pub fn survey_routing_headers(ipv6: &[u8]) -> Result<RoutingHeaderSurvey, RxErro
     if hop_limit == 0 {
         return Err(RxError::InvalidSourceRoute);
     }
-    if source == [0; 16] || source[0] == 0xff {
+    if !forwarding_address_policy_valid(&source, &destination) {
         return Err(RxError::InvalidSourceRoute);
     }
 
@@ -515,4 +537,57 @@ pub(crate) fn decapsulate_ipv6(outer: &[u8], expected_dst: [u8; 16]) -> Result<V
         return Err(RxError::InvalidSourceRoute);
     }
     Ok(inner.to_vec())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::forwarding_address_policy_valid;
+
+    fn multicast(scope: u8) -> [u8; 16] {
+        let mut address = [0u8; 16];
+        address[0] = 0xff;
+        address[1] = scope;
+        address
+    }
+
+    #[test]
+    fn forwarding_address_policy_matches_martian_table() {
+        let source = [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
+        let destination = [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2];
+        let mut mapped = [0u8; 16];
+        mapped[10..12].copy_from_slice(&[0xff, 0xff]);
+
+        let cases = [
+            ("unicast", source, destination, true),
+            ("unspecified source", [0; 16], destination, false),
+            (
+                "loopback source",
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                destination,
+                false,
+            ),
+            ("multicast source", multicast(2), destination, false),
+            ("mapped source", mapped, destination, false),
+            ("unspecified destination", source, [0; 16], false),
+            (
+                "loopback destination",
+                source,
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                false,
+            ),
+            ("mapped destination", source, mapped, false),
+            ("multicast scope 1", source, multicast(1), false),
+            ("multicast scope 2", source, multicast(2), true),
+            ("multicast scope 14", source, multicast(14), true),
+            ("multicast scope 15", source, multicast(15), false),
+        ];
+
+        for (name, source, destination, expected) in cases {
+            assert_eq!(
+                forwarding_address_policy_valid(&source, &destination),
+                expected,
+                "{name}"
+            );
+        }
+    }
 }

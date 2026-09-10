@@ -9,6 +9,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/test_common.cmake)
 add_executable(ux_button_test
   main.c
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/ux/ux_button_core.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/ux/ux_strings.c
 )
 target_include_directories(ux_button_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/ux/include

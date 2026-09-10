@@ -95,6 +95,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 .process_announce(frame, bootstrapped, now_ms)
                 .await
                 .map(|outcome| Some(RplBorderIngressOutcome::Control(outcome))),
+            L2PayloadKind::Sos => Ok(None),
             L2PayloadKind::Schc => {
                 let mut ipv6 = vec![0u8; 256];
                 let len = self
@@ -225,6 +226,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 .process_announce(frame, bootstrapped, now_ms)
                 .await
                 .map(Some),
+            L2PayloadKind::Sos => Ok(None),
             L2PayloadKind::Schc => {
                 let mut ipv6 = vec![0u8; 256];
                 let len = self
@@ -381,9 +383,13 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             return Err(RplReceiveError::Receive(RxError::InvalidSourceRoute));
         }
 
-        let next_destination =
-            advance_rpl_source_route(&mut received.ipv6, current_destination, sender_iid, sender_routable)
-                .map_err(RplReceiveError::Receive)?;
+        let next_destination = advance_rpl_source_route(
+            &mut received.ipv6,
+            current_destination,
+            sender_iid,
+            sender_routable,
+        )
+        .map_err(RplReceiveError::Receive)?;
         let Some(next_destination) = next_destination else {
             // SRH fully consumed and stripped: the former next-header chain
             // may now start with an IPv6-in-IPv6 tunnel to unwrap (R-05-063).

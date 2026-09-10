@@ -26,6 +26,8 @@ from lichen.ipv6.packet import IPv6Packet
 from lichen.loadng.discovery import LoadngRouter
 from lichen.rpl.dodag import DodagState
 from lichen.rpl.routing import RoutingError, survey_source_route
+from lichen.schc.codec import SchcError
+from lichen.schc.headers import validate_rule7_addresses
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +77,7 @@ class ForwardingResult(Enum):
     """
 
     ACCEPTED = auto()  # Packet buffered successfully
-    BACKPRESSURE = auto()  # Source at per-source limit, send NACK upstream
+    BACKPRESSURE = auto()  # Source at per-source limit; record locally
     EVICTED = auto()  # Accepted, but evicted oldest from different source
 
 
@@ -142,7 +144,7 @@ class ForwardingBuffer:
 
     Why per-source limits: Prevents one chatty node from monopolizing relay
     capacity. Each source gets MAX_PACKETS_PER_SOURCE slots; when full, the
-    relay returns backpressure (NACK) rather than silently dropping.
+    relay returns backpressure rather than silently dropping.
 
     Why total source limit: Bounded memory. With MAX_FORWARDING_SOURCES sources
     and MAX_PACKETS_PER_SOURCE each, total capacity is 16 packets.
@@ -206,7 +208,8 @@ class ForwardingBuffer:
             queue = self._buffer[source_iid]
             if len(queue) >= self.max_per_source:
                 # SECURITY: Per-source limit reached, return backpressure.
-                # Caller should send NACK upstream.
+                # Caller records local backpressure unless an eligible
+                # protocol failure response is available.
                 self.packets_backpressure += 1
                 logger.debug(
                     "forwarding buffer full for source %s, backpressure",
@@ -464,6 +467,12 @@ class Router:
         dst = packet.header.dst_addr
         if not isinstance(dst, IPv6Address):
             logger.error("route: invalid dst_addr type: %s", type(dst))
+            return RouteDecision.DROP, None
+
+        try:
+            validate_rule7_addresses(packet.header.src_addr, dst)
+        except SchcError as error:
+            logger.debug("route: dropping packet with invalid forwarding address: %s", error)
             return RouteDecision.DROP, None
 
         # SECURITY: RFC 6554 forwarding precedence (mirrors the C router). A

@@ -119,6 +119,19 @@ class TestRootDioSignaturePayload:
         assert decoded.root_seq == payload.root_seq
         assert decoded.mop == payload.mop
 
+    def test_cbor_rejects_wrong_field_types(self) -> None:
+        payload = {
+            1: 42,
+            2: 1,
+            3: 1,
+            4: 256,
+            5: int(time.time()) + 3600,
+            6: 1,
+            7: 2,
+        }
+        with pytest.raises(ValueError, match="dodag_id must be bytes"):
+            RootDioSignaturePayload.from_cbor(cbor2.dumps(payload))
+
 
 class TestRootDioSignature:
     """Tests for RootDioSignature COSE_Sign1 wrapper."""

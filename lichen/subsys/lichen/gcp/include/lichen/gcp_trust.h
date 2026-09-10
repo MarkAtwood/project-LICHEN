@@ -22,6 +22,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <errno.h>
 
 /* Nullability annotations */
 #ifndef __has_feature
@@ -111,6 +112,52 @@ typedef enum {
     /** Signature invalid or message malformed; reject claim */
     GCP_SLOT_CLAIM_REJECT_INVALID
 } gcp_slot_claim_result_t;
+
+/**
+ * @brief Validate a DER certificate chain against one configured anchor.
+ *
+ * The leaf is followed through the supplied intermediates to the exact DER
+ * trust anchor. Implementations MUST verify signatures and validity periods,
+ * and MUST enforce leaf basicConstraints CA=false and digitalSignature key
+ * usage. Issuer-DN equality alone is not authorization.
+ *
+ * @param[in] leaf_der       DER-encoded end-entity certificate
+ * @param[in] leaf_len       Length of leaf_der
+ * @param[in] chain_der      DER-encoded intermediate certificates, or NULL
+ *                           when chain_count is zero
+ * @param[in] chain_lens     Length of each intermediate, or NULL when
+ *                           chain_count is zero
+ * @param[in] chain_count    Number of intermediates
+ * @param[in] anchor_der     DER-encoded configured trust anchor
+ * @param[in] anchor_len     Length of anchor_der
+ * @return 0 on success, -EINVAL for malformed/rejected input, or
+ *         -ENOTSUP when X.509 support is disabled.
+ */
+#if defined(CONFIG_LICHEN_GCP_TRUST_X509)
+int gcp_trust_validate_x509_chain(const uint8_t *_Nonnull leaf_der,
+                                  size_t leaf_len,
+                                  const uint8_t *const *_Nullable chain_der,
+                                  const size_t *_Nullable chain_lens,
+                                  size_t chain_count,
+                                  const uint8_t *_Nonnull anchor_der,
+                                  size_t anchor_len);
+#else
+static inline int gcp_trust_validate_x509_chain(
+    const uint8_t *_Nonnull leaf_der, size_t leaf_len,
+    const uint8_t *const *_Nullable chain_der,
+    const size_t *_Nullable chain_lens, size_t chain_count,
+    const uint8_t *_Nonnull anchor_der, size_t anchor_len)
+{
+    (void)leaf_der;
+    (void)leaf_len;
+    (void)chain_der;
+    (void)chain_lens;
+    (void)chain_count;
+    (void)anchor_der;
+    (void)anchor_len;
+    return -ENOTSUP;
+}
+#endif
 
 /**
  * @brief Derive IID from Ed25519 public key.

@@ -129,21 +129,23 @@ pub fn synchronized_hop_channel(sfn: u32, seed: u32, n_channels: u8) -> u8 {
     }
 }
 
-/// Select channel using a priority chain with GNSS-sync support.
+/// Select channel using the CCP-9/CCP-16 priority chain with optional CCP-12.
 ///
 /// Priority order:
-/// 1. **GNSS-synced**: When `gnss_config.enabled` is true and `unix_time_us`
-///    is provided, computes the superframe number and uses synchronized hopping.
-/// 2. **Hash-based**: When a peer EUI-64 is provided, uses hash-based selection
-///    for peer-specific rendezvous (CCP-9 compatible).
-/// 3. **Fallback**: Returns CH0 when no other method applies.
+/// 1. **Announce-driven**: A valid announced channel for a known peer wins.
+/// 2. **Dense fallback**: High-density operation uses reserved CH0.
+/// 3. **GNSS-synced**: Optional deployment-wide CCP-12 hopping.
+/// 4. **Hash-based**: A peer EUI-64 selects a CCP-16 rendezvous channel.
+/// 5. **Fallback**: Returns CH0 when no other method applies.
 ///
 /// # Arguments
 ///
 /// * `unix_time_us` - UTC time in microseconds from a TimeProvider (or None)
 /// * `gnss_config` - GNSS hopping configuration
 /// * `peer_eui64` - Optional 8-byte EUI-64 of the peer for hash-based selection
+/// * `announce_rx_channel` - Optional signed CCP-9 channel announcement
 /// * `epoch` - Link-layer epoch for hash-based selection
+/// * `density` - Estimated peer density; values above 10 use CH0
 /// * `n_channels` - Total number of available channels
 ///
 /// # Example
@@ -154,22 +156,34 @@ pub fn synchronized_hop_channel(sfn: u32, seed: u32, n_channels: u8) -> u8 {
 /// // With GNSS time available
 /// let config = GnssHopConfig { enabled: true, seed: 0x12345678, ..Default::default() };
 /// let unix_us = GNSS_EPOCH_BASE_US + 4_000_000; // 2 superframes in
-/// let ch = select_channel_with_gnss(Some(unix_us), &config, None, 0, 8);
+/// let ch = select_channel_with_gnss(Some(unix_us), &config, None, None, 0, 0, 8);
 /// assert!(ch >= 1 && ch <= 8);
 ///
 /// // Fallback to CH0 when GNSS disabled and no peer
 /// let config = GnssHopConfig::default();
-/// let ch = select_channel_with_gnss(None, &config, None, 0, 8);
+/// let ch = select_channel_with_gnss(None, &config, None, None, 0, 0, 8);
 /// assert_eq!(ch, 0);
 /// ```
 pub fn select_channel_with_gnss(
     unix_time_us: Option<u64>,
     gnss_config: &GnssHopConfig,
     peer_eui64: Option<&[u8; 8]>,
-    epoch: u8,
+    announce_rx_channel: Option<u8>,
+    epoch: u32,
+    density: u8,
     n_channels: u8,
 ) -> u8 {
-    // Priority 1: GNSS-synced when enabled and time available
+    // Priority 1: signed announce-driven channel for a known peer.
+    if let Some(channel) = announce_rx_channel.filter(|&channel| channel < n_channels) {
+        return channel;
+    }
+
+    // Priority 2: dense meshes use the reserved control channel.
+    if density > 10 {
+        return 0;
+    }
+
+    // Priority 3: optional deployment-wide CCP-12 hopping.
     if gnss_config.enabled {
         if let Some(unix_us) = unix_time_us {
             let sfn = sfn_from_unix_time(
@@ -181,11 +195,11 @@ pub fn select_channel_with_gnss(
         }
     }
 
-    // Priority 2: hash-based for known peers (CCP-9 rendezvous)
+    // Priority 4: hash-based for known peers (CCP-16 rendezvous).
     if let Some(eui) = peer_eui64 {
         let mut data = [0u8; 12];
         data[0..8].copy_from_slice(eui);
-        data[8..12].copy_from_slice(&(epoch as u32).to_le_bytes());
+        data[8..12].copy_from_slice(&epoch.to_le_bytes());
         let h = lichen_hash_32(&data);
         // N = NChannels - 1 (exclude reserved CH0), channels 1..NChannels-1
         if n_channels <= 1 {
@@ -195,7 +209,7 @@ pub fn select_channel_with_gnss(
         return 1 + (h % n) as u8;
     }
 
-    // Priority 3: fallback to CH0
+    // Priority 5: fallback to CH0.
     0
 }
 
@@ -331,11 +345,58 @@ mod tests {
         let peer_eui = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
 
         // Even with peer EUI present, GNSS takes priority
-        let ch = select_channel_with_gnss(Some(unix_us), &config, Some(&peer_eui), 0, 8);
+        let ch = select_channel_with_gnss(Some(unix_us), &config, Some(&peer_eui), None, 0, 0, 8);
 
         // Should match synchronized_hop_channel result
         let expected = synchronized_hop_channel(2, 0x12345678, 8);
         assert_eq!(ch, expected);
+    }
+
+    #[test]
+    fn test_select_channel_announce_beats_gnss_and_hash() {
+        let config = GnssHopConfig {
+            enabled: true,
+            seed: 0x12345678,
+            ..Default::default()
+        };
+        let peer_eui = [0x01; 8];
+        let ch = select_channel_with_gnss(
+            Some(GNSS_EPOCH_BASE_US + 4_000_000),
+            &config,
+            Some(&peer_eui),
+            Some(3),
+            u32::MAX,
+            255,
+            8,
+        );
+        assert_eq!(ch, 3);
+    }
+
+    #[test]
+    fn test_select_channel_dense_falls_back_to_ch0() {
+        let config = GnssHopConfig {
+            enabled: true,
+            ..Default::default()
+        };
+        let peer_eui = [0x01; 8];
+        let ch = select_channel_with_gnss(
+            Some(GNSS_EPOCH_BASE_US),
+            &config,
+            Some(&peer_eui),
+            None,
+            u32::MAX,
+            11,
+            8,
+        );
+        assert_eq!(ch, 0);
+    }
+
+    #[test]
+    fn test_select_channel_ignores_out_of_plan_announce() {
+        let config = GnssHopConfig::default();
+        let peer_eui = [0x01; 8];
+        let ch = select_channel_with_gnss(None, &config, Some(&peer_eui), Some(7), 0, 0, 4);
+        assert!((1..4).contains(&ch));
     }
 
     #[test]
@@ -348,7 +409,7 @@ mod tests {
         };
         let peer_eui = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
 
-        let ch = select_channel_with_gnss(None, &config, Some(&peer_eui), 0, 8);
+        let ch = select_channel_with_gnss(None, &config, Some(&peer_eui), None, 0, 0, 8);
 
         // Should be hash-based, in valid range [1, n_channels]
         assert!((1..=8).contains(&ch), "channel {} out of range", ch);
@@ -365,8 +426,9 @@ mod tests {
         let unix_us = GNSS_EPOCH_BASE_US + 4_000_000;
         let peer_eui = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
 
-        let ch_with_time = select_channel_with_gnss(Some(unix_us), &config, Some(&peer_eui), 0, 8);
-        let ch_no_time = select_channel_with_gnss(None, &config, Some(&peer_eui), 0, 8);
+        let ch_with_time =
+            select_channel_with_gnss(Some(unix_us), &config, Some(&peer_eui), None, 0, 0, 8);
+        let ch_no_time = select_channel_with_gnss(None, &config, Some(&peer_eui), None, 0, 0, 8);
 
         // Both should use hash-based (same result)
         assert_eq!(ch_with_time, ch_no_time);
@@ -378,7 +440,7 @@ mod tests {
         // Priority 3: CH0 when GNSS disabled and no peer
         let config = GnssHopConfig::default();
 
-        let ch = select_channel_with_gnss(None, &config, None, 0, 8);
+        let ch = select_channel_with_gnss(None, &config, None, None, 0, 0, 8);
         assert_eq!(ch, 0);
 
         // Also with GNSS enabled but no time and no peer
@@ -386,7 +448,7 @@ mod tests {
             enabled: true,
             ..Default::default()
         };
-        let ch2 = select_channel_with_gnss(None, &config_enabled, None, 0, 8);
+        let ch2 = select_channel_with_gnss(None, &config_enabled, None, None, 0, 0, 8);
         assert_eq!(ch2, 0);
     }
 
@@ -395,15 +457,16 @@ mod tests {
         let config = GnssHopConfig::default();
         let peer_eui = [0xAA; 8];
 
-        let ch_epoch0 = select_channel_with_gnss(None, &config, Some(&peer_eui), 0, 16);
-        let ch_epoch1 = select_channel_with_gnss(None, &config, Some(&peer_eui), 1, 16);
+        let ch_epoch0 = select_channel_with_gnss(None, &config, Some(&peer_eui), None, 0, 0, 16);
+        let ch_epoch1 = select_channel_with_gnss(None, &config, Some(&peer_eui), None, 1, 0, 16);
 
         // Both valid, and deterministic
         assert!((1..16).contains(&ch_epoch0));
         assert!((1..16).contains(&ch_epoch1));
 
         // Same inputs should be deterministic
-        let ch_epoch0_again = select_channel_with_gnss(None, &config, Some(&peer_eui), 0, 16);
+        let ch_epoch0_again =
+            select_channel_with_gnss(None, &config, Some(&peer_eui), None, 0, 0, 16);
         assert_eq!(ch_epoch0, ch_epoch0_again);
     }
 
@@ -413,8 +476,8 @@ mod tests {
         let peer1 = [0x01; 8];
         let peer2 = [0x02; 8];
 
-        let ch1 = select_channel_with_gnss(None, &config, Some(&peer1), 0, 16);
-        let ch2 = select_channel_with_gnss(None, &config, Some(&peer2), 0, 16);
+        let ch1 = select_channel_with_gnss(None, &config, Some(&peer1), None, 0, 0, 16);
+        let ch2 = select_channel_with_gnss(None, &config, Some(&peer2), None, 0, 0, 16);
 
         assert!((1..16).contains(&ch1));
         assert!((1..16).contains(&ch2));
@@ -427,19 +490,19 @@ mod tests {
         let config = GnssHopConfig::default();
         for seed_byte in 0..=255u8 {
             let peer = [seed_byte; 8];
-            for epoch in 0..8u8 {
-                let ch = select_channel_with_gnss(None, &config, Some(&peer), epoch, 8);
+            for epoch in 0..8u32 {
+                let ch = select_channel_with_gnss(None, &config, Some(&peer), None, epoch, 0, 8);
                 assert!((1..8).contains(&ch), "channel {} out of range", ch);
             }
         }
         // Degenerate channel plans fail closed to CH0
         let peer = [0x01; 8];
         assert_eq!(
-            select_channel_with_gnss(None, &config, Some(&peer), 0, 0),
+            select_channel_with_gnss(None, &config, Some(&peer), None, 0, 0, 0),
             0
         );
         assert_eq!(
-            select_channel_with_gnss(None, &config, Some(&peer), 0, 1),
+            select_channel_with_gnss(None, &config, Some(&peer), None, 0, 0, 1),
             0
         );
     }

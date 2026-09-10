@@ -166,6 +166,30 @@ bool lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
 		return true;
 	}
 
+	if (net_pkt_get_len(pkt) < 40U) {
+		k_mutex_lock(&s_stats_mutex, K_FOREVER);
+		s_stats.forwarding_policy_denied++;
+		k_mutex_unlock(&s_stats_mutex);
+		LOG_WRN("Forwarding: truncated IPv6 header");
+		return false;
+	}
+
+	{
+		uint8_t ip6[40];
+		struct net_pkt_cursor backup;
+
+		net_pkt_cursor_save(pkt, &backup);
+		int rread = net_pkt_read(pkt, ip6, sizeof(ip6));
+		net_pkt_cursor_restore(pkt, &backup);
+		if (rread != 0 || !lichen_forwarding_ipv6_policy_allows(ip6)) {
+			k_mutex_lock(&s_stats_mutex, K_FOREVER);
+			s_stats.forwarding_policy_denied++;
+			k_mutex_unlock(&s_stats_mutex);
+			LOG_WRN("Forwarding: IPv6 endpoint policy denied");
+			return false;
+		}
+	}
+
 #if defined(CONFIG_LICHEN_TUNNEL_AUTH)
 	if (s_tunnel_ready) {
 		/* Fail closed if the mesh iface was never identified: with

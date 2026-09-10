@@ -57,6 +57,16 @@ def test_root_construction() -> None:
     assert root.is_joined()
 
 
+def test_build_dio_includes_dodag_configuration() -> None:
+    dio = DodagState.as_root(0, DODAG_ID, 1).build_dio()
+
+    config_options = [
+        option for option in dio.options if option.type == RplOptionType.DODAG_CONFIGURATION
+    ]
+    assert len(config_options) == 1
+    assert DodagConfig.from_option(config_options[0]) == DodagConfig()
+
+
 def test_root_ignores_dio() -> None:
     root = DodagState.as_root(0, DODAG_ID, 1)
     root.process_dio(_dio(128), P1, link_etx=1.0)

@@ -396,6 +396,7 @@ class DodagState:
                     DodagConfig(
                         max_rank_increase=self.max_rank_increase,
                         min_hop_rank_increase=self.min_hop_rank_increase,
+                        gateway_centric=self.gateway_centric,
                     ).to_option()
                 ],
             )

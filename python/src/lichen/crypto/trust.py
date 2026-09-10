@@ -8,9 +8,8 @@ Per spec section 8.7, trust is established per-peer using one of:
 - DANE: DNSSEC-verified TLSA records (optional)
 - PKIX: CA-issued certificates (optional, enterprise)
 
-The cryptographic binding ensures pubkey -> IID/02xx is verifiable:
-  iid = SHA-512(pubkey)[0:8] with U/L bit cleared
-  02xx = [0x02] || SHA-512(pubkey)[0:7] || iid
+The cryptographic binding ensures pubkey -> upstream Yggdrasil address is
+verifiable: the routable 02xx address equals AddrForKey(pubkey).
 
 Key rotation: A key change with valid signature from old key is accepted.
 Otherwise, key/IID mismatch is rejected as potential MITM.

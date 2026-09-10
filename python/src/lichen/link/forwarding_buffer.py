@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
-"""Forwarding buffer with per-source limits and backpressure (B.2.4, B.3.2).
+"""Forwarding buffer with per-source limits and local backpressure.
 
 Implements spec/appendix-bufferbloat.md section "Forwarding Buffer":
 - MAX_FORWARDING_SOURCES = 8 (max unique sources tracked)
@@ -9,13 +9,14 @@ Implements spec/appendix-bufferbloat.md section "Forwarding Buffer":
 - LRU eviction when max sources reached
 - FIFO dequeue within a source
 - Deadline-based expiry
-- BACKPRESSURE result triggers NACK upstream (B.2.4 explicit backpressure)
-- B.2.5 No Silent Drops: on_drop callback for NACK signaling
+- BACKPRESSURE result records local backpressure; an on_drop callback is only
+  a notification for local observability and does not authorize protocol
+  transmission.
 
 Why this exists: Relay nodes must buffer packets for forwarding, but unlimited
 buffering causes latency explosion. Per-source limits prevent one chatty node
-from monopolizing relay capacity. When the limit is reached, we send NACK
-upstream so the source can back off (explicit backpressure).
+from monopolizing relay capacity. When the limit is reached, the caller
+records local backpressure unless an eligible protocol response is available.
 """
 
 from __future__ import annotations
@@ -37,14 +38,15 @@ class BufferResult(Enum):
     """Result of attempting to buffer a packet for forwarding."""
 
     ACCEPTED = auto()  # Packet buffered successfully
-    BACKPRESSURE = auto()  # Per-source limit reached, send NACK upstream
+    BACKPRESSURE = auto()  # Per-source limit reached; record locally
     EVICTED = auto()  # Accepted but evicted an LRU source's packets
 
 
 class DropReason(Enum):
-    """Reason a packet was dropped (B.2.5 No Silent Drops).
+    """Reason a packet was dropped (section 4 No Silent Drops).
 
-    Used by on_drop callback to enable NACK signaling upstream.
+    Used by on_drop callback to report a local drop or invoke an eligible
+    protocol response.
     """
 
     BACKPRESSURE = auto()  # Per-source limit reached
@@ -53,7 +55,8 @@ class DropReason(Enum):
 
 
 # Type alias for drop callback: (source_iid, data, reason) -> None
-# Caller uses this to send NACK upstream per B.2.5 "No Silent Drops"
+# Caller uses this to record local backpressure; it does not authorize sending
+# a protocol response.
 DropCallback = Callable[[bytes, bytes, DropReason], None]
 
 
@@ -82,7 +85,7 @@ class ForwardingBufferStats:
     """
 
     packets_accepted: int = 0
-    packets_backpressure: int = 0  # NACK sent upstream
+    packets_backpressure: int = 0  # Local backpressure recorded
     packets_expired: int = 0
     packets_evicted: int = 0  # LRU source eviction
     packets_forwarded: int = 0
@@ -96,9 +99,10 @@ class ForwardingBuffer:
     - Each source has at most max_per_source packets queued
     - Total packets <= max_sources * max_per_source
 
-    B.2.5 No Silent Drops: When packets are dropped (backpressure, eviction,
+    Section 4 No Silent Drops: When packets are dropped (backpressure, eviction,
     expiry), the on_drop callback is invoked with the source IID, packet data,
-    and drop reason. Callers use this to send NACK upstream.
+    and drop reason for local observability. Any protocol response must use a
+    separately gated protocol path.
 
     Reentrancy: Not thread-safe. Caller must ensure single-threaded access
     or external synchronization.
@@ -117,8 +121,9 @@ class ForwardingBuffer:
             max_sources: Maximum unique sources to track.
             max_per_source: Maximum packets per source.
             clock: Optional clock function for testing. Returns ms since epoch.
-            on_drop: Callback invoked when packets are dropped (B.2.5 No Silent
-                Drops). Receives (source_iid, data, reason). Use to send NACK.
+            on_drop: Callback invoked when packets are dropped (section 4 No Silent
+                Drops). Receives (source_iid, data, reason). Use to record the
+                local observability only; it does not authorize transmission.
         """
         if max_sources <= 0:
             raise ValueError("max_sources must be positive")
@@ -188,14 +193,14 @@ class ForwardingBuffer:
         if source_iid in self._buffer:
             queue = self._buffer[source_iid]
             if len(queue) >= self._max_per_source:
-                # Per-source limit reached: NACK upstream (B.2.4 backpressure)
+                # Per-source limit reached: record local backpressure
                 self.stats.packets_backpressure += 1
                 logger.debug(
                     "forwarding buffer backpressure: source=%s has %d packets",
                     source_iid.hex(),
                     len(queue),
                 )
-                # B.2.5 No Silent Drops: notify caller to send NACK
+                # Section 4 No Silent Drops: notify caller of local backpressure
                 if self._on_drop is not None:
                     self._on_drop(source_iid, data, DropReason.BACKPRESSURE)
                 return BufferResult.BACKPRESSURE
@@ -234,7 +239,7 @@ class ForwardingBuffer:
         self._touch_source(source_iid)
         self.stats.packets_accepted += 1
 
-        # B.2.5 No Silent Drops: notify AFTER state is consistent (reentrancy-safe)
+        # Section 4 No Silent Drops: notify AFTER state is consistent (reentrancy-safe)
         if self._on_drop is not None:
             for evicted_entry in evicted_queue:
                 self._on_drop(
@@ -335,7 +340,7 @@ class ForwardingBuffer:
         if expired_count > 0:
             self.stats.packets_expired += expired_count
             logger.debug("forwarding buffer expired %d packets", expired_count)
-            # B.2.5 No Silent Drops: notify for each expired packet
+            # Section 4 No Silent Drops: notify for each expired packet
             if self._on_drop is not None:
                 for entry in expired_entries:
                     self._on_drop(entry.source_iid, entry.data, DropReason.EXPIRED)

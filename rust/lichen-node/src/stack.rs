@@ -12,7 +12,7 @@ use std::vec::Vec;
 
 use lichen_core::addr::NodeId;
 use lichen_core::constants::{L2_DISPATCH_SCHC, PORT_COAP, RULE_UNCOMPRESSED};
-use lichen_core::l2_payload::{classify as classify_l2_payload, L2PayloadKind};
+use lichen_core::l2_payload::{classify as classify_l2_payload, wrap_sos_payload, L2PayloadKind};
 use lichen_hal::Radio;
 use lichen_ipv6::{next_header, Addr, Ipv6Header, UdpHeader, IPV6_HEADER_LEN, UDP_HEADER_LEN};
 use lichen_link::seqnum::LinkSeqNum;
@@ -92,7 +92,8 @@ pub enum TxError {
     RadioTx,
     /// Buffer too small for message.
     BufferTooSmall,
-    /// Forwarding queue full for source — send NACK upstream.
+    /// Forwarding queue full for source; record backpressure locally unless
+    /// an existing protocol permits an eligible failure response.
     QueueFull,
     /// Every link-layer epoch/sequence tuple has been consumed.
     SequenceExhausted,
@@ -484,6 +485,14 @@ impl<R: Radio> Stack<R> {
         self.send_ipv6_to(ipv6, &[], priority).await
     }
 
+    /// Transmit a canonical SOS alert through the authenticated L2 link.
+    pub async fn transmit_sos(&mut self, sos_cbor: &[u8]) -> Result<(), TxError> {
+        let mut l2_payload = [0u8; MAX_ELIDED_SCHC_SIZE + 1];
+        let payload = wrap_sos_payload(sos_cbor, &mut l2_payload)
+            .map_err(|_| TxError::BufferTooSmall)?;
+        self.send_l2_payload_to(payload, &[]).await
+    }
+
     pub(crate) async fn send_ipv6_to(
         &mut self,
         ipv6: &[u8],
@@ -734,8 +743,9 @@ impl<R: Radio> Stack<R> {
     /// # Errors
     ///
     /// Returns [`TxError::QueueFull`] if the source already has
-    /// `MAX_PACKETS_PER_SOURCE` packets queued. The caller SHOULD send
-    /// a NACK upstream when this occurs.
+    /// `MAX_PACKETS_PER_SOURCE` packets queued. The caller records this
+    /// forwarding drop locally unless an existing protocol permits an
+    /// eligible failure response.
     ///
     /// # Arguments
     ///
@@ -1197,6 +1207,30 @@ mod tests {
         let mut stack = test_stack(128, 0);
         let payload = [0u8; 40];
         assert_eq!(stack.send_l2_payload_to(&payload, &[0x22; 8]).await, Ok(()));
+    }
+
+    #[tokio::test]
+    async fn transmit_sos_preserves_cbor_after_l2_dispatch() {
+        let sender_id = Identity::from_seed(Seed::new([0x03; 32]));
+        let receiver_id = Identity::from_seed(Seed::new([0x04; 32]));
+        let (sender_radio, receiver_radio) = LoopbackRadio::pair();
+        let mut sender = Stack::new(sender_radio, sender_id.clone(), 128, 0);
+        let mut receiver = Stack::new(receiver_radio, receiver_id, 128, 0);
+        receiver.add_peer(PeerIdentity::from_pubkey(sender_id.pubkey));
+
+        let sos_cbor = [0xa2, 0x62, 0x74, 0x73, 0x1a, 0x66, 0x53, 0x6a, 0x90];
+        sender.transmit_sos(&sos_cbor).await.unwrap();
+
+        let mut wire = [0u8; MAX_FRAME_SIZE];
+        let packet = receiver
+            .radio
+            .receive(receiver.channel, &mut wire, 1000)
+            .await
+            .unwrap()
+            .unwrap();
+        let frame = receiver.link.receive_frame(&wire[..packet.len]).unwrap();
+        assert_eq!(frame.payload()[0], lichen_core::constants::L2_DISPATCH_SOS);
+        assert_eq!(&frame.payload()[1..], &sos_cbor);
     }
 
     #[test]

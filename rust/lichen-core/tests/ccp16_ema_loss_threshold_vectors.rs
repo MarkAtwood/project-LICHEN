@@ -125,6 +125,16 @@ fn rf_health_adaptive_sf_select_ema_loss_matches_vectors() {
         // Convert ema_loss from float 0.0-1.0 to Q16.16
         let loss_fp = ((vector.input.ema_loss * FP_SCALE as f32) as u32).min(FP_SCALE);
 
+        let _ = metrics.adaptive_sf_select(
+            Some(vector.input.assigned_sf),
+            Some(util_fp),
+            Some(loss_fp),
+        );
+        let _ = metrics.adaptive_sf_select(
+            Some(vector.input.assigned_sf),
+            Some(util_fp),
+            Some(loss_fp),
+        );
         let (computed_sf, _tx_allowed) = metrics.adaptive_sf_select(
             Some(vector.input.assigned_sf),
             Some(util_fp),

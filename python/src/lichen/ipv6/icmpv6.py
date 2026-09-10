@@ -405,7 +405,10 @@ def make_dest_unreachable(invoking_packet: bytes, code: DestUnreachableCode) -> 
 
 
 def make_resource_exhausted(invoking_packet: bytes) -> Icmpv6ErrorMessage:
-    """Build a DEST_UNREACHABLE/ADMIN_PROHIBITED NACK (no-silent-drops B.2.5)."""
+    """Build a DEST_UNREACHABLE/ADMIN_PROHIBITED response.
+
+    This standalone helper is not emitted for forwarding backpressure.
+    """
     return make_dest_unreachable(invoking_packet, DestUnreachableCode.ADMIN_PROHIBITED)
 
 

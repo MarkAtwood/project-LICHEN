@@ -40,6 +40,7 @@
 #include <lichen/sos_alert.h>
 #include <lichen/sos_origin.h>
 #include <lichen/sos_origin_table.h>
+#include <lichen/link_ctx.h>
 #include <lichen/schnorr48.h>
 #include <lichen/coap_keys.h>
 #include <lichen/sos_ratelimit.h>

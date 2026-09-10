@@ -248,6 +248,10 @@ impl ReceivedSecureDatagram {
         self.sender_iid
     }
 
+    pub(crate) fn remap_sender_iid(&mut self, sender_iid: [u8; 8]) {
+        self.sender_iid = sender_iid;
+    }
+
     pub(crate) fn source(&self) -> Addr {
         self.source
     }

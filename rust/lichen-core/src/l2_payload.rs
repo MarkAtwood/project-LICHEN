@@ -60,7 +60,10 @@ pub fn wrap_schc_payload<'a>(schc: &[u8], out: &'a mut [u8]) -> Result<&'a [u8],
 /// Prefix a §18.4.2 CBOR SOS alert map with the L2 SOS dispatch byte (0x16).
 /// The body is NOT SCHC-compressed (SOS is small and latency-critical,
 /// spec 02-physical-link.md §4.1).
-pub fn wrap_sos_payload<'a>(sos_cbor: &[u8], out: &'a mut [u8]) -> Result<&'a [u8], BufferTooSmall> {
+pub fn wrap_sos_payload<'a>(
+    sos_cbor: &[u8],
+    out: &'a mut [u8],
+) -> Result<&'a [u8], BufferTooSmall> {
     let needed = sos_cbor
         .len()
         .checked_add(1)
@@ -100,7 +103,10 @@ mod tests {
         );
         assert_eq!(classify_known(&[]), Err(UnknownDispatch));
         // 0x16 is the SOS dispatch (spec 02-physical-link.md §4.1), NOT unknown.
-        assert_eq!(classify_known(&[0x16, 0xa0]), Ok(L2PayloadKind::Sos));
+        assert_eq!(
+            classify_known(&[L2_DISPATCH_SOS, 0xa0]),
+            Ok(L2PayloadKind::Sos)
+        );
         assert_eq!(classify_known(&[0x17]), Err(UnknownDispatch));
         assert_eq!(
             classify_known(&[L2_DISPATCH_SCHC, RULE_GLOBAL_COAP]),
@@ -116,7 +122,7 @@ mod tests {
     fn sos_dispatch_classifies_and_wraps() {
         // spec 12-apps.md §18.4.3: SOS is emitted with dispatch 0x16 carrying
         // the §18.4.2 CBOR alert map, NOT SCHC-compressed.
-        let sos_cbor = [0xa2, 0x62, 0x74, 0x73, 0x1a]; // fragment of a CBOR map
+        let sos_cbor = [0xa2, 0x62, 0x74, 0x73, 0x1a];
         let mut out = [0u8; 16];
         let wrapped = wrap_sos_payload(&sos_cbor, &mut out).unwrap();
         assert_eq!(wrapped[0], L2_DISPATCH_SOS);

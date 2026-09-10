@@ -58,6 +58,7 @@ from lichen.l2_payload import (
     l2_payload_body,
     wrap_routing_payload,
     wrap_schc_payload,
+    wrap_sos_payload,
 )
 from lichen.link.frame import AddrMode
 from lichen.link.link_layer import (
@@ -660,6 +661,10 @@ class Node:
         unknown peers can discover this node.
         """
         return await self.link.send(wrap_routing_payload(data))
+
+    async def transmit_sos(self, data: bytes) -> bool:
+        """Transmit a canonical SOS alert through the authenticated L2 link."""
+        return await self.link.send(wrap_sos_payload(data))
 
     @staticmethod
     def dispatch_udp(ipv6: bytes) -> port_dispatch.Dispatched:
