@@ -1,0 +1,7 @@
+{
+  "id": "1789043897591369149-1",
+  "issue_id": "project-LICHEN-worker6-l1qw.16.2",
+  "author": "opencode-worker-8",
+  "text": "Codec scope is already implemented and verified in existing commits; focused unit/integration tests pass and vectors are byte-identical. Closure is blocked by open child l1qw.16.2.6, which is explicitly blocked on human transport decision ljgs and has a deliberately RED end-to-end test. Reviewer model attempts failed due insufficient OpenRouter credits; local correctness/security/edge passes found no defect.",
+  "created_at": "2026-09-10T12:38:17.591369149Z"
+}
