@@ -326,13 +326,18 @@ fn validate_leaf_san_binding(leaf: &X509Certificate<'_>) -> Result<(), TrustErro
         TrustError::InvalidCertificate("leaf Ed25519 public key must be 32 bytes".into())
     })?;
     let expected = ygg_addr_from_pubkey(public_key);
-    let extension = leaf.extensions().iter().find_map(|extension| {
+    let mut san_extensions = leaf.extensions().iter().filter(|extension| {
         matches!(
             extension.parsed_extension(),
             ParsedExtension::SubjectAlternativeName(_)
         )
-        .then_some(extension)
     });
+    let extension = san_extensions.next();
+    if san_extensions.next().is_some() {
+        return Err(TrustError::InvalidCertificate(
+            "leaf certificate contains duplicate SAN extensions".into(),
+        ));
+    }
     let Some(extension) = extension else {
         return Err(TrustError::InvalidCertificate(
             "leaf certificate SAN is required".into(),
