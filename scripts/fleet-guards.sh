@@ -117,6 +117,11 @@ while :; do
     USED=$(total_used)
     NOW_S=$(date +%s)
     W_ERR="$STATE/fleet_burn.err"
+    # /tmp can lose $STATE mid-run (tmp cleaner, reboot). The 2> redirect
+    # opens BEFORE the helper runs, so without this re-creation the helper's
+    # own makedirs self-heal never executes and the waste guard stays blind
+    # (WASTE empty every cycle) until guards restart. (tpcn)
+    mkdir -p "$STATE"
     WASTE=$(python3 "$REPO/scripts/fleet_burn.py" "$STATE" "$USED" "${CLOSES:-0}" "$NOW_S" 2>"$W_ERR")
     W_EVAL=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('evaluated', False))" 2>/dev/null || echo PARSE_FAIL)
     W_HINT=$(tail -n 1 "$W_ERR" 2>/dev/null)
