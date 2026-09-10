@@ -58,6 +58,10 @@ def update(
     cost-per-close was computed (then 'burn', 'closes', 'cpc', 'cpc_str',
     'over' are present).
     """
+    # Self-heal: the guards loop runs for weeks; if the state dir vanishes
+    # mid-run (tmp cleaner, manual cleanup), recreate it instead of crashing
+    # every cycle until restart (rmza).
+    os.makedirs(state_dir, exist_ok=True)
     path = os.path.join(state_dir, SNAPSHOT_NAME)
     if used <= 0:
         # Provider call failed (total_used prints 0 on error): an invalid
