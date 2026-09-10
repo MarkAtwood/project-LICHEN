@@ -447,6 +447,7 @@ int gcp_trust_validate_x509_chain(const uint8_t *leaf_der,
         ret = -EINVAL;
     }
 
+out:
     mbedtls_x509_crt_free(&anchor);
     mbedtls_x509_crt_free(&chain);
     return ret;
