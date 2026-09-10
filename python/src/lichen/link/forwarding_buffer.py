@@ -9,13 +9,14 @@ Implements spec/appendix-bufferbloat.md section "Forwarding Buffer":
 - LRU eviction when max sources reached
 - FIFO dequeue within a source
 - Deadline-based expiry
-- BACKPRESSURE result triggers NACK upstream (B.2.4 explicit backpressure)
-- B.2.5 No Silent Drops: on_drop callback for NACK signaling
+    - BACKPRESSURE result records local backpressure unless an eligible
+      protocol failure response is available (B.2.4 explicit backpressure)
+- B.2.5 No Silent Drops: on_drop callback for local drop handling
 
 Why this exists: Relay nodes must buffer packets for forwarding, but unlimited
 buffering causes latency explosion. Per-source limits prevent one chatty node
-from monopolizing relay capacity. When the limit is reached, we send NACK
-upstream so the source can back off (explicit backpressure).
+from monopolizing relay capacity. When the limit is reached, the caller
+records local backpressure unless an eligible protocol response is available.
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ class BufferResult(Enum):
     """Result of attempting to buffer a packet for forwarding."""
 
     ACCEPTED = auto()  # Packet buffered successfully
-    BACKPRESSURE = auto()  # Per-source limit reached, send NACK upstream
+    BACKPRESSURE = auto()  # Per-source limit reached; record locally
     EVICTED = auto()  # Accepted but evicted an LRU source's packets
 
 
@@ -53,7 +54,7 @@ class DropReason(Enum):
 
 
 # Type alias for drop callback: (source_iid, data, reason) -> None
-# Caller uses this to send NACK upstream per B.2.5 "No Silent Drops"
+# Caller uses this to record local backpressure per B.2.5 "No Silent Drops"
 DropCallback = Callable[[bytes, bytes, DropReason], None]
 
 
@@ -98,7 +99,8 @@ class ForwardingBuffer:
 
     B.2.5 No Silent Drops: When packets are dropped (backpressure, eviction,
     expiry), the on_drop callback is invoked with the source IID, packet data,
-    and drop reason. Callers use this to send NACK upstream.
+    and drop reason. Callers record the drop locally unless an eligible
+    protocol response is available.
 
     Reentrancy: Not thread-safe. Caller must ensure single-threaded access
     or external synchronization.
@@ -118,7 +120,8 @@ class ForwardingBuffer:
             max_per_source: Maximum packets per source.
             clock: Optional clock function for testing. Returns ms since epoch.
             on_drop: Callback invoked when packets are dropped (B.2.5 No Silent
-                Drops). Receives (source_iid, data, reason). Use to send NACK.
+                Drops). Receives (source_iid, data, reason). Use to record the
+                local drop or invoke an eligible protocol response.
         """
         if max_sources <= 0:
             raise ValueError("max_sources must be positive")
@@ -188,14 +191,14 @@ class ForwardingBuffer:
         if source_iid in self._buffer:
             queue = self._buffer[source_iid]
             if len(queue) >= self._max_per_source:
-                # Per-source limit reached: NACK upstream (B.2.4 backpressure)
+                # Per-source limit reached: record local backpressure
                 self.stats.packets_backpressure += 1
                 logger.debug(
                     "forwarding buffer backpressure: source=%s has %d packets",
                     source_iid.hex(),
                     len(queue),
                 )
-                # B.2.5 No Silent Drops: notify caller to send NACK
+                # B.2.5 No Silent Drops: notify caller of local backpressure
                 if self._on_drop is not None:
                     self._on_drop(source_iid, data, DropReason.BACKPRESSURE)
                 return BufferResult.BACKPRESSURE

@@ -249,7 +249,7 @@ def build_document() -> dict[str, object]:
     vectors.append(
         {
             "name": "backpressure_at_per_source_limit",
-            "description": "Third packet from same source triggers backpressure (NACK).",
+            "description": "Third packet from same source triggers locally recorded backpressure.",
             "operation": "try_buffer",
             "inputs": {
                 "packet_id": "pkt3",

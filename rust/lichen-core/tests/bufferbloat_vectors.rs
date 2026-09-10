@@ -128,7 +128,10 @@ fn b5_congestion_vectors_match_spec_testing_table() {
             "fairness" => {
                 assert_eq!(u64_field(case, "max_packets_per_source"), 2);
                 assert_eq!(u64_field(case, "max_forwarding_sources"), 8);
-                assert_eq!(case["expected"], "nack_when_source_full");
+                assert_eq!(
+                    case["expected"],
+                    "local_backpressure_recorded_when_source_full"
+                );
             }
             other => panic!("unexpected congestion vector {other}"),
         }

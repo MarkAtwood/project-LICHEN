@@ -58,7 +58,10 @@ pub fn wrap_schc_payload<'a>(schc: &[u8], out: &'a mut [u8]) -> Result<&'a [u8],
 }
 
 /// Prefix a canonical SOS alert CBOR map with the L2 SOS dispatch byte.
-pub fn wrap_sos_payload<'a>(sos_cbor: &[u8], out: &'a mut [u8]) -> Result<&'a [u8], BufferTooSmall> {
+pub fn wrap_sos_payload<'a>(
+    sos_cbor: &[u8],
+    out: &'a mut [u8],
+) -> Result<&'a [u8], BufferTooSmall> {
     let needed = sos_cbor
         .len()
         .checked_add(1)
@@ -97,7 +100,10 @@ mod tests {
             Err(UnknownDispatch)
         );
         assert_eq!(classify_known(&[]), Err(UnknownDispatch));
-        assert_eq!(classify_known(&[L2_DISPATCH_SOS, 0xa0]), Ok(L2PayloadKind::Sos));
+        assert_eq!(
+            classify_known(&[L2_DISPATCH_SOS, 0xa0]),
+            Ok(L2PayloadKind::Sos)
+        );
         assert_eq!(classify_known(&[0x17]), Err(UnknownDispatch));
         assert_eq!(
             classify_known(&[L2_DISPATCH_SCHC, RULE_GLOBAL_COAP]),

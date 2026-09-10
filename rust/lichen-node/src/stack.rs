@@ -92,7 +92,8 @@ pub enum TxError {
     RadioTx,
     /// Buffer too small for message.
     BufferTooSmall,
-    /// Forwarding queue full for source — send NACK upstream.
+    /// Forwarding queue full for source; record backpressure locally unless
+    /// an existing protocol permits an eligible failure response.
     QueueFull,
     /// Every link-layer epoch/sequence tuple has been consumed.
     SequenceExhausted,
@@ -734,8 +735,9 @@ impl<R: Radio> Stack<R> {
     /// # Errors
     ///
     /// Returns [`TxError::QueueFull`] if the source already has
-    /// `MAX_PACKETS_PER_SOURCE` packets queued. The caller SHOULD send
-    /// a NACK upstream when this occurs.
+    /// `MAX_PACKETS_PER_SOURCE` packets queued. The caller records this
+    /// forwarding drop locally unless an existing protocol permits an
+    /// eligible failure response.
     ///
     /// # Arguments
     ///

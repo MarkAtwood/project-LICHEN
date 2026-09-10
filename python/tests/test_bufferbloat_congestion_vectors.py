@@ -48,4 +48,4 @@ def test_b5_congestion_scenarios_match_spec() -> None:
     fairness = by_name["fairness"]
     assert fairness["max_packets_per_source"] == SPEC_FORWARDING_PER_SOURCE
     assert fairness["max_forwarding_sources"] == SPEC_FORWARDING_SOURCES
-    assert fairness["expected"] == "nack_when_source_full"
+    assert fairness["expected"] == "local_backpressure_recorded_when_source_full"

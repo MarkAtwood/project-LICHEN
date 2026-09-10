@@ -439,7 +439,7 @@ class TestOracleForwardingBuffer:
         assert buf.total_count() == expected["state"]["stats"]["total_packets"]
 
     def test_oracle_backpressure_at_limit(self, vectors):
-        """Oracle: Third packet from same source triggers backpressure (NACK)."""
+        """Oracle: Third packet from same source records backpressure locally."""
         vec = next(v for v in vectors["vectors"] if v["name"] == "backpressure_at_per_source_limit")
         inputs = vec["inputs"]
         expected = vec["expected"]
