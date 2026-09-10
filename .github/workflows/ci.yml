@@ -104,6 +104,15 @@ jobs:
       # lichen-link link-layer suite behind schnorr,std — bead 19d4).
       - run: cargo test --features lichen-link/schnorr,lichen-link/std
       - run: cargo test
+      # lichen-embassy is excluded from default-members; its host pins (e.g.
+      # the R-02-006 sync-word selector) only run when named explicitly.
+      - run: cargo test -p lichen-embassy
+      # The radio call sites are feature-gated and not cross-compiled in CI;
+      # pin that both route through the sync-word selector (edge-review
+      # finding on cac252b4ac).
+      - run: |
+          grep -q 'LoRa::new(sx126x, crate::ENABLE_PUBLIC_NETWORK, delay)' lichen-embassy/src/esp32s3.rs
+          grep -q 'LoRa::new(sx126x, crate::ENABLE_PUBLIC_NETWORK, delay)' lichen-embassy/src/stm32wl.rs
 
   rust-all-features:
     needs: rust-fmt
