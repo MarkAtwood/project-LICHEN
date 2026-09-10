@@ -2815,7 +2815,7 @@ def test_dao_origin_signature_coverage_and_dodag_rules() -> None:
         "target_flags_nonzero",
         "cross_prefix_equal",
         "cross_prefix_lower",
-        "fresh_cross_prefix_target",
+        "fresh_cross_prefix_iid_mismatch",
         "multiple_distinct_targets",
         "replay_non128_target",
         "context_malformed_option",
@@ -2839,7 +2839,7 @@ def test_dao_origin_production_enforces_canonical_source_vectors() -> None:
     selected = [
         vectors["valid_d1_self_128"],
         vectors["reject_source_mutation"],
-        vectors["reject_fresh_cross_prefix_target"],
+        vectors["reject_fresh_cross_prefix_iid_mismatch"],
         vectors["reject_cross_prefix_equal_sequence"],
         vectors["reject_cross_prefix_lower_sequence"],
     ]
