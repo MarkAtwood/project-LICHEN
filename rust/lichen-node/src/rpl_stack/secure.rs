@@ -126,7 +126,46 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         &self,
         received: &ReceivedIpv6,
     ) -> Result<Option<ReceivedSecureDatagram>, RxError> {
-        secure_datagram_from_received(received)
+        let Some(mut datagram) = secure_datagram_from_received(received)? else {
+            return Ok(None);
+        };
+        // OSCORE peers are end-to-end identities: for source-routed traffic
+        // the L2 frame sender is the previous hop, not the datagram's
+        // origin. Resolve the origin IID from the IPv6 source — itself for
+        // link-local sources, otherwise through the authenticated identity
+        // tables (AddrForKey equality): link peers for direct neighbors, the
+        // root's RPL DAO origin table for multi-hop origins the link layer
+        // never pinned, and the announce TOFU pins for the DODAG side
+        // (i72x.2). An unresolvable source keeps the frame sender, so the
+        // context lookup fails closed with NoContext instead of
+        // misattributing the peer.
+        let source = datagram.source.0;
+        if source[0] == 0xfe && source[1] & 0xc0 == 0x80 {
+            datagram.sender_iid = source[8..]
+                .try_into()
+                .expect("16-byte address yields 8-byte IID");
+        } else if let Some(origin_iid) = self
+            .stack
+            .link_ref()
+            .peer_iid_for_routable_addr(&source)
+            .or_else(|| {
+                self.rpl
+                    .router
+                    .dao_manager
+                    .origin_high_water()
+                    .into_iter()
+                    .find(|entry| lichen_link::ygg_addr_from_pubkey(&entry.public_key) == source)
+                    .map(|entry| lichen_core::addr::iid_from_pubkey_bytes(&entry.public_key))
+            })
+            .or_else(|| {
+                self.announces
+                    .pinned_pubkey_for_addr(&source)
+                    .map(|pubkey| lichen_core::addr::iid_from_pubkey_bytes(pubkey.as_bytes()))
+            })
+        {
+            datagram.sender_iid = origin_iid;
+        }
+        Ok(Some(datagram))
     }
 
     /// Protect and route a response bound to a decrypted request.

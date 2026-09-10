@@ -228,8 +228,8 @@ pub enum SecureObserveResponse {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReceivedSecureDatagram {
     coap: Vec<u8>,
-    sender_iid: [u8; 8],
-    source: Addr,
+    pub(crate) sender_iid: [u8; 8],
+    pub(crate) source: Addr,
     destination: Addr,
     source_port: u16,
     destination_port: u16,
