@@ -172,7 +172,7 @@ bool lichen_rpl_root_send_dio(struct lichen_rpl_root *root)
 	dio.version = root->dodag.version;
 	dio.rank = root->dodag.rank;
 	dio.grounded = true;
-	dio.mode_of_operation = 0;
+	dio.mode_of_operation = 1;
 	dio.preference = 0;
 	dio.dtsn = root->dodag.dtsn;
 	memcpy(dio.dodag_id, root->dodag.dodag_id, 16);
