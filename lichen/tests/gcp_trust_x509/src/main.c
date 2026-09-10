@@ -23,6 +23,22 @@ extern unsigned char ca_leaf_der[];
 extern unsigned int ca_leaf_der_len;
 extern unsigned char no_digital_signature_der[];
 extern unsigned int no_digital_signature_der_len;
+extern unsigned char san_root_der[];
+extern unsigned int san_root_der_len;
+extern unsigned char san_intermediate_der[];
+extern unsigned int san_intermediate_der_len;
+extern unsigned char san_valid_leaf_der[];
+extern unsigned int san_valid_leaf_der_len;
+extern unsigned char san_mismatch_leaf_der[];
+extern unsigned int san_mismatch_leaf_der_len;
+extern unsigned char san_duplicate_leaf_der[];
+extern unsigned int san_duplicate_leaf_der_len;
+extern unsigned char san_forbidden_leaf_der[];
+extern unsigned int san_forbidden_leaf_der_len;
+extern unsigned char san_noncritical_leaf_der[];
+extern unsigned int san_noncritical_leaf_der_len;
+extern unsigned char san_mixed_ip_leaf_der[];
+extern unsigned int san_mixed_ip_leaf_der_len;
 
 static int validate_leaf(const uint8_t *leaf, size_t leaf_len,
 			 const uint8_t *anchor, size_t anchor_len)
@@ -32,6 +48,15 @@ static int validate_leaf(const uint8_t *leaf, size_t leaf_len,
 
 	return gcp_trust_validate_x509_chain(leaf, leaf_len, chain, chain_lens, 1,
 					    anchor, anchor_len);
+}
+
+static int validate_san_leaf(const uint8_t *leaf, size_t leaf_len)
+{
+	const uint8_t *chain[] = {san_intermediate_der};
+	const size_t chain_lens[] = {san_intermediate_der_len};
+
+	return gcp_trust_validate_x509_chain(leaf, leaf_len, chain, chain_lens, 1,
+					     san_root_der, san_root_der_len);
 }
 
 ZTEST(gcp_trust_x509, test_rejects_null_leaf)
@@ -55,8 +80,27 @@ ZTEST(gcp_trust_x509, test_rejects_null_chain_arrays)
 
 ZTEST(gcp_trust_x509, test_accepts_valid_chain)
 {
-	zassert_equal(validate_leaf(leaf_der, leaf_der_len, root_der, root_der_len),
+	zassert_equal(validate_san_leaf(san_valid_leaf_der, san_valid_leaf_der_len),
 			      0, "valid chain must verify");
+	zassert_equal(validate_san_leaf(san_mixed_ip_leaf_der,
+				       san_mixed_ip_leaf_der_len), 0,
+			      "non-native IP SANs must be ignored");
+}
+
+ZTEST(gcp_trust_x509, test_rejects_invalid_san_binding)
+{
+	zassert_not_equal(validate_san_leaf(san_mismatch_leaf_der,
+					 san_mismatch_leaf_der_len), 0,
+				 "mismatched native address must be rejected");
+	zassert_not_equal(validate_san_leaf(san_duplicate_leaf_der,
+					 san_duplicate_leaf_der_len), 0,
+				 "duplicate native address must be rejected");
+	zassert_not_equal(validate_san_leaf(san_forbidden_leaf_der,
+					 san_forbidden_leaf_der_len), 0,
+				 "forbidden DNS SAN must be rejected");
+	zassert_not_equal(validate_san_leaf(san_noncritical_leaf_der,
+					 san_noncritical_leaf_der_len), 0,
+				 "empty-subject non-critical SAN must be rejected");
 }
 
 ZTEST(gcp_trust_x509, test_rejects_wrong_anchor)

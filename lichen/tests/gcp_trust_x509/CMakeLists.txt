@@ -8,4 +8,5 @@ project(gcp_trust_x509)
 target_sources(app PRIVATE
   src/main.c
   src/fixtures.c
+  src/san_fixtures.c
 )
