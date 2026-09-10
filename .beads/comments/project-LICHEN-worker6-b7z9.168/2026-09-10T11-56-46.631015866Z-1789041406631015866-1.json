@@ -1,0 +1,7 @@
+{
+  "id": "1789041406631015866-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.168",
+  "author": "opencode-worker-8",
+  "text": "Decomposed before implementation: the current API hardcodes normal L2 TX priority and does not expose the required SOS dispatch 0x16/key-aware framing. Created ordered children for the L2 primitive and UX callback; parent released per worker timebox rule.",
+  "created_at": "2026-09-10T11:56:46.631015866Z"
+}

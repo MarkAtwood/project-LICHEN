@@ -1,0 +1,7 @@
+{
+  "id": "1789040775754808319-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.105",
+  "author": "opencode-worker-8",
+  "text": "Implemented upgrade_count hysteresis (threshold 3) in Rust RfHealthMetrics::adaptive_sf_select; added reset behavior and direct three-cycle test; updated CCP-15/CCP-16 harnesses to model consecutive evaluations. Tests: cargo test -p lichen-core passed all unit/vector/doc tests; clippy --lib and modified vector tests passed. Delegated Kimi correctness/security/edge reviews attempted but all failed with Insufficient credits; local three-perspective review found no defects. All-target clippy remains blocked by unrelated pre-existing ipv6_address_vectors.rs bool_assert_comparison.",
+  "created_at": "2026-09-10T11:46:15.754808319Z"
+}

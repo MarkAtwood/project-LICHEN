@@ -1,0 +1,32 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.168.2",
+  "title": "Wire UX SOS events to the SOS dispatch primitive",
+  "description": "After the priority-aware SOS L2 primitive lands, register an app-level lichen_ux_button handler for SOS_ARM and SOS_DEDICATED. Compose canonical sos_alert CBOR, sign with the node identity and monotonic origin sequence, and send through the primitive. Add independent tests for both button events, signing, and priority.",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "opencode-worker-8",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T11:56:45.685164887Z",
+  "created_by": "opencode-worker-8",
+  "updated_at": "2026-09-10T11:58:40.804235653Z",
+  "started_at": "2026-09-10T11:58:40.804235653Z",
+  "lease_expires_at": "2026-09-10T12:03:40.804235653Z",
+  "heartbeat_at": "2026-09-10T11:58:40.804235653Z",
+  "labels": [
+    "ux",
+    "c",
+    "spec-gap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.168.2",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.168",
+      "type": "parent-child",
+      "created_at": "2026-09-10T11:56:45.949230893Z",
+      "created_by": "opencode-worker-8",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.168.1",
+  "title": "Add priority-aware L2 SOS dispatch primitive",
+  "description": "Expose a supported Zephyr L2 send path for SOS that builds link dispatch 0x16, accepts TX_PRIORITY_SOS, and signs/frames the caller-provided SOS payload without exposing internal queue globals. Add focused host or Zephyr tests for dispatch and priority.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T11:56:44.979473377Z",
+  "created_by": "opencode-worker-8",
+  "updated_at": "2026-09-10T11:56:44.979473377Z",
+  "labels": [
+    "l2",
+    "c",
+    "spec-gap",
+    "ux",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.168.1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.168",
+      "type": "parent-child",
+      "created_at": "2026-09-10T11:56:45.226597571Z",
+      "created_by": "opencode-worker-8",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.168.1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.168.2",
+      "type": "blocks",
+      "created_at": "2026-09-10T11:56:46.171718321Z",
+      "created_by": "opencode-worker-8",
+      "metadata": "{}"
+    }
+  ]
+}

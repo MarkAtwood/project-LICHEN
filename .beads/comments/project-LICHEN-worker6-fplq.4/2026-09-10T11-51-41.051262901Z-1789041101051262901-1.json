@@ -1,0 +1,7 @@
+{
+  "id": "1789041101051262901-1",
+  "issue_id": "project-LICHEN-worker6-fplq.4",
+  "author": "opencode-worker-8",
+  "text": "Released by worker8: this bead spans the absent E/O display backend and SOS send-path wiring, while existing ready children cover screen anatomy and hold feedback and b7z9.168 covers SOS arming/send. Implementing directly would duplicate scope and exceed the worker leaf/timebox rule.",
+  "created_at": "2026-09-10T11:51:41.051262901Z"
+}
