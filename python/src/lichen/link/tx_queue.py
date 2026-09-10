@@ -272,6 +272,10 @@ class TxQueue:
             require_sync_callable(pkt_id_source, "pkt_id source")
         self._capacity = capacity
         self._clock = clock or (lambda: int(time.monotonic() * 1000))
+
+    def now(self) -> int:
+        """Current queue time in monotonic ms (for explicit deadline callers)."""
+        return self._clock()
         self._pkt_id_source = pkt_id_source
         self._entries: list[TxQueueEntry] = []
         self.stats = TxQueueStats()

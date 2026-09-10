@@ -912,6 +912,7 @@ class Node:
                     destination,
                     AddrMode.EXTENDED,
                     Priority.ACK,
+                    deadline_ms=self.link.ack_deadline_ms(),
                 )
             except asyncio.CancelledError:
                 raise
@@ -1026,6 +1027,7 @@ class Node:
                     iid_to_eui64(rx.sender.iid),
                     AddrMode.EXTENDED,
                     Priority.ACK,
+                    deadline_ms=self.link.ack_deadline_ms(),
                 )
             if ipv6_bytes is None:
                 return
@@ -1425,12 +1427,14 @@ class Node:
         for output in outputs:
             if self._fragment_shutdown_requested:
                 return False
+            is_control = _is_fragment_control(output)
             try:
                 sent = await self.link.send(
                     output,
                     iid_to_eui64(peer.iid),
                     AddrMode.EXTENDED,
-                    Priority.ACK if _is_fragment_control(output) else Priority.BULK,
+                    Priority.ACK if is_control else Priority.BULK,
+                    deadline_ms=self.link.ack_deadline_ms() if is_control else None,
                 )
             except asyncio.CancelledError:
                 raise
@@ -1448,12 +1452,14 @@ class Node:
     ) -> bool:
         """Send one manager-issued output batch, stopping at the first failure."""
         for output in outputs:
+            is_control = _is_fragment_control(output)
             try:
                 sent = await self.link.send(
                     output,
                     iid_to_eui64(peer.iid),
                     AddrMode.EXTENDED,
-                    Priority.ACK if _is_fragment_control(output) else Priority.BULK,
+                    Priority.ACK if is_control else Priority.BULK,
+                    deadline_ms=self.link.ack_deadline_ms() if is_control else None,
                 )
             except asyncio.CancelledError:
                 raise
@@ -1481,6 +1487,7 @@ class Node:
                         iid_to_eui64(session.peer.iid),
                         AddrMode.EXTENDED,
                         Priority.ACK,
+                        deadline_ms=self.link.ack_deadline_ms(),
                     )
                 except asyncio.CancelledError:
                     raise
