@@ -39,7 +39,9 @@ uncompressed     = 255  # No compression; full headers follow
 
 # /deaddrop (spec 18.9) has no dedicated rule IDs: POSTs use rules 5/6
 # (OSCORE mandatory on writes), GETs use 5/6 or 0/1. Uri-Path "deaddrop"
-# and Content-Format 112 travel verbatim in the CoAP tail (appendix-schc A.4.1).
+# and Content-Format 112 are Inner options encrypted in the OSCORE
+# ciphertext on protected traffic, verbatim tail options when unprotected
+# (appendix-schc A.4.1).
 
 [l2.payload_dispatch]
 # Authenticated link inner-payload namespace. SCHC rule IDs begin after

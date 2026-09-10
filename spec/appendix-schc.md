@@ -94,13 +94,13 @@ provisioning record:
   (private/group drops); Rule 0/1 is permitted for unprotected discovery of
   public drops only.
 - **Uri-Path `/deaddrop`:** CoAP option number 11, length 8, value
-  `deaddrop`, carried verbatim in the tail; SCHC does not compress CoAP
-  options in Rule Set Version 3. (On the wire it follows the Object-Security
-  option, number 9, in OSCORE-protected requests, so its encoded delta is 2;
-  in unprotected Rule 0/1 traffic the encoded delta is 11.)
+  `deaddrop`. In OSCORE-protected traffic (all POSTs, protected GETs) it is
+  an Inner option and travels encrypted inside the OSCORE ciphertext, not in
+  the clear tail; in unprotected Rule 0/1 traffic it is carried verbatim in
+  the tail. SCHC does not compress CoAP options in Rule Set Version 3.
 - **Content-Format 112 (SenML-CBOR):** CoAP option number 12, length 1,
-  value `0x70`, carried verbatim in the tail (encoded delta 1 after
-  Uri-Path). See appendix-senml.md for the SenML payload profile; SenML
+  value `0x70`; Inner/encrypted under OSCORE, verbatim in the tail when
+  unprotected. See appendix-senml.md for the SenML payload profile; SenML
   payloads larger than ~100 bytes after compression trigger SCHC
   fragmentation per A.2.
 - **No dedicated rule IDs:** `/deaddrop` reuses the existing rules 0/1/5/6;
