@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+common:
+  tags:
+    - lichen
+    - schc
+  extra_conf_files:
+    - ../../tests/sanitizers.conf
+tests:
+  net.schc.failure_tracker:
+    platform_allow:
+      - qemu_x86
+      - native_sim
+      - native_sim/native/64
+    integration_platforms:
+      - native_sim
