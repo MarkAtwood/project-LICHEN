@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-seo2.2",
+  "title": "Review additional unmerged local workbranches",
+  "description": "Inventory found beads-worker-8 (1 unique commit), fix-dio-unicast-dis-0l4q (5), wip/i72x2-upstream-addr-impl (2 non-equivalent plus 1 equivalent), xeli-seq-restart (1). Review semantic delta vs current main; patch non-equivalence alone does not establish missing work. beads-worker-orchestrator and local/main are ancestors; bundle/main lone patch is equivalent. No extra recovered checkout or bundle found under parent workspace.",
+  "acceptance_criteria": "All four branches have exact recovery/superseded dispositions and required checks.",
+  "notes": "beads-worker-8 5d9b6b0288: recover enable_testing() and add_test(NAME schc_session_table COMMAND schc_session_table_test) in lichen/tests/schc_session_table/CMakeLists.txt; file identical to patch parent, suite has 14 internal tests. fix-dio-unicast-dis-0l4q: production multicast DIO/bootstrap changes superseded; reject diagnostic panic and stale identity setup. Recover only tunnel_encapsulation_vectors_decap_conformance() from 27aa680f6a into rust/lichen-node/src/rpl_stack/tests.rs; generator and JSON already byte-identical on main, dependencies present. wip/i72x2: 17175dd68a patch-equivalent, 09e2f4f12f actual address code superseded by main with stronger upstream vectors, 73c7eec069 helper byte-identical. xeli-seq-restart 01e360e659: full added text already in main via 42c86484c5. No additional production functionality established. No builds run.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T16:22:29.026788407Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T16:26:37.627604539Z",
+  "closed_at": "2026-09-10T16:26:37.627604539Z",
+  "close_reason": "All four local workbranches reviewed semantically; two exact missing test hunks identified, remaining changes incorporated or rejected.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-seo2.2",
+      "depends_on_id": "project-LICHEN-worker6-seo2",
+      "type": "parent-child",
+      "created_at": "2026-09-10T16:22:29.173547662Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

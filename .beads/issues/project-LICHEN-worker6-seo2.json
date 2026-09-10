@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-worker6-seo2",
+  "title": "Reconcile recovered branches against spec",
+  "description": "User requests intelligent integration of recovered workbranches while the ad hoc orchestrator is inactive. Baseline main 05d07bba97. Inventory local and neighboring recovery evidence; review every recovered delta against settled spec/decisions.jsonl; preserve newer mainline fixes and existing uncommitted Beads work. Initial read-only reviews find stale rollback hunks and committed conflict markers in five recover branches. No wholesale merge is appropriate.",
+  "design": "Record per-branch dispositions first. Obtain approval for concrete multi-file integration plan before code changes, as required by AGENTS.md. Selectively recover only demonstrated unique correct work, validate affected paths and run three independent code reviews for modified source modules. Preserve recovery refs; do not run orchestrators or push.",
+  "acceptance_criteria": "Every recovered branch has a documented disposition with spec evidence; any accepted change has targeted validation and correctness/security/robustness review; unresolved decisions are explicit; no superseded protocol behavior is reintroduced.",
+  "notes": "Branch dispositions complete (.1/.2 closed); approved integration and malformed routing repair complete (.3/.5 closed). Code committed in logical chunks: 2df0c190cf fix(rpl): reconcile root route merge; 7eb93520c8 test(schc): register session table suite; a310cce21a test(rpl): recover tunnel vector consumer. Validation: 14 SCHC + 53 RPL + 11 upstream vectors pass; changed-file formatting and whitespace pass; independent correctness/security/robustness reviews clear. Separate fixture correction .4 and pre-existing Rust quality-gate follow-up .6 remain open. User authorized commits and push. Recovery refs preserved; unrelated Beads work excluded from staging.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "epic",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T16:20:17.798850292Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T16:48:21.806724923Z"
+}

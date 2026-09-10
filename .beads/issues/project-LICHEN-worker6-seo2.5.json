@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-seo2.5",
+  "title": "Repair overlapping root route merge fragments",
+  "description": "Approved recovery validation blocked on committed main 05d07bba97: rust/lichen-node/src/rpl_stack/mod.rs:275-299 contains three interleaved root RoutePlan implementations with unclosed Some/and_then delimiters. File is byte-identical to HEAD (git diff --exit-code succeeded); last touching commit 84fc4e1b9a Merge branch beads-worker-5. cargo +1.98.1 test --locked -p lichen-node --features std rpl_stack::tests fails at parse stage. Reconcile the overlapping fragments using authenticated peer resolution preserving upstream AddrForKey and fail-closed routing, then run route and RPL tests and triple review. Requires approval beyond the two-file recovery scope.",
+  "acceptance_criteria": "Production file parses; full-address-to-authenticated-peer resolution remains correct; relevant route/RPL tests pass without weakening assertions; three independent reviews pass.",
+  "notes": "User approved routing repair. Reconciled to single helper-based return from merge parent 623d900a0f, then rustfmt layout; removed interleaved duplicate fragments. Full routable-address peer resolution and None fail-closed behavior retained. Rust 1.98.1: 53/53 rpl_stack tests PASS including three-node root delivery and recovered decap consumer; 11/11 upstream Yggdrasil vector tests PASS. Changed-file rustfmt and git diff --check PASS. Three independent correctness/security/robustness reviews (including final formatting delta) each zero introduced findings. Broader lint/format failures tracked separately. No commit/push.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T16:30:38.265995364Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T16:40:22.158275658Z",
+  "started_at": "2026-09-10T16:34:54.545490294Z",
+  "closed_at": "2026-09-10T16:40:22.158275658Z",
+  "close_reason": "Reconciled broken routing merge; targeted RPL and upstream oracle suites pass; three independent reviews clear.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-seo2.5",
+      "depends_on_id": "project-LICHEN-worker6-seo2",
+      "type": "parent-child",
+      "created_at": "2026-09-10T16:30:38.412623484Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

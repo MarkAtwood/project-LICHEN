@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-seo2.1",
+  "title": "Disposition five stash recovery branches",
+  "description": "Reviewed recover/dtn-routing-aug31, recover/l2-tx-5fva1-aug30, recover/oscore-checkin-aug30, recover/routing-slot-coord-aug31, recover/sos-slice-sep09 against main 05d07bba97 and settled spec decisions. DTN and OSCORE upstream conflict resolution yields main; SOS has 14 Python conflict blocks and stale IID binding; L2 rolls back \u003e10 density, test reprovisioning, provider isolation and Cargo baseline; slot branch rolls back five-byte DTN option, tunnel support, per-source quota and slot claim protections. Reject wholesale merges. Potential salvage limited to explicit util header include and independently ported extra malformed-input assertions; no new production feature established.",
+  "acceptance_criteria": "Record reviewed tips, spec reasons and selective salvage decisions; never import conflict markers or weaken current tests.",
+  "notes": "Reviewed tips b786311939 (DTN), 5f07b28350 (L2), dbce02bdbc (OSCORE), 8ba5e3c60c (slot), 611cbd1451 (SOS), all direct children of 05d07bba97. DTN has 9 conflict blocks, OSCORE 13, SOS 14; no merge-ready feature absent from main. Keep main for all production hunks. Do not import stale Beads closures/leases or worker prompt rollbacks. Optional explicit sys/util.h include and extra test ideas are not necessary feature recovery. Governing decisions: density-high \u003e10, DTN Type03 Length5 flags+expiry, upstream AddrForKey without IID equality, custody best effort with normative obligations. Read-only semantic reviews completed; no runtime checks performed.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T16:22:28.575792917Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T16:26:36.828617414Z",
+  "closed_at": "2026-09-10T16:26:36.828617414Z",
+  "close_reason": "Completed per-branch spec review; wholesale recovery rejected with evidence, current implementations retained.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-seo2.1",
+      "depends_on_id": "project-LICHEN-worker6-seo2",
+      "type": "parent-child",
+      "created_at": "2026-09-10T16:22:28.716518444Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

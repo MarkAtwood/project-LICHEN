@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-seo2.3",
+  "title": "Integrate approved recovery hunks and validate",
+  "description": "After completing branch dispositions, present concrete scope for approval per AGENTS.md planning requirement. Selectively apply only unique spec-conformant work; retain newer mainline implementations and existing Beads records. Run targeted checks and three independent correctness/security/robustness reviews for changed modules. Record rejected/superseded branches durably without deleting refs.",
+  "acceptance_criteria": "Approved changes integrated locally with passing relevant validation, reviews recorded, and no unreviewed security-semantic OSCORE edits or upstream writes.",
+  "notes": "Approved recovery complete in working tree: SCHC CTest registration (5d9b6b0288), Rust decap vector consumer (27aa680f6a), plus separately approved root-route merge reconciliation seo2.5. Validation: SCHC 14/14 ASan/UBSan PASS; RPL stack 53/53 including recovered consumer PASS; upstream Yggdrasil corpus 11/11 PASS; changed-file rustfmt and diff --check PASS. Three independent reviews clear for initial recovery and final routing repair. Used separately installed Rust 1.98.1 after existing stable registration failed. Broad pre-existing workspace formatting/Clippy failures separately tracked; no claim all workspace gates pass. Source changes limited to three approved files. No commits/pushes; original recovery refs retained. Fixture follow-up seo2.4 remains open.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T16:22:29.501711613Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T16:40:23.073487032Z",
+  "started_at": "2026-09-10T16:27:29.086991966Z",
+  "closed_at": "2026-09-10T16:40:23.073487032Z",
+  "close_reason": "Approved selective recovery and routing repair applied; targeted validation passes and independent reviews clear. Existing workspace gate issues tracked separately.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-seo2.3",
+      "depends_on_id": "project-LICHEN-worker6-seo2",
+      "type": "parent-child",
+      "created_at": "2026-09-10T16:22:29.635081686Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
