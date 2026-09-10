@@ -291,6 +291,17 @@ mod tests {
     }
 
     #[test]
+    fn tracker_u64_max_first_seq_locks_origin_out() {
+        // Boundary: a first-seen u64::MAX is accepted, and nothing can ever
+        // strictly advance past it — the origin is locked out for good.
+        let mut t = OriginSequenceTracker::new(SOS_ORIGIN_GATE_DEFAULT_CAPACITY);
+        let origin = [0xCC; 16];
+        assert!(t.accept(&origin, u64::MAX));
+        assert!(!t.accept(&origin, u64::MAX));
+        assert_eq!(t.last_seen(&origin), Some(u64::MAX));
+    }
+
+    #[test]
     fn tracker_zero_capacity_fails_closed() {
         let mut t = OriginSequenceTracker::new(0);
         assert!(!t.accept(&[1; 16], 1));
