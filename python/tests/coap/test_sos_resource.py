@@ -38,7 +38,8 @@ from lichen.crypto.trust import TrustEntry, TrustLevel, TrustStore
 from lichen.ipv6.addr import upstream_addr_for_key
 
 # Deterministic signer identity; /sos requires origin signatures (spec 18.4.1),
-# so the POSTing node's EUI-64 must be the one its pubkey derives to.
+# so the POSTing node's 0200:: address (AddrForKey) must be the one
+# its pubkey derives to.
 _SOS_PRIV, _SOS_PUB = derive_keypair(bytes(range(64, 96)))
 _EUI = _pubkey_to_iid(_SOS_PUB)
 # Spec 18.4.2 wire form: the originator's full 0200:: address string; the
@@ -306,7 +307,8 @@ class TestSosPutDelete:
                         0x72,
                         0x6F,
                         0x6D,  # "from"
-                        0x70,  # text(16)
+                        0x78,
+                        0x20,  # text(32)
                     ]
                 )
                 + _ADDR_HEX.encode()
@@ -577,7 +579,7 @@ class TestSosSignatureEnforcement:
         other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
         body = _signed_body(priv=other_priv, pub=other_pub)
         resp = await sos.render_post(_request(body))
-        # Other key does not derive to the claimed IID: binding gate fires.
+        # Other key does not derive to the claimed address: binding gate fires.
         _assert_silently_dropped(resp)
         assert sos._active is False
 

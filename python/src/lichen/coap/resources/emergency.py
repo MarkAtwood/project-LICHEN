@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import math
+import re
 import time
 from collections import OrderedDict
 from ipaddress import IPv6Address
@@ -23,6 +24,7 @@ from lichen.coap.sos_origin import (
     verify_sos_origin,
 )
 from lichen.crypto.identity import _pubkey_to_iid, yggdrasil_address
+from lichen.crypto.key_persistence import TrustStorePersistenceError
 from lichen.crypto.trust import TrustError
 
 MAX_ROLLCALLS = 256
@@ -40,6 +42,10 @@ SOS_BURST_MAX = 2  # Max messages per cooldown period ("Burst allowance: 2")
 # Fields carrying the origin-signature envelope; excluded from the signed
 # core alert dict (spec 18.4.1 signs only the alert payload).
 _SOS_ENVELOPE_FIELDS = frozenset({"pubkey", "sig"})
+
+# Spec 18.4.2 node field: exactly 8 colon-separated groups of 1-4 hex digits
+# (full IPv6 notation, no :: compression) - identical to the C codec.
+_SOS_NODE_RE = re.compile(r"^[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){7}$")
 
 # Valid check-in status values per spec 18.6.1
 CHECKIN_STATUS_VALUES = frozenset({"ok", "help", "delayed"})
@@ -252,11 +258,13 @@ class SosResource(resource.ObservableResource):
             return Message(code=aiocoap.BAD_REQUEST)
         # Spec 18.4.2: the node field is the originator's full 0200:: IPv6
         # address string (colon-separated); bare IID hex is no longer accepted.
-        if not isinstance(from_hex, str):
+        # The 8-group shape mirrors the C codec's validate_node_id so both
+        # implementations issue identical verdicts on the same wire bytes.
+        if not isinstance(from_hex, str) or not _SOS_NODE_RE.fullmatch(from_hex):
             return Message(code=aiocoap.BAD_REQUEST)
         try:
             parsed = IPv6Address(from_hex)
-        except ValueError:
+        except ValueError:  # pragma: no cover - regex already guarantees this
             return Message(code=aiocoap.BAD_REQUEST)
         if (
             isinstance(timestamp, bool)
@@ -289,7 +297,8 @@ class SosResource(resource.ObservableResource):
         if self._trust_store is not None:
             try:
                 self._trust_store.verify_or_pin(pubkey, _pubkey_to_iid(pubkey))
-            except TrustError:
+            except (TrustError, TrustStorePersistenceError):
+                # Persistence failures fail closed: no pin, no reply.
                 return _silent_drop()
         # Replay gate: only strictly advancing sequences may activate.
         # Accounting keys are the canonical packed form of the full 16-byte
