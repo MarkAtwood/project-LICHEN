@@ -115,13 +115,13 @@ Step 2: Concatenate
 
 Step 3: FNV-1a32(Data)
     H = 0x811c9dc5
-    After processing all bytes: H = 926423932 (0x373854FC)
+    After processing all bytes: H = 926423932 (0x37381B7C)
 
 Step 4: N = 8 - 1 = 7
 
-Step 5: Channel = 1 + (926423932 MOD 7) = 1 + 1 = 2
+Step 5: Channel = 1 + (926423932 MOD 7) = 1 + 0 = 1
 
-Result: Channel 2
+Result: Channel 1
 ```
 
 `NChannels` counts every channel-plan entry, including CH0. Subtracting one
