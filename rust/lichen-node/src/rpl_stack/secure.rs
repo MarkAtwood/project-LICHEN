@@ -126,7 +126,21 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         &self,
         received: &ReceivedIpv6,
     ) -> Result<Option<ReceivedSecureDatagram>, RxError> {
-        secure_datagram_from_received(received)
+        let mut datagram = secure_datagram_from_received(received)?;
+        if let Some(datagram) = &mut datagram {
+            let source = received
+                .ipv6
+                .get(8..24)
+                .and_then(|bytes| bytes.try_into().ok());
+            if let Some(source) = source {
+                if let Some(key) = self.announces.pinned_pubkey_for_routable(&source) {
+                    datagram.remap_sender_iid(lichen_core::addr::iid_from_pubkey_bytes(
+                        key.as_bytes(),
+                    ));
+                }
+            }
+        }
+        Ok(datagram)
     }
 
     /// Protect and route a response bound to a decrypted request.
