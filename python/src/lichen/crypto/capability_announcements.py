@@ -19,27 +19,16 @@ from typing import TYPE_CHECKING
 import cbor2
 
 from . import schnorr48
-# Merge resolution: HEAD imports the COSE labels from schnorr48 (single
-# source of truth); beads-worker-7 derives the announcer IID from upstream
-# AddrForKey instead of the rejected SHA-512 native ``identity._pubkey_to_iid``.
-# Both intents preserved; worker-7's local label duplicates rejected.
+from .identity import Identity, _pubkey_to_iid
 from .schnorr48 import COSE_ALG_LABEL, COSE_KID_LABEL, SCHNORR48_ED25519_ALG
-from .identity import Identity
-
-
-def _announcer_iid_from_pubkey(pubkey: bytes) -> bytes:
-    """Derive the announcer IID: low 8 bytes of upstream AddrForKey(pubkey).
-
-    Matches Rust lichen-core ``ygg_addr_from_pubkey(pubkey)[8..]`` (kd0p).
-    The SHA-512 native IID from ``identity._pubkey_to_iid`` is the rejected
-    native profile and remains only for link-local identity consumers.
-    """
-    from lichen.ipv6.addr import upstream_addr_for_key  # lazy: import cycle
-
-    return upstream_addr_for_key(pubkey).packed[8:]
 
 if TYPE_CHECKING:
     pass
+
+
+def _announcer_iid_from_pubkey(pubkey: bytes) -> bytes:
+    """Return the link-local/kid IID, independent of the routable address."""
+    return _pubkey_to_iid(pubkey)
 
 
 class Capability(IntFlag):
@@ -319,7 +308,7 @@ def create_capability_announcement(
         prefix_len=prefix_len,
         expiry=expiry,
         seq=seq,
-        announcer_iid=_announcer_iid_from_pubkey(identity.pubkey),
+        announcer_iid=identity.iid,
     )
 
     # Build COSE Sig_structure
@@ -371,7 +360,7 @@ def verify_capability_announcement(
         return False, "RESERVED_BITS_SET"
 
     # Step 2: Verify announcer_iid matches derived IID from pubkey
-    derived_iid = _announcer_iid_from_pubkey(pubkey)
+    derived_iid = _pubkey_to_iid(pubkey)
     if payload.announcer_iid != derived_iid:
         return False, "IID_MISMATCH"
 

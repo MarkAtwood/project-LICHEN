@@ -1266,6 +1266,22 @@ issuer. Verifiers MUST fail closed: a fact carrying `lichen:expiry` cannot
 be accepted without a current time to check against, and a fact carrying
 `lichen:seq` cannot be accepted without a per-issuer sequence cache.
 
+Because wall-clock time is untrusted input (a radio adversary can spoof a
+verifier's GPS/RTC clock), the verifier's expiry check MUST be robust to
+clock rollback, mirroring the issuer-side `max(floor + 1, time-derived)`
+clamp below: the verifier persists a monotone floor of the highest wall-clock
+time it has observed and evaluates `lichen:expiry` against
+`max(floor, current time)`, never against a time that has moved backward.
+Without this clamp a backward-spoofed clock makes an expired fact read as
+unexpired, and — because revocation-by-non-renewal leaves the revoked fact as
+the highest-seq fact the verifier has seen — the seq check then passes and
+the revoked grant is re-admitted until the wall clock is set forward again.
+The floor prevents that rollback-driven re-admission: a backward-spoofed
+clock does not lower the effective time used for the expiry check. A verifier
+with no trustworthy time source at all MUST NOT honor expiring facts (it
+cannot evaluate `lichen:expiry`); mesh-lifetime facts without freshness
+claims are unaffected.
+
 On first contact with an issuer the cache has no entry; the verifier treats
 the empty cache as "highest seq = -1", accepts any non-negative seq, and
 seeds the cache from the verified fact. A verifier MUST NOT derive the
@@ -1310,6 +1326,54 @@ Local facts are mesh-lifetime. Gateway restart or root re-election
 invalidates cached facts; nodes re-request from new gateway. Within a mesh
 lifetime, `lichen:expiry` and `lichen:seq` (above) provide revocation and
 supersession without waiting for infrastructural invalidation.
+
+**Sequence continuity across restart.** The `lichen:seq` revocation
+guarantee depends on the issuer's sequence counter and the verifier's
+per-issuer sequence cache moving together across a gateway restart or
+root re-election. Note the two distinct things a verifier holds: the
+*facts* it honors (invalidated on restart per above, since the issuing
+gateway's reachability is gone) and the per-issuer *seq cache* (the
+replay floor for that issuer's key). Invalidating facts on restart does
+not reset the seq cache, which is keyed by issuer IID and survives so
+long as the issuer's key stays trusted.
+
+An issuing gateway MUST persist its `lichen:seq` counter to non-volatile
+storage so it resumes strictly above the highest value it has issued,
+or derive it from a monotonic source with the same property; it MUST NOT
+restart from a value at or below a previously issued seq. A gateway
+without persistent storage derives the counter from a monotonic time
+source (seconds since a fixed epoch, e.g. an RTC or GPS clock) — but a
+boot-relative uptime counter is forbidden, since it resets every boot,
+and wall-clock time is untrusted input: a radio adversary can spoof GPS
+civil time backward (deadlocking issuance against retained verifier
+floors) or forward (ratcheting verifier floors so true time then reads
+as a regression, permanently deadlocking a persistence-less issuer). To
+stay non-regressing under such spoofing the issuer MUST persist at least
+an 8-byte floor of the highest seq issued and clamp to
+`max(floor + 1, time-derived value)`; an issuer that cannot guarantee a
+non-regressing counter MUST NOT issue seq-bearing facts. The verifier
+MUST retain the per-issuer seq cache for at least as long as it trusts
+that issuer's key: the cache is as durable as the trust anchor for the
+issuer IID, and evicting it while still trusting the key re-admits
+revoked pre-restart facts (the failure named below), so a constrained
+verifier that must bound the cache drops the issuer's trust entry
+together with its seq cache, never the seq cache alone. Note that such a
+drop is a paired reset: if the issuer's key is later re-trusted (re-TOFU
+or re-provisioning), the cache restarts empty and the first-contact
+bootstrap (highest seq = -1) re-opens, re-admitting a replayed
+revoked-but-unexpired fact until the current fact arrives or it expires.
+A fact intended to remain revocable after such a re-bootstrap SHOULD
+therefore carry `lichen:expiry` to bound that window; a mesh-lifetime
+fact without freshness claims (above) instead remains valid for the mesh
+lifetime once re-admitted. A replayed pre-restart fact (whose signature
+is still valid)
+must still lose to the retained cache. With both sides preserved, a
+restarted gateway's next fact (higher persisted seq) supersedes its
+pre-restart facts, and no availability deadlock occurs: the gateway does
+not reissue at-or-below the retained floor, and verifiers do not reset
+below it. If either side resets independently the guarantee breaks — an
+issuer reset deadlocks issuance against retained verifier caches, and a
+verifier reset re-admits revoked pre-restart facts.
 
 #### 8.13.2. CA Credentials (Portable)
 

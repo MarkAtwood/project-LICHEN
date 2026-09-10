@@ -455,6 +455,8 @@ def test_root_vectors_use_upstream_addr_for_key_and_independent_signatures() -> 
             )
             assert (valid_signature and binding) is vector["valid"]
 
+
+def test_root_authorization_vectors_use_upstream_addr_for_key_and_independent_signatures() -> None:
     for vector in _load("root_authorization.json")["vectors"]:
         public_key = bytes.fromhex(vector["pubkey_hex"])
         if len(public_key) != 32:
@@ -468,6 +470,8 @@ def test_root_vectors_use_upstream_addr_for_key_and_independent_signatures() -> 
         )
         assert (binding and signature) is vector["expected_valid"]
 
+
+def test_rpl_messages_root_dodagid_matches_reference_identity() -> None:
     # DIO DODAGID is a root routable address: upstream AddrForKey, not the
     # rejected SHA-512 native profile (spec/decisions.jsonl
     # upstream-yggdrasil-addressing). Independent oracle, not the impl.

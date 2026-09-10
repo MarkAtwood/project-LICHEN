@@ -290,10 +290,12 @@ async fn main() -> ExitCode {
     // caches (receiver-side replay gate), a silent self-DoS. Only a genuinely
     // fresh provisioning (no manifest, no security artifacts) may default 0.
     let claim_seq_exists = claim_seq_path.exists();
-    let gateway_preprovisioned = loaded_manifest.is_some()
-        || artifact_presence.iter().any(|present| *present);
+    let gateway_preprovisioned =
+        loaded_manifest.is_some() || artifact_presence.iter().any(|present| *present);
     if gateway_preprovisioned && !claim_seq_exists {
-        error!("claim_seq counter missing on provisioned gateway; refusing to reset replay counter");
+        error!(
+            "claim_seq counter missing on provisioned gateway; refusing to reset replay counter"
+        );
         return ExitCode::FAILURE;
     }
     match lichen_gateway::slot::ClaimSeqStore::load(&claim_seq_path) {
@@ -409,7 +411,7 @@ async fn main() -> ExitCode {
     } else {
         let coordinator = match GatewayCoordinator::load_persistent(
             lichen_core::addr::ygg_addr_from_pubkey(id.pubkey.as_bytes()),
-            id.iid,
+            lichen_core::addr::iid_from_pubkey_bytes(id.pubkey.as_bytes()),
             60,
             256,
             &slot_path,
@@ -1270,8 +1272,6 @@ fn recover_or_provision_slot_replay(
     slot_floor_path: &Path,
     sealing_seed: &[u8; 32],
 ) -> Result<(GatewayCoordinator, ProvisionManifest), String> {
-    // The IID derives from the key, never from the routable address (i72x.2).
-    let own_iid = lichen_core::addr::iid_from_pubkey_bytes(&identity_pubkey);
     let store_exists = slot_path.exists();
     let floor_exists = slot_floor_path.exists();
     if stage >= PROVISION_STAGE_SLOT && (!store_exists || !floor_exists) {
@@ -1291,7 +1291,7 @@ fn recover_or_provision_slot_replay(
     let coordinator = if slot_path.exists() {
         GatewayCoordinator::load_persistent(
             iid,
-            own_iid,
+            lichen_core::addr::iid_from_pubkey_bytes(&identity_pubkey),
             60,
             256,
             slot_path,
@@ -1301,7 +1301,7 @@ fn recover_or_provision_slot_replay(
     } else {
         GatewayCoordinator::provision_persistent(
             iid,
-            own_iid,
+            lichen_core::addr::iid_from_pubkey_bytes(&identity_pubkey),
             60,
             256,
             slot_path,
@@ -1806,7 +1806,7 @@ mod tests {
             .unwrap();
         let coordinator = GatewayCoordinator::provision_persistent(
             address,
-            address[8..16].try_into().unwrap(),
+            lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes()),
             60,
             8,
             &root.join("gateway-slot-replay.bin"),
@@ -2086,9 +2086,13 @@ mod tests {
         sealing_seed: &[u8; 32],
         claim_seq_path: &Path,
     ) -> u64 {
+        // Identity IID == address low half, matching the caller's documented
+        // intent ("high local IID"): the 0xff-filled tail keeps this gateway
+        // highest so the peer claim wins the tiebreak and is accepted.
+        let identity_iid: [u8; 8] = address[8..].try_into().unwrap();
         let mut coordinator = GatewayCoordinator::provision_persistent(
             address,
-            address[8..16].try_into().unwrap(),
+            identity_iid,
             60,
             256,
             slot_path,
@@ -2194,7 +2198,7 @@ mod tests {
 
         GatewayCoordinator::provision_persistent(
             address,
-            address[8..16].try_into().unwrap(),
+            [0u8; 8],
             60,
             256,
             &slot_path,

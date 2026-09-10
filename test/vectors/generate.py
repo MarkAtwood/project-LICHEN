@@ -4678,23 +4678,20 @@ def root_authorization_vectors() -> list[dict]:
     - DODAGID == AddrForKey(root_pubkey) (section 8.4)
     - RPL messages MUST be signed with Schnorr48 (section 8.2)
 
-    Fixture construction uses deterministic production primitives. The committed
-    results are independently checked by test_protocol_vector_security.py using
-    reference_schnorr48.py and the upstream yggdrasil-go AddrForKey derivation
-    (rubw; the SHA-512 native profile is rejected).
+    Fixture construction uses independent reference_schnorr48.py primitives
+    and the upstream AddrForKey bit-packing oracle
+    (test/vectors/yggdrasil_address.json anchor).
     """
-    from lichen.crypto.identity import Identity
-    from lichen.crypto.schnorr48 import sign
-    from lichen.ipv6.addr import upstream_addr_for_key
+    from reference_schnorr48 import ReferenceIdentity, addr_for_key, sign
 
     vectors = []
 
     # Vector 1: Valid signature with correct DODAGID binding
     seed_valid = bytes(range(32))
-    identity_valid = Identity.from_seed(seed_valid)
+    identity_valid = ReferenceIdentity.from_seed(seed_valid)
     message_valid = b"DIO: DODAG config, RPLInstanceID=0x01, Version=42"
-    sig_valid = sign(identity_valid.privkey, identity_valid.pubkey, message_valid)
-    dodagid_valid = upstream_addr_for_key(identity_valid.pubkey)
+    sig_valid = sign(identity_valid, message_valid)
+    dodagid_valid = IPv6Address(addr_for_key(identity_valid.pubkey))
 
     vectors.append(
         {
@@ -4729,10 +4726,10 @@ def root_authorization_vectors() -> list[dict]:
 
     # Vector 3: Valid signature but wrong DODAGID (attacker impersonation)
     attacker_seed = bytes([x ^ 0xFF for x in range(32)])
-    attacker = Identity.from_seed(attacker_seed)
-    attacker_dodagid = upstream_addr_for_key(attacker.pubkey)
+    attacker = ReferenceIdentity.from_seed(attacker_seed)
+    attacker_dodagid = IPv6Address(addr_for_key(attacker.pubkey))
     # Attacker signs correctly but claims victim's DODAGID
-    attacker_sig = sign(attacker.privkey, attacker.pubkey, message_valid)
+    attacker_sig = sign(attacker, message_valid)
 
     vectors.append(
         {
@@ -4785,10 +4782,10 @@ def root_authorization_vectors() -> list[dict]:
 
     # Vector 6: Valid root with different seed (deterministic cross-validation)
     seed_alt = bytes([0xAB] * 32)
-    identity_alt = Identity.from_seed(seed_alt)
+    identity_alt = ReferenceIdentity.from_seed(seed_alt)
     message_alt = b"DIO: instance=1, version=1, rank=256"
-    sig_alt = sign(identity_alt.privkey, identity_alt.pubkey, message_alt)
-    dodagid_alt = upstream_addr_for_key(identity_alt.pubkey)
+    sig_alt = sign(identity_alt, message_alt)
+    dodagid_alt = IPv6Address(addr_for_key(identity_alt.pubkey))
 
     vectors.append(
         {
@@ -5028,7 +5025,7 @@ VECTOR_FILES: tuple[_VectorFile, ...] = (
     ),
     _VectorFile(
         "root_authorization.json",
-        "Root authorization validation vectors (spec 8.2, 8.4). Tests DODAGID == AddrForKey(root_pubkey) binding and Schnorr48 signature verification. Covers valid root, invalid signature, DODAGID mismatch (impersonation), and pubkey validation. Fixed literals are independently checked with reference_schnorr48.py and the upstream yggdrasil-go AddrForKey derivation.",
+        "Root authorization validation vectors (spec 8.2, 8.4). Tests DODAGID == AddrForKey(root_pubkey) binding and Schnorr48 signature verification. Covers valid root, invalid signature, DODAGID mismatch (impersonation), and pubkey validation. Fixed literals are independently checked with reference_schnorr48.py and the upstream AddrForKey bit-packing oracle (test/vectors/yggdrasil_address.json anchor).",
         builder="root_authorization_vectors",
     ),
     _VectorFile(

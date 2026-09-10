@@ -1,7 +1,7 @@
 {
   "$schema": "./schema.json",
   "format_version": 2,
-  "description": "Root authorization validation vectors (spec 8.2, 8.4). Tests DODAGID == AddrForKey(root_pubkey) binding and Schnorr48 signature verification. Covers valid root, invalid signature, DODAGID mismatch (impersonation), and pubkey validation. Fixed literals are independently checked with reference_schnorr48.py and the upstream yggdrasil-go AddrForKey derivation.",
+  "description": "Root authorization validation vectors (spec 8.2, 8.4). Tests DODAGID == AddrForKey(root_pubkey) binding and Schnorr48 signature verification. Covers valid root, invalid signature, DODAGID mismatch (impersonation), and pubkey validation. Fixed literals are independently checked with reference_schnorr48.py and the upstream AddrForKey bit-packing oracle (test/vectors/yggdrasil_address.json anchor).",
   "vectors": [
     {
       "name": "valid_signature_and_dodagid",

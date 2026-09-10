@@ -434,8 +434,14 @@ fn ygg_addr(iid: [u8; 8]) -> [u8; 16] {
 }
 
 fn egress_coordinator(corpus: &Value, egress_name: &str) -> GatewayCoordinator {
-    let (egress_iid, _) = identity(corpus, egress_name);
-    let mut coordinator = GatewayCoordinator::new_ephemeral(ygg_addr(egress_iid), egress_iid, 60, 64).unwrap();
+    let (egress_iid, egress_key) = identity(corpus, egress_name);
+    let mut coordinator = GatewayCoordinator::new_ephemeral(
+        ygg_addr(egress_iid),
+        lichen_core::addr::iid_from_pubkey_bytes(egress_key.as_bytes()),
+        60,
+        64,
+    )
+    .unwrap();
     coordinator.set_tunnel_auth_root(identity(corpus, "root").0);
     coordinator
 }
@@ -485,8 +491,14 @@ fn wired_coap_tunnel_auth_fails_closed_on_missing_oscore_wrong_root_and_wrong_eg
     let wire = vector_envelope(vector);
 
     // A table with no bound root never accepts (WrongRoot, fail-closed).
-    let (egress_iid, _) = identity(&corpus, "egress");
-    let mut unbound = GatewayCoordinator::new_ephemeral(ygg_addr(egress_iid), egress_iid, 60, 64).unwrap();
+    let (egress_iid, egress_key) = identity(&corpus, "egress");
+    let mut unbound = GatewayCoordinator::new_ephemeral(
+        ygg_addr(egress_iid),
+        lichen_core::addr::iid_from_pubkey_bytes(egress_key.as_bytes()),
+        60,
+        64,
+    )
+    .unwrap();
     let response = unbound.handle_request(
         CoapMethod::Post,
         "tunnel-auth",

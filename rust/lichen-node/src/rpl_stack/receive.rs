@@ -784,15 +784,28 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             }
         }
         let mut proposed = self.root_seqs.clone();
-        if proposed
-            .accept(
-                decoded.payload.dodag_id,
-                decoded.payload.instance,
-                decoded.payload.root_seq,
-            )
-            .is_err()
-        {
-            return DioRootSigOutcome::Baseline;
+        use lichen_rpl::root_seq_cache::RootSeqReject;
+        match proposed.accept(
+            decoded.payload.dodag_id,
+            decoded.payload.instance,
+            decoded.payload.root_seq,
+        ) {
+            Ok(()) => {}
+            Err(RootSeqReject::Replay | RootSeqReject::Regression) => {
+                return DioRootSigOutcome::Reject;
+            }
+            Err(RootSeqReject::Capacity) => {
+                // Full table, untracked key: fail-closed Reject is correct
+                // for tracked keys (replay/regression, handled above), but
+                // hard-rejecting a NEW DODAG's first genuine signed DIO
+                // punishes the legitimate root — unsigned, the identical
+                // DIO would baseline-process (L679 floor). Degrade to the
+                // unsigned baseline instead; replay protection for the
+                // cached keys is untouched. (An attacker with a TOFU-pinned
+                // key can otherwise fill the table across instance IDs and
+                // turn the signature option into a self-DoS for new roots.)
+                return DioRootSigOutcome::Baseline;
+            }
         }
         let Ok(current) = proposed.persist(&mut self.storage, self.root_seq_store) else {
             return DioRootSigOutcome::Baseline;

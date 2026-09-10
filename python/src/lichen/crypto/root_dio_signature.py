@@ -39,12 +39,6 @@ from typing import TYPE_CHECKING
 
 import cbor2
 
-# Merge resolution: COSE header labels come from schnorr48 (HEAD's shared
-# constants) instead of being redefined locally. The routable-address oracle
-# is ipv6.addr.upstream_addr_for_key (canonical name post-merge, lazy-imported
-# in verify_root_dio_signature to avoid a module cycle, matching the
-# rpl/root_signature.py convention), so identity.yggdrasil_address is
-# intentionally not imported here.
 from . import schnorr48
 from .identity import _pubkey_to_iid
 from .schnorr48 import COSE_ALG_LABEL, COSE_KID_LABEL, SCHNORR48_ED25519_ALG

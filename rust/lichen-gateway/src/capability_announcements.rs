@@ -541,7 +541,10 @@ mod tests {
         // mask — unlike tunnel-auth; see the note in from_cose_sign1).
         let tail_bits = envelope_with_prefix(&[0x02, 0x00, 0x12, 0x34, 0x01], 33);
         assert_eq!(
-            from_cose_sign1(&tail_bits).expect("tail-bit /33 decodes per Python parity").payload.prefix_len,
+            from_cose_sign1(&tail_bits)
+                .expect("tail-bit /33 decodes per Python parity")
+                .payload
+                .prefix_len,
             33
         );
         // Non-byte-aligned canonical form (trailing bits zero) decodes.

@@ -1045,7 +1045,7 @@ impl Gateway {
     ) -> Result<Self, GatewayOpenError> {
         let root_addr = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
         let root_iid = lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes());
-        if coordinator.info.iid != root_addr {
+        if coordinator.info.iid != root_addr || coordinator.own_identity_iid() != root_iid {
             return Err(GatewayOpenError::RplProvision);
         }
         let dodag_id = root_addr;
@@ -1092,9 +1092,10 @@ impl Gateway {
     /// do not represent a persistent gateway deployment.
     pub fn new_ephemeral(identity: Identity, safe_epoch: u8) -> Result<Self, GatewayOpenError> {
         let root_addr = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
+        let identity_iid = lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes());
         let trust_store =
             TrustStore::new_ephemeral(64).map_err(|_| GatewayOpenError::RplProvision)?;
-        let coordinator = GatewayCoordinator::new_ephemeral(root_addr, identity.iid, 60, 64)
+        let coordinator = GatewayCoordinator::new_ephemeral(root_addr, identity_iid, 60, 64)
             .map_err(|_| GatewayOpenError::RplProvision)?;
         Self::new(identity, safe_epoch, trust_store, coordinator)
     }
@@ -1154,12 +1155,7 @@ impl Gateway {
         {
             return Err(SecureError::NoContext);
         }
-        // Merge resolution (i72x.2 + 7ecb): the local identity is the key-
-        // derived IID plane (iid_from_pubkey_bytes), not the low half of the
-        // routable /128 — under upstream AddrForKey the routable low half is
-        // key material that never equals the IID, so the OSCORE
-        // sender/recipient IDs would not mirror on the peer.
-        let local_iid: [u8; 8] = self.rpl_stack.local_iid();
+        let local_iid: [u8; 8] = self.coordinator.own_identity_iid();
         const OSCORE_ID_LEN: usize = 7;
         if context.sender_id() != &local_iid[..OSCORE_ID_LEN]
             || context.recipient_id() != &peer_iid[..OSCORE_ID_LEN]
@@ -1214,11 +1210,12 @@ impl Gateway {
         if peer_pubkeys.len() > MAX_GCP_OSCORE_CONTEXTS {
             return Err(GatewayFederationError::TooManyPeers);
         }
-        // Merge resolution (i72x.2 + 7ecb): key-derived IID plane, not the
-        // low half of the routable address. Using the routable low half both
-        // breaks OSCORE ID mirroring and makes the LocalPeer self-guard
-        // below fail open.
-        let local_iid: [u8; 8] = self.rpl_stack.local_iid();
+        // The OSCORE ids and the LocalPeer check bind the canonical identity
+        // IID (SHA-512(pubkey)[0:8]), not the routable address in
+        // coordinator.info.iid (upstream AddrForKey: its low half is
+        // bit-packed key material, never the IID). install_gcp_context
+        // cross-checks sender_id against the same identity IID.
+        let local_iid: [u8; 8] = self.coordinator.own_identity_iid();
         let mut contexts = Vec::with_capacity(peer_pubkeys.len());
         let mut peer_iids = Vec::with_capacity(peer_pubkeys.len());
         for pubkey in peer_pubkeys {
@@ -2003,6 +2000,22 @@ mod tests {
         Gateway::new_ephemeral(identity, 128).unwrap()
     }
 
+    #[test]
+    fn gateway_rejects_coordinator_with_mismatched_identity_iid() {
+        let identity = Identity::from_seed(Seed::new([0x42; 32]));
+        let address = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
+        let mut wrong_iid = identity.iid;
+        wrong_iid[0] ^= 0x80;
+        let coordinator = GatewayCoordinator::new_ephemeral(address, wrong_iid, 60, 64).unwrap();
+        let result = Gateway::new(
+            identity,
+            128,
+            TrustStore::new_ephemeral(8).unwrap(),
+            coordinator,
+        );
+        assert!(matches!(result, Err(GatewayOpenError::RplProvision)));
+    }
+
     /// 7ecb(a): the local GCP identity must be the SHA-512 IID plane (same as
     /// the peer's), not the routable /128's low half. Pre-fix the LocalPeer
     /// guard compared the SHA-512 peer IID against the routable low half, so
@@ -2504,7 +2517,10 @@ mod tests {
         assert_eq!(&buf[..2], &[0xc1, 60]);
         assert_eq!(encode_content_format_option(112, &mut buf), 2);
         assert_eq!(&buf[..2], &[0xc1, 112]);
-        assert_eq!(encode_content_format_option(u16::from(u8::MAX), &mut buf), 2);
+        assert_eq!(
+            encode_content_format_option(u16::from(u8::MAX), &mut buf),
+            2
+        );
         assert_eq!(&buf[..2], &[0xc1, 0xff]);
 
         // Values above u8::MAX use delta 12 + len 2 (0xc2), big-endian.
@@ -2547,7 +2563,13 @@ mod tests {
         private_test_dir(&path);
         let identity = Identity::from_seed(Seed::new([0x61; 32]));
         let root = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
-        let coordinator = GatewayCoordinator::new_ephemeral(root, identity.iid, 60, 8).unwrap();
+        let coordinator = GatewayCoordinator::new_ephemeral(
+            root,
+            lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes()),
+            60,
+            8,
+        )
+        .unwrap();
         let result = Gateway::new_persistent(
             identity,
             128,
@@ -2586,7 +2608,7 @@ mod tests {
         let trust = TrustStore::new_ephemeral(8).unwrap();
         let coordinator = GatewayCoordinator::provision_persistent(
             root,
-            identity.iid,
+            lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes()),
             60,
             64,
             &replay_path,
@@ -2673,7 +2695,7 @@ mod tests {
         .unwrap();
         let coordinator = GatewayCoordinator::load_persistent(
             root,
-            identity.iid,
+            lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes()),
             60,
             64,
             &replay_path,
@@ -2913,16 +2935,13 @@ mod tests {
         // Including root_addr would make the root its own first hop and violate
         // RFC 6554's prohibition on placing the IPv6 Source in the SRH path.
         let path = [relay_addr, node_addr];
-        gw.rpl_stack
-            .rpl_node_mut()
-            .router_mut()
-            .inject_route(
+        gw.rpl_stack.rpl_node_mut().router_mut().inject_route(
+            core::net::Ipv6Addr::from(node_addr),
+            &[
+                core::net::Ipv6Addr::from(relay_addr),
                 core::net::Ipv6Addr::from(node_addr),
-                &[
-                    core::net::Ipv6Addr::from(relay_addr),
-                    core::net::Ipv6Addr::from(node_addr),
-                ],
-            );
+            ],
+        );
 
         // Build IPv6 packet FROM root TO node_addr
         let payload = b"hello";

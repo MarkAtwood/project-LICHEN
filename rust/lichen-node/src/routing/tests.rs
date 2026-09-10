@@ -2523,4 +2523,3 @@ fn dense_network_simulation_progressive_suppression() {
         );
     }
 }
-

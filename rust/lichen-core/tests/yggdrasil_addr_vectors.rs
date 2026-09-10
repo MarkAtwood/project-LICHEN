@@ -103,7 +103,9 @@ fn corpus_shape() {
     );
     // The rejected native profile must not leak back into the live corpus.
     assert!(
-        vectors.iter().all(|v| v["profile"] != "lichen_native_sha512"),
+        vectors
+            .iter()
+            .all(|v| v["profile"] != "lichen_native_sha512"),
         "live corpus must not hold rejected native-profile vectors"
     );
     let legacy = load_legacy_document();
@@ -154,7 +156,18 @@ fn upstream_anchor_byte_equality() {
     assert_eq!(&derived[..], &ANCHOR_ADDRESS[..]);
 
     let subnet = lichen_core::addr::subnet_for_key(&pubkey);
-    assert_eq!(&subnet[..], &ANCHOR_SUBNET[..]);
+    assert_eq!(
+        subnet, ANCHOR_SUBNET,
+        "MUST equal upstream SubnetForKey byte-for-byte (0300::/8)"
+    );
+    // Subnet lives in 0300::/8 (prefix byte low bit set).
+    assert_eq!(subnet[0] & 0x01, 0x01, "subnet prefix bit must be set");
+    // And shares the leading-1 count byte with the address.
+    let addr = lichen_core::addr::ygg_addr_from_pubkey(&pubkey);
+    assert_eq!(
+        subnet[1], addr[1],
+        "subnet and address share leading-1 count"
+    );
 }
 
 #[test]
@@ -232,6 +245,54 @@ fn addr_for_key_trailing_partial_byte_discarded() {
 }
 
 #[test]
+fn upstream_edge_classes() {
+    // Test-local pins from upstream's own address.go @422836ee, never this
+    // crate. Retain the migration's full-byte edge oracles alongside the
+    // standalone packing tests and main's quarantine-integrity pins.
+    let cases: [(&str, &str); 6] = [
+        // Six leading one-bits in the inverted key.
+        (
+            "0202020202020202020202020202020202020202020202020202020202020202",
+            "0206fefefefefefefefefefefefefefe",
+        ),
+        // Seven leading one-bits in the inverted key.
+        (
+            "0101010101010101010101010101010101010101010101010101010101010101",
+            "0207fefefefefefefefefefefefefefe",
+        ),
+        // Degenerate count wraps 256 -> 0; no payload bits remain.
+        (
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "02000000000000000000000000000000",
+        ),
+        // Zero leading one-bits and an all-zero packed payload.
+        (
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "02000000000000000000000000000000",
+        ),
+        // Mixed remainder: 255 payload bits, with the last seven discarded.
+        (
+            "deadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabe",
+            "020042a482206a028a8242a482206a02",
+        ),
+        (
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "0200aaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ),
+    ];
+    for (pubkey_hex, expected_hex) in cases {
+        let pubkey_vec = decode_hex(pubkey_hex);
+        let pubkey: [u8; 32] = pubkey_vec.try_into().expect("32-byte key");
+        let expected = decode_hex(expected_hex);
+        assert_eq!(
+            lichen_core::addr::ygg_addr_from_pubkey(&pubkey)[..],
+            expected[..],
+            "{pubkey_hex}"
+        );
+    }
+}
+
+#[test]
 fn iid_retains_sha512_legacy_profile() {
     // The SHA-512 IID is retained for link-local per the settled decision.
     // Pinned from the SHA-512 of the anchor pubkey (independent oracle:
@@ -242,5 +303,6 @@ fn iid_retains_sha512_legacy_profile() {
     // The routable address no longer embeds the IID (settled migration):
     // this MUST NOT hold, and pinning the divergence guards the sweep.
     let addr = lichen_core::addr::ygg_addr_from_pubkey(&pubkey);
+    assert_eq!(addr[0], 0x02, "0200::/8 prefix byte");
     assert_ne!(&addr[8..16], &iid[..]);
 }

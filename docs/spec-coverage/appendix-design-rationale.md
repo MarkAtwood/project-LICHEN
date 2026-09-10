@@ -1,0 +1,80 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- SPDX-FileCopyrightText: The contributors to the LICHEN project -->
+
+## spec/appendix-design-rationale.md — coverage (sweep 2026-09-09)
+
+Scope note: this appendix is predominantly design rationale. Sections 1, 2, 4,
+5 (prose and comparison tables), 6.1–6.4 (intentional-omission justifications),
+7.1–7.3 (PHY tradeoff narrative), and the §8 summary contain **zero** RFC 2119
+keywords and define no behavior — no requirement rows are extracted from them
+(same treatment as the appendix-border-router sweep). Their normative content
+is owned by the sections they summarize (05-routing §9.7/9.8/9.9/§11.4,
+06-security §8/15.5, 03-adaptation, 02-physical-link, 02a); all cross-references
+were verified to resolve. Normative text concentrates in §3.1, §3.2, §6.5,
+§7.4/7.5, §7.6 (CCP-16 block) and §8. Requirement IDs use `R-ADR-NNN`
+(ADR = appendix-design-rationale).
+
+Step 0: `spec/decisions.jsonl` contains no decision whose `specs` array lists
+`appendix-design-rationale.md` — no verify greps to run, no spec edit authorized.
+However, appendix line 394 ("density >8 triggers…") **conflicts** with the
+adjudicated `density-high` decision (">10"); because this section is not in
+that decision's `specs` array the sweep could not fix the file — filed as
+**b7z9.204** instead. All other 18 decisions were checked; none touch this
+appendix.
+
+| Req | Spec text (trimmed) | Status | Evidence | Confidence |
+|-----|---------------------|--------|----------|------------|
+| R-ADR-001 | §3.1: Schnorr48 uses the Ed25519 group with a 128-bit truncated challenge to produce 48 bytes (§3.1, lines 101–103) | implemented+tested | Py `python/src/lichen/crypto/schnorr48.py` (e[0:16]‖s[0:32], truncation :128-138); Rust `schnorr48` crate 0.1.0 via rust/lichen-link/src/schnorr.rs; C lichen/subsys/lichen/link/schnorr48.c (Monocypher). Vectors test/vectors/schnorr48.json (16 vectors) consumed: python/tests/crypto/test_schnorr48.py:19,32; rust/lichen-link/tests/schnorr48_vectors.rs:37; lichen/tests/schnorr48/main.c:6,137. Normative home: spec/06-security.md §8 + draft-lichen-schnorr-00 (own sweeps) | high |
+| R-ADR-002 | §3.2: baseline compresses link-local IPv6+UDP to 18 bytes and "native-address" IPv6+UDP to 32-33 bytes (§3.2, lines 107–110) | divergent | Normative spec/03-adaptation.md §5.3/§5.5 (:55-60, :84-87, :145): 23 bytes link-local Rule 0, 37 bytes **Yggdrasil** Rule 1 (IPv6+UDP+CoAP); "native" appears nowhere in 03-adaptation.md or appendix-schc.md (rg zero), and the SHA-512 "native" profile is exactly what the settled upstream-yggdrasil-addressing decision rejected — doubly stale wording. appendix-misc.md:38 hedges "18-33 bytes". Spec-bug bead **b7z9.205** | high |
+| R-ADR-003 | §6.5: LICHEN does not (and will not) randomize MAC/addresses; normative statement in Security Considerations 15.5 (§6.5, lines 253–273) | implemented+tested | No randomization code in any stack (rg: only TX jitter rust/lichen-node/src/scheduler.rs:317; DAD probe *timing* jitter python/src/lichen/link/short_addr.py:332 — address stays deterministic, verified by read :293-339). Normative spec/06-security.md:1539-1543 ("does not implement address randomization or IPv6 privacy extensions… stable and cryptographically derived"). Stability pinned by addressing vectors (test/vectors/address_classification.json et al., 03-addressing sweep) | high |
+| R-ADR-004 | §7.4/7.5: PHY params SF10 / 125 kHz / CR 4-5 / sync word 0x34; LICHEN and Meshtastic cannot hear each other (lines 342–382) | divergent (sync word, Rust) | SF10/BW125/CR4-5 implemented+tested cross-ref 02-physical-link matrix R-02-002/003/004 (constants.toml:6-9; constants.rs:4-9; lora_l2.c:300-303; airtime.py:12-16). Sync 0x34: C lr1110.c:502-504 programs it; Py constants.py:11; Rust LORA_SYNC_WORD=0x34 (constants.rs:4) has zero consumers — lichen-embassy never programs it (**existing bead b7z9.103**, R-02-006). Non-interference follows from HW sync-word gating | high |
+| R-ADR-005 | §7.6: All impls (Python sim/schc, Rust rpl/gateway, Zephyr lichen/subsys/lichen) MUST match test/vectors/ccp16.json exactly (line 386) | implemented+tested | Py python/tests/test_ccp.py:170-196,353-354 + test_channel_plan.py:276-345 + test_vectors.py:1815 (independent `_oracle_hash_32`); Rust rust/lichen-core/src/rf_health.rs:1140-1190 `ccp_vectors_match` (include_str! ccp16.json); C lichen/tests/rf_health_vectors/main.c:171 (+CMakeLists.txt:23). Caveat: appendix names rust/rpl+rust/gateway which don't exist and don't consume ccp16.json (**existing bead b7z9.179**); python/tests/sim/test_ccp16.py absent (R-ADR-020, **b7z9.210**) | high |
+| R-ADR-006 | §7.6: Slot ID = (hash_32(eui64) + u32(SFN)) mod num_slots, FNV-1a32 + unsigned-32 wrapping add; MUST match ccp_sfn_wrap_slot_hash.json; concat-hash/CRC32 non-conformant (line 390) | implemented+tested | Py timing/sfn.py:18-46 (`slot_for`, wrap :45); Rust wrapping_add ×3: lichen-node/tdma_scheduler.rs:18-24, lichen-core/tdma_beacon.rs:31-36, lichen-core/rf_health.rs:376-382; C tdma.c:51-55 + hash32.c:24-32 (u32 add wraps). Vector ccp_sfn_wrap_slot_hash.json: py timing/test_sfn_wrap_vectors.py:19 + link/test_slot_coordination.py:326,357,382; rust lichen-node/tests/sfn_wrap_vectors.rs:42 (production `TdmaScheduler::slot_for`); C transcribed literals lichen/tests/util/main.c:136-152,221,251 + link_crypto/main.c:697-737 (no JSON read). Divergences: C silently coerces num_slots 0→8 (tdma.c:53; noted 02b matrix:48); Rust return types differ (u16 vs u8) | high |
+| R-ADR-007 | §7.6: Slot duration ≥ profile max PHY airtime + single 50 ms guard; SF10/125 kHz minimum 2,346 ms (line 391) | divergent (C) | Py timing/sfn.py:12-13 TDMA_SLOT_MS=2346, TDMA_GUARD_MS=50 (+constants.py:78); Rust lichen-core/constants.rs:95,97 (2346/50) pinned tdma_clock.rs:120-123, tdma_scheduler.rs:49-50; C link.h:87 GUARD=50 correct but LICHEN_TDMA_SLOT_MS=250 violates SF10 minimum (link.h:88; 2346 only as test literal link_crypto/main.c:737) — **existing bead b7z9.17**. ceil(airtime)+guard computed formula exists as code in no stack (02b matrix R-02b-012) | high |
+| R-ADR-008 | §7.6: TX suppressed outside slot (tdma_tx_allowed()) (line 392) | divergent (inert in production) | C tdma.c:303-338 + production call lichen_link_tx.c:110 (-EBUSY) BUT now_ms hardcoded 0 (FIXME :99-109) and synced only set by lichen_link_set_slot (no production caller) → gate passes unconditionally today. Tested: lichen/tests/link_crypto/main.c:641-644,690-693 (incl. 2346/50 boundary). Rust tdma_clock::tx_allowed (lichen-link/src/tdma_clock.rs:69) no production caller; Py sim-only TDMAScheduler.is_tx_allowed. **Existing bead b7z9.164** | high |
+| R-ADR-009 | §7.6: Node uses lichen_link_set_slot() in subsys (line 391) | not-implemented (production wiring) | Defined tdma.c:263-284, declared link.h:563; callers are tests only (lichen/tests/link_crypto/src/main.c:653,661,673,687,716,722; tdma_guard_budget/main.c:168; desync_fsm/main.c:234); zero production call sites (rg lichen/apps+subsys). **Existing bead b7z9.164** | high |
+| R-ADR-010 | §7.6: SF10 is the REQUIRED baseline for moderate density; overrides/CH0 fallback only on explicit thresholds — "(density >8 triggers…)" (line 394) | divergent (spec text) | Threshold-10 implemented+tested cross-ref 02-physical-link matrix R-02-015/R-02-024/R-02-029 (rf_health.rs:16 DENSITY_HIGH=10; link_ctx.c:716; channel_plan.py:295; ccp16.json SF cases). Appendix ">8" contradicts adjudicated `density-high` decision (>10) — spec-bug bead **b7z9.204** (only remaining spec-text >8 site) | high |
+| R-ADR-011 | §7.6: Implementations MUST match test/vectors/ccp16.json **and ccp_load_balancing.json** exactly (line 394) | divergent (consumers) | ccp_load_balancing.json: Py python/tests/sim/test_tdma.py:212-227 pins tdma_slot_assignment_static_hash + guard values (2346/50); Rust rf_health.rs:1192-1229 reads expected_ppm/slot_adjust_ticks and DISCARDS them (:1213-1219); C none (appendix-rpl.md:32). **Existing bead b7z9.163** (consumer asymmetry + skipped drift_compensation case) | high |
+| R-ADR-012 | §7.6: Embedded no_std uses saturating Q16.16 EMA (alpha=1/4) matching rf_health.rs; identical results to floating-point pseudocode for vectors (lines 396–413) | implemented+tested | Rust rf_health.rs:13-14 FP_SCALE=1<<16, EMA_ALPHA_SHIFT=2; SnrStats::update :514-526 saturating_sub/add>>EMA_ALPHA_SHIFT; constants block :15-24 matches DENSITY_*/SNR_* (verified by read). Test oracle rust/lichen-core/tests/ema_vectors.rs:20 (`ema_update_fp`). C rf_health.c:45-61 (__builtin overflow-checked saturating); vector ccp_ema_update_integer.json: py test_ema_vectors.py:27, rust tests/ema_vectors.rs:14, C lichen/tests/rf_health (CMakeLists.txt:26, main.c:176-239); ccp16_ema_loss_threshold.json: py test_ccp.py:229,374-375, rust ccp16_ema_loss_threshold_vectors.rs:15. Minor: spec anchors "rf_health.rs:170,251" drifted (now land in rolling-window trackers; EMA at :514-526); C link_load_balance.c:39 second EMA lacks saturation | high |
+| R-ADR-013 | §7.6: CH0 always for control (DIOs, all listen) (line 416) | implemented+tested | Py node.py:659,1655,1670 announces/relays on CH0 (CCP-9); Rust rf_health.rs:384-395 select_channel CH0 control + tdma_beacon.rs:58 CH0_RX flag 0x04; C lichen_l2_tx.c:192 CH0 control/fallback + link/Kconfig:273. Tests: ccp15 frequency-agility vectors (rf_health.rs:1240), py test_ccp.py:107-113. Caveats (owned elsewhere): C post-TX RX never restores CH0 (latent, **b7z9.108**); C density→CH0 fallback gated behind non-default Kconfig (**b7z9.177**) — hence confidence not raised above high→still high, but see flagged | high |
+| R-ADR-014 | §7.6: Data channels via hash or root-assigned (RPL DAO-ACK carries channel_map) (line 416) | divergent (root-assigned clause) | Hash-based data channels implemented+tested (CCP-12; appendix-ccp12-hopping sweep). No DAO-ACK in any stack carries a channel map: Rust DAO-ACK carries address assignment (lichen-rpl/src/address_assignment.rs:385-471; option registry message.rs:71-85 no channel option); C registry rpl_messages.h:59-78 none; Py none. GCP channel_map (gateway/src/resources.rs:1173, vector gateway_coordination.json:218) is CoAP coordination, not RPL. Related: R-02-013 (DIO channel option, not-implemented, flagged for spec simplification). Bead **b7z9.207** | high |
+| R-ADR-015 | §7.6: Nodes report neighbor_count (u8), channel_util (percent*2.55) in DIO option (line 417) | divergent | C LICHEN_RPL_OPT_RF_METRICS 0x16 TLV [snr,loss,dens,util] rpl_messages.h:78,101-115 + messages.c:935-960 (tested lichen/tests/rpl_messages/main.c:802-842) — different field set (no neighbor_count), util plain u8, ×2.55 factor exists nowhere — and helpers never emitted into a DIO (test-only callers). Rust 0x16 = DODAG-Version-Auth (message.rs:80; wire-type collision **b7z9.147**). Py nothing. **Existing beads b7z9.187 + b7z9.74** | high |
+| R-ADR-016 | §7.6: Root (Rust gateway/rpl) runs central optimizer: minimize collisions using density map (line 418) | not-implemented | rg "optimiz" in rust/ → only airtime low-data-rate optimization (lichen-core/src/airtime.rs:86-111); "density_map"/"DensityMap" zero hits repo-wide; lichen-gateway has no density logic. Closest: GCP channel_map publication (resources.rs:1173) — publishes a plan, performs no minimization. Bead **b7z9.208** | high |
+| R-ADR-017 | §7.6: Python sim/schc models multi-channel propagation, TDMA collisions, validates <5% loss at 50 nodes/km² (line 419) | divergent (validation absent) | Multi-channel + collisions modeled: sim/protocol.py:625-654 `hop_channel`, sim/medium.py:3-17,162 (collision + capture effect), TDMA sim/tdma.py:48-49,94-117. No <5% loss / 50 nodes-per-km² validation anywhere (rg km2 / "50 nodes" zero); closest python/tests/sim/test_scale.py:349-423 asserts collision_rate<0.5 (50%, no area units). Folded into bead **b7z9.210** | high |
+| R-ADR-018 | §7.6 Kconfig: CONFIG_LICHEN_CCP16=y, CONFIG_LICHEN_TDMA_SLOTS=8, CONFIG_LICHEN_ADAPTIVE_SF=y (lines 423–425) | divergent (2 of 3 symbols missing) | CONFIG_LICHEN_ADAPTIVE_SF exists, default y (lichen/subsys/lichen/rpl/Kconfig:164-168; inner symbol lichen/subsys/lichen/Kconfig:37-46). CONFIG_LICHEN_CCP16 and CONFIG_LICHEN_TDMA_SLOTS: zero Kconfig occurrences (sole repo occurrences are the appendix lines); nearest real: CONFIG_LICHEN_LINK_CCP16_LOAD_BALANCING (link/Kconfig:148-149, **no default y** — b7z9.177) and LICHEN_TDMA* booleans (no slot-count int). Bead **b7z9.209** | high |
+| R-ADR-019 | §7.6: Root includes epoch and num_slots (default 8) in extended RPL config option (see draft-lichen-rpl-lora) (lines 387–389) | divergent | draft-lichen-rpl-lora-00.md exists but §4.2 (:141-148) + Appendix A (:520-540) specify neither field (zero num_slots hits). All three stacks' DODAG Config option (type 4) lacks both: rust/lichen-rpl/src/message.rs:655-718; C rpl_messages.h:456-500 + messages.c:594-660; py rpl/messages.py:96-135. epoch+num_slots actually ride the TDMA beacon header: rust tdma_beacon.rs:5-15, py rpl/tdma_beacon.py:10-11, C beacon.c:41. Default 8 real: C tdma.c:53,89 + link/Kconfig:167-168. Spec-bug bead **b7z9.206** | high |
+| R-ADR-020 | §7.6 Interop & Tests: all platforms load ccp16.json; pytest python/tests/sim/test_ccp16.py; cargo test rust/rpl + rust/gateway; west native_sim for Zephyr; Renode scenarios for multi-node density test (lines 427–432) | divergent | ccp16.json consumers exist but NOT at cited paths: python/tests/sim/test_ccp16.py absent; rust/rpl + rust/gateway crate paths don't exist and neither consumes ccp16.json (**b7z9.179**); C rf_health_vectors consumes. Renode: every .resc single-machine (ttgo_lora32.resc:3-4 + 11 board resc files), zero ccp16/density mentions. Zephyr west/native_sim path real (lichen/tests/rf_health_vectors). 50-nodes/km² <5% loss validation absent (R-ADR-017). Bead **b7z9.210** | high |
+
+### Notes
+- No SHOULD/MAY requirements exist in this section. Gap beads filed: **7**
+  (b7z9.204 density>8 stale; b7z9.205 SCHC sizes/"native" wording; b7z9.206
+  draft epoch/num_slots cross-ref; b7z9.207 DAO-ACK channel_map; b7z9.208 root
+  optimizer; b7z9.209 Kconfig symbols; b7z9.210 test-matrix drift). Flagged:
+  **14** (appendix-design-rationale-flagged.md).
+- Divergences already tracked by prior sweeps and **not re-filed**: C
+  LICHEN_TDMA_SLOT_MS=250 vs 2346 (**b7z9.17**); inert TDMA TX gate + uncalled
+  lichen_link_set_slot (**b7z9.164**); ccp_load_balancing.json consumer
+  asymmetry incl. Rust binds-and-discards (**b7z9.163**); Rust/C ccp16.json +
+  ccp16-hop.json consumer gaps (**b7z9.179**, **b7z9.106**); DIO metric
+  signaling / RF-metrics TLV never emitted (**b7z9.187**, **b7z9.74**); C
+  density fallback behind non-default Kconfig (**b7z9.177**); Rust sync word
+  0x34 never programmed (**b7z9.103**); 0x16 wire-type collision (**b7z9.147**).
+- "No dead code; all paths exercised by vectors" (lines 394, 433) is an
+  engineering directive (AGENTS.md-wide), not a runtime behavior — noted, not
+  numbered.
+- §7.6 line 435 "Integrates with existing SCHC (add channel to rule ID), RPL
+  (new option type), link layer (new ctx fields)" is a design statement, not a
+  MUST; the RPL-option part is covered by R-ADR-015/b7z9.187, the SCHC
+  channel-in-rule-ID integration was not audited here (owned by appendix-schc /
+  03-adaptation sweeps).
+- §8 (lines 453–457) is rationale + cross-refs to 02a (CCP-12/CCP-15
+  pseudocode, now()/clamp() definitions at 2a.3.1) — covered by
+  appendix-ccp12-hopping and 02a sweeps; deterministic-hash channel selection
+  itself implemented+tested there.
+- §5 table cell "Mandatory per-packet signatures" (line 175) is rationale
+  prose; normative home 06-security (per-packet Schnorr48) covered by
+  06-security-part1 sweep.
+- §1.1–1.4 / §2 / §4 / §5 / §6.1–6.4 / §7.1–7.3 contain no RFC 2119 keywords —
+  informational; the cross-references they cite (05-routing §9.7 GPSR :933,
+  §9.8 DTN :1021, §9.9 :1218, §11.4 backpressure :1606; 06-security §15.5
+  :1539; 12-apps /config/privacy :472,523) all resolve.

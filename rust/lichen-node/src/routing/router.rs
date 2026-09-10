@@ -715,21 +715,13 @@ impl Router {
             // not addr[8:16].
             let Some(identity) = (0u8..=u8::MAX)
                 .map(|seed| Identity::from_seed(Seed::new([seed; 32])))
-                // The DAO packet source is the origin's primary 02xx address
-                // (AddrForKey), which post-migration embeds no IID. Recover
-                // the test identity by full-address match, not by slicing the
-                // low 64 bits.
-                // Merge resolution (HEAD i72x.2 vs beads-worker-2 ywec): kept
-                // the full-address-only match and dropped HEAD's IID-or
-                // disjunct. The merged production path (node.rs
-                // pinned_pubkey_for_routable, i72x.2) resolves DAO origins by
-                // full AddrForKey only — the low half of an upstream address
-                // is not an IID and can collide with another peer's IID — and
-                // every process_dao_at_ms caller passes a full AddrForKey
-                // source, so the IID branch was dead and diverged from
-                // production semantics.
                 .find(|identity| {
+                    // The DAO source may be the originator's link-local
+                    // (SHA-512 IID tail) or its routable upstream
+                    // AddrForKey /128; match either form.
                     lichen_link::ygg_addr_from_pubkey(identity.pubkey.as_bytes()) == packet_source
+                        || (packet_source.starts_with(&[0xfe, 0x80, 0, 0, 0, 0, 0, 0])
+                            && identity.iid == packet_source[8..])
                 })
             else {
                 return false;

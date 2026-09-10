@@ -357,6 +357,6 @@ fn yggdrasil_derivation_corpus_matches_upstream_addr_for_key() {
         positive += 1;
     }
     assert!(positive >= 4, "positive derivation entries must run");
-    assert!(binding >= 1, "binding-invariant entry must run");
+    assert_eq!(binding, 1, "binding-invariant entry must run");
     assert_eq!(negative, 1, "negative attack entry must run");
 }

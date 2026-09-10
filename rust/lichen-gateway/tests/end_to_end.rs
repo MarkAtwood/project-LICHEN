@@ -804,7 +804,7 @@ async fn restart_after_partial_context_install_self_heals() {
         .unwrap();
     let coordinator = GatewayCoordinator::provision_persistent(
         gateway_addr,
-        gateway_identity.iid,
+        iid_from_pubkey(gateway_identity.pubkey.as_bytes()),
         60,
         64,
         &root.join("gateway-slot-replay.bin"),
@@ -887,7 +887,7 @@ async fn config_removal_revokes_durable_pin_and_context() {
         .unwrap();
     let coordinator = GatewayCoordinator::provision_persistent(
         gateway_addr,
-        gateway_identity.iid,
+        iid_from_pubkey(gateway_identity.pubkey.as_bytes()),
         60,
         64,
         &root.join("gateway-slot-replay.bin"),
@@ -977,7 +977,7 @@ async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
         .unwrap();
     let coordinator = GatewayCoordinator::provision_persistent(
         gateway_addr,
-        gateway_identity.iid,
+        iid_from_pubkey(gateway_identity.pubkey.as_bytes()),
         60,
         64,
         &root.join("gateway-slot-replay.bin"),
@@ -1115,7 +1115,7 @@ async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
     .unwrap();
     let coordinator = GatewayCoordinator::load_persistent(
         gateway_addr,
-        gateway_identity.iid,
+        iid_from_pubkey(gateway_identity.pubkey.as_bytes()),
         60,
         64,
         &root.join("gateway-slot-replay.bin"),
@@ -1201,7 +1201,7 @@ async fn handoff_harness(label: &str) -> HandoffHarness {
         .unwrap();
     let coordinator = GatewayCoordinator::provision_persistent(
         gateway_addr,
-        gateway_identity.iid,
+        iid_from_pubkey(gateway_identity.pubkey.as_bytes()),
         60,
         64,
         &root.join("gateway-slot-replay.bin"),

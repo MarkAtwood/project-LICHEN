@@ -1,0 +1,39 @@
+{
+  "id": "project-LICHEN-worker6-hpc8.3",
+  "title": "Verify decomposition and runnable frontier",
+  "description": "Independently audit scope coverage, exact parent/child andblocking relations, hierarchy-inclusiveacyclicity, corpusandRFworkflow sequencing, realreadyfrontier, preservedclosedstatuses, andallpermission/portabilitydeferrals. Re-readactualBeadsafterpublicationandreportactualcounts.",
+  "acceptance_criteria": "Coverage/DAG/ready/statuschecks pass;no parent-childblockingcycles or hiddenancestor deadlocks;three independent decompositionreviews have no unresolvedfinding;onlytrackingwork markedcomplete,notfutureimplementation.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T03:27:32.370380566Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T03:43:33.650743056Z",
+  "started_at": "2026-09-09T03:40:12.985665771Z",
+  "closed_at": "2026-09-09T03:43:33.650743056Z",
+  "close_reason": "Independent audit complete, report filed on this bead. 0 hierarchy-inclusive cycles across the full store; 31/31 leaves with intact parent relations; sequencing edges verified by re-read (corpus-\u003eintegrations-\u003eCI-\u003edocs; RF-authority-\u003ehardware leaves; human ljgs gate on frame-budget); frontier real (10 leaves ready, 0 gated leaks); closed statuses preserved (q74u x3, 9zla.1 — re-verified via bd show after an initial query artifact); 9zla.2 deferral and human/blocked:hardware gates intact. Actual counts reported: 45 x7hh-family beads (14 original + 31 leaves, all open). No defects, no follow-up beads. Audit-only: no source changes, reviewer passes N/A.",
+  "labels": [
+    "ccp",
+    "planning"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-hpc8.3",
+      "depends_on_id": "project-LICHEN-worker6-hpc8",
+      "type": "parent-child",
+      "created_at": "2026-09-09T03:27:32.506276498Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-hpc8.3",
+      "depends_on_id": "project-LICHEN-worker6-hpc8.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T03:38:35.099520563Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
