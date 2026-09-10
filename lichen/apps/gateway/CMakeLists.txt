@@ -12,6 +12,7 @@ target_sources(app PRIVATE
   src/config_apply.c
   src/config_cbor.c
   src/forwarding.c
+  src/forwarding_policy.c
   src/network_location.c
   src/status_cbor.c)
 target_sources_ifdef(CONFIG_LICHEN_ROUTING app PRIVATE

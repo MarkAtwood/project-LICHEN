@@ -11,10 +11,13 @@
 #include <zephyr/net/net_pkt.h>
 #include <zephyr/net/net_if.h>
 
+#include "forwarding_policy.h"
+
 struct lichen_forwarding_stats {
 	uint64_t mesh_to_backhaul;
 	uint64_t backhaul_to_mesh;
 	uint64_t backhaul_to_mesh_dropped_mtu;
+	uint64_t forwarding_policy_denied;
 	uint64_t tunnel_auth_denied;
 };
 
