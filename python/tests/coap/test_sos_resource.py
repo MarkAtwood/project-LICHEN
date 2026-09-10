@@ -122,7 +122,7 @@ def _signed_body(
     **overrides: object,
 ) -> bytes:
     """Build a spec-18.4.1 signed /sos POST body."""
-    core: dict[str, object] = {"from": str(_ADDR), "t": t}
+    core: dict[str, object] = {"from": _ADDR.exploded, "t": t}
     core.update(overrides)
     sig = sign_sos_origin(priv, pub, _origin_addr(pub), seq, core)
     return cbor2.dumps({**core, "pubkey": pub, "sig": sig.to_bytes()})
@@ -282,7 +282,7 @@ class TestSosPutDelete:
         client, server, sos = await _setup()
         try:
             # "t" as string instead of numeric
-            body = cbor2.dumps({"from": str(_ADDR), "t": "not-a-number"})
+            body = cbor2.dumps({"from": _ADDR.exploded, "t": "not-a-number"})
             resp = await client.request(
                 Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
             ).response
@@ -560,7 +560,7 @@ class TestSosSignatureEnforcement:
 
     async def test_unsigned_post_dropped(self) -> None:
         sos = _sos_resource()
-        body = cbor2.dumps({"from": str(_ADDR), "t": _T0})
+        body = cbor2.dumps({"from": _ADDR.exploded, "t": _T0})
         resp = await sos.render_post(_request(body))
         _assert_silently_dropped(resp)
         assert sos._active is False

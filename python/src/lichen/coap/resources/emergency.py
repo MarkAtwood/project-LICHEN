@@ -214,10 +214,15 @@ class SosResource(resource.ObservableResource):
     def _state_payload(self) -> bytes:
         return cbor2.dumps({"active": self._active, "from": self._from, "t": self._t})
 
-    def activate(self, from_eui64: bytes, t: float) -> None:
-        """Activate SOS from *from_eui64* at time *t* and notify observers."""
+    def activate(self, origin_addr: bytes, t: float) -> None:
+        """Activate SOS from *origin_addr* (16-byte packed 0200::) at *t*."""
+        if len(origin_addr) != 16:
+            # The state and every cancel path key off the FULL 16-byte origin
+            # address (spec 18.4.1); an 8-byte caller would create an alert
+            # no valid cancel can ever match.
+            raise ValueError(f"origin_addr must be 16 bytes, got {len(origin_addr)}")
         self._active = True
-        self._from = from_eui64.hex()
+        self._from = origin_addr.hex()
         self._t = t
         self.updated_state()
 
