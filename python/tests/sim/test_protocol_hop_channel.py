@@ -7,7 +7,7 @@ spec/02a-coordinated-capacity.md:190-196 and spec/appendix-ccp12-hopping.md:81-8
 using an independent FNV-1a32 oracle (test/vectors/generate.py
 ``_oracle_hash_32``), never the code under test. The ``spec_example_eui_sfn1``
 vector additionally matches the worked example in
-spec/appendix-ccp12-hopping.md section 3.2: hash 926423932 (0x373854FC),
+spec/appendix-ccp12-hopping.md section 3.2: hash 926423932 (0x37381B7C),
 channel 1. ``ccp15_freq_agility_epoch42`` comes from the committed shared
 vector file test/vectors/ccp15.json. The same literals are asserted by the
 Rust twin ``lichen_core::rf_health::select_channel`` in
