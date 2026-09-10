@@ -17,6 +17,10 @@
 #include <lichen/link_ctx.h>
 #include <string.h>
 
+#ifdef CONFIG_LICHEN_GCP_TRUST_X509
+#include <mbedtls/x509_crt.h>
+#endif
+
 /* ---- Logging ------------------------------------------------------------ */
 
 #include <lichen/lichen_log.h>
@@ -387,3 +391,65 @@ const char *gcp_trust_level_name(gcp_trust_level_t level)
 }
 
 #endif /* CONFIG_LICHEN_CRYPTO_MONOCYPHER */
+
+#ifdef CONFIG_LICHEN_GCP_TRUST_X509
+
+int gcp_trust_validate_x509_chain(const uint8_t *leaf_der,
+                                  size_t leaf_len,
+                                  const uint8_t *const *chain_der,
+                                  const size_t *chain_lens,
+                                  size_t chain_count,
+                                  const uint8_t *anchor_der,
+                                  size_t anchor_len)
+{
+    int ret;
+    uint32_t flags = 0;
+    mbedtls_x509_crt chain;
+    mbedtls_x509_crt anchor;
+
+    if (leaf_der == NULL || leaf_len == 0 || anchor_der == NULL ||
+        anchor_len == 0 || (chain_count != 0 &&
+                            (chain_der == NULL || chain_lens == NULL))) {
+        return -EINVAL;
+    }
+
+    mbedtls_x509_crt_init(&chain);
+    mbedtls_x509_crt_init(&anchor);
+    ret = mbedtls_x509_crt_parse_der(&chain, leaf_der, leaf_len);
+    if (ret != 0) {
+        ret = -EINVAL;
+        goto out;
+    }
+    for (size_t i = 0; i < chain_count; i++) {
+        if (chain_der[i] == NULL || chain_lens[i] == 0 ||
+            mbedtls_x509_crt_parse_der(&chain, chain_der[i], chain_lens[i]) != 0) {
+            ret = -EINVAL;
+            goto out;
+        }
+    }
+    if (mbedtls_x509_crt_parse_der(&anchor, anchor_der, anchor_len) != 0 ||
+        anchor.next != NULL || anchor.raw.len != anchor_len ||
+        memcmp(anchor.raw.p, anchor_der, anchor_len) != 0) {
+        ret = -EINVAL;
+        goto out;
+    }
+
+    if ((chain.ext_types & MBEDTLS_X509_EXT_BASIC_CONSTRAINTS) == 0 ||
+        chain.ca_istrue ||
+        (chain.ext_types & MBEDTLS_X509_EXT_KEY_USAGE) == 0 ||
+        (chain.key_usage & MBEDTLS_X509_KU_DIGITAL_SIGNATURE) == 0) {
+        ret = -EINVAL;
+        goto out;
+    }
+
+    ret = mbedtls_x509_crt_verify(&chain, &anchor, NULL, NULL, &flags, NULL, NULL);
+    if (ret != 0 || flags != 0) {
+        ret = -EINVAL;
+    }
+
+    mbedtls_x509_crt_free(&anchor);
+    mbedtls_x509_crt_free(&chain);
+    return ret;
+}
+
+#endif /* CONFIG_LICHEN_GCP_TRUST_X509 */
