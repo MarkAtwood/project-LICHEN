@@ -45,9 +45,19 @@ ROOT_ADDR = yggdrasil_address(ROOT_IDENTITY.pubkey)
 NODE_IDENTITY = Identity.from_seed(NODE_SEED)
 NODE_ADDR = yggdrasil_address(NODE_IDENTITY.pubkey)
 OTHER_IDENTITY = Identity.from_seed(OTHER_SEED)
+OTHER_ADDR = yggdrasil_address(OTHER_IDENTITY.pubkey)
 FOREIGN_IDENTITY = Identity.from_seed(FOREIGN_SEED)
 FOREIGN_ADDR = yggdrasil_address(FOREIGN_IDENTITY.pubkey)
 DODAG_ID = ROOT_ADDR
+
+# Delegate keys in delegation tokens and the pin table use the low 8 bytes of
+# the delegate's routable (AddrForKey) address: DaoOriginValidator extracts
+# source_address.packed[8:16] as the lookup IID and _authorize_delegated_target
+# binds delegate_iid to the same bytes (the .44.7 DAO source is the 02xx
+# address; Identity.iid is the SHA-512 link-local IID, which post-AddrForKey
+# is not embedded in the routable address).
+NODE_DELEGATE = NODE_ADDR.packed[8:16]
+OTHER_DELEGATE = OTHER_ADDR.packed[8:16]
 
 NOW = 1000.0
 FAR_EXPIRY = 2000
@@ -71,7 +81,7 @@ def make_root_manager(
     if wall_clock is None:
         wall_clock = lambda: NOW  # noqa: E731
     persistence = MemoryPersistence()
-    pins = _PinTable({NODE_IDENTITY.iid: NODE_IDENTITY.pubkey})
+    pins = _PinTable({NODE_DELEGATE: NODE_IDENTITY.pubkey})
     validator = DaoOriginValidator(pins, persistence)
     manager = DaoManager(
         node_address=ROOT_ADDR,
@@ -223,7 +233,7 @@ def test_delegated_foreign_host_route_allowed_after_seeding() -> None:
     assert floor[0] == 1
 
     token = create_prefix_delegation_token(
-        ROOT_IDENTITY, NODE_IDENTITY.iid, FOREIGN_ADDR, 128, FAR_EXPIRY, 1
+        ROOT_IDENTITY, NODE_DELEGATE, FOREIGN_ADDR, 128, FAR_EXPIRY, 1
     )
     manager.install_prefix_delegation(token)
 
@@ -246,7 +256,7 @@ def test_delegation_is_bound_to_the_delegated_origin() -> None:
     """A delegation issued to another origin does not authorize this one."""
     manager, persistence = make_root_manager()
     token = create_prefix_delegation_token(
-        ROOT_IDENTITY, OTHER_IDENTITY.iid, FOREIGN_ADDR, 128, FAR_EXPIRY, 1
+        ROOT_IDENTITY, OTHER_DELEGATE, FOREIGN_ADDR, 128, FAR_EXPIRY, 1
     )
     manager.install_prefix_delegation(token)
     routes_before = manager.routing_table.routes()
@@ -264,7 +274,7 @@ def test_expired_delegation_is_rejected_without_mutation() -> None:
     clock = [NOW]
     manager, persistence = make_root_manager(wall_clock=lambda: clock[0])
     token = create_prefix_delegation_token(
-        ROOT_IDENTITY, NODE_IDENTITY.iid, FOREIGN_ADDR, 128, FAR_EXPIRY, 1
+        ROOT_IDENTITY, NODE_DELEGATE, FOREIGN_ADDR, 128, FAR_EXPIRY, 1
     )
     manager.install_prefix_delegation(token)
 
