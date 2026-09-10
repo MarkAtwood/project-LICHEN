@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-xft7",
   "title": "tests/schc_failure_tracker: Zephyr branch unbuildable + no testcase.yaml (twister discovery hole)",
   "description": "Edge-cases review of b7z9.92 commit c930e39a8f (2026-09-09) found two defects in lichen/tests/schc_failure_tracker/: (1) CMakeLists.txt:16-17 Zephyr branch (ZEPHYR_BASE set) adds only src/main.c to app and relies on the CONFIG_LICHEN_SCHC-gated library for both the include path (schc/CMakeLists.txt:22 zephyr_include_directories) and tracker symbols, but the test dir ships NO prj.conf so CONFIG_LICHEN_SCHC is unset: main.c:8 fails on #include \u003clichen/schc_failure_tracker.h\u003e and lichen_schc_failure_* would be undefined at link. Every other dual-mode test pairs this structure with a prj.conf enabling the gating CONFIG (e.g. redundant_slot/prj.conf sets CONFIG_LICHEN_HAL=y) or compiles the source into app directly (coap_codec/CMakeLists.txt:32). (2) No testcase.yaml: survey of all ~150 lichen/tests/* dirs shows every test with a Zephyr branch has both testcase.yaml + prj.conf; schc_failure_tracker is the sole exception, so twister can never discover it and defect (1) can never be caught by CI. Fix: add prj.conf (CONFIG_LICHEN=y, CONFIG_LICHEN_SCHC=y) + testcase.yaml mirroring schc_generic (platform_allow native_sim, sanitizers.conf), or delete the Zephyr half and keep the test host-only.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-10T02:17:33.567628497Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-10T02:45:41.67393002Z",
+  "updated_at": "2026-09-10T03:02:22.698051526Z",
+  "closed_at": "2026-09-10T03:02:22.698051526Z",
+  "close_reason": "Restored the merge-clobbered dedup (lost commit 9d4f35d8ac): CMakeLists.txt rewritten as clean dual-mode host/Zephyr mirroring redundant_slot; deleted stale top-level main.c (targets the removed 3-arg API, unbuildable); added prj.conf (CONFIG_LICHEN=y + CONFIG_LICHEN_SCHC=y + safety flags) and testcase.yaml (net.schc.failure_tracker, native_sim/qemu_x86, sanitizers.conf) so twister can discover it. Verified: host cmake+ctest 1/1 pass; west build -b native_sim/native/64 on heft 226/226 + west build -t run prints 'PASS: schc_failure_tracker'. Codereview: correctness+security passes via reviewer model (both PASS, 2 out-of-scope findings filed as m0b9/uyoh); edge-cases pass timed out twice on opencode run, done by this agent instead: no defects in changed files.",
   "labels": [
     "schc"
   ],
