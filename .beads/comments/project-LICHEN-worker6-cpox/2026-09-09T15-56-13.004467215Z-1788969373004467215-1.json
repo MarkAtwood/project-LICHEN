@@ -1,0 +1,7 @@
+{
+  "id": "1788969373004467215-1",
+  "issue_id": "project-LICHEN-worker6-cpox",
+  "author": "Mark Atwood",
+  "text": "worker4 evidence: d78f67bdfa (announce gradient destination uses AddrForKey) IS already landed on beads-worker-4 HEAD~2, yet cargo test -p lichen-node --lib three_rpl_stacks still FAILS — now at tests.rs:1798 (relay.receive != DisReceived), BEFORE the :1864 route-install assert the bead describes. So the announce-gradient fix alone does not repair it; the failure moved earlier (DIS receive), consistent with the nnmc parent-two-forms root cause (DAO transit parent link-local vs routable). This is blocked on nnmc's design decision, not independently landable. Not claiming.",
+  "created_at": "2026-09-09T15:56:13.004467215Z"
+}

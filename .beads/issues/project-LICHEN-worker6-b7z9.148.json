@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.148",
+  "title": "[spec-gap][R-05-041/049/053/054/056/057] C DAO Origin receive path: no per-key replay floor, accepts Origin Sequence 0, production ingest unwired (spec 8.6)",
+  "description": "Spec 8.6: receiver MUST maintain crash-safe persistent per-pinned-pubkey (high-water sequence, collision-resistant digest of complete signed DAO bytes); Origin Sequence starts above zero, never wraps; greater fresh, equal accepted only if digest matches (idempotent), equal-different or lower rejected; missing receive state fails closed. Classification: Rust+Python implemented+tested (rust/lichen-rpl/src/routing.rs:637-648 + persistence.rs; python/src/lichen/rpl/dao_origin.py:406-431 + dao_persistence.py). C: NO receive-side per-key high-water/digest store anywhere in lichen/subsys/lichen/rpl/ (symbol search empty); only post-signature per-target Path Sequence compare (rpl_dao_process.c:896-904); Origin Sequence 0 accepted on receive (Rust message.rs:527 and Python dao_origin.py:314 reject); pinned-key ingest lichen_rpl_dao_manager_process_dao_ex has no production caller (lichen/apps/gateway/src/rpl_root.c:275 unwired). Related tracked: b7z9.135 (C DAO RX replay floor not persisted before route exposure - possible same defect, needs merge decision), ndrz (C delegation gate keyed by origin address not pinned pubkey). Suggested placement: C RX replay floor store (two-slot or NVS) + seq-0 reject + wire gateway ingest; also decide whether floor digest algorithm should be pinned cross-stack (Rust SHA-256 vs Python SHA-512, both collision-resistant).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T22:53:36.761303806Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T22:53:36.761303806Z",
+  "labels": [
+    "routing",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.148",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T22:53:36.88913936Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

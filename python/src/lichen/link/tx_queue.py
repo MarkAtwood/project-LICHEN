@@ -36,7 +36,9 @@ TX_QUEUE_CAPACITY = 4
 # Default deadlines in milliseconds (spec/appendix-bufferbloat.md)
 DEADLINE_SOS_MS = 2000  # P0: Emergency - transmit ASAP
 DEADLINE_ROUTING_MS = 5000  # P1: Routing control (DIO/DAO)
-DEADLINE_ACK_MS = 5000  # P1: Link-layer ACKs (alias for ROUTING)
+DEADLINE_ACK_MS = 10000  # P1: Link-layer ACK/NACKs (spec B.2: 10 s; Priority.ACK
+# aliases ROUTING for queue ordering, but the spec ACK deadline is its own
+# constant — callers pass it as an explicit deadline_ms)
 DEADLINE_URGENT_MS = 30000  # P2: Time-sensitive app traffic
 DEADLINE_APP_MS = 60000  # P3: Normal application data
 DEADLINE_BULK_MS = 120000  # P4: Bulk/firmware - can wait
@@ -149,6 +151,8 @@ class TxReservation:
             on_owning_loop = False
             if loop is not None:
                 try:
+                    # loop is self._future_loop (aliased above); both merge
+                    # sides were semantically identical — keep the local form.
                     on_owning_loop = asyncio.get_running_loop() is loop
                 except RuntimeError:
                     on_owning_loop = False  # no running loop here: foreign
@@ -596,15 +600,17 @@ class TxQueue:
             raise TypeError("success must be bool")
 
         if success:
-            # Remove entry from queue (may have shifted position)
-            try:
-                self._entries.remove(entry)
-            except ValueError:
-                # Entry was already removed (expired/preempted) - reservation
-                # already signaled by whoever removed it, but we set_result
-                # anyway (idempotent, first-wins semantic)
-                pass
-            else:
+            # Remove the exact reserved object by identity, not value
+            # equality: a byte-identical twin inserted ahead of it while in
+            # flight must not be removed instead (the reserved twin would
+            # stay queued and stay reservation-eligible). Mirrors the
+            # identity semantics of fail()/cancel_reservation().
+            index = next(
+                (i for i, queued in enumerate(self._entries) if queued is entry),
+                None,
+            )
+            if index is not None:
+                del self._entries[index]
                 # Entry removed - update stats
                 latency = self._clock() - entry.enqueue_time_ms
                 if latency > self.stats.max_latency_ms:
@@ -623,6 +629,11 @@ class TxQueue:
                     len(self._entries),
                     self._capacity,
                 )
+            else:
+                # Entry was already removed (expired/preempted) - reservation
+                # already signaled by whoever removed it, but we set_result
+                # anyway (idempotent, first-wins semantic)
+                pass
             # Always signal reservation (idempotent if already signaled)
             if entry.reservation is not None:
                 entry.reservation.set_result(True)

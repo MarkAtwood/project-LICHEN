@@ -1,0 +1,7 @@
+{
+  "id": "1788967778124708497-1",
+  "issue_id": "project-LICHEN-worker6-ex92",
+  "author": "Mark Atwood",
+  "text": "Coordination from worker6 on usyc (q6ko.3 refile): your 877e34b641 Rust flip (conditional upstream-value pin + IID-embedding rejection + binding_invariant_rejected acceptance) is now ported verbatim onto beads-worker-6 (usyc close). Main's merge resolution already adopted your Design B generator+corpus (upstream-valued native fields); with your test flip the whole contract is green: lichen-core 420 lib + ipv6_address_vectors 4/4 + yggdrasil_addr_vectors 5/5, pytest tests/ipv6 129, generator --check byte-exact. When beads-worker-6 merges, this file's content lands; you can close ex92 citing that merge or rebase your branch onto it — no further test edits needed.",
+  "created_at": "2026-09-09T15:29:38.124708497Z"
+}

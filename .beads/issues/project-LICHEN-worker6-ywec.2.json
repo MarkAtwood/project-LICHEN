@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-ywec.2",
+  "title": "ywec.b: gradient lookup_by_iid provenance audit (prefix+IID vs routable destinations)",
+  "description": "Child of project-LICHEN-worker6-ywec. lichen-node/src/gradient.rs:174-183 lookup_by_iid matches e.destination[8..] == iid. Gradient destinations are written two ways: announce path builds prefix[0..8]||iid (announce.rs:232) but GradientSource::Rpl entries exist (gradient.rs tests, callers TBD) and may carry routable /128 destinations post-AddrForKey. Enumerate ALL writers of GradientTable entries, pin down each destination form; if RPL-sourced destinations are routable, lookup_by_iid silently mismatches - fix call sites to match by full address for routable forms. Line 318 is a test using lookup_by_iid. Same review as mjm7: link-local/IID-constructed destinations keep IID matching; routable ones must correlate by full address.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T17:21:43.636686692Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T17:58:43.633058234Z",
+  "started_at": "2026-09-09T17:54:56.4018371Z",
+  "closed_at": "2026-09-09T17:58:43.633058234Z",
+  "close_reason": "Audit complete; bead's premise was stale — no production mismatch exists and lookup_by_iid is gone. FINDINGS: (1) gradient.rs has NO lookup_by_iid; lookup() (gradient.rs:162) matches the full 16-byte destination. The bead referenced a stale sweep. (2) Production gradient writer is AnnounceProcessor (announce.rs:222) which builds destination = ygg_addr_from_pubkey(pubkey) — full routable AddrForKey /128, NOT prefix||iid. Its readers are consistent: hybrid.rs is a SEPARATE table (see below); the production lookup callers rpl_stack/mod.rs:280 and the AnnounceProcessor gradient_table_mut() all pass full 16-byte destinations. (3) The bead's named 'prefix[0..8]||iid (announce.rs:232)' construction no longer exists — migrated to ygg_addr_from_pubkey. (4) Enumerated ALL GradientTable writers: production announce path = AnnounceProcessor only (rpl_stack/receive.rs calls AnnounceProcessor::process_announce). The link-local-writing HybridRouter::process_announce (hybrid.rs:487) is NEVER called in production (HybridRouter never instantiated outside its own module/tests) and owns a SEPARATE gradient_table, so no shared-table mixed-form mismatch is possible. Filed latent-divergence follow-up project-LICHEN-worker6-hm6e (P3): HybridRouter is production-unwired and still uses pre-AddrForKey link-local gradient destinations — must be reconciled before any production wiring. Baseline: cargo test -p lichen-node --lib = 358 passed / 1 failed, identical to pre-existing baseline; the single failure (three_rpl_stacks_send_leaf_dao_via_preferred_parent) is tracked by out-of-scope cpox/nnmc. No source change (verification/audit only). Reviewer-model pass attempted (timed out mid-analysis); consistency conclusion verified by direct enumeration of all writers/readers.",
+  "labels": [
+    "rust",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ywec.2",
+      "depends_on_id": "project-LICHEN-worker6-ywec",
+      "type": "parent-child",
+      "created_at": "2026-09-09T17:21:43.759235609Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

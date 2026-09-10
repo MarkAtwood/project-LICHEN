@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-r2oz",
+  "title": "RootSeqCache Capacity error hard-Rejects a NEW genuine root's first signed DIO (signed presence becomes a self-DoS liability under cache-fill)",
+  "description": "Found in security review of b7z9.88.3. rust/lichen-node/src/rpl_stack/receive.rs:736-746 maps root_seqs.accept(...).is_err() to Reject; after the pre-filter at 728-735 the only reachable error is RootSeqReject::Capacity (root_seq_cache.rs:81-84, MAX_ROOT_SEQ_KEYS=16). Cache mutation happens at receive.rs:522 BEFORE/independent of routing admission (process_authenticated_dio, receive.rs:530). Exploit: an on-link adversary with a TOFU-pinned key (cheap under TOFU baseline) sends 16 DIOs validly self-signed for their own DODAG across 16 instance IDs — all pass structural binding legitimately (root_sig.rs:273-281) — filling the table. Thereafter a NEW DODAG's first genuine signed DIO is hard-Rejected, where the identical DIO WITHOUT the 0x17 option would Baseline-process (receive.rs:679 floor). Fail-closed is correct for already-cached keys (replay/regression), but Capacity on an untracked key punishes the legitimate root. Fix shape: map Capacity-for-untracked-key to Baseline (preserves replay guarantee for cached keys and the unsigned floor for new ones); keep Reject for Replay/Regression. ",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T16:08:08.259440454Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T16:41:01.951008897Z",
+  "started_at": "2026-09-09T16:24:54.672967953Z",
+  "closed_at": "2026-09-09T16:41:01.951008897Z",
+  "close_reason": "Fixed: verify_dio_root_signature (receive.rs:736+) now maps RootSeqReject::Capacity (reachable only for untracked keys, after the cached-key pre-filter) to Baseline — the unsigned L679 floor — instead of hard-Reject. Replay/Regression still Reject. Removes the self-DoS where a TOFU-pinned adversary fills the 16-entry table across instance IDs and turns the 0x17 option into a liability for new genuine roots. Tests added: full_root_seq_cache_degrades_new_dodag_to_baseline_not_reject (Baseline twice, nothing admitted, consistent floor) + full_root_seq_cache_keeps_replay_protection_for_tracked_keys (tracked key Verified, replay still Rejects at capacity). lichen-node lib: 343 passed/18 failed, identical failure set to clean HEAD A/B via git stash (pre-existing, tracked by cpox/5217 et al); lichen-rpl pre-existing compile error (missing dao_origin_signature_upstream.json) also on clean HEAD. 3x codereview: correctness PASS + security PASS delegated to reviewer model (security verdict explicit PASS; correctness analysis concluded change is strictly dominant over old behavior); edge-cases reviewer returned empty, done in-session per loop fallback: capacity boundary, re-seen untracked DIO consistency, tracked-key advance at capacity, u64 wrap, expiry/tamper ordering all verified PASS. Residual saturation-holds-Baseline risk filed as P3 follow-up. Commit dfabb763e2.",
+  "labels": [
+    "networking",
+    "rust",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-r2oz",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.88.3",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T16:08:08.382856366Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

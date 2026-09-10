@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.201",
+  "title": "[spec-gap][R-GATT-001/002/004/007/008] BLE GATT-to-IPSO/SenML gateway relay absent from all stacks (spec appendix-gatt-ipso K.1-K.4, K.8-K.9)",
+  "description": "Appendix K (BLE GATT to IPSO/SenML Mapping) defines a gateway translation feature that no stack implements. Requirement (K.2 SHOULD): a device exposing a GATT Service SHOULD be represented as one or more IPSO Object instances, per the K.2/K.3 mapping tables. Keyword-less companions: K.4 reserves IPSO extension object IDs 26250-26299 (10-object table); K.9.1 sequential IPSO instance IDs for repeated characteristics; K.9.4 SHOULD cache last-known values + ut staleness; K.9.5 CoRE Link Format advertisement with anchor=ble:\u003cMAC\u003e. Evidence: zero GATT sensor-characteristic UUIDs (0x180D/0x2A37/0x181A/0x2A6E/0x2A19/0x180F etc.) in rust/, lichen/, python/src/, firmware/, c/ — all BLE code is transport (Meshtastic GATT emulation rust/lichen-meshtastic/src/gatt.rs, KISS-over-BLE, LCI SLIP python/src/lichen/gateway/ble_lci.py, IPSP lichen/subsys/lichen/transport/ble_ipsp_transport.c); rg \\b2625[0-9]\\b zero; no link-format anchor= attribute or rt=ipso anywhere; no BLE value cache. Partial support that exists: 7-object IPSO vocabulary (3303/3304/3313/3315/3323/3334/3336) rust/lichen-senml/src/ipso.rs:15-94 + python/src/lichen/senml/ipso.py:26-105, tested against test/vectors/ipso_smart_objects.json (python/tests/senml/test_ipso.py, rust/lichen-senml/tests/ipso_vectors.rs) — no GATT side, no production caller in Rust. Suggested placement: GATT-characteristic-to-IPSO mapping table + notification relay in lichen-senml (Rust) / lichen.senml (Python) and the C gateway BLE ingress (lichen/apps/gateway/src/), with vectors extending test/vectors/ipso_smart_objects.json. MUSTs R-GATT-003/005 filed separately.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T01:25:41.368308034Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T01:25:41.368308034Z",
+  "labels": [
+    "ble-gateway",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.201",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-10T01:25:41.493680604Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

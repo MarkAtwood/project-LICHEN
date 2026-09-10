@@ -1,271 +1,114 @@
-# Flagged set — spec/07-transport-app.md (sweep 2026-08-31)
+## spec/07-transport-app.md — flagged set for Opus verification (sweep 2026-09-09)
 
-Requirements flagged for verification: low confidence, ambiguous/divergent
-classification, or section 06-security/OSCORE-semantics sensitive. Each entry:
-requirement, classification, evidence, and the specific question to answer.
-No rows in this section touch oscore/EDHOC internals (human-only bar); the
-section is not 06-security, so every flag below originates from rule (a) or
-(b) of the sweep protocol.
+20 requirements flagged: divergent (16), ambiguous (1), low-confidence
+(024, 033, 038 — 033 also implemented+untested). Not a 06-security /
+oscore-EDHOC section, so criterion (c) does not apply. Rows are R-07-NNN
+per `docs/spec-coverage/07-transport-app.md`; spec line refs are to
+`spec/07-transport-app.md`.
 
-## R-07-001 — Gateways MUST translate mesh-internal ports before external forwarding (§9.1)
+---
 
-- Classification: divergent (confidence high). Gap bead
-  `project-LICHEN-worker6-b7z9.43` (P2).
-- Evidence: Only 5686→APRS-IS TCP is implemented+tested
-  (rust/lichen-gateway/src/aprs_is.rs:228,473,527 + loopback tests:619-1072).
-  CoT→XML expansion exists as functions but has no TCP 8087 listener
-  (python/src/lichen/gateway/compact_cot.py:432,765; rg 8087 clean).
-  5682→CoAP CF112 is plumbing only (constant+codec, no 5682-datagram bridge).
-  5685→LoRaWAN has no Cayenne codec in any stack. 5687 has no translation.
-  5688 (Crypto Relay) is absent from all constants, dispatch tables, and
-  vectors in all three stacks (sweep rows R-07-019/020).
-- Questions: (1) Does the MUST bind gateways to translate *all six* ports
-  unconditionally, or only for ports the deployment actually carries (i.e.,
-  is a gateway that never forwards 5685 traffic conformant without a Cayenne
-  codec)? (2) Is port 5688's total absence (not even a reserved constant)
-  intended to be tracked as one gap with the translation table, or should the
-  whole §10.1.6 crypto-relay feature be a separate epic? (3) Is CoT XML over
-  TCP 8087 expected to ship in the C gateway, Rust lichend, or Python
-  reference only?
+### R-07-001 — Gateway MUST translate mesh-internal ports (§9.1, :51-52)
+- Classification: divergent (1 of 6 translations implemented: 5686→APRS-IS TCP in Rust).
+- Evidence: rust/lichen-gateway/src/aprs_is.rs:228,258-319 (tested :619-1072); no TCP 8087 listener anywhere; no Cayenne codec; no 5688; NMEA sim-only. Beaded as b7z9.43.
+- Question for Opus: Is the C/Zephyr gateway in scope for the translation MUST at all (b7z9.43 suggests "only if the C gateway ships app translation")? Should the spec scope the MUST to specific node classes (border router vs leaf), since a leaf gateway cannot exist in RPL non-storing topology?
 
-## R-07-002 — Port allocation table incl. 5688 (§9.1, no kw)
+### R-07-003 — CoT subtype byte table incl. 0x10 marker / 0x20 alert (§10.1.1)
+- Classification: divergent — C has no marker/alert codec at all; Rust Marker/Alert are payload-less stubs; Python full.
+- Evidence: lichen/subsys/lichen/compact_cot/ (PLI+chat only); rust/lichen-core/src/compact_cot.rs:57; python/src/lichen/compact_cot.py:32.
+- Question for Opus: Is C's PLI+chat-only scope an intentional size constraint (STM32WL RAM) that should be reflected in a spec conformance class, or a gap? Rust alert stubs carry zero payload — the spec's alert subtype presumably needs at least a text field; confirm intended wire shape.
 
-- Classification: divergent (confidence high). Keyword-less: noted, not
-  beaded; folded into `project-LICHEN-worker6-b7z9.43`.
-- Evidence: 8/9 ports defined in all three stacks
-  (python/src/lichen/constants.py:24-31; rust/lichen-core/src/constants.rs:31-38;
-  lichen/subsys/lichen/udp_port_dispatch/include/lichen/udp_port_dispatch.h:15-22)
-  and pinned by test/vectors/port_dispatch.json; 5688 is absent from all
-  stacks and from constants.toml. Also: the raw-UDP ports (5681/5682/5685-5687)
-  are missing from the canonical constants.toml [ports] table, and
-  rust/lichen-core/src/constants.rs:48 carries a stale comment ("rule 7 not in
-  constants.toml yet" while constants.toml:36 has mqtt_sn=7).
-- Questions: (1) Should 5688 be added as a reserved constant even before any
-  relay exists, so dispatch classifies it instead of treating it as unknown?
-  (2) Should the raw-UDP ports be hoisted into constants.toml (the declared
-  cross-language source of truth) to prevent drift?
+### R-07-006 — Receivers MUST reject malformed PLI (§10.1.1, :168-169)
+- Classification: divergent (primary decoders conform+tested; two helper receivers do not).
+- Evidence: python/src/lichen/gateway/compact_cot.py:336-358 tolerates trailing bytes (warnings.warn); rust/lichen-gateway/src/aprs_is.rs:93 rejects only len<17 / non-PLI subtype, no range validation. Filed as new gap bead this sweep.
+- Question for Opus: Does the MUST cover internal translation helpers (aprs_is.rs) or only the datagram entry-point decoders? If yes, confirm the fix is to route both helpers through lichen-core's validating decoder rather than duplicating validation.
 
-## R-07-011 — Sender identity from L2/OSCORE context, not CoT payload (§10.1.1, no kw)
+### R-07-009 — Sender identity from L2/OSCORE context, not payload (§10.1.1, :207)
+- Classification: divergent, low confidence.
+- Evidence: wire format has no sender field (all stacks) — structural half holds; but expand_cot_to_xml (python/src/lichen/gateway/compact_cot.py:432) derives a content-hash UUID when sender_uid is absent and nothing passes L2/OSCORE identity; no port-5681 receiver exists anywhere.
+- Question for Opus: With no 5681 datagram server in any stack, is this requirement even reachable? Should the spec note that sender-identity binding applies at the (unbuilt) gateway ingestion point, and should the UUID fallback be prohibited?
 
-- Classification: implemented+untested (confidence low).
-- Evidence: The compact CoT format carries no sender field — pinned by the
-  exact layouts in test/vectors/compact_cot.json (+schema); stack-wide
-  identity attribution is per key-derived IID (R-04-003/022 evidence).
-- Question: Is format-level absence of a sender field + the stack's IID
-  attribution sufficient evidence for this row, or does it need an explicit
-  test that a 5681 datagram's sender resolves to the OSCORE/L2 identity
-  (e.g., a spoofed-source datagram rejected at dispatch)? python/src/lichen/
-  port_dispatch.py:146 (dispatch_udp) does verify source-address policy —
-  confirm that is the intended enforcement site.
+### R-07-010 — Gateways expand compact CoT to full XML (§10.1.1, :209)
+- Classification: divergent (Python-only).
+- Evidence: python/src/lichen/gateway/compact_cot.py:432-966 complete+tested; Rust has no XML dependency; C none.
+- Question for Opus: Confirm Rust/C gateway translation scope decision (same root cause as R-07-001; do not file twice — pick the owning bead).
 
-## R-07-016 — APRS-IS ASCII payloads; format chars !/@/:/>/T (§10.1.4, no kw)
+### R-07-014 — APRS-IS bridge on 5686 (§10.1.4)
+- Classification: divergent (TCP path done in Rust; AX.25 reconstruction absent; `T` telemetry format char unimplemented).
+- Evidence: rust/lichen-gateway/src/aprs_is.rs:228-527 + tests.
+- Question for Opus: Is AX.25 RF reconstruction a real deployment requirement (spec says "when bridging to RF APRS") or should the spec downgrade it to optional? Same for the `T` telemetry format char.
 
-- Classification: divergent (confidence high). Keyword-less: noted, not
-  beaded.
-- Evidence: Rust handles position reports only (cot_to_aprs/aprs_to_cot,
-  aprs_is.rs:473,527 — PHG, DDMM.mmN, altitude clamp, inline tests). No
-  handling of `:` message, `>` status, `T` telemetry, `@` timestamped
-  position (rg clean). Python/C: port dispatch classification only.
-- Question: Is position-report-only coverage acceptable for the port's
-  documented purpose, or are status/message/telemetry format chars required
-  for the APRS feature to be considered implemented?
+### R-07-015 — NMEA passthrough on 5687 (§10.1.5)
+- Classification: divergent (dispatch entry only; no consumer/producer; sim generation only).
+- Evidence: port tables all 3 stacks; python/src/lichen/sim/gnss.py:100-156.
+- Question for Opus: Is port 5687 dead weight (spec lists no translation obligation beyond "may convert")? Either implement passthrough in the gateway or mark the port reserved-until-implemented.
 
-## R-07-018 — NMEA passthrough on 5687 (§10.1.5, no kw)
+### R-07-016..020 — Crypto relay 5688 (§10.1.6)
+- Classification: not-implemented (whole subsection: CBOR format, CAIP-2, response, limits, gateway RPC op).
+- Evidence: port 5688 absent from all constants/dispatch (rg clean); cross-noted in b7z9.43(f).
+- Question for Opus: Is 5688 in scope for any current milestone, or should the spec mark the subsection "reserved, unimplemented"? Filing 5 separate beads for one absent feature seemed like bead-spam; confirm one epic-level bead (b7z9.43) is the right vehicle.
 
-- Classification: ambiguous (confidence low).
-- Evidence: Dispatch classifies 5687→Nmea in all stacks
-  (port_dispatch.rs:165, port_dispatch.py:38, udp_port_dispatch.h:21) but no
-  passthrough/forward handler exists downstream anywhere. Python sim
-  generates GGA/RMC (sim/gnss.py:100-156 + test_gnss_nmea_feeder.py).
-- Question: What does "direct passthrough of standard sentences" require of a
-  node — hand the datagram to an application callback (which dispatch does),
-  or relay it toward a gateway? Is the existing dispatch-then-drop behavior
-  conformant?
+### R-07-024 — IPSO discovery /.well-known/core?rt=ipso (§10.2.2)
+- Classification: implemented+tested for discovery infrastructure, low confidence on the `rt=ipso` attribute specifically.
+- Evidence: well-known-core handlers exist (rust dispatch.rs:301,349 + test; py site.py:203; C CONFIG_COAP_SERVER_WELL_KNOWN_CORE) but no stack registers any IPSO resource (see R-07-023), so `?rt=ipso` filtering is never exercised.
+- Question for Opus: Should IPSO URIs be served by the node's CoAP server at all (R-07-023 shows codec-only today), or is IPSO Direct client-side encoding only? Spec reads as server-side ("CoAP resources MAY use OMA LwM2M/IPSO paths").
 
-## R-07-025 — Gateways SHOULD translate between SenML and IPSO formats (§10.2.2)
+### R-07-026 — CoAP transmission parameters for LoRa (§10.2.3)
+- Classification: divergent.
+- Evidence: Python pins all 6 constants + vectors but the live aiocoap transport uses RFC 7252 defaults (transport.py:977-1044); Rust has no constants at all (ad-hoc ctor args in observe paths); C has only ACK_TIMEOUT=15s (Zephyr MAX_RETRANSMIT=4 default still in effect).
+- Question for Opus: The retry-storm/duty-cycle rationale makes this behaviorally load-bearing even though the table carries no RFC 2119 keyword. Should this be filed as a MUST-gap bead (spec implies normative "LICHEN Value" column), and which stack owns the reference implementation (Python constants exist but are unwired)?
 
-- Classification: not-implemented (confidence high). SHOULD — no bead filed
-  (omission breaks no shipped documented feature).
-- Evidence: No SenML↔IPSO translation code in any stack (rg clean); both
-  codecs exist independently (lichen-senml wire.rs; senml/ipso.py).
-- Question: Does any current documented gateway feature depend on this
-  translation (which would flip it to a beaded SHOULD-gap), or is it
-  correctly deferred?
+### R-07-027 — Prefer NON for telemetry; CON only for critical (§10.2.3, :513-523)
+- Classification: ambiguous.
+- Evidence: no per-message CON/NON policy code found; delivery-service selection absent (R-07-034/b7z9.122), so there is nothing to evaluate the preference against.
+- Question for Opus: Is this row redundant with the delivery-services table (:581-598) once R-07-034's send-side selection lands, or does it impose an additional constraint on current NON/CON usage?
 
-## R-07-026 — CoAP parameters: ACK_TIMEOUT 15s, ARF 2.0, MAX_RETRANSMIT 2, NSTART 1, LEISURE 15s, PROBING_RATE 0.1 (§10.2.3, no kw)
+### R-07-028 — Duty cycle MUST: accounting groups + per-frequency occupancy (§10.2.4, :527-528)
+- Classification: divergent.
+- Evidence: all 3 stacks = single rolling window per node; dwell is per-TX ceiling (Rs US915_FCC_MAX_DWELL_MS 400), not per-frequency occupancy; no accounting-group multiplexing. Tracking kernel itself is vector-pinned (Semtech airtime oracle). Filed as new gap bead this sweep.
+- Question for Opus: Does "applicable regulatory accounting group" require multi-group support today (e.g., EU sub-band hopping where per-sub-band budgets differ), or is single-group + per-TX dwell adequate for the current regional plans (EU868 1%, US915 dwell-only)? This decides whether the fix is a data-structure change or a spec clarification.
 
-- Classification: divergent (confidence high). Keyword-less: noted, not
-  beaded.
-- Evidence: Python implements all six exactly (coap/params.py:26-38) with a
-  live retransmit engine (transport.py:974-985) and vector
-  coap_transport.json loRa_params (test_vector_consumers_lci.py:596-609).
-  C sets ACK_TIMEOUT only (apps/puck/prj.conf:48; no Kconfig symbols for the
-  other five). Rust has ack_timeout/max_retransmit only inside the Observe
-  server (observe.rs:292-293,444-463) — no general CON retransmit engine, so
-  Rust CON requests arguably never retransmit at all.
-- Questions: (1) Is the absence of a Rust CON-retransmit engine deliberate
-  (licend sends NON/Observe traffic) or a gap the spec's table makes visible?
-  (2) Should C grow Kconfig symbols for the remaining five parameters, or is
-  puck's ACK_TIMEOUT the only C-relevant knob?
+### R-07-031 — Congestion tiers + 5.03 load-shedding emission (§10.2.4, :548-577)
+- Classification: divergent (3-way).
+- Evidence: Py complete+tested (500/800/950); Rs thresholds/gating but no server-side duty-cycle 5.03 builder; C builder duty_response.c:117-155 with DIVERGENT thresholds 700/850/950 (spec :550-555 = 500/800/950) and no production caller. Filed as new gap bead this sweep (threshold divergence); b7z9.45 tracks the C emission/backoff gap.
+- Question for Opus: Confirm the C 700/850/950 constants are a bug (not a deliberate C-profile), and whether the fix belongs in duty_response.c constants or the spec's tier table.
 
-## R-07-027 — Prefer NON for telemetry; CON only when critical (§10.2.3, no kw)
+### R-07-032 — Senders MUST back off on 5.03 (§10.2.4, :573)
+- Classification: divergent (C status uncertain — evidence conflict).
+- Evidence: Py+Rs implemented+tested. C: backoff.c (DEFAULT 60s/MAX 3600s) + coap_client.c:297-315,472-477 NOW EXIST — this contradicts bead b7z9.45's claim of "C coap_client.c has ZERO 5.03/backoff handling"; recent bead 6lhf ("Committed host test + cross-impl vectors for the 5.03 backoff payload parser", open) suggests this landed recently.
+- Question for Opus: Verify current C sender-backoff coverage against b7z9.45 and close/update that bead; confirm the cross-implementation 5.03 payload-parser vectors (6lhf) actually gate the C path.
 
-- Classification: ambiguous (confidence low).
-- Evidence: No automatic NON-selection logic in any stack. Implemented as a
-  priority incentive (CON→P2, NON→P3: params.py:163-164,
-  transport.py:848-861; vector prefer_non coap_transport.json:121-134). C
-  uses NON for observe notifications (coap_location.c:406).
-- Question: Is the priority differential an acceptable implementation of
-  "prefer NON", or is sender-side automatic NON selection for telemetry
-  required?
+### R-07-033 — Failure signaling only via already-defined mechanisms (§10.2.4, :575-577)
+- Classification: implemented+untested (negative constraint, conformant by absence), low confidence.
+- Evidence: no forwarder synthesizes CoAP responses in any stack; no MAC ACK/NACK added.
+- Question for Opus: Confirm no planned CCoP/CCP mechanism reintroduces forwarder-synthesized responses, and whether a negative test (forwarder must not emit 5.03) is worth a vector.
 
-## R-07-030 — Congestion levels 50/80/95% with per-level actions (§10.2.4, no kw)
+### R-07-034 — Datagram vs message delivery service selection via DTN S-flag (§10.2.4, :581-598)
+- Classification: divergent (RX complete, TX absent).
+- Evidence: dtn_sflag_hbh.json consumed by all 3 stacks (Py routing/dtn_option.py, Rs routing/dtn_option.rs + stack.rs:1000-1046, C routing/router.c:416-441 + routing/dtn.c); send-side selection absent — b7z9.122.
+- Question for Opus: None beyond b7z9.122's scope; included here because the spec-07 half of the split (per-message application selection, §10.2.4 table) should be verified as covered by that bead's fix plan.
 
-- Classification: divergent (confidence high). Keyword-less: noted, not
-  beaded.
-- Evidence: Rust thresholds 500/800/950 permille with boundary tests
-  (duty_cycle.rs:124-147,994-1135); Python congestion levels
-  (coap/params.py:140-148 + test_congestion.py); C has no level
-  classification — it fail-closed blocks at budget (lora_l2_tx.c:427-436).
-- Question: Does the C stack need the four-level classification (it already
-  throttles), or is block-at-budget acceptable for a constrained node whose
-  only remaining action would be the same block?
+### R-07-036 / R-07-037 — Observe MUST bounds 16/64 + LRU eviction (§10.3, :695-697)
+- Classification: divergent / not-implemented.
+- Evidence: no 16/64 enforcement anywhere; C pools of 3-4 never-evict with explicit 5.03-on-full; Rs fail-closed RegistryFull; Py unbounded. Beaded as b7z9.44, which already flags the never-evict-vs-LRU conflict as needing a human decision.
+- Question for Opus: Confirm the b7z9.44 human decision (implement evict-oldest per spec vs amend spec to fail-closed pools). Note C's 5.03-on-full is arguably *stricter* than the spec's LRU requirement.
 
-## R-07-031 — 5.03 + Max-Age + CBOR {reason: duty_cycle, retry_after, level} (§10.2.4, no kw)
+### R-07-038 — MAY coalesce unsent Observe updates (§10.3, :667-670)
+- Classification: implemented+untested, low confidence.
+- Evidence: C coalesces to latest on /status and /sensors/location (coap_status.c:1374-1428, retry :885-920; coap_location.c:386-424); Rs rejects-with-Backpressure instead (conformant for a MAY); no vector pins coalescing.
+- Question for Opus: Should a vector pin the coalescing contract (latest-value only, no distinct-record merge) given R-07-039's MUST NOT sits directly adjacent and is only structurally guaranteed in C?
 
-- Classification: divergent (confidence high). Keyword-less: noted, not
-  beaded; folded into `project-LICHEN-worker6-b7z9.45`.
-- Evidence: Python implements the full emission (params.py:239-292,
-  site.py:111-130) with vector load_shedding_503; Rust parses client-side
-  (client.rs:74-82); C emits generic 5.03s for unrelated capacity policies
-  (coap_status.c:961, coap_location.c:1248, coap_rangetest.c:836-890) but
-  never a duty-cycle CBOR body or Max-Age retry hint.
-- Question: See R-07-032 — same bead. Additionally: are C's existing generic
-  5.03s (no Max-Age) a sender-side hazard, since conformant Python/Rust
-  senders will apply the 60 s default backoff to them?
+### R-07-042 — MQTT-SN gateway architecture (§10.4)
+- Classification: divergent (transport layer complete, application bridge absent).
+- Evidence: port+SCHC Rule 7 all 3 stacks (vector-pinned); codec Py-only; no MQTT-SN↔MQTT broker bridge anywhere (same finding as R-08N-004, 08-nodes sweep).
+- Question for Opus: Confirm the broker bridge is owned by the 08-nodes/gateway sweep (R-08N-004) so the two sweeps don't file competing beads; the port_dispatch.json vector pins only 5683-family + 10883 — the spec's "reserved 5684" row is pinned as reserved_dtls, good.
 
-## R-07-032 — Senders receiving 5.03 MUST back off (§10.2.4)
+### R-07-043 — CoAP Block-wise NOT RECOMMENDED (§10.5, :735-741)
+- Classification: divergent.
+- Evidence: block-wise IS implemented in all 3 stacks and coap_block.json explicitly says it is still used by OTA and gateway paths; SCHC fragmentation is also fully implemented (R-07-044).
+- Question for Opus: Spec vs implementation tension: either spec 10.5 should acknowledge block-wise's OTA/gateway role (like the guard-ppm align-spec-to-reality precedent), or OTA paths should migrate to SCHC fragmentation/app chunking. Which way does Mark want it?
 
-- Classification: divergent (confidence high). Gap bead
-  `project-LICHEN-worker6-b7z9.45` (P2).
-- Evidence: Python implemented+tested (ip_coap.py:25,80,110,237-245 + tests
-  client/test_ip_coap.py:295-408 citing spec 07); Rust implemented+tested
-  (client.rs:35-40,159,217-254 + tests:648-720); C coap_client.c has zero
-  5.03/backoff/retry handling (rg clean).
-- Question: Confirm no other C CoAP client surface (e.g., apps/puck or
-  apps/gateway request paths outside subsys coap_client.c) needs the backoff;
-  sweep only verified subsys/lichen/coap.
-
-## R-07-034 — Application→priority mapping table (§10.2.4, no kw)
-
-- Classification: divergent (confidence high). Keyword-less: noted, not
-  beaded.
-- Evidence: Python implements the full 12-row table (params.py:155-170 +
-  transport.py:848-861, vector app_to_priority_mapping, TestAppPriority).
-  Rust uses priorities but the per-port/subtype table was not found
-  (lichend.rs:545-1059, tui/radio.rs:80-95). C defaults all app data to
-  TX_PRIORITY_BULK (lora_l2_tx.c:399-407) — meaning C sends tactical chat and
-  CoAP CON at P4, contradicting the table.
-- Question: Is the C bulk-default a deliberate simplification or a gap? If
-  gap: should the mapping live in udp_port_dispatch (which already classifies
-  ports) so lora_l2_tx can consume it?
-
-## R-07-036 / R-07-037 — Observe MUST bounds (≤16/resource, ≤64 global) + LRU eviction (§10.3)
-
-- Classification: divergent / not-implemented (confidence high). Gap bead
-  `project-LICHEN-worker6-b7z9.44` (P2).
-- Evidence: No stack implements 16/64 or LRU. Rust: fail-closed RegistryFull
-  with caller-chosen const-generic capacity, no production instantiation
-  (observe.rs:289-341; tests at 2 observers). Python: aiocoap observer lists
-  unbounded. C: per-resource pools 4/4/3, explicitly never-evict
-  (coap_msg.c:37-39, coap_status.h:37-38, coap_location.h:29,
-  coap_rangetest.c:838-855), no global counter.
-- Questions: (1) C's never-evict looks deliberate — should the spec be
-  amended to reject-new (current behavior is arguably safer against
-  subscription thrash on constrained nodes), or must C implement
-  evict-oldest? (2) For Python, is a site-level cap wrapper the right
-  placement, or should each ObservableResource own its bound? (3) Does
-  "64 globally" mean per-node-process, or per-DODAG/per-interface?
-
-## R-07-038 — MQTT-SN message types / codec (§10.4, no kw)
-
-- Classification: divergent (confidence high). Keyword-less: noted, not
-  beaded.
-- Evidence: Python has the full codec (mqttsn/messages.py:33-47,137-344,
-  codec.py) with 13 vectors (mqtt_sn.json) incl. QoS -1, truncated, reserved
-  type; Rust and C classify the port and compress it via SCHC Rule 7 but do
-  not parse MQTT-SN.
-- Question: Do the Rust/C stacks need an MQTT-SN codec, or is Python the
-  reference implementation for payload formats (consistent with how SenML/CoT
-  are distributed across stacks)?
-
-## R-07-040 — Gateway translates MQTT-SN ↔ MQTT 3.1.1/5.0 (§10.4.1, no kw)
-
-- Classification: not-implemented (confidence high). Keyword-less: noted, not
-  beaded. Resolves the R-08N-004 deferral (spec/08-nodes sweep).
-- Evidence: No MQTT broker client or translator in any stack (rg
-  1883|broker|paho clean).
-- Question: This is the largest single feature gap in the section (whole
-  gateway role absent, cross-ref R-08N-004). The sweep preamble rules
-  keyword-less rows out of gap beads — should the human override that and
-  file an epic for the MQTT-SN gateway anyway, given two prior sweeps
-  deferred to this one?
-
-## R-07-041 — CoAP Block-wise NOT RECOMMENDED (§10.5)
-
-- Classification: divergent (confidence high). SHOULD-NOT tension — no bead;
-  needs a human/spec decision.
-- Evidence: Block-wise exists and is actively used: Rust block.rs (+ tests),
-  Python aiocoap passthrough (transport.py:1130-1131), C gateway app uses
-  Zephyr-native Block2 (apps/gateway/src/main.c:326-384) consumed by puck
-  (main.c:445); vectors coap_block.json exist and explicitly say they pin the
-  option syntax "still used by OTA and gateway paths". The standalone C
-  engine (coap_blockwise.c) is unwired (bead `worker6-kbgx`).
-- Question: Spec-vs-implementation conflict: either the spec sentence should
-  be softened (block-wise permitted where SCHC reassembly is unavailable, e.g.
-  the C gateway path) or the gateway/puck Block2 usage should be scheduled
-  for removal. Which way? (Related: OSCORE block-wise is load-bearing per
-  `worker6-cvko` — removing block-wise has security-test fallout.)
-
-## R-07-043 — Unknown-limit chunks MUST fit 1281-byte receiver capacity (§10.5)
-
-- Classification: ambiguous (confidence low).
-- Evidence: No application chunking exists (R-07-044), so the conditional
-  MUST has no trigger site — vacuously satisfied. The 1281 constant itself is
-  implemented+tested in all stacks (R-07-042 sites; coap_transport.json:311
-  pins mandatory_receiver 1281).
-- Question: Does vacuous compliance count for a conditional MUST whose
-  precondition (application chunking) is entirely absent, or should the
-  missing /firmware/upload protocol be treated as making the MUST
-  unimplementable (and thus beaded)?
-
-## R-07-045 — Border router runs CoAP Resource Directory (§10.6, no kw)
-
-- Classification: divergent (confidence high). Keyword-less: noted, not
-  beaded (adjacent to `worker6-l1qw.18`).
-- Evidence: Python only (resource_directory.py:124-358, simplified RFC 9176,
-  coap_rd.json, 73+ tests); Rust and C have no /rd at all.
-- Question: Spec says the *border router* runs RD. Python's RD mounts on the
-  generic CoAP site (any node), and no Rust/C BR runs it. Is RD required on
-  BRs specifically (→ should ride with the l1qw.18 WKC/Block2 gateway
-  work), or is the Python implementation sufficient as reference?
-
-## Adjacent keyword-less not-implemented rows (context for the above; not separately flagged)
-
-- R-07-015 (Cayenne LPP codec absent — blocks R-07-001's 5685 row),
-- R-07-019/020 (crypto-relay wire format and gateway operation absent —
-  same site as R-07-001's 5688 row),
-- R-07-044 (/firmware/upload chunking absent — precondition of R-07-043).
-
-## Cross-sweep notes
-
-- R-01-012's DTLS-for-MQTT-SN deferral resolves here: §9.1 reserves 5684 and
-  states OSCORE-not-DTLS; code comments already match (constants.rs:34). No
-  action.
-- Beads `project-LICHEN-wutk.7` / `wutk.8` ("KISS/SLIP transport vs
-  spec/07-transport-app.md") reference this spec file for LCI transports;
-  this section contains no SLIP/KISS text — those beads appear to target the
-  LCI spec (spec/11) and were left untouched.
-- SCHC Rule 7 open beads `worker6-83wu` / `worker6-pgsl` affect R-07-039's
-  "implemented+tested" status if the fallback policy changes MQTT-SN
-  sendability.
+### R-07-046 — Resource Directory on border router (§10.6)
+- Classification: divergent (Python-only; Rs/C absent).
+- Evidence: resource_directory.py + coap_rd.json (15 vectors, Py consumer); rg clean in rust/ and lichen/.
+- Question for Opus: Cross-listed from 08-nodes R-08N-015 — confirm RD in Rs/C is tracked by an existing gateway-epic bead (b7z9.113 covers GCP discovery runtime; RD specifically may be unowned). If unowned, file one bead rather than two.

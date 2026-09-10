@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-afqq",
+  "title": "[human] DECIDE: DAO transit-parent address form post-AddrForKey (link-local vs routable) — blocks nnmc",
+  "description": "DECISION NEEDED (blocks nnmc / test three_rpl_stacks_send_leaf_dao_via_preferred_parent).\n\nAfter the AddrForKey migration the RPL DAO transit-parent address has TWO inconsistent forms, and the codebase currently encodes BOTH:\n\n  PRODUCTION writer (router.rs:869-886 build_signed_dao): names the transit parent from dodag.preferred_parent, stored from the DIO IPv6 source = LINK-LOCAL fe80::+SHA512-IID (dodag.rs:750, parents keyed by DIO source). So the wire transit parent is LINK-LOCAL.\n\n  TEST-HARNESS writers (node.rs:1306/1443, routing/tests.rs): build DAOs naming the transit parent as the ROUTABLE /128 (ygg_addr_from_pubkey). The ssg9 anti-spoof comment at router.rs:688-696 explicitly states \"post-i72x.2 the DAO transit parent is the parent's routable /128 (upstream AddrForKey; no IID embedded)\".\n\n  ROOT route assembly (lichen-rpl routing.rs assemble_path_from:1650-1670): parent_map KEYS are routable Targets; it bridges a link-local transit parent to a routable key by LOW-HALF (addr[8..]) equality. Post-migration the routable low half is key material, never the IID, so the alias ALWAYS fails and multi-hop routes never install. The direct-child gate at routing.rs:752 has the same dead low-half comparison.\n\nThis cannot be fixed purely inside lichen-rpl: translating link-local-\u003eroutable needs the parent's pubkey, which lives in the node-layer announce pin table, not in lichen-rpl's data model. And the DAO origin signature COVERS the transit bytes, so they cannot be rewritten at ingest without re-signing.\n\nTWO VIABLE OPTIONS (recommend A):\n\n  A) WRITE-side routable naming. In build_signed_dao, translate preferred_parent (link-local) -\u003e routable /128 before build_dao_with_lifetime, via the LinkLayer/announce pin table (iid -\u003e pinned_pubkey_for -\u003e ygg_addr_from_pubkey). Matches the ssg9 comment + test harness + upstream intent. Wire parent becomes routable, so assemble_path_from key-equality works and the [8..] alias + root-termination low-half checks become dead code to remove. CON: needs an iid-\u003epubkey resolver inside Router (Router currently has no pin table; build_signed_dao already takes \u0026LinkLayer which exposes pinned_pubkey_for). ALSO: for a 2-hop route, a node may know its parent's link-local (from the DIO) but NOT its parent's routable /128 unless it has pinned the parent's pubkey — must confirm the parent is always pinned before DAO TX (announce/TOFU), else the DAO cannot be built. This is the main risk.\n\n  B) INGEST-side resolution at root. In handle_dao / process_signature_verified_dao_from_at_ms, translate each verified TransitInfo link-local parent -\u003e routable using the announce pin table BEFORE parent_map insert. Root already scans pinned_pubkeys_snapshot for signer resolution (receive.rs:568-577). CON: the parent bytes are inside the origin's signature, so the root would be routing on a DIFFERENT address than the origin signed — a security-semantics change (root substitutes its own resolved identity for the signed parent). Also touches every ingest path and the C parity side.\n\nC PARITY: worker7's C migration (lichen/subsys/lichen/rpl/) likely has the same latent low-half identity comparisons (rpl_routing_table.c, rpl_dao_process.c). spec/05-routing.md should adjudicate the DAO transit-parent address FORM explicitly either way.\n\nRECOMMENDATION: Option A (write-side routable naming), with a guard that a node MUST have pinned its preferred parent's pubkey (and thus its routable /128) before it may emit a DAO; if not pinned, defer DAO TX until the parent announce is pinned. This keeps the signed bytes and the routed-on bytes identical, removes the dead low-half bridges, and matches the post-i72x.2 test intent. Needs: (1) Router gains an iid-\u003eroutable resolver fed by the pin table; (2) build_signed_dao writes routable parent; (3) routing.rs assemble_path_from:1645-1670 + direct-child gate:752 drop the low-half [8..] fallbacks in favor of exact equality; (4) spec/05-routing.md records the transit-parent form; (5) C parity audit.\n\nAcceptance for nnmc once decided: cargo test -p lichen-node --lib rpl_stack::tests::three_rpl_stacks_send_leaf_dao_via_preferred_parent GREEN, no regressions.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T17:19:10.849004014Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T17:19:10.849004014Z",
+  "labels": [
+    "human",
+    "rpl",
+    "yggdrasil",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-afqq",
+      "depends_on_id": "project-LICHEN-worker6-nnmc",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T17:19:10.99073645Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

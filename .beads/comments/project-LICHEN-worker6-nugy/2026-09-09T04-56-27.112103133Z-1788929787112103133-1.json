@@ -1,7 +1,0 @@
-{
-  "id": "1788929787112103133-1",
-  "issue_id": "project-LICHEN-worker6-nugy",
-  "author": "Mark Atwood",
-  "text": "Evidence for the direction decision (worker4, 2026-09-09): RFC 8613 §5.2 classifies Content-Format as Class E (encrypted+integrity-protected, inner message). C's coap_oscore_protect_response (coap_oscore.c:267-291) passes NULL,0 for class-E options with the comment 'No Class E options for now' — so C emits NO protected options at all and is the deficient implementation, not the contract. Rust emitting [0xc1,60] on the outer is also wrong (CF is Class E, must be inner, never outer per RFC 8613 §5.2/§7 — a relay-visible outer CF leaks the payload type). Direction (b) is correct: fix C to accept content_format and pass it as a Class E option into oscore_protect_response (signature change at coap_oscore.h:209-215), and fix Rust to move CF from outer to the protected inner option set rather than emitting it outer. oscore_protect.c:872 already takes a class-E options parameter — C's wrapper just doesn't populate it.",
-  "created_at": "2026-09-09T04:56:27.112103133Z"
-}

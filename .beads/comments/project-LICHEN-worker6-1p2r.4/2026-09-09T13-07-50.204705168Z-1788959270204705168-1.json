@@ -1,0 +1,7 @@
+{
+  "id": "1788959270204705168-1",
+  "issue_id": "project-LICHEN-worker6-1p2r.4",
+  "author": "Mark Atwood",
+  "text": "Readability carry-over from wta9 codereview (all 3 passes PASS): when you flip the root_signature.json loop to the upstream oracle, also rename test_root_vectors_use_native_addr_for_key_and_independent_signatures (python/tests/test_protocol_vector_security.py:437) — the root_authorization loop inside it already uses upstream addr_for_key, so the name is half-wrong now and fully wrong after your flip.",
+  "created_at": "2026-09-09T13:07:50.204705168Z"
+}

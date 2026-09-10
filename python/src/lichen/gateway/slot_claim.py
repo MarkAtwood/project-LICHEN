@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING
 import cbor2
 
 from lichen.crypto import schnorr48
+from lichen.crypto.schnorr48 import COSE_KID_LABEL
 from lichen.link.channel import SUPERFRAME_DURATION_US
 
 if TYPE_CHECKING:
@@ -337,7 +338,7 @@ class SlotClaim:
         if major != 5 or pairs != 1:
             raise ClaimError("COSE unprotected header must be exactly {4: kid}")
         major, label, pos = _read_head(envelope, pos, "unprotected kid label")
-        if major != 0 or label != _COSE_KID_LABEL:
+        if major != 0 or label != COSE_KID_LABEL:
             raise ClaimError("COSE unprotected header must be exactly {4: kid}")
         kid, pos = _read_bstr(envelope, pos, "slot-claim kid")
         if len(kid) != 8:
@@ -399,19 +400,26 @@ class SlotClaim:
             ordinal=ordinal,
             signature=signature,
         )
+        # Merged: HEAD's gate comment kept (it covers the C peer and the
+        # full wire-contract summary); worker-5's two extra facts folded
+        # in — indefinite lengths among the malleations cbor2 admits, and
+        # the note that Rust's key loop does not yet enforce key order.
         # Canonical-form gate (5rfl/cb10): cbor2 decodes tag-2 bignums,
-        # non-minimal long-form uints, reordered/duplicate/unknown keys, and
-        # trailing payload bytes to the same field values a canonical claim
-        # has, so the type gates above accept wire forms Rust's strict
-        # reader and C's digest-the-received-bytes reject — and
-        # verify_slot_claim digests a canonical RE-ENCODE, so a
-        # signature-valid claim with the payload re-encoded non-canonically
-        # would be accepted here and rejected by every Rust/C peer:
-        # cross-implementation slot-map divergence. Byte-equality against
-        # the canonical re-encode closes ALL of these uniformly: the
-        # adjudicated wire contract is a deterministic-CBOR payload
-        # (spec/decisions.jsonl slot-claim-cose-sign1), keys 1-7 ascending,
-        # minimal heads, no trailing bytes.
+        # non-minimal long-form uints, indefinite lengths, reordered/
+        # duplicate/unknown keys, and trailing payload bytes to the same
+        # field values a canonical claim has, so the type gates above
+        # accept wire forms Rust's strict reader and C's digest-the-
+        # received-bytes reject — and verify_slot_claim digests a
+        # canonical RE-ENCODE, so a signature-valid claim with the payload
+        # re-encoded non-canonically would be accepted here and rejected
+        # by every Rust/C peer: cross-implementation slot-map divergence.
+        # Byte-equality against the canonical re-encode closes ALL of
+        # these uniformly: the adjudicated wire contract is a
+        # deterministic-CBOR payload (spec/decisions.jsonl
+        # slot-claim-cose-sign1), keys 1-7 ascending, minimal heads, no
+        # trailing bytes — including payload key order, which Rust's
+        # order-insensitive key loop does not yet enforce (tracked
+        # separately).
         if encode_claim_canonical(claim) != payload:
             raise ClaimError("slot-claim payload must be canonically encoded")
         return claim
@@ -430,7 +438,6 @@ _PAYLOAD_EXPIRY = 4
 _PAYLOAD_GATEWAY_IID = 5
 _PAYLOAD_CLAIM_SEQ = 6
 _PAYLOAD_ORDINAL = 7
-_COSE_KID_LABEL = 4
 _MODE_INTERLEAVED = 0
 _MODE_CONTIGUOUS = 1
 

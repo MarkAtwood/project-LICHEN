@@ -1,0 +1,7 @@
+{
+  "id": "1788954420019348265-1",
+  "issue_id": "project-LICHEN-worker6-cbmt",
+  "author": "Mark Atwood",
+  "text": "Landed as 27f21860ec (amended: the worker driver auto-committed the dirty tree mid-round as 420c2475e7 'chore(beads): worker2 sync'; I amended the message to the conventional test(rpl) title — content identical, no force-push). Pre-existing lichen-node rpl_stack::tests failures (root_dispatch_installs_route..., rpl_dispatch_rejects_invalid_ipv6_length_and_checksum, multicast_dio_and_dis_are_received, three_rpl_stacks_send_leaf_dao...) confirmed identical before/after this change; they are DAO-origin/multicast path failures in the o5bl/lptm design-bead domain, not root-sig.",
+  "created_at": "2026-09-09T11:47:00.019348265Z"
+}

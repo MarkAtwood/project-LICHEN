@@ -2,11 +2,15 @@
   "id": "project-LICHEN-worker6-u40o",
   "title": "encode_rule255 raw-bound error taxonomy diverges from Python",
   "description": "Codereview finding (P3) from ba39 3-pass review. rust/lichen-schc/src/codec.rs:1528-1539 rejects raw \u003e SCHC_FRAG_MAX_PACKET_SIZE with BufferTooSmall whose needed equals the RAW size, while every other BufferTooSmall in the file reports encoded sizes; Python headers.py rejects raw \u003e MAX-1 with a dedicated Rule-255 raw message AFTER IPv6 validation. Accept/reject boundary identical; no vector pins either path. Align needed-semantics + ordering or pin with vectors. Discovered-from: project-LICHEN-worker6-ba39",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
+  "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T10:06:02.541121436Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-31T10:06:02.541121436Z"
+  "updated_at": "2026-09-09T13:58:39.012047194Z",
+  "started_at": "2026-09-09T13:49:52.55172741Z",
+  "closed_at": "2026-09-09T13:58:39.012047194Z",
+  "close_reason": "已实现并通过验证：encode_rule255 重排序为先容量检查(out.len()\u003cneeded→可重试BufferTooSmall)，再天花板检查(needed\u003emin(single_frame_limit,SCHC_FRAG_MAX_PACKET_SIZE)→终止InvalidPacket)，删除被吞并的前置raw检查，对齐Python headers.py先验证后终止拒绝的语义，消除grow-and-retry不终止问题。更新rule255_profile_size_boundary测试期望(cargo test -p lichen-schc 全绿: 92 lib + 所有集成套件0失败)，clippy无警告。3x codereview委派reviewer模型(openrouter/moonshotai/kimi-k3, plan agent)：correctness/security/edge-cases三pass均VERDICT: PASS，零新发现(encode/decode不对称被审者判定为有意设计且被测试与decompress()前置拦截覆盖)。"
 }

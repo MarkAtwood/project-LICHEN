@@ -102,7 +102,7 @@ fn test_hash_32_ones_eui() {
 }
 
 // =============================================================================
-// slot_for tests (using expected implementation until Rust is fixed)
+// slot_for tests (drive the production TdmaScheduler::slot_for)
 // =============================================================================
 
 #[test]
@@ -226,9 +226,14 @@ fn test_sfn_wrap_continuity() {
     assert_eq!(slot_at_last, expected_slot_at_last);
     assert_eq!(slot_at_current, expected_slot_at_current);
     assert_eq!(delta, expected_delta);
+    // Consistency oracle from the unreduced hash sum: exact for any
+    // num_slots. The reduced-slot identity (slot + delta) % N is exact only
+    // when N divides 2^32 (num_slots=16 here); hash + last + delta is the
+    // faithful mirror of production (hash + sfn) % N for every N.
+    let hash = lichen_hash_32(&eui);
     assert_eq!(
         slot_at_current,
-        ((slot_at_last as u32 + delta) % num_slots as u32) as u16
+        (hash.wrapping_add(last_sfn).wrapping_add(delta) % num_slots as u32) as u16
     );
 }
 
@@ -339,12 +344,20 @@ fn test_sfn_increment_rotates_slot() {
     let eui_bytes = parse_hex_bytes(vec["eui64_hex"].as_str().unwrap());
     let eui: [u8; 8] = eui_bytes.try_into().unwrap();
     let num_slots = vec["num_slots"].as_u64().unwrap() as u16;
+    let hash = lichen_hash_32(&eui);
 
     // Test at various SFN values including near wrap
     for sfn in [0u32, 1, 100, 0xFFFFFFFF - 1, 0xFFFFFFFF] {
         let s0 = TdmaScheduler::slot_for(&eui, sfn, num_slots).unwrap();
         let s1 = TdmaScheduler::slot_for(&eui, sfn.wrapping_add(1), num_slots).unwrap();
-        let expected = ((s0 as u32 + 1) % num_slots as u32) as u16;
+        // Unreduced-hash oracle: exact for any num_slots (the reduced-slot
+        // identity (s0 + 1) % N is exact only when N divides 2^32).
+        let expected = (hash.wrapping_add(sfn).wrapping_add(1) % num_slots as u32) as u16;
+        assert_eq!(
+            s0,
+            (hash.wrapping_add(sfn) % num_slots as u32) as u16,
+            "At SFN={sfn}: slot does not match the unreduced hash sum"
+        );
         assert_eq!(
             s1, expected,
             "At SFN={}: slot did not rotate by 1 (got {}, expected {})",
@@ -363,15 +376,23 @@ fn test_delta_equals_slot_difference() {
     let num_slots = vec["num_slots"].as_u64().unwrap() as u16;
 
     let test_pairs: [(u32, u32); 4] = [(0, 5), (100, 150), (0xFFFFFFFF, 2), (0xFFFFFFFE, 5)];
+    let hash = lichen_hash_32(&eui);
 
     for (last, current) in test_pairs {
         let delta = expected_sfn_delta(current, last);
         let s_last = TdmaScheduler::slot_for(&eui, last, num_slots).unwrap();
         let s_current = TdmaScheduler::slot_for(&eui, current, num_slots).unwrap();
-        let expected_slot = ((s_last as u32 + delta) % num_slots as u32) as u16;
+        // Unreduced-hash oracle: exact for any num_slots (the reduced-slot
+        // identity (s_last + delta) % N is exact only when N divides 2^32).
+        let expected_slot = (hash.wrapping_add(last).wrapping_add(delta) % num_slots as u32) as u16;
+        assert_eq!(
+            s_last,
+            (hash.wrapping_add(last) % num_slots as u32) as u16,
+            "For SFN {last}: slot does not match the unreduced hash sum"
+        );
         assert_eq!(
             s_current, expected_slot,
-            "For SFN {} -> {}: slot_for({}) = {}, but (slot_for({}) + delta) % {} = {}",
+            "For SFN {} -> {}: slot_for({}) = {}, but (hash + {} + delta) % {} = {}",
             last, current, current, s_current, last, num_slots, expected_slot
         );
     }

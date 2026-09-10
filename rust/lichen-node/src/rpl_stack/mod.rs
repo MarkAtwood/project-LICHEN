@@ -41,6 +41,7 @@ pub use self::error::{
     DaoAdmissionError, DaoSendError, RplControlError, RplReceiveError, RplRuntimeReceiveError,
     RplRuntimeTrickleError, RplStackOpenError, RplStackProvisionError,
 };
+pub use self::util::{survey_routing_headers, RoutingHeaderSurvey, SourceRouteView};
 
 /// Outcome of Trickle transmit completion.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -120,6 +121,10 @@ pub struct RplStack<R: Radio, S: NonVolatile> {
     bootstrap_peers: VecDeque<[u8; 8]>,
     dao_admissions: Option<DaoAdmissionState>,
     root_seqs: RootSeqCache,
+    /// Durable generation handle for `root_seqs` (spec 06 §8.10.1 anti-replay
+    /// survives reboot; worker6-eebl). Every admitted high-water mark is
+    /// persisted BEFORE the in-memory cache is updated.
+    root_seq_store: lichen_hal::storage::RedundantValue,
     /// DAO TX scheduler state (b7z9.16.1(b) wires the TX consumer).
     dao_tx_sched: DaoTxScheduler,
     wall_clock_unix: Option<fn() -> u64>,
@@ -133,6 +138,15 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// owner (for example, a gateway federation proof-of-possession exchange).
     pub fn install_verified_link_peer(&mut self, peer: PeerIdentity) {
         self.stack.add_peer(peer);
+    }
+
+    /// This node's key-derived IID (SHA-512 derivation; link-local identity).
+    ///
+    /// Distinct from the low half of the routable address: upstream
+    /// `AddrForKey` bit-packs the inverted key and does not embed the IID
+    /// (i72x.2).
+    pub fn local_iid(&self) -> [u8; 8] {
+        lichen_link::identity::iid_from_pubkey(&self.stack.local_public_key())
     }
 
     pub fn rpl_node(&self) -> &RplNode {
@@ -178,7 +192,10 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// Interim `dead_code` expectation: the receiver call site lands with the
     /// root-signature validation bead (b7z9.37.1); the expectation then stops
     /// being fulfilled and must be removed.
-    #[allow(dead_code, reason = "root-signature receiver call site lands in b7z9.37.1")]
+    #[allow(
+        dead_code,
+        reason = "root-signature receiver call site lands in b7z9.37.1"
+    )]
     pub(crate) fn root_seqs_mut(&mut self) -> &mut RootSeqCache {
         &mut self.root_seqs
     }
@@ -245,9 +262,11 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             {
                 return None;
             }
-            return Some(RoutePlan {
-                next_hop: util::ipv6_eui64(destination),
-                source_route: Vec::new(),
+            return util::l2_destination(destination, self.stack.link_ref()).map(|next_hop| {
+                RoutePlan {
+                    next_hop,
+                    source_route: Vec::new(),
+                }
             });
         }
         if self.rpl.router.is_root() {
@@ -261,9 +280,23 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 if source_route.last() != Some(&destination) {
                     return None;
                 }
-                return source_route.first().copied().map(|first| RoutePlan {
-                    next_hop: util::ipv6_eui64(first),
+                // The first hop is a routable /128; its L2 EUI-64 is not
+                // derivable from the address (i72x.2) — resolve through the
+                // authenticated peer table, failing closed (no route).
+                let first = *source_route.first()?;
+                let mut next_hop = self.stack.link().peer_iid_for_routable_addr(&first)?;
+                next_hop[0] ^= 0x02;
+                return Some(RoutePlan {
+                    next_hop,
                     source_route,
+                // The first hop is this node's direct neighbor, but post-AddrForKey
+                // it is a routable 02xx address with no embedded IID, so the L2
+                // destination resolves through the authenticated peer table.
+                return source_route.first().copied().and_then(|first| {
+                    Some(RoutePlan {
+                        next_hop: util::l2_destination(first, self.stack.link_ref())?,
+                        source_route,
+                    })
                 });
             }
         }
@@ -272,18 +305,23 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             .gradient_table_mut()
             .lookup(&destination, now_ms as u32)
         {
-            return Some(RoutePlan {
-                next_hop: util::ipv6_eui64(entry.next_hop),
-                source_route: Vec::new(),
+            return util::l2_destination(entry.next_hop, self.stack.link_ref()).map(|next_hop| {
+                RoutePlan {
+                    next_hop,
+                    source_route: Vec::new(),
+                }
             });
         }
         if from_parent {
             return None;
         }
-        self.rpl.preferred_parent().map(|parent| RoutePlan {
-            next_hop: util::ipv6_eui64(parent),
-            source_route: Vec::new(),
-        })
+        self.rpl
+            .preferred_parent()
+            .and_then(|parent| util::l2_destination(parent, self.stack.link_ref()))
+            .map(|next_hop| RoutePlan {
+                next_hop,
+                source_route: Vec::new(),
+            })
     }
 }
 

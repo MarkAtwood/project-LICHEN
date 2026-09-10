@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-plqy",
+  "title": "i72x follow-up: DAO transit-parent + sender authorization naming post-AddrForKey (spec decision needed)",
+  "description": "Discovered during a763 (worker7 timebox analysis, comment there has the full failure map). Post-i72x.2 the routable address embeds no IID, so three coupled RPL/DAO invariants broke: (1) DaoManager sender_is_authorized (rust/lichen-rpl/src/routing.rs:729) compares the DAO transit parent against the authenticated sender IID — but the transit parent is now the parent's link-local control address (fe80::+IID) while parent_map keys and Targets are routable /128s, and assemble_path_from's IID-aliasing (routing.rs:1645+) can never match. (2) DAO parents must be named in a form the root can chain-walk to the DODAG root — routable address (not derivable from a neighbor's control address without a pubkey map) vs control address (breaks chain assembly). (3) The spec (05-routing 8.6/8.7, 09 13.3) does not say which form the TransitInfo parent_address MUST carry post-migration. Needs a spec decision + regen of dao_origin_signature.json (52 interdependent vectors, i72x.6 scope) before the Rust/Python/C suites can pin it. Labels: rpl, spec-gap, yggdrasil.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T12:09:54.605095425Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T12:09:54.605095425Z",
+  "labels": [
+    "yggdrasil",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-plqy",
+      "depends_on_id": "project-LICHEN-worker6-a763",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T12:09:54.722375088Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

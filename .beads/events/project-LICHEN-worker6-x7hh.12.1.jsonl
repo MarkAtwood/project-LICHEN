@@ -1,6 +1,0 @@
-{"id":"01a0843e-2830-7654-81ad-322e125dd2af","issue_id":"project-LICHEN-worker6-x7hh.12.1","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-09T03:37:41.168416885Z"}
-{"id":"01a0843e-2835-72e0-b726-9acb07f4e5db","issue_id":"project-LICHEN-worker6-x7hh.12.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: networking","created_at":"2026-09-09T03:37:41.173189912Z"}
-{"id":"01a0843e-2839-7d46-9e1e-43a3fd7051f3","issue_id":"project-LICHEN-worker6-x7hh.12.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: testing","created_at":"2026-09-09T03:37:41.177871488Z"}
-{"id":"01a0843e-283e-787a-a2fa-66ebb96a0832","issue_id":"project-LICHEN-worker6-x7hh.12.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: ccp","created_at":"2026-09-09T03:37:41.18255706Z"}
-{"id":"01a0843e-2843-73f9-8a30-fb6e3cd56520","issue_id":"project-LICHEN-worker6-x7hh.12.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: conformance","created_at":"2026-09-09T03:37:41.187261594Z"}
-{"id":"01a0843e-2847-7e10-86d8-755a92be6335","issue_id":"project-LICHEN-worker6-x7hh.12.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: regulatory","created_at":"2026-09-09T03:37:41.191923192Z"}

@@ -2,7 +2,7 @@
   "$schema": "./schema.json",
   "format_version": 2,
   "name": "root_signature",
-  "description": "Root signature verification for RPL DIO messages (spec sections 8.2, 8.4). Root legitimacy requires: (1) valid Schnorr48 signature on RPL message, (2) DODAGID == AddrForKey(root_pubkey) cryptographic binding. Expected results are fixed literals independently checked with test/vectors/reference_schnorr48.py and direct SHA-512 address derivation.",
+  "description": "Root signature verification for RPL DIO messages (spec sections 8.2, 8.4). Root legitimacy requires: (1) valid Schnorr48 signature on RPL message, (2) DODAGID == AddrForKey(root_pubkey) cryptographic binding. Expected results are fixed literals independently checked with test/vectors/reference_schnorr48.py and upstream yggdrasil-go AddrForKey derivation (pinned anchor in yggdrasil_address.json).",
   "spec": "spec/drafts/draft-lichen-rpl-lora-00.md",
   "vectors": [
     {
@@ -74,8 +74,8 @@
       "pubkey": "bafc71bead3ac5e4b63e9c8216ee71a34aaec65722eedbca728b4e9b3ccce396",
       "message": "746573742044494f206d657373616765",
       "signature": "a5c3136f3ee9e861d3cb3bac534554a90336b5d6db55c64829318f33f5ffb96b19567c49f438abf4282110bdd4fda90c",
-      "dodagid": "02ed4242ead4ac69ed4242ead4ac6948",
-      "dodagid_str": "2ed:4242:ead4:ac69:ed42:42ea:d4ac:6948",
+      "dodagid": "02062f7c200618f7a0f14791738c5a1f",
+      "dodagid_str": "206:2f7c:2006:18f7:a0f1:4791:738c:5a1f",
       "valid": false,
       "error": "DODAGID_MISMATCH",
       "note": "Attacker with different key cannot claim victim's DODAGID - this is the core security property"
@@ -106,7 +106,7 @@
       "dodagid": "02062f7c200618f7a0f14791738c5a1f",
       "dodagid_str": "206:2f7c:2006:18f7:a0f1:4791:738c:5a1f",
       "binding_valid": true,
-      "note": "DODAGID == AddrForKey(pubkey), LICHEN native 0200::/8 address"
+      "note": "DODAGID == AddrForKey(pubkey), upstream Yggdrasil 0200::/8 address"
     }
   ]
 }

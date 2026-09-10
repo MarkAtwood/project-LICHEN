@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.110",
+  "title": "[spec-gap][R-02-050/051] Link-layer SOS dispatch 0x16 not consumed end-to-end (Rust missing; C RX SCHC-only; Python budget unwired)",
+  "description": "Reqs R-02-050/051 (spec/02-physical-link.md 4.1): dispatch 0x16 = SOS emergency alert; receivers use it solely for the 6.3.3 SOS budget classification and MUST still apply 18.4.1 origin-signature verification before relaying. DIVERGENT per stack: Rust has NO 0x16 dispatch at all — constants.rs:52-53 defines only 0x14/0x15, l2_payload.rs:83 asserts [0x16] -\u003e UnknownDispatch; SOS exists only as TX priority (transport.rs:42-107, stack.rs:770). C classifies 0x16 (l2_payload.h:32-61 LICHEN_L2_DISPATCH_SOS) with tests (lichen/tests/l2_dispatch) and has origin sig (link/sos_origin.c:89-158) + ratelimit (sos_ratelimit.c:104+), but production link RX admits ONLY the SCHC dispatch (lichen_link_rx.c:327-331 -EPROTONOSUPPORT for 0x15/0x16) so the SOS classification is never consumed on the RX relay path. Python classifies SOS to the app callback (node.py:901-943, l2_payload.py:40-41) and implements origin signature (coap/sos_origin.py:92-179) but the 6.3.3 SOS budget limiter (broadcast_limit.py) is not wired to the dispatch classification in the RX relay path. Origin-signature verification itself is implemented+tested in all three (sos_signature.json). Suggested placement: rust lichen-core l2_payload/constants + stack RX SOS arm; C lichen_link_rx SOS arm; python broadcast_limit wiring (see 06-security coverage for the limiter divergence).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T19:28:19.141892746Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T19:28:19.141892746Z",
+  "labels": [
+    "spec-gap",
+    "sos",
+    "link-layer"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.110",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T19:28:19.283789076Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

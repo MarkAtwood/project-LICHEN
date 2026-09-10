@@ -292,6 +292,15 @@ mod tests {
     }
 
     // ── Key derivation vectors (gcp3_trust_models.json) ───────────────────
+    //
+    // QUARANTINE (spec/decisions.jsonl upstream-yggdrasil-addressing): the
+    // ygg_addr values in gcp3_trust_models.json encode the rejected
+    // SHA-512 native address profile (test/vectors/legacy/). The iid values
+    // are the retained link-local IID per the preserved local IID rules.
+    // The ygg_addr fields pin internal consistency only, MUST NOT be
+    // treated as addressing conformance oracles, and must be regenerated
+    // as pinned upstream AddrForKey byte-equality vectors when the
+    // migration lands.
 
     #[test]
     fn derivation_zero() {
@@ -526,49 +535,6 @@ mod tests {
             verify_slot_claim(&gateway_pubkey, &message, &truncated_sig),
             SlotClaimResult::RejectSignatureInvalid
         );
-    }
-
-    // ── Binding invariant vectors (gcp3_trust_models.json) ────────────────
-
-    #[test]
-    fn binding_invariant_alice() {
-        // Test vector: binding_invariant_alice
-        let pubkey_bytes = arr32(&hex(
-            "4cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba29",
-        ));
-        let ygg_addr: [u8; 16] = hex("02fd6b265c858536fd6b265c8585369b")
-            .try_into()
-            .unwrap();
-        let iid = arr8(&hex("fd6b265c8585369b"));
-
-        assert!(verify_ygg_iid_binding(&ygg_addr, &iid));
-        assert_eq!(iid_from_pubkey_bytes(&pubkey_bytes), iid);
-    }
-
-    #[test]
-    fn binding_invariant_bob() {
-        // Test vector: binding_invariant_bob
-        let pubkey_bytes = arr32(&hex(
-            "7422b9887598068e32c4448a949adb290d0f4e35b9e01b0ee5f1a1e600fe2674",
-        ));
-        let ygg_addr: [u8; 16] = hex("02888bcf64cfefa3888bcf64cfefa304")
-            .try_into()
-            .unwrap();
-        let iid = arr8(&hex("888bcf64cfefa304"));
-
-        assert!(verify_ygg_iid_binding(&ygg_addr, &iid));
-        assert_eq!(iid_from_pubkey_bytes(&pubkey_bytes), iid);
-    }
-
-    #[test]
-    fn binding_invariant_mismatch() {
-        // ygg_addr lower 64 bits don't match claimed IID
-        let ygg_addr: [u8; 16] = hex("02fd6b265c858536fd6b265c8585369b")
-            .try_into()
-            .unwrap();
-        let wrong_iid = arr8(&hex("888bcf64cfefa304")); // bob's IID, not alice's
-
-        assert!(!verify_ygg_iid_binding(&ygg_addr, &wrong_iid));
     }
 
     // ── Domain separation tests (confused deputy prevention) ─────────────

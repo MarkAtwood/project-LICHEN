@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-bedw.18",
+  "title": "[spec-gap][R-X509-011/013/029/030/031/037/044] CA issuance conventions: DN rules, notBefore truncation, validity bounds, same-day + key-retirement rules",
+  "description": "spec/appendix-x509-cert-profile.md sections 3 and 6: subject SHOULD be empty, else a single serialNumber attribute (13-char Crockford Base32 short address or 16-char uppercase hex IID); issuer MUST contain CN and SHOULD contain O; notBefore MUST be truncated to 00:00:00 UTC of issuance day; notAfter MUST be finite; validity longer than 825 days MUST NOT be issued (RECOMMENDED 200 days); a same-day replacement MUST wait for the next UTC day or use a fresher out-of-band channel (accept-on-tie is not permitted); a compromised key MUST be retired out-of-band, supersession cannot revoke it. Classification: not-implemented. Suggested placement: CA/provisioning tool (PoP bead site) for issuance defaults; verifier cache policy (freshness bead) for the displacement rules.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T01:32:03.221511925Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T01:32:03.221511925Z",
+  "labels": [
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-bedw.18",
+      "depends_on_id": "project-LICHEN-worker6-bedw",
+      "type": "parent-child",
+      "created_at": "2026-09-10T01:32:03.343862267Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

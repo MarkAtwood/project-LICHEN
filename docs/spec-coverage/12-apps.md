@@ -1,170 +1,146 @@
-<!-- SPDX-License-Identifier: CC-BY-4.0 -->
-<!-- SPDX-FileCopyrightText: The contributors to the LICHEN project -->
+## spec/12-apps.md — coverage (sweep 2026-09-09)
 
-## spec/12-apps.md — coverage (sweep 2026-09-01)
+Extraction of normative requirements (MUST/MUST NOT/SHOULD/RECOMMENDED/MAY-defining-behavior)
+from spec/12-apps.md (§18 Applications). Evidence: file:line for code, test/vector names for tests.
+Statuses: IT=implemented+tested, IUT=implemented+untested, DIV=divergent, NI=not-implemented, AMB=ambiguous.
+Incorporates prior Opus verify-log verdicts where still current; several prior findings were stale and are
+corrected here (OFF privacy mode now exists; delegation-token presentation now wired; C traceroute present;
+MsgStoreResource now exists in msg_store.py).
 
-No decisions in `spec/decisions.jsonl` target 12-apps (Step 0: clean).
-
-Statuses: IT = implemented+tested, IU = implemented+untested, D = divergent, NI = not-implemented, A = ambiguous.
-
-### 18.1 Messaging
-
-| Req | Spec text (trimmed) | Status | Evidence | Conf |
+| Req | Spec text (trimmed) | Status | Evidence | Confidence |
 |---|---|---|---|---|
-| R-12-001 | All features use CoAP with CBOR payloads | IT | `python/src/lichen/coap/resources/messaging.py:424-442`; test `test_messages_resource.py::test_post_valid_lci_message_body`; vectors `test/vectors/messaging.json` | high |
-| R-12-002 | POST /msg/inbox → 2.01 + Location-Path /msg/sent/{id} | IT | messaging.py:424-442; Rust `lichen-client/src/msg.rs:85-141`; C `coap_msg.c` | high |
-| R-12-003 | GET /msg/inbox observable, `{messages, unread}` | IT | messaging.py:223,314-320; tests `test_observe_notified_on_deliver/post`; vector `inbox_get_observable` | high |
-| R-12-004 | When ack:true, recipient POSTs /msg/ack with id/status/ts | IT | messaging.py:525-600; `receipt_vectors.rs`; vectors `receipt_cbor.json` | high |
-| R-12-005 | GET /msg/canned returns configurable catalog (5 default entries) | IT | messaging.py:445-456; `test_default_catalog_matches_spec`; `messaging_vectors.rs:261 canned_catalog_matches_spec_18_1_3` | high |
-| R-12-006 | POST {"canned": N} expands canned message | IT | messaging.py:349-360; `test_post_canned_expands_body` | high |
-| R-12-007 | Message CBOR fields id/from/to/ts/body/ack/priority/reply_to/ttl | IT | messaging.py:361-394; msg.rs:89-124; vector `inbox_post_full_message` | high |
-| R-12-008 | ts included only when wall_clock_valid; receivers MAY accept ts absent/0 | D | Senders rebound `from` (messaging.py:339-348) but no wall_clock_valid gating or ts=0 "time unknown" acceptance found | low |
-| R-12-009 | Nodes without wall-clock SHOULD NOT enforce TTL expiry | NI | No TTL expiry enforcement exists on /msg at all (only validation, messaging.py:376-377); C struct has no ttl field (coap_msg.h:70-83) | low |
-| R-12-010 | Store-and-forward nodes advertise `rt="msg.store"`; MUST comply with storage limits (8/16/64 msgs, TTL 1-24h) | NI | No `/msg/store` resource anywhere; grep msg/store, msg.store negative | high |
-| R-12-011 | Eviction: expired → per-destination fair-share → FIFO | NI | Fair-share-per-destination eviction not found; inbox eviction is plain FIFO (messaging.py:278-279) | high |
-| R-12-012 | Back-pressure: 5.03 storage_full / 4.13 too large / 4.03 blacklisted / 4.00 TTL too long | D | Only ad hoc: 4.13 on >1024B body, 5.03 on msg-id exhaustion (messaging.py:330,398); spec form only exists for deaddrop (deaddrop.py:593) | low |
-| R-12-013 | S&F MUST NOT dynamically allocate starving routing/buffers | IU | C uses static buffers (`s_inbox` coap_msg.c:136-138); no S&F module exists to violate this | low |
+| R-12-001 | All nodes MUST include `ts` (GNSS wall-clock) in messages under normal operation | DIV | No sender gates ts on a time provider: python/src/lichen/coap/resources/messaging.py:377 (ts optional, uint-validated); C sends uptime not epoch (lichen/subsys/lichen/coap/coap_msg.c:261); Rust documents omit-or-0 (rust/lichen-client/src/msg.rs:100-102) | low |
+| R-12-002 | Pre-GNSS-lock senders MAY omit ts/ts=0; receivers SHOULD accept as "time unknown" | IT | messaging.py:377-378 (missing ts, ts=0 accepted); rust msg.rs:100-102,154-156 (`received: 0 = time unknown`); test_messages_resource.py, rust inbox_post tests; vector messaging.json inbox_post cases | high |
+| R-12-003 | TTL expiry = `ts + ttl` vs receiver GNSS wall-clock; all nodes enforce | DIV | Python MessagesResource never expires messages (messaging.py, no ts+ttl); msg_store.py:193 expires vs injected monotonic clock (:91); Unix-wall-clock expiry only in routing DTN layer (python/src/lichen/routing/dtn_option.py:69-79) | low |
+| R-12-004 | POST /msg/inbox → 2.01 Created, Location-Path /msg/sent/{id} | IT | messaging.py:443-445; C coap_server.c:341-355; rust msg.rs InboxPost; tests: test_messages_resource.py, lichen/tests/coap_msg_inbox, vector messaging.json | high |
+| R-12-005 | Broadcast = POST to coap://[ff02::1]/msg/inbox or mesh multicast | AMB | Resource accepts broadcast-targeted posts (vector messaging.json inbox_post_broadcast) but no ff02::1 handling/delivery path in any stack (grep: doc mentions only) | low |
+| R-12-006 | GET /msg/inbox observable returns {messages, unread}; new messages trigger Observe | IT | messaging.py:317-323,275-285; C coap_msg.c:1738-1792,1875-1918; tests test_observe_notified_on_post/deliver, C test_observe_change_no_change_cancel_and_capacity. DIV note: C adds `next`/`received` fields | high |
+| R-12-007 | Coalescing MUST NOT merge/discard individual inbox messages or custody records | IT | No coalescing of inbox exists; per-message deliver notifies (messaging.py:275-285); test_observe_notified_on_deliver | high |
+| R-12-008 | Unicast messages default to custody transfer: sender sets DTN S and C flags, sends via CoAP CON | NI | No C flag constant anywhere (only DTN_FLAG_S=0x80, receive-side: dtn_option.py:22, router.c:265); no send path sets flags; no CON/datagram selection | low |
+| R-12-009 | Broadcast messages (ff02::1) use datagram service (no custody) | NI | No service-selection code in any messaging layer | low |
+| R-12-010 | Piggybacked receipt: reply carries `ack_through` naming highest ID received | NI | Absent everywhere: Python allow-list drops key (messaging.py:384-397); Rust InboxPost has no field (msg.rs:89-124); C strict decode rejects unknown keys (coap_msg.c:933-935) | high |
+| R-12-011 | Explicit receipt: POST /msg/ack {id, status:"delivered", ts} | IT | messaging.py:586-603 (→2.04); rust msg.rs:271-300,862; C coap_msg.c:1924-2013; tests: receipt_cbor.json (16), C coap_msg_ack (10 ZTESTs), test_ack_advertised_and_stores_valid_receipts | high |
+| R-12-012 | Receipt window (RECOMMENDED 5 min) auto-send; explicit receipts are custody-transfer messages | NI | No receipt-window timer in any stack; receipts stored only, never sent; zero "custody" hits in python/rust send paths | low |
+| R-12-013 | Senders SHOULD treat ack_through as equivalent to explicit receipt for IDs ≤ value | NI | No ack_through exists (see R-12-010) | high |
+| R-12-014 | Sender does not retry after TTL expiry; custody chain is the retry mechanism | AMB | No sender auto-retry exists (vacuously conformant); custody chain not implemented so "retry mechanism" unrealized | low |
+| R-12-015 | Canned default set: 16 messages in 4 categories with cat/id/text (GET /msg/canned) | DIV | Catalog is 5 messages, no `cat` field: messaging.py:34-40, msg.rs:44-50 | high |
+| R-12-016 | ID→priority mapping: 0-11 normal, 12-14 priority=1, 15 priority=2/SOS | NI | No priority mapping for canned IDs anywhere | high |
+| R-12-017 | POST {"canned": N}; recipient renders from local lookup | IT | messaging.py:352-363 (expands to body); msg.rs canned lookup; tests test_post_canned_expands_body, rust inbox_post_expands_canned_catalog; vector inbox_post_canned_message | high |
+| R-12-018 | PUT /msg/canned/{id}; custom messages persist across reboots (flash) | NI | CannedMessagesResource GET-only (messaging.py:448-459); no PUT/DELETE in py/c/rust | high |
+| R-12-019 | DELETE /msg/canned/{id} → 2.02, slot reverts to default | NI | Not implemented anywhere | high |
+| R-12-020 | Constraints: max 16 slots (0-15); max text 64 bytes UTF-8 | DIV | 5-slot catalog; Python caps body at 1024 B (MESSAGES_MAX_BODY_SIZE, messaging.py:30,409-411; test_canned_text_exactly_at_byte_cap_posts_created) | high |
+| R-12-021 | Slot 15 always emergency: MAY change text, always priority=2 + SOS path | NI | No slot-15 special-casing anywhere | high |
+| R-12-022 | Custom canned MUST be sent as full text when recipient may lack customization; SHOULD include both ID and body | DIV | No "customized slot" concept; Python keeps explicit body if provided (messaging.py:406-407; test_post_canned_keeps_explicit_body) but no customization trigger | high |
+| R-12-023 | Custody-capable nodes advertise `</msg/custody>;rt="msg.custody"` via /.well-known/core | DIV | /msg/custody absent everywhere; Python advertises rt="msg.store" (msg_store.py:10-11,62); test_capability_link_description pins the divergent value | high |
+| R-12-024 | Custody OPTIONAL for leaf, RECOMMENDED for relays, REQUIRED for border routers | DIV | No app-layer custody handshake; C routing-layer DTN store has different limits (32 msgs/64 KB/1536 B/TTL 24h: routing/dtn.h:32-49); no capability advertisement | low |
+| R-12-025 | Custody implementations MUST comply with storage limits (8/16/64 msgs, 2/4/16 per-dest, 128/256/512 B, 1/4/16 KB, 1/4/24 h) | IT | msg_store.py:76-85 bounds exactly per table (defaults 16/4/256/4096/4h); python/tests/coap/test_msg_store.py (13 tests incl. test_per_destination_cap_enforced). C routing store uses §9.8 values instead (different table) | high |
+| R-12-026 | Nodes MUST support at least minimum values; constrained nodes SHOULD use minimums | IT | Same site as R-12-25 (constructor enforces min bounds msg_store.py:76-85); minimum enforcement untested explicitly | high |
+| R-12-027 | Eviction when full: expired first, then per-destination fair-share oldest, then FIFO | IT | msg_store.py:108-142 _evict_one; tests test_expired_messages_evicted_first, test_fair_share_eviction, test_expired_first_under_full_store | high |
+| R-12-028 | Back-pressure: full→5.03, too large→4.13, blacklisted→4.03, TTL too long→4.00; 5.03 with Max-Age + {reason, available, retry_after} | DIV | Codes 4.13/5.03/4.03/4.00 implemented (msg_store.py:175-187) but 5.03 is bare (no Max-Age/CBOR body); POST returns 2.04 not 2.01 (:197) | high |
+| R-12-029 | Nodes SHOULD reserve S&F memory statically at boot | IT | C DTN store static buffers (routing/dtn.h); Python N/A (managed runtime); no explicit reservation config | low |
+| R-12-030 | S&F MUST NOT allocate dynamically starving routing/buffers | IT | C store statically bounded (dtn.c:22-80); Python heap N/A | high |
+| R-12-031 | Delivery when reachable: FIFO, wait for ACK before next, retain on failure until TTL, delete on success | DIV | msg_store.py GET ?dest= pull-drain deletes on fetch (:199-224); no push loop, no wait-for-ACK, no retain-on-failure | high |
+| R-12-032 | Nodes with GPS SHOULD periodically broadcast position (PUT ff02::1/pos SenML) | IT | C scheduler coap_location.c:427-621 (NON PUT → ff02::1); Python receiver only (senml.py:195, site.py:227-228); tests test_default_transport_is_nonconfirmable_multicast_put, test_senml_resources.py | high |
+| R-12-033 | Beacon interval configurable, default 60 s moving / 300 s stationary | IT | coap_location.h (LICHEN_POSITION_BEACON_MOVING_INTERVAL_MS 60000 / STATIONARY 300000); C test_stationary_and_moving_intervals_with_hysteresis. Python sender absent | high |
+| R-12-034 | Density estimate > 20 → beacon interval MUST be ≥ 300 s regardless of motion | NI | No density logic in any beacon path (grep zero in coap_location.c/python/rust); vectors exist with zero consumers: test/vectors/density_scaling.json#position_beacon_rate (D=21→300s) | high |
+| R-12-035 | MAY replace unsent position update with newer state for same resource+dest | AMB | C test_backpressure_retries_are_bounded covers retry, not replacement; no replace-newer-state code found | low |
+| R-12-036 | Receivers update position cache; GET /pos/cache {positions:[{node,lat,lon,alt,ts,age_s}]} | IT | python position.py:22-173 (site.py:229-230); C coap_location.h:137-154; vectors position_cache.json; tests test_position_cache.py (18), C test_cache_* | high |
+| R-12-037 | GET /sensors/location → SenML lat/lon/alt/speed/heading | IT | senml.py:54-126 (site.py:222-226); C senml.c:941,983 + coap_location.c; vectors senml_location.json; tests test_senml_location_vectors.py, rust location_vectors.rs, C lichen/tests/senml | high |
+| R-12-038 | Position Observe; triggers: distance threshold (~50 m) or time interval | IT | C coap_location.h:30-31 (5000 cm / 300000 ms), coap_location.c:856-862; tests test_observe_change_triggers_and_wrap. Python Observe works but fires on every update (senml.py:107) — no trigger policy | high |
+| R-12-039 | Position privacy modes public/group/private/off | IT | position_privacy.py:23-29 (4 modes incl. OFF); check_read codes 4.01/4.03 (:80-112); vectors position_privacy_auth.json (public/group/private); test_position_privacy_vectors.py. Note: `off` not in vectors | high |
+| R-12-040 | Query auth per mode; unauthenticated queries to non-public nodes → 4.01 {"error":"oscore_required","mode":...} | DIV | senml.py:109-116 calls check_read() with no request context (oscore/requester always None → authenticated members rejected too) and discards returned code (always bare 4.03, empty payload); no 4.01 error body; only call site | high |
+| R-12-041 | Group mode: beacons encrypted with group OSCORE key; only members decrypt | IUT | python/src/lichen/coap/group_beacon.py (seal/open AAD=mcast, :42,:72; receiver silently drops non-members :116; emitter :160); tests test_group_beacon.py (9). Not mounted by build_site — standalone | low |
+| R-12-042 | Private mode: no beacons; only whitelisted peers' OSCORE queries answered | IT | position_privacy.py:114-122 (beacon PUBLIC-only), :55-75 allowed_peers; privacy_config.py:43-83 /config/privacy/allowed; tests test_privacy_config.py, test_no_fix_and_privacy_modes_never_transmit (C). Resource-level wiring gap → see R-12-040 | high |
+| R-12-043 | Waypoint CRUD: GET list, GET {id}, POST create 2.01+Location-Path, DELETE 2.02 | IT | waypoints.py:243,338-340,364-418; C coap_waypoints.c:965; rust waypoint.rs:266; tests test_waypoints_resource.py, lichen/tests/coap_waypoints, waypoint_vectors.rs; vector waypoint.json | high |
+| R-12-044 | Share waypoint (POST to destination) and broadcast (POST ff02::1) | DIV | Rust client unicast share only (waypoint.rs:266 WaypointShare); no ff02::1 waypoint handling in any stack; py/C render locally only | high |
+| R-12-045 | MUST bound waypoints ≤32 per originator IID, ≤256 global; full table POST → 5.03 {reason:"waypoint_limit",per_originator,global} | IT | waypoints.py:21-22,215-228 (exact body); C coap_waypoints.h:16, coap_waypoints.c:283-285; tests test_waypoints_reject_33rd_per_originator, C test_per_originator_limit_is_32/test_global_limit_is_256_with_503_body | high |
+| R-12-046 | Routes: /routes, /routes/{id} same CRUD as waypoints | NI | No /routes resource in any stack (only unrelated /status/routes routing-table view, site.py:211) | high |
+| R-12-047 | SOS Origin Signature: 56 B = 8 B Origin Sequence (BE) + 48 B Schnorr48 over SHA-512("LICHEN-SOS-ORIGIN-v1" ‖ origin IPv6 ‖ seq ‖ canonical CBOR payload); domain 20 ASCII octets, no NUL | IT | python coap/sos_origin.py:35,59-73,92-117; C link/sos_origin.c:35-38 (static_assert),89-124; rust lichen-link/src/sos_origin.rs:14-17,76-88; rust test transcript_matches_python_oracle (pinned SHA-512); sos_origin_vectors.rs. Note: sos_signature.json is descriptive-only (no real key bytes) | high |
+| R-12-048 | Receiver MUST verify origin signature before rebroadcast; missing/malformed/invalid → silently dropped | DIV | C silent drop -ENOENT (coap_server.c:467-502); Python returns 4.01 (emergency.py:235-251) — contradicts spec + vector sos_signature.json:30 (error_response:false); Rust library-only, no RX consumer | high |
+| R-12-049 | Per-origin monotonic Origin Sequence gate (strictly greater) | DIV | Python OriginSequenceTracker (sos_origin.py:182-209) enforced (emergency.py:257-273, sos_relay.py:164-170; test_replayed_sequence_dropped); C gate exists in sos_resource.c:92-96 but NOT called from sos_post (coap_server.c:449-528); Rust none | high |
+| R-12-050 | SOS rate limits: 10 min cooldown, 3/hour, burst 2 | IT | Python emergency.py:31-33,122-152; C sos_ratelimit.{h,c} (coap_server.c:510-523); Rust sos.rs:669-780; vectors sos_rate_limiting.json consumed by C+Rust; Python tests (10) | high |
+| R-12-051 | Rate key = full 16-byte IPv6 source; relays MUST preserve; MUST NOT extract IID; monotonic uptime | DIV | Python per-source keyed by hex string w/ monotonic default (emergency.py:31-33,93,122-152); C single global state, NOT per-origin (coap_server.c:447 "Single-source scope" comment) — divergent; Rust per-source struct (sos.rs) | high |
+| R-12-052 | SOS over rate limits dropped and logged, not relayed | IT | C LOG_WRN + drop (coap_server.c:510-523); Python returns 4.29+retry_after (emergency.py:263-271) and does not relay; C test lichen/tests/sos_ratelimit | low |
+| R-12-053 | Soft blacklist RECOMMENDED (reputation < -10 → delayed/dropped; 7-day expiry) | NI | MAY/RECOMMENDED-level; no reputation tracking anywhere — matrix note only, no bead (MAY) | high |
+| R-12-054 | Operator overrides SHOULD: clear rate limit, blacklist/whitelist, disable limiting | NI | No operator override endpoints for SOS abuse controls in any stack (SHOULD; matrix note) | high |
+| R-12-055 | Alert CBOR {type,node,ts,lat,lon,msg,seq}; types sos/medical/security/fire/cancel | IT | Byte-exact vectors sos_cbor.json consumed by Rust (sos_cbor_vectors.rs) + Python (test_vector_consumers_lci.py:280-425); C sos_alert.c codec (no C vector test). DIV: node field format — C requires colon-IPv6, Python requires 16-hex EUI64 (emergency.py:219-224) | high |
+| R-12-056 | POST coap://[ff02::1]/sos → 2.04 Changed | IT | Python emergency.py:275; C coap_server.c:525-527; C ff02::1 membership test lichen/tests/sos_mcast_membership | high |
+| R-12-057 | Sender MUST emit with link dispatch byte 0x16 carrying CBOR alert map, NOT SCHC CoAP; relays classify solely by 0x16 | DIV | Constant exists C (l2_payload.h:34) + Python (constants.py:44, l2_payload.py:40) but NO sender emits 0x16 in any stack; Rust actively rejects: rust/lichen-core/src/l2_payload.rs:83 asserts classify_known(&[0x16]) == Err(UnknownDispatch) | high |
+| R-12-058 | Receiving nodes: display prominently, re-broadcast once when TX eligible (once per SOS ID), log to /sos/log | DIV | Python relay library exists, unwired (sos_relay.py, dedup per SOS ID); C sos_post does no rebroadcast/display/log; Rust none; /sos/log Python-only and unmounted | high |
+| R-12-059 | SOS button: hold 3 s initiate, triple-press initiate, press during SOS → position update, hold 5 s → cancel | DIV | C implements spec/19 grammar instead: ≥2 s hold (ux_button.h LICHEN_UX_BUTTON_SOS_HOLD_MS 2000), 5 s → factory reset, no triple-press (repo grep: none); no wiring to SOS TX | high |
+| R-12-060 | GET /sos returns {active: [alerts]}; GET /sos/log returns {events} | DIV | Python GET /sos returns {"active": bool,...} (emergency.py:174-175); C stub {"s": true} (coap_server.c:530-542); Python /sos/log resource exists+tested (sos_log.py; 4 tests) but never registered in server setup; C/Rust absent | high |
+| R-12-061 | SOS packets get priority among eligible TX | IT | C tx_queue.h:61 TX_PRIORITY_SOS=0; rust lichen-core/src/tx_queue.rs:243,275; python timing/tx_queue.py:26-46; gateway uses it (lichend.rs:609,632); priority tests in rust | high |
+| R-12-062 | Beacon boost: originating node beacons position every 30 s | IT | Python sos_periodic.py BEACON_BOOST_INTERVAL_S=30; tests test_activation_starts_boost_timer, test_beacon_boost_at_30s_boundary. C/Rust absent | high |
+| R-12-063 | Relay duty: all nodes in forwarding scope attempt eligible SOS relay once per SOS ID | IUT | Python SosRelay.check_relay dedup per SOS ID (sos_relay.py, 48 tests) but not wired from node RX; C/Rust none | low |
+| R-12-064 | Persistence: SOS active until cancelled or 4-hour timeout | IT | Python SOS_AUTO_TIMEOUT_S=4*3600 + test_auto_timeout_cancels_at_4h; C sos_resource.c state machine has no timeout (unwired); Rust none | high |
+| R-12-065 | SOS + boosted beacons MUST NOT preempt committed RX, exceed airtime limits, or start unless op+guard fits | AMB | No SOS-specific guard in any stack; only general duty-cycle/CSMA gates (rust lichen-core/src/duty_cycle.rs, lichen/tests/airtime) | low |
+| R-12-066 | Presence format {status,activity,msg,battery,ts}; status/activity value sets | IT | python/src/lichen/presence.py:29-30 (frozensets); presence_cbor.json consumed by py/C/rust (tests/test_presence.py, lichen/tests/presence, presence_vectors.rs) | high |
+| R-12-067 | /presence GET/PUT + Observe; /presence/cache for known nodes | IT | presence.py:60-231 (PUT auth-gated 4.01), :234-367 cache w/ age_s; tests test_presence_resource.py (~40), test_presence_cache.py; C presence.c codec; rust PresenceCache | high |
+| R-12-068 | SHOULD auto-update status: movement→moving, stationary>5 min, idle>30 min→away, SOS→emergency, battery<10%→low_battery | IT | presence.py:292-366 apply_automatic_status (constants :33-35); tests test_gps_motion_sets_available_moving, test_inactivity_after_thirty_minutes_sets_away, test_sos_sets_emergency_and_wins_over_gps, test_low_battery_flag_when_below_ten; rust apply_automatic_status | high |
+| R-12-069 | POST /checkin {node,ts,lat,lon,status ok/help/delayed,msg} → 2.04 | IT | emergency.py:483-601; C checkin_resource.c; rust checkin.rs; vectors checkin_rollcall.json (17 checkin cases); tests test_get_returns_stored_checkins, C test_checkin_post_valid_and_invalid | high |
+| R-12-070 | Roll call via multicast POST coap://[ff02::mesh]/rollcall; nodes respond unicast | DIV | Unicast-only record model in all stacks: emergency.py:414-453 RollcallResource.render_post (no multicast dest handling, no response emission); C rollcall lifecycle tests same model; rust client codec only | high |
+| R-12-071 | GET /rollcall/{id} status {responded, missing} | IT | emergency.py:455-467; C test_rollcall_lifecycle_and_capacity; rust checkin.rs:115-148 + checkin_rollcall_vectors.rs; responded/missing only demo-populated (see R-12-070) | high |
+| R-12-072 | PUT /config/checkin {enabled,target,interval_s,include_location} scheduled check-ins | IT | C checkin.c:1332-1407 codec + checkin_resource.c:341-393 PUT handler (OSCORE-authorized); tests test_config_put_applies, test_config_codec_and_due. Python/Rust: NI (parity gap) | high |
+| R-12-073 | Missed check-ins trigger alerts (see 18.4) | NI | C tracks due state (lichen_checkin_due) but no alert emission in any stack | high |
+| R-12-074 | ICMPv6 Echo ping for reachability/RTT | IT | rust lichen-core/src/icmpv6.rs + icmpv6_echo_vectors.rs; C lichen/tests/icmpv6, ping_l2; Python: SCHC ICMPv6 rules only, no ping client (AMB for py) | high |
+| R-12-075 | POST /diag/rangetest {seq,payload_len,count} → SenML rssi/snr/sf/freq | IT | rangetest.py:191,65; C coap_rangetest.c:384 (byte-exact vs rangetest.json); rust rangetest.rs; tests test_all_vectors_byte_exact (C), rangetest_vectors.rs | high |
+| R-12-076 | GET /diag/rangetest Observe continuous {interval_ms} | IT | rangetest.py Observable + interval_ms (:174-183); C coap_rangetest.c:40 + tests test_interval_state_semantics, test_observe_registered_only_on_success; vectors rangetest_get ×9 | high |
+| R-12-077 | GET /diag/traceroute {hops[{addr,rssi,rtt_ms}],total_hops,total_rtt_ms}; RPL SRH or hop-by-hop | IT | rangetest.py:257-295; C coap_rangetest.c (test_traceroute_max_hops_encode); rust rangetest.rs; vectors rangetest.json traceroute ×2. Probing mechanism injected via RadioMetricsProvider — actual path discovery mechanism AMB | high |
+| R-12-078 | Group creation POST /groups → 2.01; master_secret only in creation response; creator=owner | IT | groups_collection.py:274-336 (:317-331 secret only in creation response); tests test_groups_collection.py | high |
+| R-12-079 | Roles: owner full control; admin invite/remove/distribute keys; member send/receive; owner/admins always members | IT | groups_collection.py role gates (:714-731 owner-only delete; :758 owner-only promote); tests test_groups_roles.py | high |
+| R-12-080 | Group mcast = ff35:0040:<upper 64 of owner's primary /128>::<16-bit gid> (RFC 3306) | IT | groups_collection.py:184-199 group_multicast_from_id + _owner_mcast_prefix; vectors groups_cbor.json | low |
+| R-12-081 | Invitation COSE_Sign1: alg -65537, protected h'47A1013A00010000', kid=inviter IID, payload keys 1-7, Schnorr48(SHA256(CBOR(Sig_structure))) | IT | group_membership.py:228-341 verify_invitation_cose (kid bound to pubkey-derived IID :292-294); tests test_groups_cose.py, test_groups_invite.py test_post_groups_invite_accepts_vector. Python-only codec (no C/Rust) | high |
+| R-12-082 | Invitee validation 12 steps; failure → 4.00 (malformed) or 4.03 (signature/authority); accept → 2.04 | IT | groups_invite.py:86-131 (_render_cose_invitation; unknown inviter fail-closed 4.03 :92); tests test_forged_signature_and_wrong_key_are_rejected, test_remote_invitation_without_known_pubkey_is_refused | high |
+| R-12-083 | Per-inviter nonce ledger, 32-entry ring, RAM-only; collision rejects; cleared on reboot | IT | groups_invite.py:91-131 deque(maxlen=32) "In-RAM by policy" (:66); tests test_groups_invite_replay.py | high |
+| R-12-084 | Invitations MAY be delivered without OSCORE (COSE_Sign1 provides auth/integrity/authz) | IT | groups_invite.py accepts COSE_Sign1 POST without OSCORE (designed so; tests exercise it) | high |
+| R-12-085 | Key distribution POST /groups/{gid}/key over pairwise OSCORE; never plaintext | IT | groups_collection.py:613,797-867 (_join_key; pairwise OSCORE required; body node must equal authenticated peer :829-831; {key_id,key_epoch,master_secret,master_salt,algorithm:"AES-CCM-16-64-128"}); tests test_groups_item.py | high |
+| R-12-086 | Leaving: DELETE /groups/{gid} on own node = self-leave, removes group+keys | DIV | DELETE is owner-only authoritative delete, members get 4.03; no self-leave op (groups_collection.py:707-731, comment cites 18.8.2 roles) | high |
+| R-12-087 | Removal by admin/owner: POST /groups/remove with signature; validate signer role, delete | IT | groups_remove.py:34-107 (can_remove gate :74, fail-closed pubkey :90-93, replay-once preimage, triggers rekey :101); tests test_groups_roles.py; Python-only | high |
+| R-12-088 | Membership list NOT broadcast; owner/admins maintain authoritative list; GET /groups/{gid}/members | IT | groups_collection.py:637-675 (group-OSCORE-or-pairwise gate :668-670; public doc omits members :221-228); vectors groups_membership.json; tests test_groups_item.py | high |
+| R-12-089 | Rekey on member removal SHOULD; key_epoch++; old epoch rejected after 1 h grace; not on voluntary leave | IT | groups_collection.py:338-424 rekey() + REKEY_GRACE_S=3600 (:38,:429-476); triggered by removal only; vector groups_rekey.json removal_increments_epoch; tests test_groups_rekey.py | high |
+| R-12-090 | Only owner can promote/demote admins (POST /groups/{gid}/admins) | IT | groups_collection.py:734-785 _promote_demote (owner-only :758, orphaned-admin fail-closed); tests test_groups_admins.py | high |
+| R-12-091 | MUST NOT persist invitation ledgers, revocation markers, retired epoch lists (RAM-only) | IUT | Nonce ring "In-RAM by policy" (groups_invite.py:66,122); removed-member markers deliberately unpersisted (groups_collection.py:255-256); retired_epochs in-RAM; no flash/NVS writes found. No test asserts non-persistence | high |
+| R-12-092 | Admin removal does not cascade; owner MUST remove affected members or rekey | IT | groups_remove.py rekey-on-removal (:101); rekey invalidates outstanding invitations (groups_collection.py rekey); test_groups_rekey.py | high |
+| R-12-093 | Delegation tokens: scope bitmap 0x01/0x02/0x04/0x08/0x10; owners any, admins only scope&0x13; beyond-role rejected | IT | python/src/lichen/crypto/delegation_tokens.py (scope bits, ADMIN_DELEGABLE_SCOPE, VALID_SCOPE_MASK); vectors delegation_tokens.json (12, incl. delegation_admin_exceeds_scope); tests test_delegation_tokens.py (24) | high |
+| R-12-094 | Token issuance POST /groups/{gid}/tokens → 2.01 + COSE_Sign1 | DIV | Handler implemented+unit-tested (delegation_tokens_resource.py _handle_tokens_post, admin mask 0x0C exclusion :96-97) but NOT routed in GroupsItemResource.render_post (groups_collection.py:733-739 routes only key/admins); unreachable via CoAP; tests invoke handler directly (test_groups_tokens.py) | high |
+| R-12-095 | Token presentation: delegation field in POST /groups/invite; 11-step validation incl. seq cache; failure → 4.03 {"error":"delegation_invalid",...} | IT | groups_invite.py:144-211 _admit_via_delegation (seq cache (delegator,delegate,resource) :67-69,:197-208; scope check :202); tests test_groups_invite.py | high |
+| R-12-096 | Group resources: GET /groups list; group messaging POST [mcast]/msg/inbox; group position PUT [mcast]/pos | DIV | GET /groups implemented (groups_collection.py); group /msg/inbox POST vector exists (groups_messaging.json) but multicast delivery transport unimplemented; group position PUT via GroupBeaconResource not mounted | low |
+| R-12-097 | /deaddrop POST → 2.01 + Location-Path + Max-Age; GET list + Observe; GET /{id}; query ?type=&after= | IT | deaddrop.py:586-662 (:660 location, :661 max_age), :560-584 queries, Observable :281; 72 tests test_deaddrop_resource.py; rust deaddrop.rs + deaddrop_vectors.rs (17). C divergent: 2.04, no Location/Max-Age, ?node= only, no Observe (coap_dtn.c:299-321) | high |
+| R-12-098 | /deaddrop CoAP MUST use project's SCHC rule set; rules pre-provisioned; MUST match compressed-packet vectors | NI | No /deaddrop or CF-112 rules anywhere: spec/appendix-schc.md (zero mentions), constants.toml [schc.rule_id] (:27-38), rust/lichen-schc/src/rules.rs, python schc; deaddrop.json has no SCHC-compressed vectors | high |
+| R-12-099 | Deaddrop rate limits: 6 POST/h/context; key = OSCORE identity (pairwise pair / group (ctx,SenderID)); MUST NOT key on extracted IID; 1536 B→4.13; 8 KB leaf/32 KB BR; 24 h/7 d retention | DIV | Python: 6/h (deaddrop.py:29,367-384), key = post-unprotect OSCORE identity fail-closed (:114-149; test_spoofed_option_does_not_share_default_rate_bucket); Rust same (:970-981); C keys on iid7 = peer_eui64[7] — 1 byte, violates MUST NOT (coap_dtn.c:193-205); group-(ctx,SenderID) keying unimplemented | high |
+| R-12-100 | Exceeding limits: 4.29 + Retry-After; 4.13; 5.03 {reason, retry_after, available_kb} | DIV | Python/Rust implement all three codes (deaddrop.py:597-629; rust :738-745); Retry-After encoded as CBOR body + Max-Age, never CoAP option 213; C bare 4.29, omits available_kb; VECTOR BUG: deaddrop.json rate_limit_rejection (:67-77) expects 5.03 for rate limiting — spec mandates 4.29; Rust test rate_limit_rejection_matches_vector pins the wrong code | high |
+| R-12-101 | Eviction: expired first, then oldest; no dynamic allocation | IT | deaddrop.py:33-34,411-418 _evict_for_space; rust eviction_fifo_order_matches_vector; C static budget CONFIG_LICHEN_DTN_MAX_BYTES | high |
+| R-12-102 | Writes MUST be OSCORE-protected; unprotected POST → 4.01 {"error":"oscore_required"} | IT | deaddrop.py:590-594 (incl. spoofed-option-on-plaintext rejection, test :364-372); rust :1091-1093; C via coap_oscore_authorize_mutating (coap_keys.c:266,429) | high |
+| R-12-103 | Reads: public OK; private non-matching → 4.04 (conceal existence); group non-matching → 4.03 | IT | deaddrop.py:694-700 + _drop_visible :420-433 (test_private_drop_hidden_and_forbidden); rust PickupOutcome::NotFound "hidden to conceal existence" (:771-773) + Forbidden; C: no per-drop ACL (4.04 only for absent) | high |
+| R-12-104 | Replay protection via OSCORE sequence numbers; nodes track recent nonces | IT | Delegated to OSCORE layer; vectors cover mismatch→4.01, empty-ciphertext→4.00 | high |
+| R-12-105 | Implementations MUST produce identical SenML output for test vectors (deaddrop) | IT | deaddrop.json (17 vectors, format_version 2): rust deaddrop_vectors.rs (17 per-vector), lichen-coap tests/vectors.rs::test_deaddrop_vector_wire_format, python test_deaddrop_payload_format + TestCanonicalPayload | high |
+| R-12-106 | /confessions POST/GET + /{id} + queries; anonymous default true; anon:false carries sender | IT | confessions.py:584-687 (2.01, :615-617 type enforced, :191-200 anonymous, :624-629 sender only when claimed bn IID == authenticated IID; spoof tests :568-627); rust confessions.rs; 56 py tests + 20 rust tests; C divergent (2.04, no anonymous parsing, SenML-only GET) | high |
+| R-12-107 | Confessions rate limits: 1/30 s, 12/h, 768 B, 2 KB leaf/8 KB BR, 12 h/48 h; keying: pairwise pair / group (ctx,SenderID) / else 16-byte IPv6 source; single accounting entry (group exempt); MUST NOT key on extracted IID; monotonic uptime | DIV | Constants+limits conform (confessions.py:30-40; tests test_rate_and_storage_match_spec_18_10_3, test_twelfth_post_at_hourly_limit_accepted). Keying DIVERGES: Python keys on low 64 bits (confessions.py:118; test_native_0200_source_iid_keys_rate), C keys on 1 byte (coap_dtn.c:497), Rust caller-supplied (confessions.rs:785); spec's pairwise/group key preference unimplemented; Python prefers IID over OSCORE (docstring :126-127) — unification de facto but not per spec key order | high |
+| R-12-108 | Storage overrun: FIFO eviction, no back-pressure; silent vanish | IT | confessions.py eviction + tests; rust vectors storage_full_fifo_eviction | high |
+| R-12-109 | No-log: RAM-only, cleared on any reboot; MUST NOT log to /sos/log, /msg/sent, beacons; forwarded held only for SCHC window | IT | confessions.py in-RAM + clear() (test_reboot_clears_ram :823, test_no_log_storage_is_ram_only :842); rust ConfessionStore clear (:971, no_log_guarantee_checks :599); C static RAM ring (coap_dtn.c:344-349). Hidden persist resource /config/confessions/persist: NI (spec-only; MAY-level). "SCHC fragmentation window" forwarding clause: no confession-specific handling (NI, subordinate note) | high |
+| R-12-110 | Operator override MAY enable persistence; MUST accept voiding no-log; MUST NOT market "no-log"; SHOULD surface logging:true | IT | Python persist ctor param → body["logging"]=True (confessions.py:520-521; test_persist_flag_surfaces_logging); rust set_persist (:589-590). Hidden CoAP resource itself unimplemented (MAY-level) | high |
+| R-12-111 | Confessions OSCORE: writes OPTIONAL, reads public, group ctx RECOMMENDED (unlinkability); MUST NOT persist OSCORE ctx info alongside content | IT | No OSCORE gate on POST in py/c/rust; reads public; Python never stores OSCORE kid (:668-673); rust doc :381; C stores payload bytes only. Group-context sender-unlinkability mode itself unimplemented (RECOMMENDED; oscore semantics — flagged, no fix planned) | high |
+| R-12-112 | GET /confessions metadata: rate_remaining, rate_reset_s, storage_used_kb, storage_max_kb | IT | confessions.py:511-519 (rate fields for authenticated requester); rust get_confessions_with_metadata (:510,:888-904); tests test_get_collection_is_cbor_query_map. C: absent (SenML-only GET) | high |
+| R-12-113 | Implementations MUST produce identical SenML output for confessions.json vectors (5 scenarios) | IT | confessions.json all 5 scenarios present (anonymous, oscore group, rate boundary 12th/13th, storage-full FIFO, reboot clear); consumed by py test_confessions_resource.py + rust confessions_vectors.rs (one test per vector). C consumes none | high |
+| R-12-114 | Content-Format usage: 60 general CBOR, 112 senml+cbor, 40 link-format; resource summary §18.11 | IT | CF 60/112 in py (base.py:28-29, deaddrop SENML_CBOR=112) + C coap_dtn.c:333,447; CF 40 via /.well-known/core (test_well_known_core_advertises_confessions :921; core_link_format.json :207 pins ct/obs); /msg/inbox|/msg/sent, /deaddrop, /confessions, /diag/rangetest, /diag/traceroute exist per §18.11 in py+C; rust node hosts /sensors,/config,/deaddrop,/confessions only (dispatch.rs:346-359) | high |
 
-### 18.2 Position Sharing
+## Gap beads filed (10, parent project-LICHEN-worker6-b7z9)
 
-| Req | Spec text | Status | Evidence | Conf |
-|---|---|---|---|---|
-| R-12-014 | Nodes with GPS SHOULD periodically broadcast position via PUT /pos | IT | C `coap_location.c:195-230` (NON PUT, senml+cbor, ff02::1); Py receiver `senml.py:126-233`; test `coap_location_beacon` | high |
-| R-12-015 | Beacon interval 60s moving / 300s stationary, configurable | IU | `coap_location.h:22-23` (60000/300000), selection coap_location.c:427-428; C test main.c:374-466; no Python scheduler | high |
-| R-12-016 | Receivers update position cache; GET /pos/cache | IT | Py `position.py:22-165`; Rust pos.rs:218-252; tests `test_position_cache.py`, `position_cache_vectors.rs`; vector `position_cache.json` | high |
-| R-12-017 | GET /sensors/location returns SenML lat/lon/alt/speed/heading | IT | `senml.py:54-123`; test `test_senml_location_vectors.py`; vector `senml_location.json` | high |
-| R-12-018 | Observe /sensors/location; notify on distance/time threshold | IT | ObservableResource senml.py:54; Rust `PositionSubscription` pos.rs:286-292; vector `position_observe.json` (threshold logic not evidenced — flagged) | low |
-| R-12-019 | Privacy modes public/group/private/off at /config/privacy | D | C has all 4 (coap_location.h:34-38); Python has only 3, no "off" (position_privacy.py:23-28); no Rust client | high |
-| R-12-020 | Unauthenticated queries to non-public nodes → 4.01 `oscore_required` | D | C enforces (coap_location.c:1174-1175,1383-1413); Python `PositionPrivacyPolicy.check_read` returns 4.01 (position_privacy.py:90-107) but NOT wired into `SenMLLocationResource.render_get` (senml.py:110-113) | high |
-| R-12-021 | Group mode: beacons encrypted with group OSCORE key to ff35 mcast | NI | No ff35 or OSCORE-encrypted beacon path; C beacons public-mode only (bead l1qw.10.5.1.4 tracks) | high |
-| R-12-022 | Private mode: no beacons, whitelist via PUT /config/privacy/allowed | IT | Py `privacy_config.py:43-83`, policy whitelist position_privacy.py:51-74; C coap_location.c:1547-1550; tests `test_privacy_config.py` | high |
-| R-12-023 | Presence is not hideable; no cover traffic (design constraint, no requirement) | — | Documentation only; no implementation requirement | n/a |
+See `docs/spec-coverage/12-apps-flagged.md` for the full flagged set. Filed beads cover the 10 most
+impactful MUST-gap clusters. **Overflow: 11 additional MUST-gap rows not filed** (below cap):
+R-12-001 (ts gating), R-12-003 (inbox TTL expiry vs wall clock), R-12-044 (waypoint share/broadcast),
+R-12-046 (/routes CRUD), R-12-059 (SOS button grammar — spec-internal conflict, needs adjudication),
+R-12-060 (GET /sos shape + /sos/log unmounted; C/Rust absent), R-12-086 (group self-leave semantics),
+R-12-094 (tokens endpoint unrouted), R-12-097 (C deaddrop/confessions 2.04-vs-2.01 response-shape
+divergence).
 
-### 18.3 Waypoints / Routes
-
-| Req | Spec text | Status | Evidence | Conf |
-|---|---|---|---|---|
-| R-12-024 | /waypoints list/get/create/share/broadcast/delete CRUD | IT | Py `waypoints.py:190-355`; Rust `waypoint.rs:332-418`; C `coap_waypoints.c:864-1190`; tests `test_waypoints_resource.py`, `waypoint_vectors.rs:27`, C coap_waypoints; vectors `waypoint.json` (23) | high |
-| R-12-025 | MUST bound: 32 waypoints per originator IID, 256 global | IT | waypoints.py:20-21,155-160,252-258; coap_waypoints.h:16-17; tests `test_waypoints_reject_33rd_per_originator`, `test_waypoints_capped_at_max` | high |
-| R-12-026 | Full table POST → 5.03 with `{reason:"waypoint_limit",per_originator:32,global:256}` | IT | waypoints.py:162-175; coap_waypoints.c:284-290; C test `test_global_limit_is_256_with_503_body` | high |
-| R-12-027 | /routes, /routes/{id} — same CRUD as waypoints | NI | No /routes waypoint resource in Py/Rust/C (only routing-table /status/routes) | high |
-
-### 18.4 Emergency / SOS
-
-| Req | Spec text | Status | Evidence | Conf |
-|---|---|---|---|---|
-| R-12-028 | All SOS messages MUST be authenticated (link-layer signature, verified at each node before rebroadcast) | IT | C sos_origin.c:126-158, coap_server.c:530; Py emergency.py:232-256; `sos_origin_vectors.rs` (vector sos_signature.json); `test_sos_origin.py` | high |
-| R-12-029 | Unsigned/invalid SOS silently dropped | D | C: silent no-relay (sos_origin.h:19); Python returns 4.01 (emergency.py:237-238) — rejects, not silent drop | low |
-| R-12-030 | Per-source rate limits: 10-min cooldown, 3/hour, burst 2 | IT | sos_ratelimit.h:37-43, sos_ratelimit.c:104-179; Py emergency.py:31-33,122-152; `sos_rate_limit_vectors.rs` (sos_rate_limiting.json); C `lichen/tests/sos_ratelimit/` | high |
-| R-12-031 | Rate limiting uses monotonic uptime, not wall-clock | IT | sos_ratelimit.h:20-24, k_uptime_get; Py `time.monotonic` emergency.py:93 | high |
-| R-12-032 | Exceeding rate limit: dropped and logged, not relayed | IT | sos_ratelimit.c:137-149; Py 4.29 + retry_after emergency.py:263-271 | high |
-| R-12-033 | Soft blacklist reputation (-1/-2/-10, reset, 7d expiry) | NI (MAY-gated feature; no impl) | No reputation scoring anywhere; noted, not filed (MAY) | n/a |
-| R-12-034 | Nodes SHOULD support operator override (clear limit, blacklist, disable) | NI (SHOULD-gap) | No operator override API found; noted in matrix, not filed | n/a |
-| R-12-035 | SOS CBOR format type/node/ts/lat/lon/msg/seq + alert types table | IT | sos_alert.h:10-27, sos_alert.c codec; vectors sos_cbor.json; `sos_cbor_vectors.rs` | high |
-| R-12-036 | POST coap://[ff02::1]/sos (multicast SOS endpoint) | NI | Only unicast POST /sos (coap_server.c:574; emergency.py:202) | high |
-| R-12-037 | Receiving nodes: display, re-broadcast once TTL-limited, log to /sos/log | D | Re-broadcast once implemented (sos_relay.py:111-196, tests test_sos_relay.py); `/sos/log` not implemented | high |
-| R-12-038 | SOS button behavior (3s hold, triple-press, update, cancel) | NI | No hardware button mapping found | high |
-| R-12-039 | GET /sos (active emergencies) | IU | C stub coap_server.c:560-575; Py emergency.py:197-200 | low |
-| R-12-040 | Priority routing: SOS packets priority in TX queue | IT | tx_queue.h:61 `TX_PRIORITY_SOS=0`, deadline 2000ms; C tx_queue tests | high |
-| R-12-041 | Beacon boost: originating node beacons every 30s during SOS | NI | Only `SosResource.retrigger()` primitive (emergency.py:192-195); no 30s scheduler | high |
-| R-12-042 | SOS remains active until cancelled or 4-hour timeout | D | 4h only as relay dedup expiry (sos_relay.py:41-43); no auto-deactivation of active SOS | high |
-
-### 18.5 Presence and Status
-
-| Req | Spec text | Status | Evidence | Conf |
-|---|---|---|---|---|
-| R-12-043 | /presence GET/PUT (2.04 Changed) | IT | presence.py:185,190-224; presence.rs:628,642; C presence.c; tests test_presence_resource.py, presence_vectors.rs | high |
-| R-12-044 | Observe peer presence | IT | presence.py:60 ObservableResource; test_status_observe.py | high |
-| R-12-045 | /presence/cache (all known nodes, addr/status/battery/age_s) | IT | presence.py:234-360; presence.rs:426-480; test_presence_cache.py; vectors presence_cbor.json | high |
-| R-12-046 | Status values available/busy/away/offline/emergency | IT | PRESENCE_STATUSES presence.py:29; presence.rs:267-288; C presence.h:77 | high |
-| R-12-047 | Auto status: moving/stationary/away>30min/SOS→emergency/battery<10% | IT | presence.py:296-342 (AWAY_AFTER_S, STATIONARY_AFTER_S, LOW_BATTERY_PCT); presence.rs:509-537; tests test_presence.py | high |
-
-### 18.6 Check-In / Roll Call
-
-| Req | Spec text | Status | Evidence | Conf |
-|---|---|---|---|---|
-| R-12-048 | POST /checkin with node/ts/lat/lon/status/msg; 2.04 | IT | emergency.py:482-604; C checkin_resource.c; C tests checkin_rollcall; vectors checkin_rollcall.json | high |
-| R-12-049 | Roll call via multicast POST /rollcall (id/from/ts/timeout_s) | D | Unicast POST /rollcall implemented (emergency.py:413-452; checkin_resource.c:229-285); multicast addressing `[ff02::mesh]` not evidenced | low |
-| R-12-050 | GET /rollcall/{id} with responded/missing lists | IT | emergency.py:454-467; checkin_resource.c:287-320; checkin.rs:148-150 | high |
-| R-12-051 | /config/checkin scheduled check-in (enabled/target/interval_s/include_location) | D | C only (checkin_resource.c:341-383, checkin.h:16,57-71); no Python/Rust | low |
-
-### 18.7 Range Testing
-
-| Req | Spec text | Status | Evidence | Conf |
-|---|---|---|---|---|
-| R-12-052 | ICMPv6 Echo Request/Reply for basic ping | IT | lichen/tests/icmpv6/src/main.c:103,139,280; lichen/tests/ping_l2/ | high |
-| R-12-053 | POST /diag/rangetest → SenML seq/rssi/snr/sf/freq | IT | rangetest.py:191-254; coap_rangetest.c; rangetest.rs:79-138; vectors rangetest.json; tests test_rangetest_vectors.py/.rs | high |
-| R-12-054 | Observe /diag/rangetest continuous with interval_ms | IT | rangetest.py:87,143-189; rangetest.rs:281; rangetest vectors | high |
-| R-12-055 | GET /diag/traceroute with hops/total_hops/total_rtt_ms | IT | rangetest.py:257-310; rangetest.rs:59-70,360-361; vectors rangetest.json (no C resource — partial interop) | low |
-
-### 18.8 Groups and Channels
-
-| Req | Spec text | Status | Evidence | Conf |
-|---|---|---|---|---|
-| R-12-056 | POST /groups creation, 2.01 + Location-Path + master_secret | IT | groups_collection.py:274-336; test_groups_collection.py:55,118 | high |
-| R-12-057 | Group CBOR document (id/name/mcast/owner/admins/members/key_id/key_epoch) | IT | groups_collection.py:304-314,218-235; vectors groups_cbor.json | high |
-| R-12-058 | Invitation COSE_Sign1, alg -65537 (Schnorr48-Ed25519), bstr-wrapped protected header | IT | group_membership.py:188-226; delegation_tokens.py:72-78; test_groups_cose.py:58 (test_protected_header_is_bstr_wrapped_alg_65537) | high |
-| R-12-059 | Invite payload keys 1-7 per spec table | IT | group_membership.py:150-156,208-322; test_groups_cose.py:111 wire-types test | high |
-| R-12-060 | Sig_structure "Signature1"/protected/external_aad h''/payload; sig = Schnorr48(SHA256(CBOR(Sig_structure))) | IT | delegation_tokens.py:81-100; group_membership.py:220-223,323-325; test_groups_cose.py:71 | high |
-| R-12-061 | Invitee 12-step validation (alg, kid, sig, invitee_iid, expiry, nonce, authority, accept/reject responses) | IT | groups_invite.py:70-126; group_membership.py:321; test_groups_cose.py:234,270,295 | high |
-| R-12-062 | Per-inviter nonce ledger: 32-entry ring, RAM-only; collision → reject | IT | groups_collection.py:254-257 (deque maxlen=32); groups_invite.py:106-115; test_groups_cose.py:234; test_groups_invite_replay.py | high |
-| R-12-063 | Key distribution POST /groups/{gid}/key over pairwise OSCORE, never plaintext | IT | groups_collection.py:739-809 (identity + invitation required); test_groups_item.py:271-599 | high |
-| R-12-064 | Member voluntarily leaves: DELETE own group, delete key material | D | DELETE is owner-only authoritative delete (groups_collection.py:713-731); no member self-leave path | high |
-| R-12-065 | POST /groups/remove: remover signature validated owner/admin, then target deletes | IT | groups_remove.py:59-104 (fail-closed sig verify, replay preimage, rekey on removal); test_groups_remove.py | high |
-| R-12-066 | Full membership list NOT broadcast; roster only via protected /members | IT | public_group_document omits rosters (groups_collection.py:218-235); /members protected :661-675; test_groups_rekey.py:149 | high |
-| R-12-067 | Rekeying on removal: epoch+1, new secret, old epoch rejected after 1h grace | IT | groups_collection.py:38 (REKEY_GRACE_S=3600),338-479; test_groups_rekey.py; vectors groups_rekey.json | high |
-| R-12-068 | Only owner can promote/demote admins (POST /groups/{gid}/admins) | NI | No /admins endpoint; admin role only via admin-role invitation at join (groups_collection.py:793-796) | high |
-| R-12-069 | Group mcast ff35:0040:<owner 0200::/8 /64>::<16-bit gid> | IT | groups_collection.py:184-197 → ipv6/addr.py `group_multicast_from_id`; test_groups_collection.py:238 | high |
-| R-12-070 | MUST NOT persist invitation ledgers / revocation markers / retired epoch lists (RAM-only) | IT | groups_collection.py:254-257; in-RAM dicts, no persistence path found | high |
-| R-12-071 | Admin demotion does NOT cascade-revoke outstanding invitations; owner MUST remove members or rekey | IT | Rekey burns outstanding invitations groups_collection.py:385-395; demotion → can_invite fails group_membership.py:347-355; test_groups_rekey.py:454 | high |
-| R-12-072 | Delegation tokens: COSE_Sign1 payload keys 1-5 (delegate/scope/resource/expiry/seq) | IT (crypto layer only) | delegation_tokens.py:64-69,145-190,193-273; test_delegation_tokens.py:138; vectors delegation_tokens.json | high |
-| R-12-073 | Scope bitmap bits 0-4; admins may delegate only scope & 0x13 | IT (crypto layer) | delegation_tokens.py:36-61,56-58,391-396; test_admin_scope_exceeded :443 | high |
-| R-12-074 | Token issuance endpoint POST /groups/{gid}/tokens | NI | No CoAP resource for /tokens | high |
-| R-12-075 | Token presentation: `delegation` field in /groups/invite; receivers verify chain and cache (delegator,delegate,resource,seq) | NI | groups_invite.py has no `delegation` field handling; `cached_seq` is a parameter with no caller-side cache (delegation_tokens.py:323,388) | high |
-| R-12-076 | Tokens not revocable; rekey/demotion invalidate; MUST verify full delegation chain | D | Rekey invalidation implemented (groups_collection.py:385-395); full-chain verification exists only as library function, never invoked by a resource | low |
-
-### 18.9 Dead Drop
-
-| Req | Spec text | Status | Evidence | Conf |
-|---|---|---|---|---|
-| R-12-077 | /deaddrop CoAP messages MUST use project SCHC rule set; MUST match compressed-packet test vectors | IU | SCHC pre-provisioned rules referenced (constants.toml); deaddrop vectors exercise CBOR/OSCORE but no explicit SCHC-compressed deaddrop vector found | low |
-| R-12-078 | POST MUST be OSCORE-protected; unprotected → 4.01 oscore_required | IT | deaddrop.py:586-594,114-149; test_deaddrop_resource.py:171-265; Rust deaddrop_vectors.rs `oscore_wrapped_dead_drop_matches_vector` | high |
-| R-12-079 | GET: private non-matching → 4.04 (conceal), group non-matching → 4.03 | IT | deaddrop.py:694-700,420-433; test_private_drop_hidden_and_forbidden :862 | high |
-| R-12-080 | Rate limit 6 POSTs/hour/context; 4.29 + Retry-After | IT | deaddrop.py:29,367-392,608-614; test :460,478; Rust `rate_limit_rejection_matches_vector` | high |
-| R-12-081 | Max drop 1536 B → 4.13; storage 8 KB leaf / 32 KB BR → 5.03 storage_full | IT | deaddrop.py:30-32,597-598,618-629; tests :442,489; C coap_dtn.c:267 | high |
-| R-12-082 | Retention 24 h default, max 7 d; eviction expired-first then oldest; no dynamic allocation | IT | deaddrop.py:33-34,222-258,411-418; tests :523,557 | high |
-| R-12-083 | SenML payload CF 112; GET collection w/ Observe + query params ?type=&after=; GET /deaddrop/{id} | IT | deaddrop.py:152-196,281,560-584,694-700; tests :592,885; Rust client deaddrop.rs:43-96 (20 vector tests) | high |
-| R-12-084 | MUST produce identical SenML output for test vectors | IT | test/vectors/deaddrop.json consumed by Py tests + `rust/lichen-client/tests/deaddrop_vectors.rs:113 spec_limits_match_python_reference` | high |
-
-### 18.10 Confessions
-
-| Req | Spec text | Status | Evidence | Conf |
-|---|---|---|---|---|
-| R-12-085 | /confessions POST/GET/Observe (2.01, Location-Path, Max-Age) | IT | confessions.py:207,538-582,584-687; test :885,904 | high |
-| R-12-086 | `anonymous` flag default true; non-anonymous carries sender; MAY reject non-anonymous | IT | confessions.py:191-200,169-180,623-629; tests :276-618; vectors confessions.json | high |
-| R-12-087 | Rate limits: 1/30s, 12/hour, monotonic uptime, keyed per-node IID → 4.29 Retry-After | IT | confessions.py:30-31,152-166,257,315-342,608-613; tests :160-512; C coap_dtn.c:490-520 (k_uptime_get_32); vectors confessions_rate.json | high |
-| R-12-088 | Max 768 B → 4.13; storage 2 KB leaf / 8 KB BR | IT | confessions.py:34-36,247-248,589-590; tests :433,183 | high |
-| R-12-089 | Retention 12 h (max 48 h); eviction oldest FIFO, silent, no back-pressure | IT | confessions.py:39-40,435,352-356; tests :725,749; Rust confessions_vectors.rs:234 | high |
-| R-12-090 | No-log guarantee: RAM only, cleared on any reboot, never in /sos/log, /msg/sent, beacons, or persisted OSCORE context | IT | confessions.py:210-222,260-262,405-410,457-458,669-672; tests `test_reboot_clears_ram`, `test_no_log_storage_is_ram_only`, Rust `no_log_guarantee_checks` :599 | high |
-| R-12-091 | Operator persist override MUST surface `logging: true` in GET metadata | IT | confessions.py:520-521,837 | high |
-| R-12-092 | OSCORE optional on writes; reads public; group context RECOMMENDED for unlinkability; MUST NOT persist OSCORE context info | IT | confessions.py:152-166,221-222; C coap_dtn.c:461-478; Rust vectors :378,400 | high |
-| R-12-093 | Query API: count/since, rate_remaining, rate_reset_s, storage_used_kb/max_kb | IT | confessions.py:487-522,546-579; tests :323,797; Rust confessions.rs:512-513 | high |
-| R-12-094 | MUST produce identical SenML output for test/vectors/confessions.json (5 vector categories) | IT | test/vectors/confessions.json + confessions_rate.json; consumed test_security_app_vector_consumers.py:981-1131; Rust confessions_vectors.rs (17 tests) | high |
-
-### 18.11–18.12 Summaries
-
-| Req | Spec text | Status | Evidence | Conf |
-|---|---|---|---|---|
-| R-12-095 | Resource summary table (cf 18.11) | — | Informational; /msg/sent, /diag/* present; /sos/log absent (see R-12-037) | n/a |
-| R-12-096 | Content-Format IDs: CBOR 60, senml+cbor 112, link-format 40 | IU | CBOR 60 and senml 112 used throughout (messaging.py, deaddrop.py); link-format 40 used in discovery (`python/tests/coap/test_discovery.py`) | low |
-
-## Overflow notes (SHOULD/MAY gaps not filed)
-
-- R-12-034 operator override (SHOULD) — no implementation; doesn't break a documented feature end-to-end, matrix-noted.
-- R-12-033 soft blacklist reputation (MAY) — never filed per protocol.
-- 18.10.6 e-ink UI flow (descriptive UI, not protocol).
-- Delegation token revocation compensating controls (RECOMMENDED 24h expiry) — crypto layer enforces expiry; not filed.
-
-## MUST-gap bead overflow count
-
-10 gap beads filed (at cap). Additional MUST-gaps beyond cap: 0 — all identified MUST-gaps fit within the cap (S&F cluster R-12-010/011/012 filed as one bead).
+Notes:
+- MAY-level omissions (soft blacklist R-12-053, e-ink flows, hidden persist resource) are matrix notes
+  only, per protocol.
+- custody-best-effort decision (spec/decisions.jsonl): verified — spec lines 161-162 match; no beads
+  filed that reinterpret custody as guaranteed delivery; R-12-024/028/031 beads request conformance to
+  the §18.1.4 MUST table, not a new eviction/TTL/retry policy.
+- sos_signature.json is descriptive-only (placeholder keys, no real bytes) — only the Rust transcript
+  test pins a real digest (sos_origin.rs:160-173). Oracle weakness noted in flagged file.
+- test/vectors/deaddrop.json rate_limit_rejection expects 5.03 where spec 18.9 mandates 4.29 —
+  conflicting legacy fixture reported, not weakened.

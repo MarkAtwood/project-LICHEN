@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.115",
+  "title": "GCP-5.4 gateway desync unimplemented: no wall-clock gating of gateway DIO origination, no DODAG Version increment on return; C lacks multi-root 3-superframe hold-off entirely",
+  "description": "spec/08-gateway-coordination.md GCP-5.4 (L139-147, R-08-018/019) and GCP-5.2 step 3 (L110-111, R-08-012), sweep 2026-09-09. MUST 1 (L139-141): 'A gateway whose wall clock or upstream time reference becomes invalid MUST apply the 2a.6 DESYNCED semantics to its own DIO origination — suppressing DIOs until it regains a valid wall clock'. Node-side DESYNCED FSM exists (rust lichen-core/src/desync.rs:131-220; C link/tdma.c:103-130; python timing/sfn.py) but NO code path gates a gateway's own DIO origination on wall-clock validity (only comment lichen/subsys/lichen/link/tdma.c:162); ccp16-desync.json case excessive_clock_drift_desync is explicitly UNENFORCED (python/tests/test_ccp_sync_vector_consumers.py:372). MUST 2 (L146-147): 'A gateway returning from desync MUST increment its DODAG Version' — increment_dodag_version has NO production callers (rust multi_instance.rs:465; python multi_instance.py:252; C rpl_multi_instance.c lichen_rpl_coordinator_increment_version:212). Hold-off (2a.5.3): 3-superframe deferral implemented+unit-tested in Rust (rust/lichen-rpl/src/multi_instance.rs:840,1139-1175) and Python (slot_coordination.py:50,467-483) but unwired into production RX (bead b7z9.25); C has ZERO hold-off code (repo-wide grep of lichen/). Suggested placement: gateway DIO origination path gated on wall-clock validity + version increment on recovery (rust lichen-rpl root mode / lichen-node routing/router.rs:236-291; C rpl/dodag.c + link/tdma.c); C hold-off in root_selection/tdma path. Related: project-LICHEN-worker6-b7z9.25 (node-side FSM wiring), project-LICHEN-worker6-d7hg (TDMA desync FSM into beacon RX). Acceptance: gateway suppresses DIOs while wall clock invalid, increments DODAG Version on return (nodes then see 2a.5.4 version change), C implements hold-off; ccp16-desync.json excessive_clock_drift_desync enforced or explicitly waived by Mark.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T20:01:30.242292849Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T20:01:30.242292849Z",
+  "labels": [
+    "gateway",
+    "rpl",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.115",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T20:01:30.373847419Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

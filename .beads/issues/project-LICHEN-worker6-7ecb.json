@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-7ecb",
+  "title": "Sweep: lichen-core iid_from_pubkey (SHA-512 link-local IID) still used to correlate routable-address identity",
+  "description": "Found during kd0p review. Post-migration, routable /128 = upstream AddrForKey; the SHA-512 IID is valid ONLY for link-local IIDs. But iid_from_pubkey consumers correlate identity on the routable plane: capability_announcements.rs:192 (kid == payload.announcer_iid — consistent only as long as both sides derive kid from ygg_addr[8..]; flag because kid generation sites are outside this file), resources.rs own_iid = info.iid[8..16] for slot-claim tiebreak, rpl dao_origin/dodagid binding paths (audit each). Sibling of ywec (which lists lichen-node sites); this covers lichen-gateway. For each site: if the address is routable, correlation MUST be full AddrForKey == address (or ygg_addr[8..] consistently everywhere the IID appears on the wire); link-local SHA-512 IID use stays.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T13:52:31.48908425Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T17:54:03.308778667Z",
+  "labels": [
+    "rust",
+    "yggdrasil"
+  ]
+}

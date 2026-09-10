@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.127",
+  "title": "[spec-gap][R-12-015] Canned messages diverge: 5-msg catalog (no cat), no PUT/DELETE persistence, no slot-15 SOS mapping, 1024B cap vs 64B",
+  "description": "spec/12-apps.md:180-258 (18.1.3): default set is 16 messages in 4 categories with cat/id/text; PUT /msg/canned/{id} persists customizations across reboots (flash); DELETE reverts to factory default (2.02); slot 15 always sends priority=2 and triggers SOS path; max text 64 bytes UTF-8; custom canned messages MUST be transmitted as full text (SHOULD include both canned ID and body). Evidence: catalog is 5 messages, no cat field (messaging.py:34-40, msg.rs:44-50); CannedMessagesResource GET-only — no PUT/DELETE anywhere; no ID→priority mapping and no slot-15 SOS trigger; Python caps body at 1024 B (MESSAGES_MAX_BODY_SIZE, messaging.py:30,409-411); POST canned-ID expansion + keep-explicit-body behavior conforms (messaging.py:352-363,406-407; test_post_canned_expands_body/keeps_explicit_body; vector inbox_post_canned_message). C has no canned support at all. Placement: messaging.py catalog + persistence store, priority mapping, C resource.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T20:32:33.461316803Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T20:32:33.461316803Z",
+  "labels": [
+    "apps",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.127",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T20:32:33.579555602Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

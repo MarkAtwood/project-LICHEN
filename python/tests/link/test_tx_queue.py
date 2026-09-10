@@ -30,6 +30,7 @@ from lichen.link.tx_queue import (
     Priority,
     QueueFullError,
     TxQueue,
+    TxQueueEntry,
 )
 
 
@@ -185,6 +186,35 @@ class TestTxQueueBasic:
         assert len(q) == 0
         assert await reservation.wait() is False
         assert q.stats.packets_transmitted == 0
+
+    def test_complete_removes_exact_reserved_entry_not_value_twin(self):
+        """complete() removes the reserved object by identity, not equality.
+
+        A byte-identical twin inserted ahead of the reserved entry while it
+        is in flight (same-ms enqueue, e.g. a lock-bypassing push) must
+        survive; the reserved object is the one removed. Mirrors the exact
+        entry semantics of fail()/cancel_reservation().
+        """
+        q = TxQueue()
+        q.push(b"twin")
+        reserved = q.reserve()
+        assert reserved is not None
+        twin = TxQueueEntry(
+            data=reserved.data,
+            dst_addr=reserved.dst_addr,
+            priority=reserved.priority,
+            deadline_ms=reserved.deadline_ms,
+            enqueue_time_ms=reserved.enqueue_time_ms,
+            channel=reserved.channel,
+            pkt_id=reserved.pkt_id,
+        )
+        q._entries.insert(0, twin)
+
+        q.complete(reserved, True)
+
+        assert len(q) == 1
+        assert q._entries[0] is twin
+        assert q.stats.packets_transmitted == 1
 
     def test_peek_without_removing(self):
         """peek() returns packet without removing it."""

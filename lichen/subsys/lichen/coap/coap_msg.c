@@ -1027,7 +1027,8 @@ int lichen_msg_sent_post(struct coap_resource *resource,
 		int r = coap_oscore_protect_response(oscore.ctx, oscore.piv,
 						     oscore.piv_len, request,
 						     COAP_RESPONSE_CODE_CREATED,
-						     NULL, 0, &resp, buf, sizeof(buf));
+						     NULL, 0, NULL, 0, &resp, buf,
+						     sizeof(buf));
 		if (r < 0) {
 			return coap_oscore_respond_resource(resource, request, addr,
 							    addr_len, &oscore,

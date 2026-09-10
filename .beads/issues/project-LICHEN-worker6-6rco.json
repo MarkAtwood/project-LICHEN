@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-6rco",
+  "title": "test_vector_file_schema manifest covers only 21 of ~180 corpora",
+  "description": "python/tests/test_vectors.py test_vector_file_schema validates only the 21 explicitly listed filenames against test/vectors/schema.json, but test/vectors/ holds ~180 corpus JSONs (203 json minus schemas); new corpus files silently skip generic schema validation unless a worker remembers the manifest (the forward gate just proved its value by catching the phantom density_adaptive.json entry, project-LICHEN-worker6-1p2r.6). Fix: derive the parametrize from the directory listing (test/vectors/*.json minus *.schema.json, schema.json, and an explicit exemption list for non-envelope files), or add a companion test asserting every corpus file is manifest-listed. Watch for suites like ccp16-desync.json (bare array root) that need the schema's per-family branches or exemption. Discovered-from project-LICHEN-worker6-1p2r.6 codereview pass 3 (edge cases).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T12:51:35.499818266Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T12:51:35.499818266Z",
+  "labels": [
+    "python",
+    "vectors"
+  ]
+}

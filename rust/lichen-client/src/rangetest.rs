@@ -339,9 +339,12 @@ mod wire {
         } else if len <= usize::from(u8::MAX) {
             out.push(0x98);
             out.push(len as u8);
-        } else {
+        } else if len <= usize::from(u16::MAX) {
             out.push(0x99);
             out.extend_from_slice(&(len as u16).to_be_bytes());
+        } else {
+            out.push(0x9A);
+            out.extend_from_slice(&(len as u32).to_be_bytes());
         }
     }
 
@@ -431,5 +434,29 @@ impl TracerouteResult {
         wire::text(&mut out, "total_rtt_ms");
         wire::float64(&mut out, self.total_rtt_ms);
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod wire_array_tests {
+    use super::wire;
+
+    #[test]
+    fn array_covers_all_argument_widths() {
+        let cases: &[(usize, &[u8])] = &[
+            (0, &[0x80]),
+            (23, &[0x97]),
+            (24, &[0x98, 24]),
+            (255, &[0x98, 0xFF]),
+            (256, &[0x99, 0x01, 0x00]),
+            (65_535, &[0x99, 0xFF, 0xFF]),
+            (65_536, &[0x9A, 0x00, 0x01, 0x00, 0x00]),
+            (70_000, &[0x9A, 0x00, 0x01, 0x11, 0x70]),
+        ];
+        for (len, expected) in cases {
+            let mut out = Vec::new();
+            wire::array(&mut out, *len);
+            assert_eq!(&out, expected, "array header for len {len}");
+        }
     }
 }

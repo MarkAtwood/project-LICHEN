@@ -1,0 +1,7 @@
+{
+  "id": "1788976850048243933-1",
+  "issue_id": "project-LICHEN-worker6-ywec",
+  "author": "Mark Atwood",
+  "text": "Decomposed into children ywec.1 (router.rs test-support identity recovery - CLOSED, landed in d2e3e9bb54), ywec.2 gradient lookup_by_iid provenance, ywec.3 announce.rs destination audit, ywec.4 node.rs:387 DAO origin pin resolution (coordinate with plqy + 7ecb), ywec.5 secure datagram sender identity, ywec.6 node.rs source_matches_sender_iid DAO-forward gate (coordinate with ax13). Baseline note: 9 lichen-node tests red on main post-ywec.1, all pre-existing and owned by 5217/cpox.",
+  "created_at": "2026-09-09T18:00:50.048243933Z"
+}

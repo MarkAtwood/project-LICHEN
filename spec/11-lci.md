@@ -169,14 +169,21 @@ Client: fe80::<IID from device MAC>
 Node:   fe80::<node IID>
 ```
 
-`<node IID>` is always the node's key-derived IID: `IID = SHA-512(pubkey)[0:8]`
+`<node IID>` is always the node's key-derived link-local IID: `IID = SHA-512(pubkey)[0:8]`
 with the U/L bit cleared (spec/04-network.md §6.2, spec/06-security.md §8.5).
+This IID appears only in the link-local address; the node's routable
+`0200::/8` `/128` is upstream `AddrForKey(pubkey)` and does not embed the IID
+(`upstream-yggdrasil-addressing` decision, `spec/decisions.jsonl`).
 The node's wire EUI-64 is obtained from that IID by toggling the U/L bit exactly
 once (spec/02-physical-link.md §4.2); it is never the source of the IID. The
 client is a generic IPv6 host and MAY use a static address or one derived from
 its device MAC; such an IID is link-interoperability only and is not a LICHEN
 node identity. `fe80::1` in examples throughout this document is illustrative
-shorthand for the node's link-local address.
+shorthand for the node's link-local address. Likewise, every
+`0200:1234:5678:9abc::...` address in this document is an illustrative
+placeholder, not a literal `AddrForKey` output: a real node primary is
+bit-packed `AddrForKey` bytes (spec/06-security.md §8.5) and has no
+human-friendly form.
 
 The node acts as default router for the client. Client's routing table:
 
@@ -285,10 +292,14 @@ Content-Format: application/cbor
   "pubkey_fingerprint": "SHA256:xY7...",
   "addrs": {
     "link_local": "fe80::0211:22ff:fe33:4455",
-    "primary": "0200:1234:5678:9abc::0211:22ff:fe33:4455"
+    "primary": "0200:1234:5678:9abc:c557:1e9a:04b2:77d0"
   }
 }
 ```
+
+The `primary` lower half above is illustrative: a real primary address is
+upstream `AddrForKey(pubkey)` bit-packed bytes (§17.4, spec/04-network.md §6.2)
+and never contains the EUI-64/IID.
 
 #### 17.5.3. Status Resources
 
@@ -415,7 +426,7 @@ Content-Format: application/cbor
 {
   "routes": [
     {
-      "prefix": "0200:1234:5678:9abc::/64",
+      "prefix": "0300:1234:5678:9abc::/64",
       "via": "fe80::1234:5678:9abc:def0",
       "metric": 512,
       "lifetime_s": 1800

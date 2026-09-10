@@ -33,12 +33,16 @@ _OTHER_DODAG = IPv6Address("0200::2")
 
 
 def _upstream_addr_for_key(pubkey: bytes) -> bytes:
-    """Upstream yggdrasil-go AddrForKey (bit-invert, count leading 1s, bit-pack).
+    """Upstream yggdrasil-go ``AddrForKey``: bit-invert the key, count leading
+    1 bits into ``addr[1]``, drop them plus the separator 0, then pack the
+    remaining bits MSB-first into ``addr[2:16]``.  No hashing.
 
-    Matches Rust lichen-core ygg_addr_from_pubkey byte-for-byte, including
+    Matches Rust lichen-core ``ygg_addr_from_pubkey`` byte-for-byte, including
     the Go byte-counter wrap at 256 and the trailing partial-byte discard.
-    Anchored at import time to the pinned upstream vector in
-    yggdrasil_address.json so this reimplementation cannot silently diverge.
+    The corpus pins upstream addresses per spec/decisions.jsonl
+    ``upstream-yggdrasil-addressing``; the local reimplementation is anchored
+    at import time to the pinned upstream vector in yggdrasil_address.json
+    (see ``_upstream_anchor_check``) so it cannot silently diverge.
     """
     if len(pubkey) != 32:
         raise ValueError(f"pubkey must be 32 bytes, got {len(pubkey)}")

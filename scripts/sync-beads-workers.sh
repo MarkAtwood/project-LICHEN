@@ -423,7 +423,18 @@ llm_semantic_merge() {
     # resolves an unmerged index entry regardless of content, so the marker
     # and bound gates below carry the real verification.
     git add -- $files
-    if git diff --name-only --diff-filter=U | grep -q .; then
+    # Auto-resolve .beads conflicts: main's live store wins. Workers merging
+    # main into their branch transitively carry .beads content; those files
+    # conflict when the sync loop merges the branch back. No kimi session
+    # should ever burn time on store JSON.
+    BEADS_U=$(git diff --name-only --diff-filter=U -- .beads | tr '\n' ' ')
+    if [ -n "$BEADS_U" ]; then
+        for f in $BEADS_U; do
+            git checkout --ours "$f" 2>/dev/null || git show "HEAD:$f" > "$f" 2>/dev/null || rm -f "$f"
+            git add "$f"
+        done
+    fi
+    if git diff --name-only --diff-filter=U | grep -v '^\.beads/' | grep -q .; then
         return 1
     fi
 
@@ -567,16 +578,25 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
         normalize_merge_store_entries "$branch"
         if BEADS_ALLOW_STORE_COMMIT=1 git commit --no-edit --quiet; then
             echo "  merged (code only)"
-        else
+        elif git diff --cached --quiet; then
+            # Index empty after normalization: a legitimately-emptied merge
+            # (branch delta was only .beads/oscore). Abort quietly.
             echo "  nothing to commit after normalization"
             git merge --abort 2>/dev/null || true
+        else
+            # Staged content exists but the commit failed (pre-commit hook,
+            # disk). Retrying re-fails identically every run with no signal
+            # (bead gpm7): record it so a human sees the branch.
+            echo "  COMMIT FAILED on clean merge of $branch (staged content present) — recording"
+            git merge --abort 2>/dev/null || true
+            conflicted+=("$branch")
         fi
     else
         # Single-file conflicts: in-loop kimi resolves immediately (measured
         # 100% success on single files). Multi-file conflicts go straight to
         # the janitor — the in-loop session fails ~80% there (75 dead sessions
         # measured), pure wasted spend.
-        CONFLICT_N=$(git diff --name-only --diff-filter=U | wc -l)
+        CONFLICT_N=$(git diff --name-only --diff-filter=U | grep -cv '^\.beads/' || true)
         if [ "$CONFLICT_N" -le 1 ] && llm_semantic_merge "$branch"; then
             store_staged=0; merge_staged_store_entries && store_staged=1
             if git diff --name-only --diff-filter=U | grep -q .; then
@@ -588,17 +608,33 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
                 fi
                 conflicted+=("$branch")
             else
-                # Same store normalization as the clean-merge path (bead
-                # qfkj): the merge auto-staged non-conflicted branch-side
-                # .beads/oscore entries, and the kimi session may have staged
-                # more — none of that may land in main's commit.
+                # (Resolution note, this merge, main vs beads-worker-5:
+                # compatible, both kept — main's store normalization before
+                # the commit (bead qfkj: the merge auto-staged non-conflicted
+                # branch-side .beads/oscore entries, and the kimi session may
+                # have staged more — none of that may land in main's commit),
+                # its snapshots, and its per-command BEADS_ALLOW_STORE_COMMIT
+                # opt-out stand; beads-worker-5's gpm7 failure split is merged
+                # into the commit-failure branch — empty index vs. staged
+                # content with a failed commit are distinct cases and are no
+                # longer conflated, matching the clean-merge path above.)
                 snapshot_store "$branch-llm"
                 normalize_merge_store_entries "$branch"
                 if BEADS_ALLOW_STORE_COMMIT=1 git commit --no-edit --quiet; then
                     echo "  merged via LLM semantic reconciliation"
-                else
+                elif git diff --cached --quiet; then
+                    # Index empty after normalization: nothing code-side to
+                    # land. Abort quietly.
                     echo "  semantic merge produced no commit — aborting"
                     snapshot_store "$branch-nocommit"
+                    git merge --abort 2>/dev/null || true
+                    conflicted+=("$branch")
+                else
+                    # Staged content exists but the commit failed (hook,
+                    # disk): surface it explicitly rather than conflating
+                    # with the empty case (bead gpm7, beads-worker-5; same
+                    # distinction as the clean-merge path above).
+                    echo "  COMMIT FAILED after LLM merge of $branch (staged content present) — recording"
                     git merge --abort 2>/dev/null || true
                     conflicted+=("$branch")
                 fi

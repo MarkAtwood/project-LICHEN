@@ -74,7 +74,7 @@ fn vectors() -> impl Iterator<Item = &'static str> {
     })
 }
 
-fn pinned_announces(identity: &Identity, prefix: [u8; 8], root_id: NodeId) -> AnnounceProcessor {
+fn pinned_announces(identity: &Identity, root_id: NodeId) -> AnnounceProcessor {
     let rx_channel = 0;
     let mut signed = [0u8; 64];
     write_announce_signed_data(
@@ -100,7 +100,7 @@ fn pinned_announces(identity: &Identity, prefix: [u8; 8], root_id: NodeId) -> An
     .write_to(&mut wire)
     .unwrap();
     let announce = Announce::from_bytes(&wire[..len]).unwrap();
-    let mut processor = AnnounceProcessor::new(GradientTable::new(MAX_TRACKED_ORIGINATORS), prefix);
+    let mut processor = AnnounceProcessor::new(GradientTable::new(MAX_TRACKED_ORIGINATORS));
     assert!(
         processor
             .process(&announce, root_id.link_local_addr().0, 0)
@@ -155,11 +155,8 @@ fn fixed_dao_origin_vectors_match_rpl_node_handler() {
         let root_id = root_id(active_dodag);
         let wire = hex(string_field(vector, "signed_dao"));
         let reason = string_field(vector, "reason");
-        let announces = pinned_announces(&identity, source[..8].try_into().unwrap(), root_id);
-        let unpinned = AnnounceProcessor::new(
-            GradientTable::new(MAX_TRACKED_ORIGINATORS),
-            source[..8].try_into().unwrap(),
-        );
+        let announces = pinned_announces(&identity, root_id);
+        let unpinned = AnnounceProcessor::new(GradientTable::new(MAX_TRACKED_ORIGINATORS));
         let mut storage = MemStorage::new();
         let (mut node, mut rx_state) = RplNode::provision_root(root_id, &mut storage).unwrap();
         let mut dao_admission =
@@ -270,7 +267,7 @@ fn unavailable_replay_storage_leaves_dao_state_unchanged() {
     let active_dodag = array(string_field(vector, "active_dodag_id"));
     let root_id = root_id(active_dodag);
     let wire = hex(string_field(vector, "signed_dao"));
-    let announces = pinned_announces(&identity, source[..8].try_into().unwrap(), root_id);
+    let announces = pinned_announces(&identity, root_id);
     let mut storage = MemStorage::new();
     let (mut node, mut rx_state) = RplNode::provision_root(root_id, &mut storage).unwrap();
     let mut dao_admission =

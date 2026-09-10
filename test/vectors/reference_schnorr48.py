@@ -7,6 +7,11 @@ This module intentionally imports no ``lichen`` package.  It implements the
 algorithm in draft-lichen-schnorr-00 directly with libsodium group/scalar
 operations so vector generation does not reuse the signer or identity code
 being tested by Python and Rust consumers.
+
+Routable addresses use the upstream yggdrasil-go ``AddrForKey`` bit-packing
+(spec/decisions.jsonl ``upstream-yggdrasil-addressing``), validated against
+the pinned anchor in yggdrasil_address.json; the SHA-512-derived ``iid`` is
+retained only for link-local/kid purposes.
 """
 
 from __future__ import annotations
@@ -43,6 +48,41 @@ def _canonical_scalar(value: bytes) -> bytes:
     return (int.from_bytes(value, "little") % _GROUP_ORDER).to_bytes(32, "little")
 
 
+def addr_for_key(public_key: bytes) -> bytes:
+    """Derive the upstream yggdrasil-go ``AddrForKey`` for an Ed25519 public key.
+
+    Bit-invert the 32-byte key, count the leading 1 bits into ``addr[1]``,
+    drop those 1s and the first 0 bit, then bit-pack the remaining bits
+    MSB-first into ``addr[2:16]``.  No hashing is involved.  Mirrors
+    yggdrasil-go ``src/address/address.go`` ``AddrForKey`` byte-for-byte.
+    """
+    if len(public_key) != 32:
+        raise ValueError("Ed25519 public key must be exactly 32 bytes")
+    inverted = bytes(b ^ 0xFF for b in public_key)
+    total_bits = len(inverted) * 8
+    ones = 0
+    while ones < total_bits and (inverted[ones // 8] >> (7 - (ones % 8))) & 1:
+        ones += 1
+    packed = bytearray(14)
+    acc = 0
+    nbits = 0
+    pos = 0
+    for i in range(ones + 1, total_bits):
+        bit = (inverted[i // 8] >> (7 - (i % 8))) & 1
+        acc = (acc << 1) | bit
+        nbits += 1
+        if nbits == 8:
+            if pos < len(packed):
+                packed[pos] = acc
+            pos += 1
+            acc = 0
+            nbits = 0
+    return bytes((0x02, ones & 0xFF)) + bytes(packed)
+
+
+upstream_addr_for_key = addr_for_key
+
+
 @dataclass(frozen=True, slots=True)
 class ReferenceIdentity:
     """Spec-derived deterministic identity used only by vector tooling."""
@@ -67,8 +107,7 @@ class ReferenceIdentity:
         digest = hashlib.sha512(public).digest()
         iid = bytearray(digest[:8])
         iid[0] &= 0xFD
-        address = bytes((0x02,)) + digest[:7] + bytes(iid)
-        return cls(bytes(seed), private, public, bytes(iid), address)
+        return cls(bytes(seed), private, public, bytes(iid), addr_for_key(public))
 
 
 def sign(identity: ReferenceIdentity, message: bytes) -> bytes:
@@ -129,7 +168,9 @@ def signature_transcript(wire_without_mic: bytes, destination_length: int) -> by
 __all__ = [
     "LINK_SIGNATURE_DOMAIN",
     "ReferenceIdentity",
+    "addr_for_key",
     "sign",
     "signature_transcript",
+    "upstream_addr_for_key",
     "verify",
 ]

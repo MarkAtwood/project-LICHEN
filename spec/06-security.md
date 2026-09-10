@@ -17,6 +17,27 @@
 | Routing attacks | Link-layer signatures REQUIRED on all RPL control frames (DIO/DAO/DIS); RPL secure mode optional |
 | DoS | Rate limiting, admission control |
 
+**Broadcast budget key not authenticated end-to-end (acknowledged ceiling):**
+the 04-network.md §6.3.3 broadcast relay budget is keyed on the packet's
+source IID field, which the limiter never binds to any authenticated
+identity. Link-layer Schnorr signatures are per-hop (relays re-sign with
+their own keys, 02-physical-link.md:305-308); OSCORE (pairwise or group)
+secures CoAP payloads, not the network-layer source field; and DAO-origin
+authentication is DAO-only (§8.4). End-to-end-signed broadcast classes do
+exist — SOS origin signatures (12-apps.md §18.4.1) and self-authenticating
+announces (05-routing.md §9.2) — but the §6.3.3 limiter does not consult
+them; it keys on the unauthenticated inner source field. A radio adversary
+therefore gets fresh budget identities for free by inventing arbitrary source
+IIDs under a single existing keypair (no new keypair needed), and can also
+spoof a victim's source to exhaust that victim's budget; IID spoofing
+additionally pressures the un-capped §6.3.3 relay-state table. Residual risk:
+per-hop budgets still bound the blast radius any single claimed identity can
+cause through one honest relay, so the budgets remain worthwhile as a
+rate-of-amplification limiter — not as proof of origin. This ceiling is
+acknowledged here; it is not closed at this layer (the limiter would have to
+key on a verified end-to-end identity, which §8.4 scopes to DAO only).
+Coordinate any change with the open 06-security addressing-consistency audit.
+
 ### 8.2. Security Layers
 
 ```
@@ -102,22 +123,22 @@ remains future `.44.9` work.
 
 ### 8.5. Unified Ed25519 Identity Derivation
 
-All node identity derives from **a single Ed25519 keypair**. This unifies link-layer Schnorr-48 signatures, X25519 (for EDHOC/OSCORE per §8.9), stable IID, and primary 0200::/8 native address. No separate keys or ULA. See normative steps and full key management in §8.7, `rust/lichen-core/src/addr.rs:86-117` (`iid_from_pubkey_bytes`, `ygg_addr_from_pubkey`; re-exported via `rust/lichen-link/src/lib.rs`), `python/src/lichen/crypto/identity.py:116-234` (`_pubkey_to_iid`, `yggdrasil_address`), `test/vectors/yggdrasil-derivation.json`, 04-network.md:§6.2, and 03-addressing.md.
+All node identity derives from **a single Ed25519 keypair**. This unifies link-layer Schnorr-48 signatures, X25519 (for EDHOC/OSCORE per §8.9), the stable link-local IID, and the primary upstream Yggdrasil 0200::/8 address (`AddrForKey`). No separate keys or ULA. See normative steps and full key management in §8.7, the pinned upstream byte-equality oracle `test/vectors/yggdrasil_address.json` (`upstream_addr_for_key` vector), `spec/decisions.jsonl` (`upstream-yggdrasil-addressing`), `rust/lichen-core/src/addr.rs` (`iid_from_pubkey_bytes`, `ygg_addr_from_pubkey`), `python/src/lichen/crypto/identity.py` (`_pubkey_to_iid`, `yggdrasil_address`), 04-network.md §6.2 and §12.1, and 03-addressing.md. The rejected SHA-512 native profile is quarantined in `test/vectors/legacy/yggdrasil-derivation.json` (not a conformance oracle). Where 03-addressing.md and 04-network.md §6.2 still describe the superseded SHA-512 native address profile, this section and the decision record take precedence; consult them only for the link-local IID, the human-readable address, and the no-ULA model.
 
-**Overview (MUST match §8.7 and test vectors exactly):**
+**Overview (MUST match §8.7 and the pinned upstream test vectors exactly):**
 
 1. 32-byte seed → Ed25519 keypair (deterministic per draft-lichen-schnorr-00).
-2. IID = SHA-512(pubkey)[0:8]; `iid[0] &= 0b1111_1101` (U/L bit **cleared** per RFC 4291; previous `|=0x02` incorrect). **MUST be SHA-512, not SHA-256**. The native address profile fixes the first address byte to `0x02` (0200::/8).
-3. 02xx addr = `[0x02] + SHA-512(pubkey)[0:7] + IID` (lower 64 bits bind key to address; prevents substitution).
+2. IID = SHA-512(pubkey)[0:8]; `iid[0] &= 0b1111_1101` (U/L bit **cleared** per RFC 4291; previous `|=0x02` incorrect). **MUST be SHA-512, not SHA-256**. The IID is a **local identifier only**: it forms link-local `fe80::/10` control addresses, human-readable node addresses (03-addressing.md), and key identifiers (TOFU pins, COSE `kid`). It MUST NOT be used to construct or alter the routable address.
+3. Routable /128 = upstream Yggdrasil `AddrForKey(pubkey)` exactly (yggdrasil-go commit `422836ee`, `src/address/address.go`; spec/decisions.jsonl `upstream-yggdrasil-addressing`; normative byte-for-byte description also in 04-network.md §12.1): bit-invert the 32-byte pubkey; `addr[0]=0x02`; `addr[1]` = count of leading 1 bits in the inverted key; drop those leading 1 bits and the first 0 bit; pack the remaining inverted-key bits MSB-first into whole bytes, discarding any trailing partial byte; copy into `addr[2:16]`, truncating at 14 bytes, with unwritten tail bytes zero. No hashing. The result MUST match upstream byte-for-byte for every input; upstream is the arbiter for degenerate keys (inverted key with >143 leading 1 bits). The address no longer embeds the IID; key binding is by self-derivation (the address IS `AddrForKey(pubkey)`, verifiable by anyone holding the pubkey) — substitution resistance is preserved, stronger than IID-embedding. Routed `/64`s, when used, MUST equal upstream `SubnetForKey(pubkey)` in `0300::/8`.
 4. X25519 priv = clamp(SHA-512(seed)[0:32]) for OSCORE/EDHOC.
-5. TOFU pins pubkey to derived IID/02xx (cryptographically enforced).
+5. TOFU pins pubkey to derived IID and `AddrForKey` address (cryptographically enforced).
 
-Link-local `fe80::/10` is for control only. The key-derived 0200::/8 primary address is for all routable traffic. Global Yggdrasil participation, when enabled, is a separate identity-preserving profile. See test vectors for exact byte/bit positions and oracles. This binds signatures, OSCORE, and addressing into one key, eliminating mismatch attacks.
+Link-local `fe80::/10` is for control only. The upstream-derived 0200::/8 primary address is for all routable traffic, in isolated meshes and across backhauls; global Yggdrasil participation uses the same address with no translation. The SHA-512-based "LICHEN native" address profile previously described here is **rejected** (`spec/decisions.jsonl`: `upstream-yggdrasil-addressing`); the conformance oracle is the pinned upstream vector in `test/vectors/yggdrasil_address.json`, not legacy LICHEN fixtures. This binds signatures, OSCORE, and addressing into one key, eliminating mismatch attacks.
 
 **Benefits:**
 - Cryptographic binding across all uses (no key/address divergence)
 - Single key management (self-provisioned or BR)
-- Seamless Yggdrasil global routing without NAT/ULA
+- Seamless Yggdrasil global routing without NAT/ULA (upstream-compatible addressing end to end)
 - Strengthened TOFU via verifiable derivation
 
 ### 8.6. Signature Caching
@@ -136,17 +157,17 @@ high-security deployments, enable per-hop verification (costs CPU, not bytes).
 ### 8.7. Key Management
 
 
-A single 32-byte seed produces all material for signatures (Schnorr48), X25519 (for EDHOC/OSCORE), stable IID, and the primary 0200::/8 native address. Single key for all purposes. Supports the simplified no-ULA model (fe80::IID + 0200::/8 primary only) per 04-network.md §6.1 and 05-routing.md. Matches test/vectors/yggdrasil-derivation.json exactly; see `python/src/lichen/crypto/identity.py:60` (from_seed), `rust/lichen-link/src/identity.rs:69` (Identity::from_seed).
+A single 32-byte seed produces all material for signatures (Schnorr48), X25519 (for EDHOC/OSCORE), the stable link-local IID, and the primary upstream Yggdrasil 0200::/8 address (`AddrForKey`). Single key for all purposes. Supports the simplified no-ULA model (fe80::IID + upstream 0200::/8 primary only); see 04-network.md §6.1 for the addressing model and 05-routing.md (any address construction in 04-network.md that predates the upstream decision is superseded — §8.5/§8.7 here and 04-network.md §12.1 are normative). Routable addresses MUST match the pinned upstream vector in `test/vectors/yggdrasil_address.json` exactly; that vector, not any LICHEN-generated fixture, is the independent conformance oracle (`spec/decisions.jsonl`: `upstream-yggdrasil-addressing`). The rejected SHA-512 native profile is quarantined in `test/vectors/legacy/yggdrasil-derivation.json` (not a conformance oracle). See `python/src/lichen/crypto/identity.py:60` (from_seed), `rust/lichen-link/src/identity.rs:69` (Identity::from_seed).
 
-**Normative Derivation (MUST match test vectors exactly):**
+**Normative Derivation (MUST match the pinned upstream test vectors exactly):**
 
 1. **Keypair**: `privkey, pubkey = derive_keypair(seed)` per draft-lichen-schnorr-00.md:97 (h=SHA-512(seed); privkey=clamp(h[0:32]); pubkey=basepoint_mult). Matches schnorr48.py:96 and Rust exactly.
-2. **IID**: `hash=SHA-512(pubkey); iid=hash[0:8]; iid[0] &= 0b1111_1101` (U/L bit clear per RFC 4291). **MUST be SHA-512** — this is the LICHEN native profile's own derivation digest; upstream Yggdrasil `AddrForKey` does not hash at all (it bit-packs the inverted key), and the two schemes agree only on the leading `0x02` byte (see the divergence note in `test/vectors/yggdrasil_address.json`). See 04-network.md §6.2, `rust/lichen-core/src/addr.rs:86` (`iid_from_pubkey_bytes`; re-exported via `lichen-link::iid_from_pubkey`).
-3. **0200::/8 Address**: `addr=[0x02] + SHA-512(pubkey)[0:7] + IID` (MUST: lower 64 bits == IID to bind key to address and prevent substitution attacks; bytes 1 through 7 are from SHA-512(pubkey)). No ULA. See addr.rs:109 (`ygg_addr_from_pubkey`), test/vectors/yggdrasil-derivation.json.
+2. **Link-local IID**: `hash=SHA-512(pubkey); iid=hash[0:8]; iid[0] &= 0b1111_1101` (U/L bit clear per RFC 4291; **MUST be SHA-512**). The IID scopes to link-local `fe80::/10` control addressing, human-readable addresses (03-addressing.md), and key identifiers. It MUST NOT be embedded in, or used to alter, the routable address. The IID hashes the pubkey; upstream Yggdrasil `AddrForKey` (the routable primary, step 3) does NOT hash at all (it bit-packs the inverted key). The IID and the primary address share no bytes (the IID has no leading `0x02` byte); they are independent derivations from the same pubkey (see the pinned upstream anchor and rejected-profile note in `test/vectors/yggdrasil_address.json`; the rejected profile's vectors are quarantined in `test/vectors/legacy/` per spec/decisions.jsonl `upstream-yggdrasil-addressing`). See 04-network.md §6.2, `rust/lichen-core/src/addr.rs` (`iid_from_pubkey_bytes`).
+3. **Routable 0200::/8 Address**: MUST equal upstream Yggdrasil `AddrForKey(pubkey)`: invert all bits of the 32-byte pubkey; `addr[0]=0x02`; `addr[1]` = count of leading 1 bits in the inverted key; drop those leading 1 bits and the first 0 bit; pack the remaining inverted-key bits MSB-first into whole bytes, discarding any trailing partial byte; copy into `addr[2:16]`, truncating at 14 bytes, with unwritten tail bytes zero. No hashing, no embedded IID. The result MUST match upstream byte-for-byte for every input; upstream is the arbiter for degenerate keys (inverted key with >143 leading 1 bits). Routed `/64` prefixes, when used, MUST equal upstream `SubnetForKey(pubkey)` (`0300::/8`). Substitution resistance comes from self-derivation: the address IS `AddrForKey(pubkey)`, so anyone holding the pubkey recomputes and verifies it; the former "lower 64 bits == IID" MUST is withdrawn (the local IID derivation MUST NOT alter upstream address bytes). Reference: yggdrasil-go commit `422836ee`, `src/address/address.go` (normative byte-for-byte description also in 04-network.md §12.1); byte-equality oracle: `test/vectors/yggdrasil_address.json` (`upstream_addr_for_key`, pinned upstream `address_test.go` anchor); spec/decisions.jsonl `upstream-yggdrasil-addressing`. The SHA-512-based LICHEN native address profile is rejected and MUST NOT be used; its vectors are quarantined in `test/vectors/legacy/yggdrasil-derivation.json` (not a conformance oracle). No ULA.
  4. **X25519**: `x25519_priv=clamp(SHA-512(seed)[0:32])` per RFC 7748 §5 for EDHOC static DH (see 8.9). Matches Python identity.py:109, standards/crypto.md:79.
 
 
-Self-provisioned (RECOMMENDED) or BR-provisioned nodes derive identically. TOFU pins pubkey to derived IID/02xx (cryptographic consistency per 04/05). Mismatch rejects (MITM protection).
+Self-provisioned (RECOMMENDED) or BR-provisioned nodes derive identically. TOFU pins pubkey to derived IID and `AddrForKey` address (cryptographic consistency per 04/05). Mismatch rejects (MITM protection).
 
 **Design Principles:**
 - No pre-shared network keys (each node has its own keypair)
@@ -205,7 +226,7 @@ For managed fleets, border router can provision keypairs. Nodes still derive IID
 1. Node boots in commissioning mode
 2. Connects to BR via secure channel (USB/BLE/LCI)
 3. BR generates Ed25519 keypair
-4. BR transmits private key + pubkey (node derives IID/02xx/Yggdrasil addr from pubkey)
+4. BR transmits private key + pubkey (node derives the IID and the 0200::/8 `AddrForKey` primary from pubkey)
 5. Node stores keypair, derives addresses, exits commissioning
 6. BR records (derived IID, PubKey) in trust anchor list
 7. BR distributes anchors to other nodes via CoAP
@@ -350,6 +371,14 @@ of the NEW public key.
 ```
 
 Integer keys minimize payload size. The payload is the serialized CBOR map.
+
+**Abuse-state non-continuity (acknowledged):** the attestation proves key
+succession only; it carries NO application-layer abuse state. Rate-limit
+buckets and reputation scores keyed on IID (e.g. the SOS 3/hour bucket and
+soft-blacklist in 12-apps.md §18.4.1) do not transfer to the new key — a node
+that rotates starts with a fresh bucket and clean score. This evasion window
+is accepted: closing it would require carrying signed abuse history in the
+attestation, which §8.7.4 deliberately does not do.
 
 **Signature Computation (COSE_Sign1):**
 
@@ -759,13 +788,25 @@ Integer keys minimize payload size. The payload is the serialized CBOR map.
 **Route Hash Computation:**
 
 ```
-route_bytes = concat(hop[0].iid, hop[1].iid, ..., hop[n].iid)
+route_bytes = concat(hop[0].addr, hop[1].addr, ..., hop[n].addr)
 route_hash  = SHA-256(route_bytes)[0:16]
 ```
 
-Each `hop[i].iid` is the 8-byte IID from the transit node's address, in
-source-route order (first hop to last hop / egress). This matches the
-order in the IPv6 Source-Route Header.
+Each `hop[i].addr` is the full 16-byte primary 02xx address of the transit
+node as reconstructed from the IPv6 Source-Route Header, in source-route
+order (first hop to last hop / egress). This matches the visitation order
+of the IPv6 Source-Route Header (RFC 6554); the hash input is the full
+16-byte hop ADDRESSES as reconstructed in the routing table, not the
+prefix-elided suffixes the wire SRH may carry under 6LoRH compression.
+The hash input is the hop ADDRESSES, not IIDs: under the AddrForKey profile
+(§8.5/§8.7) a primary 02xx address embeds no IID, so slicing 8 bytes off it
+yields a value with no identity meaning and would break the
+root-signer/egress-validator binding. (The IID remains a real identity —
+the SHA-512(pubkey) link-local derivation used for `kid` and `egress_iid`
+below — it is just not recoverable from the 02xx address.) Hashing the full
+addresses is deterministic for both root and egress without any pubkey
+lookup, and removes the 64-bit IID-collision false loop-rejection inherent
+in 8-byte hop comparison.
 
 **Signature Computation (COSE_Sign1):**
 
@@ -1086,15 +1127,79 @@ LICHEN provides an optional public CA service for credential issuance.
 Deployments MAY use the default CA, self-operate a CA, or use any PKI.
 Trust anchor configuration is implementation-defined.
 
+**Signing Model:**
+
+The COSE_Sign1 signature key is determined solely by the unprotected `kid`
+(issuer-iid) and the trust material presented:
+
+- **Without x5chain (issuer-signed credentials):** the signer is the issuing
+  authority (CA, gateway, fleet operator). The verifier resolves the issuer
+  public key by `kid` from its trust store. Payload claims are asserted by
+  that authority. The `subject-iid` (payload key 1) MAY differ from `kid`;
+  it names the node the facts are about.
+- **With x5chain (attestation credentials):** the signer is the presenting
+  node itself, signing with its own node key (alg -65537). The CA signature
+  on the chain attests ONLY the key-to-address binding of the node key
+  (appendix-x509-cert-profile.md); it does NOT attest the payload claims,
+  which are self-asserted by the node. An authority that wants to assert
+  claims MUST sign the credential with its own key using the no-x5chain
+  form (the x5chain path is exclusively node-key attestation; an
+  authority MUST NOT attach its own chain as the credential's x5chain:
+  the x5chain path is self-referential (Key Binding check 4), so an
+  authority chain can only attest the authority about itself and can
+  never assert third-party claims).
+
+**Key Binding (x5chain path):**
+
+A credential carrying `x5chain` is valid only if ALL of the following hold:
+
+1. The leaf certificate's public key is the key that verifies the COSE_Sign1
+   signature. A chain whose leaf key does not verify the signature MUST be
+   rejected.
+2. The IID derived from the leaf public key (03-addressing.md) equals the
+   COSE `kid` (issuer-iid). A credential whose `kid` names a different key
+   than the verified one MUST be rejected.
+3. The leaf certificate's SAN native `/128` equals the upstream
+   `AddrForKey` of the leaf public key, byte-for-byte, per the verifier
+   address-binding check (appendix-x509-cert-profile.md §8, step 4).
+   The routable address does not embed the SHA-512 IID (§8.7): a SAN
+   entry that carries the `kid` in its lower 64 bits instead of the
+   `AddrForKey` form MUST be rejected.
+4. The payload `subject-iid` equals that same `kid`: a chain-attested
+   credential is self-referential, so the leaf key, the COSE signer, the
+   SAN, and the subject are all one identity. A credential asserting facts
+   about a different subject MUST use the issuer-signed form (no x5chain).
+
+These bindings defeat mix-and-match: a node holding a chain from any
+configured anchor cannot present it under an arbitrary issuer IID, cannot
+attach a foreign subject, and cannot split a chain from one credential onto
+another's claims.
+
 **Verification:**
 
 1. Decode COSE_Sign1; verify algorithm is -65537
-2. If x5chain present: validate chain to trust anchor
-3. Else: lookup issuer pubkey by kid in trust store
-4. Verify signature per RFC 9052
-5. Verify subject-iid matches presenting node
-6. Verify expiry > now
-7. Verify seq > cached seq (if superseding prior credential)
+2. Resolve the verification key:
+   - If x5chain present: validate chain to trust anchor per
+     appendix-x509-cert-profile.md §8 steps 1-3 (validity window, leaf
+     basicConstraints/keyUsage), then apply the Key Binding checks
+     (all four MUST hold); the leaf public key is the verification key
+   - Else: lookup issuer pubkey by kid in trust store
+3. Verify signature per RFC 9052
+4. Verify subject-iid matches presenting node, except for issuer-signed
+   credentials where verifier policy MAY accept a third-party subject.
+   When subject-iid differs from the presenting node, all claims MUST be
+   attributed to the subject-iid (asserted by the issuer under the
+   verification key) and MUST NOT be attributed to the presenting party or its
+   session; a bearer credential obtained by one node MUST NOT confer the
+   subject's rights on the presenter
+5. Verify expiry > now
+6. Verify seq against the cached seq for the tuple (verification-key IID,
+   subject-iid, claim-type) — an issuer may run independent seq series per
+   subject and claim type: accept if there is no cached entry (record seq);
+   reject if seq < cached seq (superseded/revoked
+   credential); accept seq == cached seq (re-presentation of the current
+   credential, safe because step 4 binds claims to their subject); update
+   the cache only when seq > cached seq
 
 **Revocation:**
 
@@ -1148,6 +1253,46 @@ Gateway decides policy (who gets what facts) out of band.
 | `lichen:channel` | [tstr] | Authorized channel/group IDs |
 | `lichen:quota` | uint | Monthly bytes (0=unlimited) |
 | `lichen:sponsored` | tstr | "Traffic sponsored by X" |
+| `lichen:expiry` | uint | Unix timestamp after which the fact is invalid |
+| `lichen:seq` | uint | Strictly increasing per-issuer sequence number |
+
+**Freshness and Revocation:**
+
+A fact carrying no freshness claim is mesh-lifetime only: it cannot be
+revoked or superseded while the issuing gateway's key remains trusted.
+Gateways SHOULD therefore include `lichen:expiry` and `lichen:seq` on every
+issued fact. A gateway revokes a grant by issuing a replacement fact with a
+higher `lichen:seq` and ceasing to renew it; verifiers reject a fact whose
+`lichen:expiry` is not greater than the current time, and whose `lichen:seq`
+is not strictly greater than the highest seq previously seen from the same
+issuer. Verifiers MUST fail closed: a fact carrying `lichen:expiry` cannot
+be accepted without a current time to check against, and a fact carrying
+`lichen:seq` cannot be accepted without a per-issuer sequence cache.
+
+Because wall-clock time is untrusted input (a radio adversary can spoof a
+verifier's GPS/RTC clock), the verifier's expiry check MUST be robust to
+clock rollback, mirroring the issuer-side `max(floor + 1, time-derived)`
+clamp below: the verifier persists a monotone floor of the highest wall-clock
+time it has observed and evaluates `lichen:expiry` against
+`max(floor, current time)`, never against a time that has moved backward.
+Without this clamp a backward-spoofed clock makes an expired fact read as
+unexpired, and — because revocation-by-non-renewal leaves the revoked fact as
+the highest-seq fact the verifier has seen — the seq check then passes and
+the revoked grant is re-admitted until the wall clock is set forward again.
+The floor prevents that rollback-driven re-admission: a backward-spoofed
+clock does not lower the effective time used for the expiry check. A verifier
+with no trustworthy time source at all MUST NOT honor expiring facts (it
+cannot evaluate `lichen:expiry`); mesh-lifetime facts without freshness
+claims are unaffected.
+
+On first contact with an issuer the cache has no entry; the verifier treats
+the empty cache as "highest seq = -1", accepts any non-negative seq, and
+seeds the cache from the verified fact. A verifier MUST NOT derive the
+comparison baseline from the fact being verified. The per-issuer cache MUST
+be updated only after the fact's signature verifies, and the update MUST be
+atomic with acceptance: updating from an unverified fact lets an
+unauthenticated sender poison the cache with a large seq and deny service to
+the legitimate issuer.
 
 **Emergency Services Authorization:**
 
@@ -1181,7 +1326,57 @@ COSE_Sign with multiple COSE_Signature entries
 **Validity:**
 
 Local facts are mesh-lifetime. Gateway restart or root re-election
-invalidates cached facts; nodes re-request from new gateway.
+invalidates cached facts; nodes re-request from new gateway. Within a mesh
+lifetime, `lichen:expiry` and `lichen:seq` (above) provide revocation and
+supersession without waiting for infrastructural invalidation.
+
+**Sequence continuity across restart.** The `lichen:seq` revocation
+guarantee depends on the issuer's sequence counter and the verifier's
+per-issuer sequence cache moving together across a gateway restart or
+root re-election. Note the two distinct things a verifier holds: the
+*facts* it honors (invalidated on restart per above, since the issuing
+gateway's reachability is gone) and the per-issuer *seq cache* (the
+replay floor for that issuer's key). Invalidating facts on restart does
+not reset the seq cache, which is keyed by issuer IID and survives so
+long as the issuer's key stays trusted.
+
+An issuing gateway MUST persist its `lichen:seq` counter to non-volatile
+storage so it resumes strictly above the highest value it has issued,
+or derive it from a monotonic source with the same property; it MUST NOT
+restart from a value at or below a previously issued seq. A gateway
+without persistent storage derives the counter from a monotonic time
+source (seconds since a fixed epoch, e.g. an RTC or GPS clock) — but a
+boot-relative uptime counter is forbidden, since it resets every boot,
+and wall-clock time is untrusted input: a radio adversary can spoof GPS
+civil time backward (deadlocking issuance against retained verifier
+floors) or forward (ratcheting verifier floors so true time then reads
+as a regression, permanently deadlocking a persistence-less issuer). To
+stay non-regressing under such spoofing the issuer MUST persist at least
+an 8-byte floor of the highest seq issued and clamp to
+`max(floor + 1, time-derived value)`; an issuer that cannot guarantee a
+non-regressing counter MUST NOT issue seq-bearing facts. The verifier
+MUST retain the per-issuer seq cache for at least as long as it trusts
+that issuer's key: the cache is as durable as the trust anchor for the
+issuer IID, and evicting it while still trusting the key re-admits
+revoked pre-restart facts (the failure named below), so a constrained
+verifier that must bound the cache drops the issuer's trust entry
+together with its seq cache, never the seq cache alone. Note that such a
+drop is a paired reset: if the issuer's key is later re-trusted (re-TOFU
+or re-provisioning), the cache restarts empty and the first-contact
+bootstrap (highest seq = -1) re-opens, re-admitting a replayed
+revoked-but-unexpired fact until the current fact arrives or it expires.
+A fact intended to remain revocable after such a re-bootstrap SHOULD
+therefore carry `lichen:expiry` to bound that window; a mesh-lifetime
+fact without freshness claims (above) instead remains valid for the mesh
+lifetime once re-admitted. A replayed pre-restart fact (whose signature
+is still valid)
+must still lose to the retained cache. With both sides preserved, a
+restarted gateway's next fact (higher persisted seq) supersedes its
+pre-restart facts, and no availability deadlock occurs: the gateway does
+not reissue at-or-below the retained floor, and verifiers do not reset
+below it. If either side resets independently the guarantee breaks — an
+issuer reset deadlocks issuance against retained verifier caches, and a
+verifier reset re-admits revoked pre-restart facts.
 
 #### 8.13.2. CA Credentials (Portable)
 
@@ -1196,6 +1391,30 @@ require PKI trust (x5chain or pre-configured anchor). Use for:
 Local facts and CA credentials can coexist. A node might have:
 - CA credential: `oidc:name = "Mark Atwood"` (portable identity)
 - Local fact: `lichen:priority = 2` (this mesh only)
+
+<!-- Merge resolution (beads-worker-8 into main): worker-8 carried an
+     earlier inline draft of this profile as section 8.13.3. The
+     profile's normative home is appendix-x509-cert-profile.md on main,
+     which supersedes that draft; keeping both would duplicate the
+     profile with contradictory normative details (role-extension OID
+     and encoding, SAN criticality, subject DN, validity bounds).
+     Merge resolution (beads-worker-5 into main): worker-5 deleted this
+     paragraph outright during its addressing-migration sweep (it cites
+     the "key-derived native /128"). Retained: it is the only normative
+     pointer binding x5chain certificates to the appendix profile, and
+     its "native" wording tracks the appendix itself, whose migration to
+     AddrForKey terminology remains incomplete and is tracked separately. -->
+**X.509v3 Certificate Profile:**
+
+The end-entity certificate carried in `x5chain` MUST conform to the
+LICHEN node attestation profile (appendix-x509-cert-profile.md;
+intermediate and root CA certificates are unconstrained ordinary
+RFC 5280 CA certificates): Ed25519 subject
+key, iPAddress SAN carrying the key-derived native `/128` (critical
+when the subject is empty), optional non-critical mesh role extension,
+and the verifier key-to-address binding check. The profile is minimal
+enough that any RFC 8410-capable CA can issue interoperable
+certificates.
 
 ---
 

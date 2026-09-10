@@ -40,6 +40,14 @@ static const struct eui64_iid_vector eui64_vectors[] = {
  * Yggdrasil AddrForKey outputs (yggdrasil-go@422836ee
  * src/address/address.go; oracle = upstream address_test.go anchor below,
  * cross-checked with an independent port — never the C impl). */
+/*
+ * QUARANTINED-PENDING-UPSTREAM-MIGRATION: these literals (from
+ * test/vectors/yggdrasil-derivation.json) encode the rejected SHA-512
+ * LICHEN-native address profile. Per the upstream-yggdrasil-addressing
+ * decision in spec/decisions.jsonl, every routable address MUST equal
+ * upstream AddrForKey; do not extend these vectors, they are pinned only
+ * until the C derivation migrates (tracked by bead project-LICHEN-worker6-q6ko).
+ */
 static const struct iid_vector vectors[] = {
 	{
 		.pubkey = {

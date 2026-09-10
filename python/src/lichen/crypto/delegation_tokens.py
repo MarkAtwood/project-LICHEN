@@ -11,7 +11,7 @@ COSE Algorithm: Schnorr48-Ed25519 (algorithm ID -65537)
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import IntFlag
 from hashlib import sha256
 from ipaddress import IPv6Address
@@ -20,16 +20,11 @@ from typing import TYPE_CHECKING
 import cbor2
 
 from . import schnorr48
-from .schnorr48 import SCHNORR48_ED25519_ALG
 from .identity import Identity, _pubkey_to_iid
+from .schnorr48 import COSE_ALG_LABEL, COSE_KID_LABEL, SCHNORR48_ED25519_ALG
 
 if TYPE_CHECKING:
     pass
-
-
-# COSE header labels
-COSE_ALG_LABEL = 1  # Algorithm
-COSE_KID_LABEL = 4  # Key ID
 
 
 class DelegationScope(IntFlag):
@@ -99,7 +94,7 @@ def cose_sig_structure(protected: bytes, payload: bytes) -> bytes:
     return cbor2.dumps(sig_structure)
 
 
-@dataclass
+@dataclass(frozen=True)
 class DelegationTokenPayload:
     """Delegation token payload per spec section 18.8.6.
 
@@ -189,7 +184,7 @@ class DelegationTokenPayload:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class DelegationToken:
     """COSE_Sign1 delegation token per spec section 18.8.6.
 
@@ -205,27 +200,60 @@ class DelegationToken:
         payload: The token payload containing delegation details
         delegator_iid: 8-byte IID of the delegator (from unprotected header)
         signature: 48-byte Schnorr48 signature
+        protected_bytes: Received protected-header bstr, retained verbatim.
+        payload_bytes: Received payload bstr, retained verbatim.
+
+    The wire bstrs are retained because RFC 9052 section 4.4 signs the
+    protected header and payload AS TRANSPORTED: a peer using a different
+    (equally valid) CBOR encoding produces bytes that re-encoding here would
+    not reproduce, breaking Python<->C/Rust interop. Both are populated by
+    :meth:`from_cose_sign1` and :func:`create_delegation_token`; they are
+    None only for a token constructed directly from its fields.
     """
 
     payload: DelegationTokenPayload
     delegator_iid: bytes
     signature: bytes
+    protected_bytes: bytes | None = None
+    payload_bytes: bytes | None = None
 
     def __post_init__(self) -> None:
         if len(self.delegator_iid) != 8:
             raise ValueError(f"delegator_iid must be 8 bytes, got {len(self.delegator_iid)}")
         if len(self.signature) != 48:
             raise ValueError(f"signature must be 48 bytes, got {len(self.signature)}")
+        if (self.protected_bytes is None) != (self.payload_bytes is None):
+            raise ValueError("wire bstrs must be retained as a pair or not at all")
+        if self.payload_bytes is not None:
+            # The retained wire bstrs are what the signature is verified over
+            # (RFC 9052 section 4.4); they must decode to exactly the payload
+            # carried on the object, or verify would authenticate one payload
+            # while callers read another (desync via mismatched construction
+            # or dataclasses.replace).
+            try:
+                decoded = DelegationTokenPayload.from_cbor(self.payload_bytes)
+            except (TypeError, KeyError, IndexError, ValueError, cbor2.CBORDecodeError) as e:
+                raise ValueError(f"payload_bytes do not decode to a valid payload: {e}") from None
+            if decoded != self.payload:
+                raise ValueError("payload_bytes do not decode to the payload on the token")
 
     def to_cose_sign1(self) -> bytes:
         """Encode as COSE_Sign1 structure.
 
+        When wire bstrs were retained (decode or creation), they are emitted
+        verbatim so a forwarded/stored token stays signature-valid for
+        downstream verifiers.
+
         Returns:
             CBOR-encoded COSE_Sign1 array
         """
-        protected = cose_protected_header()
+        protected = (
+            self.protected_bytes if self.protected_bytes is not None else cose_protected_header()
+        )
+        payload_bytes = (
+            self.payload_bytes if self.payload_bytes is not None else self.payload.to_cbor()
+        )
         unprotected = {COSE_KID_LABEL: self.delegator_iid}
-        payload_bytes = self.payload.to_cbor()
 
         cose_sign1 = [protected, unprotected, payload_bytes, self.signature]
         return cbor2.dumps(cose_sign1)
@@ -269,7 +297,12 @@ class DelegationToken:
         if not isinstance(signature, bytes):
             raise ValueError("signature must be bytes")
 
-        return cls(payload=payload, delegator_iid=delegator_iid, signature=signature)
+        token = cls(payload=payload, delegator_iid=delegator_iid, signature=signature)
+        # Retain the transported bstrs (RFC 9052 section 4.4): the signature
+        # covers them verbatim, not any re-encoding of the decoded payload.
+        return replace(
+            token, protected_bytes=protected_bytes, payload_bytes=payload_bytes
+        )
 
 
 def create_delegation_token(
@@ -310,7 +343,13 @@ def create_delegation_token(
     to_sign = sha256(sig_structure).digest()
     signature = schnorr48.sign(identity.privkey, identity.pubkey, to_sign)
 
-    return DelegationToken(payload=payload, delegator_iid=identity.iid, signature=signature)
+    return DelegationToken(
+        payload=payload,
+        delegator_iid=identity.iid,
+        signature=signature,
+        protected_bytes=protected,
+        payload_bytes=payload_bytes,
+    )
 
 
 def verify_delegation_token(
@@ -360,9 +399,16 @@ def verify_delegation_token(
     if token.delegator_iid != derived_iid:
         return False, "DELEGATOR_IID_MISMATCH"
 
-    # Step 1: Verify signature
-    protected = cose_protected_header()
-    payload_bytes = payload.to_cbor()
+    # Step 1: Verify signature over the transported bstrs (RFC 9052 section
+    # 4.4). For a token constructed directly from fields (no wire bytes), the
+    # header and payload are re-encoded instead — correct only against an
+    # encoder using this module's exact encoding.
+    if token.protected_bytes is not None and token.payload_bytes is not None:
+        protected = token.protected_bytes
+        payload_bytes = token.payload_bytes
+    else:
+        protected = cose_protected_header()
+        payload_bytes = payload.to_cbor()
     sig_structure = cose_sig_structure(protected, payload_bytes)
     to_verify = sha256(sig_structure).digest()
 
@@ -437,7 +483,7 @@ DELEGATION_FLAG_EXTERNAL = 1 << 0  # E: delegate may set Transit E flag
 DELEGATION_RESERVED_FLAG_MASK = 0xFE  # Bits 1-7 reserved, MUST be zero
 
 
-@dataclass
+@dataclass(frozen=True)
 class PrefixDelegationTokenPayload:
     """Prefix delegation token payload per spec/05-routing.md section 8.7.2.
 
@@ -490,8 +536,15 @@ class PrefixDelegationTokenPayload:
 
     @classmethod
     def from_cbor(cls, data: bytes) -> PrefixDelegationTokenPayload:
-        """Decode payload from CBOR bytes."""
+        """Decode payload from CBOR bytes.
+
+        Raises:
+            TypeError: If the payload is not a CBOR map.
+            KeyError: If a required field is missing.
+        """
         payload_map = cbor2.loads(data)
+        if not isinstance(payload_map, dict):
+            raise TypeError("payload must be a CBOR map")
         return cls(
             prefix=payload_map[_PREFIX_PAYLOAD_PREFIX],
             prefix_len=payload_map[_PREFIX_PAYLOAD_PREFIX_LEN],
@@ -502,30 +555,58 @@ class PrefixDelegationTokenPayload:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class PrefixDelegationToken:
     """COSE_Sign1 prefix delegation token per spec/05-routing.md 8.7.2.
 
     Same COSE_Sign1 envelope as the group delegation token: protected header
     {1: -65537} (Schnorr48-Ed25519), unprotected {4: delegator IID}, payload,
     48-byte Schnorr48 signature.
+
+    Wire bstrs are retained per RFC 9052 section 4.4 (signature covers the
+    transported bytes, not a re-encoding); populated by :meth:`from_cose_sign1`
+    and :func:`create_prefix_delegation_token`.
     """
 
     payload: PrefixDelegationTokenPayload
     delegator_iid: bytes
     signature: bytes
+    protected_bytes: bytes | None = None
+    payload_bytes: bytes | None = None
 
     def __post_init__(self) -> None:
         if len(self.delegator_iid) != 8:
             raise ValueError(f"delegator_iid must be 8 bytes, got {len(self.delegator_iid)}")
         if len(self.signature) != 48:
             raise ValueError(f"signature must be 48 bytes, got {len(self.signature)}")
+        if (self.protected_bytes is None) != (self.payload_bytes is None):
+            raise ValueError("wire bstrs must be retained as a pair or not at all")
+        if self.payload_bytes is not None:
+            # The retained wire bstrs are what the signature is verified over
+            # (RFC 9052 section 4.4); they must decode to exactly the payload
+            # carried on the object, or verify would authenticate one payload
+            # while callers read another (desync via mismatched construction
+            # or dataclasses.replace).
+            try:
+                decoded = PrefixDelegationTokenPayload.from_cbor(self.payload_bytes)
+            except (TypeError, KeyError, IndexError, ValueError, cbor2.CBORDecodeError) as e:
+                raise ValueError(f"payload_bytes do not decode to a valid payload: {e}") from None
+            if decoded != self.payload:
+                raise ValueError("payload_bytes do not decode to the payload on the token")
 
     def to_cose_sign1(self) -> bytes:
-        """Encode as COSE_Sign1 structure."""
-        protected = cose_protected_header()
+        """Encode as COSE_Sign1 structure.
+
+        When wire bstrs were retained (decode or creation), they are emitted
+        verbatim so a forwarded/stored token stays signature-valid.
+        """
+        protected = (
+            self.protected_bytes if self.protected_bytes is not None else cose_protected_header()
+        )
+        payload_bytes = (
+            self.payload_bytes if self.payload_bytes is not None else self.payload.to_cbor()
+        )
         unprotected = {COSE_KID_LABEL: self.delegator_iid}
-        payload_bytes = self.payload.to_cbor()
         cose_sign1 = [protected, unprotected, payload_bytes, self.signature]
         return cbor2.dumps(cose_sign1)
 
@@ -558,7 +639,12 @@ class PrefixDelegationToken:
         if not isinstance(signature, bytes):
             raise ValueError("signature must be bytes")
 
-        return cls(payload=payload, delegator_iid=delegator_iid, signature=signature)
+        token = cls(payload=payload, delegator_iid=delegator_iid, signature=signature)
+        # Retain the transported bstrs (RFC 9052 section 4.4): the signature
+        # covers them verbatim, not any re-encoding of the decoded payload.
+        return replace(
+            token, protected_bytes=protected_bytes, payload_bytes=payload_bytes
+        )
 
 
 def _masked_prefix_bytes(prefix: IPv6Address, prefix_len: int) -> bytes:
@@ -609,7 +695,13 @@ def create_prefix_delegation_token(
     to_sign = sha256(sig_structure).digest()
     signature = schnorr48.sign(identity.privkey, identity.pubkey, to_sign)
 
-    return PrefixDelegationToken(payload=payload, delegator_iid=identity.iid, signature=signature)
+    return PrefixDelegationToken(
+        payload=payload,
+        delegator_iid=identity.iid,
+        signature=signature,
+        protected_bytes=protected,
+        payload_bytes=payload_bytes,
+    )
 
 
 def verify_prefix_delegation_token(
@@ -643,8 +735,14 @@ def verify_prefix_delegation_token(
     if token.delegator_iid != derived_iid:
         return False, "DELEGATOR_IID_MISMATCH"
 
-    protected = cose_protected_header()
-    payload_bytes = payload.to_cbor()
+    # Verify signature over the transported bstrs (RFC 9052 section 4.4),
+    # falling back to re-encoding for a token constructed directly from fields.
+    if token.protected_bytes is not None and token.payload_bytes is not None:
+        protected = token.protected_bytes
+        payload_bytes = token.payload_bytes
+    else:
+        protected = cose_protected_header()
+        payload_bytes = payload.to_cbor()
     sig_structure = cose_sig_structure(protected, payload_bytes)
     to_verify = sha256(sig_structure).digest()
 

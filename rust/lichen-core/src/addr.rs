@@ -66,15 +66,17 @@ impl NodeId {
     }
 }
 
-/// Derive the IID (Interface Identifier) from an Ed25519 public key.
-///
-/// Retained SHA-512 derivation per the settled decision: link-local and
-/// IID contexts keep this profile; only the ROUTABLE /128 derivation
-/// (`ygg_addr_from_pubkey`) moved to upstream `AddrForKey`. The routable
-/// address no longer embeds this IID — callers MUST NOT assume
-/// `addr[8:16] == iid_from_pubkey_bytes(pubkey)`.
+/// Derive the IID (Interface Identifier) from an Ed25519 public key for the
+/// LICHEN link-local address (`fe80::/10`).
 ///
 /// Algorithm: `SHA-512(pubkey)[0:8]`, then clear the U/L bit per RFC 4291 S2.5.1.
+///
+/// Retained SHA-512 derivation per the settled `upstream-yggdrasil-addressing`
+/// decision in spec/decisions.jsonl: link-local and IID contexts keep this
+/// profile; only the routable /128 derivation ([`ygg_addr_from_pubkey`]) moved
+/// to upstream `AddrForKey`. The two derivations are independent by design —
+/// the routable address no longer embeds this IID, so callers MUST NOT assume
+/// `addr[8:16] == iid_from_pubkey_bytes(pubkey)`.
 ///
 /// This is the single canonical implementation; all callers MUST use it
 /// to ensure cross-implementation consistency.
@@ -87,67 +89,80 @@ pub fn iid_from_pubkey_bytes(pubkey: &[u8; 32]) -> [u8; 8] {
     iid
 }
 
-/// Derive the full 16-byte routable address from an Ed25519 pubkey.
+/// Derive the routable 16-byte node address from an Ed25519 pubkey.
 ///
-/// EXACT upstream Yggdrasil `AddrForKey` (yggdrasil-go@422836ee
-/// src/address/address.go) — no hashing; the key is bit-packed. Per the
-/// settled `upstream-yggdrasil-addressing` decision, every node's routable
-/// /128 MUST equal this derivation (0200::/8).
+/// Implements the exact upstream Yggdrasil `AddrForKey` algorithm
+/// (yggdrasil-go@422836ee `src/address/address.go`), as required by
+/// spec/decisions.jsonl `upstream-yggdrasil-addressing`: every node's
+/// routable /128 MUST equal this derivation (`0200::/8`).
 ///
-/// Algorithm:
-///   1. Bit-invert the pubkey.
-///   2. `addr[0] = 0x02`; `addr[1]` = count of leading 1 bits in the
-///      inverted key as u8, WRAPPING at 256 (Go byte overflow semantics;
-///      only reachable for a degenerate all-ones inverted key).
-///   3. Skip the leading 1s and the first 0 bit; pack the remaining bits
-///      MSB-first into whole bytes, DISCARDING any trailing partial byte;
-///      place at `addr[2:16]`, zero tail.
+///   1. Bit-invert the 256-bit key.
+///   2. `addr[0] = 0x02` (upstream `GetPrefix()`).
+///   3. `addr[1]` = count of leading 1 bits of the inverted key, as a
+///      wrapping u8 (Go `byte` overflow semantics: the degenerate all-ones
+///      inverted key — an all-zero pubkey — counts 256 and wraps to 0).
+///   4. Skip the leading 1s and the first 0 bit of the inverted key, then
+///      pack the remaining bits MSB-first into whole bytes; the trailing
+///      partial byte is discarded.
+///   5. `addr[2..16]` holds those bytes (up to 14), zero-filled if fewer.
+///
+/// No hashing is involved; the address is a lossy bit-packing of the key.
+/// Upstream conformance oracle: the pinned `upstream_addr_for_key` vector in
+/// test/vectors/yggdrasil_address.json (verbatim from upstream
+/// address_test.go).
 pub fn ygg_addr_from_pubkey(pubkey: &[u8; 32]) -> [u8; 16] {
     let mut addr = [0u8; 16];
     addr[0] = 0x02;
 
-    // Count leading 1 bits in the inverted key (wrapping at 256 like the
-    // Go byte counter) and locate the first 0 bit that terminates them.
-    let mut leading_ones: u8 = 0;
-    let mut first_zero_bit: usize = 256; // bit index in [0, 256)
-    'outer: for (byte_index, byte) in pubkey.iter().enumerate() {
-        let inverted = !byte;
-        for bit in (0..8).rev() {
-            if inverted & (1 << bit) != 0 {
-                leading_ones = leading_ones.wrapping_add(1);
-            } else {
-                first_zero_bit = byte_index * 8 + (7 - bit);
-                break 'outer;
+    // Count leading 1 bits of the bit-inverted key (= leading 0 bits of the
+    // raw key). `leading_ones` saturates at 256 for the degenerate all-zero
+    // pubkey; the stored byte wraps 256 -> 0 exactly like the Go `byte`.
+    let mut leading_ones: usize = 0;
+    'count: for byte in pubkey {
+        for shift in (0..8).rev() {
+            if byte & (1 << shift) != 0 {
+                break 'count;
             }
+            leading_ones += 1;
         }
     }
-    addr[1] = leading_ones;
+    addr[1] = leading_ones as u8;
 
-    // Pack bits after the first 0, MSB-first, whole bytes only; a trailing
-    // partial byte is discarded (upstream semantics). A degenerate all-ones
-    // inverted key has no first zero, so nothing packs.
-    let start_bit = first_zero_bit + 1;
-    let whole_bits = 256usize.saturating_sub(start_bit) & !7;
-    for out_bit in 0..whole_bits.min(14 * 8) {
-        let src_bit = start_bit + out_bit;
-        let src_byte = !pubkey[src_bit / 8];
-        if src_byte & (1 << (7 - (src_bit % 8))) != 0 {
-            addr[2 + out_bit / 8] |= 1 << (7 - (out_bit % 8));
+    // The first 0 bit of the inverted stream sits at raw bit `leading_ones`
+    // (its inversion). If the inverted key is all ones, upstream never sets
+    // `done` and the packed tail stays empty; the empty range below mirrors
+    // that naturally.
+    let mut acc: u8 = 0;
+    let mut n_bits: u32 = 0;
+    let mut out = 2usize;
+    for i in (leading_ones + 1)..256 {
+        let raw_bit = (pubkey[i / 8] >> (7 - (i % 8))) & 1;
+        acc = (acc << 1) | (raw_bit ^ 1);
+        n_bits += 1;
+        if n_bits == 8 {
+            if out < 16 {
+                addr[out] = acc;
+                out += 1;
+            }
+            acc = 0;
+            n_bits = 0;
         }
     }
     addr
 }
 
-/// Derive the routed /64 prefix from an Ed25519 pubkey.
+/// Derive the routable 8-byte subnet prefix (routed /64) from an Ed25519 pubkey.
 ///
-/// EXACT upstream Yggdrasil `SubnetForKey`: `AddrForKey`, then set the low
-/// bit of byte 0 (0300::/8). Returns the first 8 bytes (the /64 prefix).
+/// Implements upstream Yggdrasil `SubnetForKey`
+/// (yggdrasil-go `src/address/address.go`): the first 8 bytes of
+/// [`ygg_addr_from_pubkey`] with the low bit of byte 0 set to 1
+/// (`0x02 | 0x01 = 0x03`, i.e. `0300::/8`).
 pub fn subnet_for_key(pubkey: &[u8; 32]) -> [u8; 8] {
     let addr = ygg_addr_from_pubkey(pubkey);
-    let mut prefix = [0u8; 8];
-    prefix.copy_from_slice(&addr[..8]);
-    prefix[0] |= 0x01;
-    prefix
+    let mut subnet = [0u8; 8];
+    subnet.copy_from_slice(&addr[..8]);
+    subnet[0] |= 0x01;
+    subnet
 }
 
 #[cfg(test)]

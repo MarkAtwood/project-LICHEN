@@ -1,0 +1,7 @@
+{
+  "id": "1788964620193801111-1",
+  "issue_id": "project-LICHEN-worker6-ssg9",
+  "author": "Mark Atwood",
+  "text": "Landed context: i72x.2 migration commits 85a70ec445 + 7331d087c5 on beads-worker-8. The node.rs sibling gate fix referenced here is in 7331d087c5 (both-forms match via dao_manager.node_address() getter added to lichen-rpl routing.rs).",
+  "created_at": "2026-09-09T14:37:00.193801111Z"
+}

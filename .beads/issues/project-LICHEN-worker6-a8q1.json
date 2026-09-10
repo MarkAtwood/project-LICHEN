@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-a8q1",
+  "title": "node.rs echo-reply comment: stale i72x.2 forward-ref + misstates narrowing end state",
+  "description": "Codereview pass-1 on uvij (rust/lichen-node/src/node.rs:194-200 comment block, adjacent to the /7-\u003e/8 fix). Two comment-accuracy defects, P4: (1) :199 says 'once i72x.2 lands the NodeId accessor (tracked in beads)' — i72x.2 landed as 5c9f7ef657 and no open bead tracks the echo-responder narrowing (bd search for echo/promiscuous/2000::/3 is empty; a reviewer's cited 0no0 was hallucinated). (2) :197-198 'both arms become an exact check against this node's 0200::/8 AddrForKey identity' misstates the end state: the link-local arm (dst == node_id.link_local_addr()) MUST remain a link-local exact check (control traffic is link-local per the settled decision); only the promiscuous 2000::/3 arm narrows to the routable AddrForKey identity. Suggested rewrite: keep ULA note, state that the 2000::/3 arm narrows to dst == this node's AddrForKey /128 once the node carries its routable identity at this layer, and either file or cite a tracking bead. NOTE: NodeId (lichen-core addr.rs:10) is an EUI-64 wrapper with no pubkey, so the narrowing needs the node identity/pubkey plumbed to this layer — that plumbing is the actual tracked work.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T13:32:36.30434597Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T13:32:36.30434597Z",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-a8q1",
+      "depends_on_id": "project-LICHEN-worker6-uvij",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T13:32:36.407744119Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

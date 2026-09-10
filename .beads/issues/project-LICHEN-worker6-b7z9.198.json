@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.198",
+  "title": "[spec-gap][R-LOADNG-010] SEQNUM_LIFETIME 600 s not implemented in any stack",
+  "description": "Spec B2.2 table: SEQNUM_LIFETIME 600 sec 'Sequence number validity'. Classification: not-implemented.\n\nEvidence: rg -i 'seqnum_lifetime|seq_num_lifetime' across python/src, rust/, lichen/subsys matches only the spec line (spec/appendix-loadng.md:30). Note: python GRADIENT_TIMEOUT_MS=600_000 (python/src/lichen/gradient.py:28) is the gradient-table expiry from 05-routing section 11 — numerically equal but a different parameter; do not conflate.\n\nSuggested placement: define the semantic (when a cached sequence number may be treated as stale/reset, per draft-ietf-roll-aodv-rpl), then implement consistently in all three stacks, or amend the appendix if the parameter is redundant with ROUTE_TIMEOUT/GRADIENT_TIMEOUT.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T01:16:45.86037217Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T01:16:45.86037217Z",
+  "labels": [
+    "python",
+    "rust",
+    "c",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.198",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-10T01:16:46.003664217Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -7,8 +7,10 @@ is implicit (a node trusts its gateway). A fact is a COSE_Sign1 credential
 signed by the issuing gateway's Ed25519 key (Schnorr48-Ed25519, alg -65537),
 carrying a set of ``lichen:`` claims about what the gateway will do for the
 node (relay to emergency services, relay others' traffic, priority, quota,
-...). Facts are mesh-lifetime: gateway restart or root re-election invalidates
-cached facts.
+...). Facts carry optional freshness claims (``lichen:expiry`` /
+``lichen:seq``) so a gateway can revoke or supersede an issued fact while its
+key remains trusted; a fact without them is mesh-lifetime only (gateway
+restart or root re-election invalidates cached facts).
 
 This is the Python reference implementation of the credential model: claim
 encoding, COSE_Sign1 issuance (gateway side) and verification (node side).
@@ -45,6 +47,10 @@ CLAIM_PRIORITY = "lichen:priority"
 CLAIM_CHANNEL = "lichen:channel"
 CLAIM_QUOTA = "lichen:quota"
 CLAIM_SPONSORED = "lichen:sponsored"
+# Freshness claims (spec 8.13.1 "Freshness and Revocation"). expiry is a
+# uint Unix timestamp; seq is a uint strictly increasing per issuing gateway.
+CLAIM_EXPIRY = "lichen:expiry"
+CLAIM_SEQ = "lichen:seq"
 
 # Claim name -> expected CBOR/Python type(s). bool is checked before int
 # because Python bool is a subclass of int.
@@ -56,6 +62,8 @@ _CLAIM_TYPES: dict[str, tuple[type, ...]] = {
     CLAIM_CHANNEL: (list,),
     CLAIM_QUOTA: (int,),
     CLAIM_SPONSORED: (str,),
+    CLAIM_EXPIRY: (int,),
+    CLAIM_SEQ: (int,),
 }
 
 # Priority is a uint 0=low .. 3=emergency (spec 8.13.1).
@@ -99,6 +107,8 @@ class LocalFactClaims:
     channel: tuple[str, ...] | None = None
     quota: int | None = None
     sponsored: str | None = None
+    expiry: int | None = None
+    seq: int | None = None
 
     def __post_init__(self) -> None:
         # bool claims use an exact-type check (bool is a subclass of int).
@@ -116,6 +126,12 @@ class LocalFactClaims:
             raise LocalFactError(f"{CLAIM_PRIORITY} must be a uint 0..{_MAX_PRIORITY}")
         if self.quota is not None and (type(self.quota) is not int or self.quota < 0):
             raise LocalFactError(f"{CLAIM_QUOTA} must be a non-negative uint")
+        # Freshness claims mirror delegation_tokens: expiry is a positive Unix
+        # timestamp, seq is a non-negative strictly increasing counter.
+        if self.expiry is not None and (type(self.expiry) is not int or self.expiry <= 0):
+            raise LocalFactError(f"{CLAIM_EXPIRY} must be a positive uint Unix timestamp")
+        if self.seq is not None and (type(self.seq) is not int or self.seq < 0):
+            raise LocalFactError(f"{CLAIM_SEQ} must be a non-negative uint")
         # Require a real (non-str/bytes) sequence of tstr: a bare str would
         # iterate as characters and pass the element check; a non-iterable
         # would raise TypeError instead of LocalFactError.
@@ -128,8 +144,9 @@ class LocalFactClaims:
         # Normalize to tuple: from_cbor decodes CBOR arrays to list but
         # normalizes to tuple itself, and to_cbor accepts either. Frozen
         # dataclass equality is by-value, so a list-built claims would never
-        # equal its own decode — breaking the LocalFact wire-bstr agreement
-        # guard. Single source of truth here keeps encode/decode symmetric.
+        # equal its own decode — the wire-bstr consistency check on LocalFact
+        # would then falsely reject an otherwise valid fact. Single source of
+        # truth here keeps encode/decode symmetric.
         if self.channel is not None and not isinstance(self.channel, tuple):
             object.__setattr__(self, "channel", tuple(self.channel))
 
@@ -157,6 +174,10 @@ class LocalFactClaims:
             claims[CLAIM_QUOTA] = self.quota
         if self.sponsored is not None:
             claims[CLAIM_SPONSORED] = self.sponsored
+        if self.expiry is not None:
+            claims[CLAIM_EXPIRY] = self.expiry
+        if self.seq is not None:
+            claims[CLAIM_SEQ] = self.seq
         return cbor2.dumps(claims)
 
     @classmethod
@@ -199,6 +220,8 @@ class LocalFactClaims:
             channel=tuple(channel) if channel is not None else None,
             quota=cast("int | None", claims.get(CLAIM_QUOTA)),
             sponsored=cast("str | None", claims.get(CLAIM_SPONSORED)),
+            expiry=cast("int | None", claims.get(CLAIM_EXPIRY)),
+            seq=cast("int | None", claims.get(CLAIM_SEQ)),
         )
 
 
@@ -245,17 +268,22 @@ class LocalFact:
             or not isinstance(self.payload_bytes, bytes)
         ):
             raise LocalFactError("wire bstrs must be bytes")
-        # The retained wire bstrs must agree with claims. On a frozen
-        # dataclass the idiomatic mutation is dataclasses.replace(fact,
-        # claims=...), which keeps the old wire bstrs; without this check a
-        # desynced fact would verify over the OLD signed payload while
-        # .claims carries unverified fields, silently dropping the
-        # tamper-resistance property. Compare decoded (encoding-agnostic) so
-        # a peer's valid-but-different CBOR encoding still passes.
+        # The retained wire bstrs are what the signature is verified over
+        # (RFC 9052 section 4.4); they must decode to exactly the claims
+        # carried on the object. On a frozen dataclass the idiomatic mutation
+        # is dataclasses.replace(fact, claims=...), which keeps the old wire
+        # bstrs; without this check a desynced fact would verify over the OLD
+        # signed payload while .claims carries unverified fields, silently
+        # dropping the tamper-resistance property. Compare decoded
+        # (encoding-agnostic) so a peer's valid-but-different CBOR encoding
+        # still passes.
         if self.payload_bytes is not None and (
             LocalFactClaims.from_cbor(self.payload_bytes) != self.claims
         ):
-            raise LocalFactError("claims do not match the retained payload_bytes")
+            raise LocalFactError(
+                "claims do not match the retained payload_bytes: "
+                "payload_bytes do not decode to the claims on the fact"
+            )
 
     def to_cose_sign1(self) -> bytes:
         """Encode as a CBOR COSE_Sign1 array [protected, unprotected, payload, sig].
@@ -328,7 +356,12 @@ def issue_local_fact(identity: Identity, claims: LocalFactClaims) -> LocalFact:
     )
 
 
-def verify_local_fact(fact: LocalFact, gateway_pubkey: bytes) -> bool:
+def verify_local_fact(
+    fact: LocalFact,
+    gateway_pubkey: bytes,
+    current_time: int | None = None,
+    cached_seq: int | None = None,
+) -> bool:
     """Verify a local fact's Schnorr48 signature against the gateway pubkey.
 
     The Sig_structure is built over the protected-header and payload bstrs
@@ -338,13 +371,38 @@ def verify_local_fact(fact: LocalFact, gateway_pubkey: bytes) -> bool:
     are re-encoded instead — correct only against an encoder using this
     module's exact encoding, which is all a locally built fact can promise.
 
+    Freshness (spec 8.13.1): when the fact carries ``lichen:expiry`` and/or
+    ``lichen:seq``, the caller MUST supply ``current_time`` and/or
+    ``cached_seq`` respectively; a fact carrying the claim without the
+    corresponding check parameter is rejected (fail-closed). A fact carrying
+    neither freshness claim is mesh-lifetime only: it cannot be revoked or
+    superseded while the gateway key is trusted, so issuers SHOULD always set
+    expiry and seq.
+
+    Seq bootstrap: on first contact with an issuer the per-issuer cache has no
+    entry; pass ``cached_seq=-1`` to accept any non-negative seq and seed the
+    cache from the verified fact. Never derive ``cached_seq`` from the fact
+    being verified — that disables replay protection.
+
+    Cache update invariant: the caller MUST update its per-issuer seq cache
+    only after this function returns True, and the update must be atomic with
+    acceptance of the fact. Updating from an unverified fact lets an
+    unauthenticated sender poison the cache with a large seq and DoS the
+    legitimate issuer.
+
     Args:
         fact: The decoded local fact.
         gateway_pubkey: The issuing gateway's 32-byte Ed25519 public key.
+        current_time: Current Unix timestamp, required when the fact carries
+            ``lichen:expiry``; the fact is rejected when expired.
+        cached_seq: Highest previously seen ``lichen:seq`` for this issuer,
+            required when the fact carries ``lichen:seq``; the fact is
+            rejected when its seq is not strictly greater. Pass -1 on first
+            contact with the issuer (no cache entry yet).
 
     Returns:
-        True if the signature verifies and the claimed issuer IID matches the
-        verifying key, False otherwise.
+        True if the signature verifies, the claimed issuer IID matches the
+        verifying key, and the freshness checks pass, False otherwise.
     """
     # issuer_iid lives in the unprotected header (not signature-covered), so
     # bind it to the verifying key: a fact claiming gateway A's IID must
@@ -353,6 +411,15 @@ def verify_local_fact(fact: LocalFact, gateway_pubkey: bytes) -> bool:
     # for federation/audit rather than resolving keys strictly by kid.
     if _pubkey_to_iid(gateway_pubkey) != fact.issuer_iid:
         return False
+    if fact.claims.expiry is not None and (
+        current_time is None or fact.claims.expiry <= current_time
+    ):
+        return False
+    if fact.claims.seq is not None:
+        if cached_seq is None:
+            return False
+        if fact.claims.seq <= cached_seq:
+            return False
     if fact.protected_bytes is not None and fact.payload_bytes is not None:
         protected = fact.protected_bytes
         payload_bytes = fact.payload_bytes

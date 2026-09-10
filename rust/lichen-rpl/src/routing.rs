@@ -459,8 +459,14 @@ impl DaoManager {
         }
     }
 
+    /// This node's own address as configured at construction.
+    pub fn node_address(&self) -> Ipv6Addr {
+        self.node_address
+    }
+
     fn as_root(node_address: Ipv6Addr, rpl_instance_id: u8, dodag_id: Ipv6Addr) -> Self {
         let mut m = Self::new(node_address, rpl_instance_id, dodag_id);
+
         m.is_root = true;
         m
     }
@@ -942,27 +948,24 @@ impl DaoManager {
                     })
                     .collect::<Option<Vec<_>>>()?;
                 let selected_candidate = if disposition == DaoDiagnosticDisposition::Active {
-                    self.routing_table
-                        .lookup(*target)
-                        .and_then(|path| {
-                            let parent = if path.len() == 1 {
-                                self.node_address
-                            } else {
-                                path[path.len() - 2]
-                            };
-                            let candidate = self
-                                .candidate_map
-                                .get(target)?
-                                .iter()
-                                .find(|candidate| candidate.parent == parent)?;
-                            Some(DaoDiagnosticSelectedCandidate {
-                                parent,
-                                preference_subfield: Self::path_control_rank(
-                                    candidate.path_control,
-                                )? + 1,
-                                path: path.to_vec(),
-                            })
+                    self.routing_table.lookup(*target).and_then(|path| {
+                        let parent = if path.len() == 1 {
+                            self.node_address
+                        } else {
+                            path[path.len() - 2]
+                        };
+                        let candidate = self
+                            .candidate_map
+                            .get(target)?
+                            .iter()
+                            .find(|candidate| candidate.parent == parent)?;
+                        Some(DaoDiagnosticSelectedCandidate {
+                            parent,
+                            preference_subfield: Self::path_control_rank(candidate.path_control)?
+                                + 1,
+                            path: path.to_vec(),
                         })
+                    })
                 } else {
                     None
                 };
@@ -1800,10 +1803,9 @@ impl DaoManager {
                     if routes.routes.len() >= MAX_ROUTES {
                         return None;
                     }
-                    routes.routes.insert(
-                        RouteTarget::host(*target),
-                        RouteEntry::fresh(&path),
-                    );
+                    routes
+                        .routes
+                        .insert(RouteTarget::host(*target), RouteEntry::fresh(&path));
                     routes.rpl_managed_hosts.insert(*target);
                 }
                 Ok(None) => {}

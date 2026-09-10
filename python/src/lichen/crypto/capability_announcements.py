@@ -11,7 +11,7 @@ COSE Algorithm: Schnorr48-Ed25519 (algorithm ID -65537)
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import IntFlag
 from hashlib import sha256
 from typing import TYPE_CHECKING
@@ -19,28 +19,16 @@ from typing import TYPE_CHECKING
 import cbor2
 
 from . import schnorr48
-from .schnorr48 import SCHNORR48_ED25519_ALG
-from .identity import Identity
-
-
-def _announcer_iid_from_pubkey(pubkey: bytes) -> bytes:
-    """Derive the announcer IID: low 8 bytes of upstream AddrForKey(pubkey).
-
-    Matches Rust lichen-core ``ygg_addr_from_pubkey(pubkey)[8..]`` (kd0p).
-    The SHA-512 native IID from ``identity._pubkey_to_iid`` is the rejected
-    native profile and remains only for link-local identity consumers.
-    """
-    from lichen.ipv6.addr import upstream_addr_for_key  # lazy: import cycle
-
-    return upstream_addr_for_key(pubkey).packed[8:]
+from .identity import Identity, _pubkey_to_iid
+from .schnorr48 import COSE_ALG_LABEL, COSE_KID_LABEL, SCHNORR48_ED25519_ALG
 
 if TYPE_CHECKING:
     pass
 
 
-# COSE header labels
-COSE_ALG_LABEL = 1  # Algorithm
-COSE_KID_LABEL = 4  # Key ID
+def _announcer_iid_from_pubkey(pubkey: bytes) -> bytes:
+    """Return the link-local/kid IID, independent of the routable address."""
+    return _pubkey_to_iid(pubkey)
 
 
 class Capability(IntFlag):
@@ -91,7 +79,7 @@ def _build_sig_structure(protected: bytes, payload: bytes) -> bytes:
     return cbor2.dumps(sig_structure)
 
 
-@dataclass
+@dataclass(frozen=True)
 class CapabilityPayload:
     """Capability announcement payload per spec section 8.12.
 
@@ -167,8 +155,15 @@ class CapabilityPayload:
 
     @classmethod
     def from_cbor(cls, data: bytes) -> CapabilityPayload:
-        """Decode payload from CBOR bytes."""
+        """Decode payload from CBOR bytes.
+
+        Raises:
+            TypeError: If the payload is not a CBOR map.
+            KeyError: If a required field is missing.
+        """
         payload_map = cbor2.loads(data)
+        if not isinstance(payload_map, dict):
+            raise TypeError("payload must be a CBOR map")
         return cls(
             capabilities=payload_map[_PAYLOAD_CAPABILITIES],
             prefix=payload_map[_PAYLOAD_PREFIX],
@@ -179,7 +174,7 @@ class CapabilityPayload:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class CapabilityAnnouncement:
     """COSE_Sign1 capability announcement per spec section 8.12.
 
@@ -194,20 +189,44 @@ class CapabilityAnnouncement:
 
     payload: CapabilityPayload
     signature: bytes
+    protected_bytes: bytes | None = None
+    payload_bytes: bytes | None = None
 
     def __post_init__(self) -> None:
         if len(self.signature) != 48:
             raise ValueError(f"signature must be 48 bytes, got {len(self.signature)}")
+        if (self.protected_bytes is None) != (self.payload_bytes is None):
+            raise ValueError("wire bstrs must be retained as a pair or not at all")
+        if self.payload_bytes is not None:
+            # The retained wire bstrs are what the signature is verified over
+            # (RFC 9052 section 4.4); they must decode to exactly the payload
+            # carried on the object, or verify would authenticate one payload
+            # while callers read another (desync via mismatched construction
+            # or dataclasses.replace).
+            try:
+                decoded = CapabilityPayload.from_cbor(self.payload_bytes)
+            except (TypeError, KeyError, IndexError, ValueError, cbor2.CBORDecodeError) as e:
+                raise ValueError(f"payload_bytes do not decode to a valid payload: {e}") from None
+            if decoded != self.payload:
+                raise ValueError("payload_bytes do not decode to the payload on the announcement")
 
     def to_cose_sign1(self) -> bytes:
         """Encode as COSE_Sign1 structure.
 
+        When wire bstrs were retained (decode or creation), they are emitted
+        verbatim so a forwarded/stored announcement stays signature-valid
+        for downstream verifiers (RFC 9052 section 4.4).
+
         Returns:
             CBOR-encoded COSE_Sign1 array
         """
-        protected = _encode_protected_header()
+        protected = (
+            self.protected_bytes if self.protected_bytes is not None else _encode_protected_header()
+        )
+        payload_bytes = (
+            self.payload_bytes if self.payload_bytes is not None else self.payload.to_cbor()
+        )
         unprotected = {COSE_KID_LABEL: self.payload.announcer_iid}
-        payload_bytes = self.payload.to_cbor()
 
         cose_sign1 = [protected, unprotected, payload_bytes, self.signature]
         return cbor2.dumps(cose_sign1)
@@ -254,7 +273,12 @@ class CapabilityAnnouncement:
         if kid != payload.announcer_iid:
             raise ValueError("kid in unprotected header must match announcer_iid")
 
-        return cls(payload=payload, signature=signature)
+        announcement = cls(payload=payload, signature=signature)
+        # Retain the transported bstrs (RFC 9052 section 4.4): the signature
+        # covers them verbatim, not any re-encoding of the decoded payload.
+        return replace(
+            announcement, protected_bytes=protected_bytes, payload_bytes=payload_bytes
+        )
 
 
 def create_capability_announcement(
@@ -284,7 +308,7 @@ def create_capability_announcement(
         prefix_len=prefix_len,
         expiry=expiry,
         seq=seq,
-        announcer_iid=_announcer_iid_from_pubkey(identity.pubkey),
+        announcer_iid=identity.iid,
     )
 
     # Build COSE Sig_structure
@@ -296,7 +320,12 @@ def create_capability_announcement(
     to_sign = sha256(sig_structure).digest()
     signature = schnorr48.sign(identity.privkey, identity.pubkey, to_sign)
 
-    return CapabilityAnnouncement(payload=payload, signature=signature)
+    return CapabilityAnnouncement(
+        payload=payload,
+        signature=signature,
+        protected_bytes=protected,
+        payload_bytes=payload_bytes,
+    )
 
 
 def verify_capability_announcement(
@@ -331,13 +360,18 @@ def verify_capability_announcement(
         return False, "RESERVED_BITS_SET"
 
     # Step 2: Verify announcer_iid matches derived IID from pubkey
-    derived_iid = _announcer_iid_from_pubkey(pubkey)
+    derived_iid = _pubkey_to_iid(pubkey)
     if payload.announcer_iid != derived_iid:
         return False, "IID_MISMATCH"
 
-    # Step 1: Verify signature
-    protected = _encode_protected_header()
-    payload_bytes = payload.to_cbor()
+    # Step 1: Verify signature over the transported bstrs (RFC 9052 section
+    # 4.4), falling back to re-encoding for a field-constructed announcement.
+    if announcement.protected_bytes is not None and announcement.payload_bytes is not None:
+        protected = announcement.protected_bytes
+        payload_bytes = announcement.payload_bytes
+    else:
+        protected = _encode_protected_header()
+        payload_bytes = payload.to_cbor()
     sig_structure = _build_sig_structure(protected, payload_bytes)
     to_verify = sha256(sig_structure).digest()
 

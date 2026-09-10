@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.130",
+  "title": "[spec-gap][R-04-018] Hop-limited broadcast relay absent in Rust; Python routes mesh multicast as external unicast (spec 04 6.3.2)",
+  "description": "Spec spec/04-network.md 6.3.2 (MUST-level relay behavior): sender broadcasts to mesh-local group with a Hop Limit; each relay MUST preserve the original IPv6 source address end-to-end, decrement Hop Limit, rebroadcast while Hop Limit \u003e 0, consume locally at 0 — purely local decision, no routing table consulted.\n\nEvidence:\n- C: implemented. lichen/subsys/lichen/routing/router.c:627-655 (multicast relay: scope\u003e=2 local ingress relay, scope\u003e=3 \u0026\u0026 hop_limit\u003e1 mesh ingress relay, forwarded_hop_limit decrement, DELIVER_AND_FORWARD); test lichen/tests/routing_dispatch/src/main.c:245-283 test_multicast_scope_and_boundary.\n- Python: divergent. lichen/src/lichen/routing/router.py route() classifies ff02/ff03 multicast destinations via classify_address -\u003e EXTERNAL -\u003e _route_external() (unicast forwarding to RPL parent); no hop-limited flood relay. LOADng RREQ rebroadcast (lichen/src/lichen/loadng/discovery.py) is a different mechanism (spec 10). tests/routing/test_router.py only exercises BR filtering, not relay flooding.\n- Rust: not-implemented. lichen-node has no generic IPv6 multicast relay (rpl_stack handles ff02::1a RPL control only; stack.rs:629 admission gate drops non-local/non-multicast; no rebroadcast path for ff03::fc / hop-limited data broadcasts).\n\nConsequence: mesh-wide flood delivery (SOS, alerts, mesh-local broadcast) has no conformant data-plane implementation in Rust or Python; C is the only conformant relay.\n\nSuggested placement: Rust lichen-node stack receive path (mirror C router.c multicast relay + §6.3.3 limiter per b7z9.129); Python router.py multicast branch (relay on scope\u003e=2 with HL decrement + limiter admission) instead of EXTERNAL fallback.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T20:48:44.297008823Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T20:48:44.297008823Z",
+  "labels": [
+    "network",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.130",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T20:48:44.415130451Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

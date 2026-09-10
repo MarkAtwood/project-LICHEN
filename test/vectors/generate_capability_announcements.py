@@ -367,7 +367,8 @@ def document() -> dict[str, object]:
                 "capability_prefix_delegation",
                 "Node announces prefix delegation capability.",
                 capabilities=CAP_BIT_PREFIX_DELEGATION,
-                prefix=bytes.fromhex("fd000000000000000000000000000000"),
+                # spec 8.12 canonical form: ceil(prefix_len/8) bytes.
+                prefix=bytes.fromhex("fd00000000000000"),
                 prefix_len=64,
                 expiry=1735689600,
                 seq=1,
@@ -376,7 +377,8 @@ def document() -> dict[str, object]:
                 "capability_both",
                 "Node announces both egress and prefix delegation.",
                 capabilities=CAP_BIT_EGRESS | CAP_BIT_PREFIX_DELEGATION,
-                prefix=bytes.fromhex("fd000000000000000000000000000000"),
+                # spec 8.12 canonical form: ceil(48/8) = 6 bytes.
+                prefix=bytes.fromhex("fd0000000000"),
                 prefix_len=48,
                 expiry=1735689600,
                 seq=1,

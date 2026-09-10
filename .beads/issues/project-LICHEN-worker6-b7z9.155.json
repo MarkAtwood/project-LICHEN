@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.155",
+  "title": "[spec-gap][R-05-097] C announce pin durability: no atomic pin file store, no monotonic revision anchor (spec 9.3)",
+  "description": "Spec 9.3: receivers with durable node state MUST atomically persist the verified (originator_iid, pubkey, seq_num) binding before a new origin becomes a DAO authorization pin or installs a gradient; state must be locally authenticated, bounded, stored in an owned private file, serialized across processes, paired with an independent monotonic revision anchor; missing/deleted/rolled-back/corrupt/unverifiable state fails closed; restart restores pins and per-origin sequence floors before any packet is admitted. Classification: Rust+Python implemented+tested (rust/lichen-node/src/announce_store.rs MAC-sealed separate state/floor roots + persist-first ordering announce.rs:244-266; python announce/persistence.py RevisionAnchor + fcntl cross-process lock + tests test_bootstrap_commit_and_reboot_restore_exact_pin_and_floor, test_commit_cannot_roll_back_durable_replay_floor). C: announce pin is in-memory L2 TOFU only (lichen/subsys/lichen/l2/lichen_l2_peer.c:306) with NVS replay-state persist - no announce pin file store, no independent monotonic revision anchor, no bounded pin table. Suggested placement: C durable announce-pin store with independent anchor, mirroring the existing lichen/tests/nvs_persistence and replay_persist patterns; coordinate with b7z9.7 (overflow policy TOFU-vs-LRU).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T22:54:06.808979037Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T22:54:06.808979037Z",
+  "labels": [
+    "routing",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.155",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T22:54:06.931688791Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -463,10 +463,20 @@ fn router_rejects_unauthorized_version_wrap_from_127_to_zero() {
 
 #[test]
 fn root_authorized_version_propagates_across_two_hops_and_tampering_fails() {
-    // The shared corpus still signs the legacy native DODAGID (stale until
-    // i72x.6); this test builds the wire from the seed-0x61 root identity
-    // directly so the DODAGID is the upstream derivation end to end.
-    let root_identity = Identity::from_seed(Seed::new([0x61; 32]));
+    // UPSTREAM-AddrForKey variant (i72x.2): shared corpus flips in i72x.6.
+    // Merge note: beads-worker-7 hardcoded the same seed-0x61 identity; the
+    // committed fixture wins because it also pins root_pubkey/dodag_id
+    // byte-equality below (the independent upstream conformance oracle).
+    let document: serde_json::Value = serde_json::from_str(include_str!(
+        "../../tests/dodag_version_authorization_upstream.json"
+    ))
+    .unwrap();
+    let vector = &document["vectors"][0];
+    let root_seed: [u8; 32] = hex::decode(vector["seed"].as_str().unwrap())
+        .unwrap()
+        .try_into()
+        .unwrap();
+    let root_identity = Identity::from_seed(Seed::new(root_seed));
     let parent_identity = Identity::from_seed(Seed::new([0x62; 32]));
     let leaf_identity = Identity::from_seed(Seed::new([0x63; 32]));
     let root_addr = lichen_core::addr::ygg_addr_from_pubkey(root_identity.pubkey.as_bytes());
@@ -480,6 +490,16 @@ fn root_authorized_version_propagates_across_two_hops_and_tampering_fails() {
     let mut root_wire = [0u8; 160];
     let root_len = root.build_authenticated_dio(&mut root_wire, &root_link);
     assert!(root_len > Dio::SERIALIZED_LEN + DODAG_CONFIG_DATA_LEN + 2);
+    assert_eq!(
+        root_link.local_public_key().as_bytes(),
+        &hex::decode(vector["root_pubkey"].as_str().unwrap()).unwrap()[..]
+    );
+    assert_eq!(
+        root_addr.as_slice(),
+        hex::decode(vector["dodag_id"].as_str().unwrap())
+            .unwrap()
+            .as_slice()
+    );
     let root_dio = Dio::from_bytes(&root_wire[..root_len]).unwrap();
 
     let mut parent = Router::new(parent_addr, root_addr);
@@ -526,14 +546,23 @@ fn root_authorized_version_propagates_across_two_hops_and_tampering_fails() {
 
 /// Canonical root-signed option. The shared corpus
 /// `test/vectors/dodag_version_authorization.json` still signs the legacy
-/// native DODAGID with instance 1 (stale until i72x.6); this constant is
-/// the same option shape over the UPSTREAM DODAGID for the seed-0x61 root
-/// at RPL_INSTANCE_ID 0 (the Rust constant), produced with the Python
+/// native DODAGID with instance 1 (stale until i72x.6); the pinned vector
+/// in `tests/dodag_version_authorization_upstream.json` is the same option
+/// shape over the UPSTREAM DODAGID for the seed-0x61 root at
+/// RPL_INSTANCE_ID 0 (the Rust constant), produced with the Python
 /// schnorr48 oracle — the same oracle class the corpus uses — and
 /// cross-checked against the Rust signer (byte-identical), never derived
 /// from the Rust verifier alone.
 fn canonical_version_authorization_option() -> Vec<u8> {
-    hex::decode("165101af06a3e3291714e4f356c19c9b15cd1951ec6e6662aa77be07547f289383341dee30fd51b804f1a25ae91df86a6f10cc530b314de0d0d5c4e628a5d4e5dd1aaf46930672af7c4d1d2eb113369b12900c").unwrap()
+    // UPSTREAM-AddrForKey variant (i72x.2): the shared corpus still pins the
+    // rejected native-profile DODAGID for the Python consumer; it flips when
+    // the Python derivation migrates (i72x.6). Same bytes as the hardcoded
+    // literal beads-worker-7 carried; the fixture keeps one source of truth.
+    let document: serde_json::Value = serde_json::from_str(include_str!(
+        "../../tests/dodag_version_authorization_upstream.json"
+    ))
+    .unwrap();
+    hex::decode(document["vectors"][0]["option"].as_str().unwrap()).unwrap()
 }
 
 fn authorized_version_one_dio(root_addr: [u8; 16], option: &[u8]) -> (Dio, Vec<u8>) {
@@ -858,7 +887,10 @@ fn spoofed_dao_target_is_rejected_before_replay_state_changes() {
     assert!(!root.process_dao_at_ms(&dao, target, link_local(3), 0));
     assert!(root.lookup_route(Ipv6Addr::from(target)).is_none());
     assert!(root.process_dao_at_ms(&dao, target, target, 0));
-    assert_eq!(root.lookup_route(Ipv6Addr::from(target)), Some([Ipv6Addr::from(target)].as_slice()));
+    assert_eq!(
+        root.lookup_route(Ipv6Addr::from(target)),
+        Some([Ipv6Addr::from(target)].as_slice())
+    );
 }
 
 #[test]
@@ -1178,7 +1210,9 @@ fn finite_route_expires_during_idle_lookup_and_timer() {
     assert!(root.set_dao_lifetime_unit(1));
 
     assert!(root.process_dao_at_ms(&dao, target, target, 1_000));
-    assert!(root.lookup_route_at(Ipv6Addr::from(target), 1_999).is_some());
+    assert!(root
+        .lookup_route_at(Ipv6Addr::from(target), 1_999)
+        .is_some());
     root.trickle_start(2_000, 0);
     assert!(root.lookup_route(Ipv6Addr::from(target)).is_none());
 }
@@ -1225,8 +1259,12 @@ fn dao_clock_expires_across_u32_boundary() {
     assert!(root.set_dao_lifetime_unit(1));
 
     assert!(root.process_dao_at_ms(&dao, target, target, WRAP - 296));
-    assert!(root.lookup_route_at(Ipv6Addr::from(target), WRAP + 703).is_some());
-    assert!(root.lookup_route_at(Ipv6Addr::from(target), WRAP + 704).is_none());
+    assert!(root
+        .lookup_route_at(Ipv6Addr::from(target), WRAP + 703)
+        .is_some());
+    assert!(root
+        .lookup_route_at(Ipv6Addr::from(target), WRAP + 704)
+        .is_none());
 }
 
 #[test]
@@ -1241,7 +1279,9 @@ fn dao_clock_expires_after_half_range_gap() {
 
     let start = 1_000u64;
     assert!(root.process_dao_at_ms(&dao, target, target, start));
-    assert!(root.lookup_route_at(Ipv6Addr::from(target), start + HALF).is_none());
+    assert!(root
+        .lookup_route_at(Ipv6Addr::from(target), start + HALF)
+        .is_none());
 }
 
 #[test]
@@ -2224,7 +2264,6 @@ fn production_handler_requires_announce_pin() {
         .unwrap();
     let mut announces = crate::announce::AnnounceProcessor::new(
         crate::gradient::GradientTable::new(crate::announce::MAX_TRACKED_ORIGINATORS),
-        [0xfd; 8],
     );
     assert_eq!(
         node.handle_dao(
@@ -2484,4 +2523,3 @@ fn dense_network_simulation_progressive_suppression() {
         );
     }
 }
-

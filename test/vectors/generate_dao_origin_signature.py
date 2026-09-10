@@ -63,18 +63,46 @@ class DaoVectorDocument(TypedDict):
     vectors: list[dict[str, object]]
 
 
-def native_address(public_key: bytes) -> bytes:
-    """Return the canonical key-derived LICHEN/Yggdrasil 02xx address."""
-    key_digest = hashlib.sha512(public_key).digest()
-    iid = bytearray(key_digest[:8])
-    iid[0] &= 0xFD
-    return b"\x02" + key_digest[:7] + bytes(iid)
+def addr_for_key(public_key: bytes) -> bytes:
+    """Upstream Yggdrasil ``AddrForKey`` byte-for-byte (yggdrasil-go@422836ee
+    src/address/address.go; settled ``upstream-yggdrasil-addressing``
+    decision). Bit-invert the key; addr[0]=0x02; addr[1] = leading-1 count
+    mod 256; skip leading 1s + the first 0 separator bit; pack the rest
+    MSB-first into whole bytes, discarding the trailing partial byte; copy
+    into addr[2:16], zero tail. No hashing.
+    """
+    inv = bytes(b ^ 0xFF for b in public_key)
+    addr = bytearray(16)
+    addr[0] = 0x02
+    temp = bytearray()
+    done = False
+    ones = 0
+    cur = 0
+    nbits = 0
+    for idx in range(8 * len(inv)):
+        bit = (inv[idx // 8] >> (7 - (idx % 8))) & 0x01
+        if not done:
+            if bit:
+                ones = (ones + 1) & 0xFF
+                continue
+            done = True  # first leading 0 bit: separator, skipped
+            continue
+        cur = (cur << 1) | bit
+        nbits += 1
+        if nbits == 8:
+            nbits = 0
+            temp.append(cur)
+            cur = 0
+    addr[1] = ones
+    n = min(len(temp), 14)
+    addr[2 : 2 + n] = temp[:n]
+    return bytes(addr)
 
 
-ORIGIN = native_address(PUBLIC_KEY)
+ORIGIN = addr_for_key(PUBLIC_KEY)
 ALT_PREFIX_ORIGIN = bytes.fromhex("fe80000000000000") + ORIGIN[8:]
 VICTIM_PUBLIC_KEY = ReferenceIdentity.from_seed(VICTIM_SEED).pubkey
-VICTIM = native_address(VICTIM_PUBLIC_KEY)
+VICTIM = addr_for_key(VICTIM_PUBLIC_KEY)
 
 
 def target(address: bytes, prefix_length: int = 128) -> bytes:

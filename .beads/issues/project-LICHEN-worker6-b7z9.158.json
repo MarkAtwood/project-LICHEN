@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.158",
+  "title": "firmware/bridge-zephyr pubkey_to_iid uses SHA-256, diverging from spec 03 SHA-512 IID derivation",
+  "description": "RECREATED 2026-09-09 ~23:31Z by the 02a-tdma sweep worker: the original bead (created 2026-09-09T23:04:22Z, id project-LICHEN-worker6-b7z9.156) was clobbered by an ID-counter collision when the TDMA sweep created its own b7z9.156; bd sequence state was stale per store corruption tracked in project-LICHEN-worker6-rul5. Content below is verbatim from the pre-clobber bd list output. -- Spec: spec/03-addressing.md 3.1 derivation step 2-3 (sweep 2026-09-09, R-03-003): IID = SHA-512(pubkey)[0:8] with U/L cleared, MUST be identical across all implementations. Divergent: firmware/bridge-zephyr/subsys/lichen/ipv6_addr.c:85-118 derives the IID from SHA-256(pubkey) (explicit SECURITY comment, ORCHID-inspired), while the live lichen/ tree (lichen/subsys/lichen/l2/ipv6_addr.c:166-180 crypto_sha512), Rust (rust/lichen-core/src/addr.rs:84-90) and Python (python/src/lichen/crypto/identity.py:138-154) all use SHA-512. firmware/bridge-zephyr is still an active build target: python/tests/firmware/test_bridge_zephyr_cmake.py checks its CMake/Kconfig/boards and auto-merges board files (t1000_e, t_echo, rak4631, etc.). An IID mismatch breaks link-local address interop (fe80::/10) and human_address agreement with the other stacks. Suggested placement: port firmware/bridge-zephyr/subsys/lichen/ipv6_addr.c lichen_pubkey_to_iid to crypto_sha512 (Monocypher, as done for lichen/ in bead l1qw.4.5.2.3), or retire the legacy tree if it is no longer a shipping target; add a node-address vector consumer test for it either way.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T23:31:06.706984237Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T02:26:51.727580736Z",
+  "started_at": "2026-09-10T02:11:50.884112126Z",
+  "closed_at": "2026-09-10T02:26:51.727580736Z",
+  "close_reason": "Fixed: ported firmware/bridge-zephyr/subsys/lichen/ipv6_addr.c lichen_pubkey_to_iid from TinyCrypt SHA-256 to vendored Monocypher crypto_sha512 + crypto_wipe (same pattern as live l2/ipv6_addr.c, bead l1qw.4.5.2.3), matching spec/03-addressing.md 3.1 and the pinned node_address.json vectors. Key context: the file is a FROZEN snapshot compiled by NO build system (bridge CMake builds only src/main.c against module-owned l2 sources; test_bridge_zephyr_cmake.py asserts module sources win; retirement decision is tracked separately by P4 nvle) - so shipped behavior was never divergent, but the snapshot is now vector-conformant for any resurrection. Verification: host gcc ASan/UBSan harness compiles the bridge file + in-tree monocypher, derives iid=5046adc1dba83886 for the all-zero-pubkey vector (exact match); test_bridge_zephyr_cmake.py 5/5 pass. 3x delegated codereview (kimi-k3): correctness PASS, security PASS (2 P4 doc findings - fixed: phantom R-03-003 ID dropped from comment, prj.conf TinyCrypt rationale comment corrected), edge-cases PASS. Commit 7898f6cc00.",
+  "labels": [
+    "addressing",
+    "spec-gap",
+    "c"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.158",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T23:31:06.833933648Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

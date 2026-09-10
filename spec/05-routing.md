@@ -466,8 +466,9 @@ Prefix)`. In the no-ULA 02xx model, all nodes use self-derived primary 02xx
 addresses; prefix advertisement is not used for DODAG formation. The Prefix MUST
 have every bit after Prefix Length cleared. Target senders MUST use the minimum
 number of prefix octets and set reserved flags and unused prefix bits to zero.
-As required by RFC 6550, receivers MUST ignore reserved flags and bits beyond
-Prefix Length, then canonicalize the internal key. Receivers MUST reject
+Receivers MUST ignore bits beyond Prefix Length, then canonicalize the internal
+key. The reserved RPL Target Flags octet MUST be zero; a nonzero value rejects
+the DAO before route-state mutation (Section 8.6). Receivers MUST reject
 truncated prefixes and prefix lengths greater than 128 without mutating
 DAOSequence replay or routing state. Link-layer replay state is updated
 independently after link authentication.

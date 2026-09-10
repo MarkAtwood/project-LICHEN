@@ -1723,9 +1723,9 @@ mod tests {
         assert_eq!(iid, expected_iid);
 
         let ygg_addr = ygg_addr_from_pubkey(&expected_pubkey);
-        // Upstream yggdrasil-go AddrForKey (oracle: ~/GIT/yggdrasil-go
-        // src/address, validated against the pinned upstream vector in
-        // test/vectors/yggdrasil_address.json).
+        // Upstream yggdrasil-go AddrForKey (yggdrasil-go@422836ee oracle,
+        // i72x.2; validated against the pinned upstream byte-equality vector
+        // in test/vectors/yggdrasil_address.json).
         let expected_ygg: [u8; 16] = hex!("020224aec2198a4ade94eae2b97eac87");
         assert_eq!(ygg_addr, expected_ygg);
     }
@@ -1795,6 +1795,7 @@ mod tests {
     #[test]
     fn dodagid_binding_valid() {
         // Test vector: verify_dodagid_binding with valid pubkey/DODAGID pair
+        // (upstream AddrForKey value, yggdrasil-go@422836ee oracle, i72x.2).
         let pubkey: [u8; 32] =
             hex!("4cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba29");
         // Alice's DODAGID = upstream AddrForKey(alice_pubkey) (see derivation_zero).
@@ -1802,6 +1803,12 @@ mod tests {
 
         assert!(verify_dodagid_binding(&pubkey, &dodagid));
     }
+
+    // The binding_invariant_* tests asserted ygg_addr[8:16] == IID, a property
+    // of the rejected SHA-512 native profile. Upstream AddrForKey bit-packs
+    // the inverted pubkey and does not embed the IID
+    // (spec/decisions.jsonl upstream-yggdrasil-addressing, i72x.2), so the
+    // invariant is retired and the tests removed with it.
 
     #[test]
     fn dodagid_binding_mismatch() {

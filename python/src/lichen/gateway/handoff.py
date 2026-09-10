@@ -38,6 +38,7 @@ import cbor2
 
 from lichen.crypto import schnorr48
 from lichen.crypto.identity import _pubkey_to_iid
+from lichen.crypto.schnorr48 import SCHNORR48_ED25519_ALG
 from lichen.ipv6 import to_ipv6
 
 if TYPE_CHECKING:
@@ -101,7 +102,6 @@ _KEY_OSCORE_WINDOW = 7  # Window size (int)
 _KEY_OSCORE_ID_CTX = 8  # ID context (bytes or null)
 
 # COSE constants per RFC 9052 and spec 08-gateway-coordination.md GCP-7.1
-SCHNORR48_ED25519_ALG = -65537
 _COSE_ALG = 1
 _COSE_KID = 4
 

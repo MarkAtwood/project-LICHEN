@@ -100,7 +100,9 @@ fn exported_public_key_is_owned_and_drives_both_addresses() {
     assert_eq!(iid_from_pubkey(&public_key), hex8("ed4242ead4ac6948"));
     assert_eq!(
         ygg_addr_from_pubkey(public_key.as_bytes()),
-        hex16("02ed4242ead4ac69ed4242ead4ac6948")
+        // Upstream AddrForKey for this key, from the yggdrasil-go@422836ee
+        // reference implementation (external oracle, i72x.2).
+        hex16("02062f7c200618f7a0f14791738c5a1f")
     );
 }
 
@@ -121,7 +123,8 @@ fn cold_starts_reconstruct_the_exact_same_identity_and_addresses() {
             hex32("03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8"),
             hex8("ed4242ead4ac6948"),
             hex16("fe80000000000000ed4242ead4ac6948"),
-            hex16("02ed4242ead4ac69ed4242ead4ac6948"),
+            // Upstream AddrForKey (yggdrasil-go@422836ee oracle, i72x.2).
+            hex16("02062f7c200618f7a0f14791738c5a1f"),
         )
     );
     assert_ne!(first.0, different.0);

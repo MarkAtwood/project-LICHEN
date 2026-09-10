@@ -54,7 +54,7 @@ new_session() { rm -f "$SESSIONS/worker$N.sid" "$WT/SELF-REPORT-DEGENERATE"; }
 
 rounds=0
 while :; do
-    if [ -f "$REPO/.fleet-paused" ]; then sleep 60; continue; fi
+    if [ -f "$REPO/.fleet-paused" ] || [ -f "$REPO/.fleet-workers-paused" ]; then sleep 60; continue; fi
 
     # Round: fresh session or continue existing
     SID=$(sess_id)

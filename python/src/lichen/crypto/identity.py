@@ -136,11 +136,14 @@ def hash_32(data: bytes | str) -> int:
 
 
 def _pubkey_to_iid(pubkey: bytes) -> bytes:
-    """Derive IID from Ed25519 public key.
+    """Derive the IID (Interface Identifier) from an Ed25519 public key for
+    the link-local (``fe80::/10``) address.
 
-    LICHEN native profile inspired by Yggdrasil 0200::/8 range; NOT
-    wire-compatible with upstream AddrForKey (which bit-packs without hashing).
-    See test/vectors/yggdrasil_address.json for divergence documentation.
+    ``SHA-512(pubkey)[0:8]`` with the U/L bit cleared per RFC 4291 §2.5.1.
+    This is the LICHEN IID profile (03-addressing.md); it is used ONLY for
+    the link-local address and is independent of the routable primary
+    address, which is upstream Yggdrasil ``AddrForKey`` (see
+    ``yggdrasil_address``). The IID is NOT embedded in the routable address.
     """
     if len(pubkey) != 32:
         raise ValueError(f"pubkey must be 32 bytes, got {len(pubkey)}")
@@ -204,31 +207,75 @@ def iid_to_human_address(iid: bytes) -> str:
 
 
 def yggdrasil_address(pubkey: bytes) -> IPv6Address:
-    """Derive the native 0200::/8 address from an Ed25519 public key.
+    """Derive the routable 0200::/8 address from an Ed25519 public key.
 
-    LICHEN native profile inspired by Yggdrasil 0200::/8 range; NOT
-    wire-compatible with upstream AddrForKey (which bit-packs the pubkey
-    without hashing). See test/vectors/yggdrasil_address.json for divergence.
+    Upstream Yggdrasil ``AddrForKey`` byte-for-byte, per the settled
+    ``upstream-yggdrasil-addressing`` decision (spec/decisions.jsonl;
+    yggdrasil-go@422836ee src/address/address.go). The SHA-512-based LICHEN
+    native profile is REJECTED and MUST NOT be used. Mirrors Rust
+    ``ygg_addr_from_pubkey`` (i72x.2).
 
-    Algorithm:
+    Algorithm (no hashing):
 
-      1. Compute `h = SHA-512(pubkey)`
-      2. `addr = [0x02] || h[0:7] || h[0:8]`
-      3. Clear U/L bit in IID byte: `addr[8] &= 0xfd`
+      1. Bit-invert the 32-byte public key.
+      2. ``addr[0] = 0x02`` (the 0200::/8 prefix, last bit 0 = node address).
+      3. ``addr[1]`` = count of leading 1 bits in the inverted key, mod 256
+         (matches Go ``byte`` overflow semantics).
+      4. Skip the leading 1 bits and the first 0 bit (the separator).
+      5. Pack the remaining inverted-key bits MSB-first into whole bytes,
+         discarding any trailing partial byte; copy into ``addr[2:16]``,
+         truncating at 14 bytes, leaving unwritten tail bytes zero.
 
-    The fixed `0x02` first byte selects the LICHEN native 0200::/8 profile.
-    Bytes 1-7 (from `h[0:7]`) distribute identities within that prefix.
-    Bytes 8-15 (from `h[0:8]`) form the IID, binding the address to the pubkey.
+    Degenerate case (all-zero public key, i.e. inverted key of all 1 bits):
+    no separator 0 bit is ever seen, so no payload bits are appended and
+    ``ones`` wraps to 0 — matching upstream exactly.
 
-    Matches Rust `ygg_addr_from_pubkey` and test/vectors/yggdrasil-derivation.json.
+    The SHA-512 IID (``_pubkey_to_iid``) is NOT embedded in this address; the
+    address binds to the key by self-derivation. The pinned byte-equality
+    oracle is the ``upstream_addr_for_key`` vector in
+    test/vectors/yggdrasil_address.json (anchored to upstream
+    address_test.go), cross-checked against the independent Rust
+    implementation (``ygg_addr_from_pubkey``, i72x.2).
     """
     if len(pubkey) != 32:
         raise ValueError(f"pubkey must be 32 bytes, got {len(pubkey)}")
-    h = sha512(pubkey).digest()
-    iid = bytearray(h[:8])
-    iid[0] &= 0b1111_1101
-    addr_bytes = bytearray(16)
-    addr_bytes[0] = 0x02
-    addr_bytes[1:8] = h[0:7]
-    addr_bytes[8:16] = iid
-    return IPv6Address(bytes(addr_bytes))
+    inv = bytes(b ^ 0xFF for b in pubkey)
+    addr = bytearray(16)
+    addr[0] = 0x02
+    temp = bytearray()
+    done = False
+    ones = 0
+    cur = 0
+    nbits = 0
+    for idx in range(8 * len(inv)):
+        bit = (inv[idx // 8] >> (7 - (idx % 8))) & 0x01
+        if not done:
+            if bit:
+                ones = (ones + 1) & 0xFF
+                continue
+            done = True  # first leading 0 bit: separator, skipped
+            continue
+        cur = (cur << 1) | bit
+        nbits += 1
+        if nbits == 8:
+            nbits = 0
+            temp.append(cur)
+            cur = 0  # Go relies on byte overflow; explicit reset is equivalent
+    addr[1] = ones
+    n = min(len(temp), 14)
+    addr[2 : 2 + n] = temp[:n]
+    return IPv6Address(bytes(addr))
+
+
+def subnet_for_key(pubkey: bytes) -> bytes:
+    """Derive the 8-byte routable 0300::/8 subnet prefix from an Ed25519 key.
+
+    Upstream Yggdrasil ``SubnetForKey`` byte-for-byte (yggdrasil-go@422836ee
+    src/address/address.go): the AddrForKey bytes truncated to 8 with the
+    last prefix bit set (``byte0 |= 0x01``), selecting 0300::/8 and marking
+    a prefix rather than a node address. Mirrors Rust
+    ``ygg_subnet_from_pubkey`` (i72x.2).
+    """
+    subnet = bytearray(yggdrasil_address(pubkey).packed[:8])
+    subnet[0] |= 0x01
+    return bytes(subnet)

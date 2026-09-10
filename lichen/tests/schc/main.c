@@ -504,6 +504,74 @@ static int test_rule255_rejects_truncated(void)
 	return 1;
 }
 
+static int test_rule255_rx_byte_preserving_despite_emission_policy(void)
+{
+	/* rule255-rx-decode (spec/decisions.jsonl, 2026-08-31, FINAL): the
+	 * Rule 255 decoder validates structure and checksums ONLY - emission
+	 * endpoint policy (unspecified/multicast source, unspecified
+	 * destination) MUST NOT gate receipt. Regression guard for the C RX
+	 * divergence fixed by project-LICHEN-worker6-b7z9.89: pre-fix
+	 * validate_ipv6_transport_lengths rejected these on the RX path,
+	 * blackholing frames Rust (codec.rs
+	 * rule255_decode_is_byte_preserving_despite_emission_policy) and
+	 * Python (headers.py) accept. Mirrors the
+	 * rule255_rx_structural_reject vectors in
+	 * test/vectors/schc_adaptation.json (TX-reject/RX-accept).
+	 * Checksums computed independently (RFC 768 over the IPv6
+	 * pseudo-header, Python struct implementation), never from the C
+	 * checksum under test. */
+	static const uint8_t packets[3][48] = {
+		/* multicast source ff02::1 -> 2001:db8::2 */
+		{ 0x60, 0x00, 0x00, 0x00, 0x00, 0x08, 0x11, 0x40,
+		  0xff, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+		  0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
+		  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+		  0x2a, 0x83, 0x13, 0x88, 0x00, 0x08, 0x95, 0x14 },
+		/* unspecified source :: -> 2001:db8::2 */
+		{ 0x60, 0x00, 0x00, 0x00, 0x00, 0x08, 0x11, 0x40,
+		  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		  0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
+		  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+		  0x2a, 0x83, 0x13, 0x88, 0x00, 0x08, 0x94, 0x18 },
+		/* 2001:db8::1 -> unspecified destination :: */
+		{ 0x60, 0x00, 0x00, 0x00, 0x00, 0x08, 0x11, 0x40,
+		  0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
+		  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+		  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		  0x2a, 0x83, 0x13, 0x88, 0x00, 0x08, 0x94, 0x19 },
+	};
+	uint8_t out[64];
+	uint8_t comp[300];
+
+	for (size_t i = 0; i < 3; i++) {
+		/* TX half of the split: emission policy still rejects. */
+		int ret = lichen_schc_compress(packets[i], sizeof(packets[i]),
+					       comp, sizeof(comp));
+		if (ret != SCHC_ERR_INVALID_ENDPOINT) {
+			printf("  FAIL: compress accepted emission-policy packet %zu (got %d)\n",
+			       i, ret);
+			return 0;
+		}
+		/* RX half: decoder is byte-preserving. */
+		int m = rule255_decompress(packets[i], sizeof(packets[i]), out,
+					   sizeof(out));
+		if (m != (int)sizeof(packets[i])) {
+			printf("  FAIL: rule255 RX rejected emission-policy-only packet %zu (got %d)\n",
+			       i, m);
+			return 0;
+		}
+		if (memcmp(out, packets[i], sizeof(packets[i])) != 0) {
+			printf("  FAIL: rule255 RX not byte-preserving for packet %zu\n",
+			       i);
+			return 0;
+		}
+	}
+	return 1;
+}
+
 static int test_unknown_rule_id(void)
 {
 	uint8_t data[5] = { 0x7e, 0xde, 0xad, 0xbe, 0xef };
@@ -654,9 +722,8 @@ static int test_validator_direct_call_self_defense(void)
 	 * check is the ONLY rejection path: pre-uylk code returned SCHC_OK
 	 * here (non-UDP terminal, zero payload length consistent), so this
 	 * fixture discriminates a revert of the self-check. Addresses are
-	 * valid link-locals: the structural address constraints (unspecified
-	 * or multicast source, unspecified destination) must not fire on this
-	 * fixture — it targets the version self-check only. */
+	 * ordinary unicast so no emission-policy shape distracts the
+	 * version-check assertion. */
 	static const uint8_t minimal_v6[40] = { [0] = 0x60,
 						[6] = 59,
 						[8] = 0xfe,
@@ -823,6 +890,7 @@ int main(void)
 	RUN_TEST(test_rule255_rejects_non_rh3_routing);
 	RUN_TEST(test_rule255_rejects_bad_udp_checksum);
 	RUN_TEST(test_rule255_rejects_truncated);
+	RUN_TEST(test_rule255_rx_byte_preserving_despite_emission_policy);
 	RUN_TEST(test_unknown_rule_id);
 	RUN_TEST(test_truncated_coap_linklocal);
 	RUN_TEST(test_truncated_coap_global);

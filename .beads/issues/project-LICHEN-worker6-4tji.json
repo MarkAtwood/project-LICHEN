@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-4tji",
   "title": "Rust: implement real Yggdrasil AddrForKey algorithm",
   "description": "Update ygg_addr_from_pubkey in Rust to match exact Yggdrasil algorithm:\n1. Invert pubkey bits\n2. Count leading 1-bits\n3. Build address per yggdrasil-go AddrForKey()\n\nBreaking change. Must match Python implementation exactly.\nUpdate any /8 references to /7.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T23:46:05.759834Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-31T05:16:50.183560993Z",
+  "updated_at": "2026-09-09T13:22:16.327952902Z",
+  "closed_at": "2026-09-09T13:22:16.327952902Z",
+  "close_reason": "Already landed by i72x.2. rust/lichen-core/src/addr.rs:119 ygg_addr_from_pubkey implements upstream yggdrasil-go AddrForKey exactly (bit-invert, leading-1 count wrapping mod 256, separator skip, MSB-first bit-pack discarding trailing partial byte, 0x02 prefix) with doc citing yggdrasil-go 422836ee; lichen-gateway trust.rs:497 delegates to it. Pinned oracle: test/vectors/yggdrasil_address.json upstream_addr_for_key anchor consumed by lichen-core tests yggdrasil_addr_vectors.rs + ipv6_address_vectors.rs:221 and lichen-link identity.rs:160; verified green (4+5 pass). The bead's '/8 -\u003e /7 rename' tail is overtaken by the settled upstream-yggdrasil-addressing decision: 0200::/7 is the aggregate, node /128s stay in 0200::/8 — current /8 terminology is correct and was left alone.",
   "labels": [
     "rust",
     "security"

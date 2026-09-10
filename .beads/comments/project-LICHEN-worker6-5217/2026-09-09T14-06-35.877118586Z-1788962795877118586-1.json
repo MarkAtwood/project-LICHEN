@@ -1,0 +1,7 @@
+{
+  "id": "1788962795877118586-1",
+  "issue_id": "project-LICHEN-worker6-5217",
+  "author": "Mark Atwood",
+  "text": "Worker5 release note (2026-09-09 ~14:00 UTC): verified on HEAD b43bfb1393 (contains 17e39dbb31) - lichen-node --lib is 341 passed / 18 FAILED, failure set has drifted beyond the original 6: new DAO clock/expiry family (process_dao_at_ms assertions in routing/tests.rs ~1156/1251 + runtime.rs:514), renamed version-auth tests, and multicast_dio_and_dis_are_received overlaps the open ehcn decision. Concurrent commits to rpl_stack within the last hour (87f166a5e4 debris restore + others) =\u003e files mid-flight. Releasing per loop protocol (recent-merge/dirty-area rule + 15-min timebox); recommend re-claiming after rpl_stack churn settles and ehcn decision lands.",
+  "created_at": "2026-09-09T14:06:35.877118586Z"
+}

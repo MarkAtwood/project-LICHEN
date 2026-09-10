@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.172",
+  "title": "[spec-gap][R-19-032/033] Factory-reset screen + ≥3s hold-to-confirm unimplemented; H tier reset gate missing",
+  "description": "spec/19-device-ux.md §9: ≥5s hold opens the reset screen (E/O), which requires an additional hold-to-confirm (≥3s) — never a plain press; H tier has no reset gesture (reset path is the LCI or physical reflash). Evidence: RESET_PATH event at 5000ms is implemented+tested (ux_button_core.c:140-153; tests test_hold_5s_opens_reset_path, test_reset_outranks_sos) but nothing consumes it — no reset screen, no ≥3s hold-to-confirm flow, no reset action. Risk: the engine emits RESET_PATH tier-agnostically; the future consumer MUST gate on tier (H must ignore RESET_PATH) or headless targets silently gain a reset gesture the spec forbids. Note LCI reset resource also absent (rg factory-reset|/reset in coap server + gateway: zero) — the spec's stated LCI reset path needs its own resource or the reset story is gesture-only. Suggested placement: consumer in the ux screen module (b7z9.165) with hold-to-confirm reusing the button engine's hold events; H gate via hal capabilities.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "feature",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T00:08:08.891296698Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T00:08:08.891296698Z",
+  "labels": [
+    "ux",
+    "spec-gap",
+    "c",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.172",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-10T00:08:09.039154076Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

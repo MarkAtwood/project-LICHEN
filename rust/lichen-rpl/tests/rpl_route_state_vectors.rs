@@ -226,8 +226,7 @@ fn canonical_route_state_vectors_match_production_manager() {
             lifetime_unit_seconds,
             max_deadline_seconds: u64::MAX,
         };
-        let mut relation_manager =
-            DaoManager::diagnostic_root(dodag_id, rpl_instance_id, dodag_id);
+        let mut relation_manager = DaoManager::diagnostic_root(dodag_id, rpl_instance_id, dodag_id);
         relation_manager
             .process_route_state_diagnostic(
                 &route_dao(1, current, target, parent),
@@ -249,8 +248,8 @@ fn canonical_route_state_vectors_match_production_manager() {
             "stale" | "incomparable" => assert!(result.is_err(), "{name}"),
             expected => panic!("{name}: unknown sequence relation {expected}"),
         }
-        let state = relation_manager
-            .route_state_diagnostic(sequence_authority, lifetime_unit_seconds);
+        let state =
+            relation_manager.route_state_diagnostic(sequence_authority, lifetime_unit_seconds);
         assert_eq!(state.len(), 1, "{name}");
         assert_eq!(
             state[0].path_sequence,
@@ -263,11 +262,7 @@ fn canonical_route_state_vectors_match_production_manager() {
         );
     }
 
-    let mut tx_manager = DaoManager::new(
-        sequence_authority,
-        rpl_instance_id,
-        dodag_id,
-    );
+    let mut tx_manager = DaoManager::new(sequence_authority, rpl_instance_id, dodag_id);
     let mut last_logical_lifetime = None;
     for transition in document["tx_sequence_transitions"].as_array().unwrap() {
         let name = transition["name"].as_str().unwrap();
@@ -335,15 +330,12 @@ fn canonical_route_state_vectors_match_production_manager() {
         );
     }
 
-    let mut manager =
-        DaoManager::diagnostic_root(dodag_id, rpl_instance_id, dodag_id);
+    let mut manager = DaoManager::diagnostic_root(dodag_id, rpl_instance_id, dodag_id);
 
     for vector in document["vectors"].as_array().unwrap() {
         let name = vector["name"].as_str().unwrap();
         assert_eq!(
-            snapshot(
-                manager.route_state_diagnostic(sequence_authority, lifetime_unit_seconds)
-            ),
+            snapshot(manager.route_state_diagnostic(sequence_authority, lifetime_unit_seconds)),
             vector["before"],
             "{name}: before snapshot"
         );
@@ -383,9 +375,7 @@ fn canonical_route_state_vectors_match_production_manager() {
             "{name}: reason must be a canonical diagnostic string"
         );
         assert_eq!(
-            snapshot(
-                manager.route_state_diagnostic(sequence_authority, lifetime_unit_seconds)
-            ),
+            snapshot(manager.route_state_diagnostic(sequence_authority, lifetime_unit_seconds)),
             vector["expected"]["state"],
             "{name}: expected snapshot"
         );
@@ -420,7 +410,11 @@ fn zero_length_transit_is_rejected_without_public_state_mutation() {
         )
         .unwrap();
     let before = manager.route_state_diagnostic(authority.into(), timing.lifetime_unit_seconds);
-    let route_before = manager.routing_table().lookup(Ipv6Addr::from(target)).unwrap().to_vec();
+    let route_before = manager
+        .routing_table()
+        .lookup(Ipv6Addr::from(target))
+        .unwrap()
+        .to_vec();
     let mut malformed = vec![0, 0, 0, 2, 5, 18, 0, 128];
     malformed.extend_from_slice(&target);
     malformed.extend_from_slice(&[OPT_TRANSIT_INFO, 0]);

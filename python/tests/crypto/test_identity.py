@@ -161,8 +161,10 @@ class TestIdentityConstruction:
             "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8"
         )
         assert _pubkey_to_iid(exported_public).hex() == "ed4242ead4ac6948"
+        # Upstream AddrForKey (yggdrasil-go@422836ee address.go oracle; the
+        # rejected SHA-512 native profile embedded the IID here).
         assert yggdrasil_address(exported_public).packed.hex() == (
-            "02ed4242ead4ac69ed4242ead4ac6948"
+            "02062f7c200618f7a0f14791738c5a1f"
         )
 
         for malformed in (exported_public[:-1], exported_public + b"\x00"):
@@ -197,7 +199,7 @@ class TestIdentityConstruction:
             bytes.fromhex("03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8"),
             bytes.fromhex("ed4242ead4ac6948"),
             bytes.fromhex("fe80000000000000ed4242ead4ac6948"),
-            bytes.fromhex("02ed4242ead4ac69ed4242ead4ac6948"),
+            bytes.fromhex("02062f7c200618f7a0f14791738c5a1f"),
         )
         assert all(left != right for left, right in zip(first, different, strict=True))
 

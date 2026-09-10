@@ -157,15 +157,21 @@ mod tests {
     }
 
     #[test]
-    fn yggdrasil_addr_unified_with_iid() {
+    fn yggdrasil_addr_matches_upstream_addr_for_key() {
         let seed = Seed::new([0x01u8; 32]);
         let id = Identity::from_seed(seed);
         let direct = ygg_addr_from_pubkey(id.pubkey.as_bytes());
         assert_eq!(direct[0], 0x02, "must start with Yggdrasil prefix");
+        // Upstream AddrForKey for this seed's pubkey (8a88e3dd..f6f5c), from
+        // the yggdrasil-go@422836ee reference implementation (i72x.2). The
+        // routable address no longer embeds the IID (rejected native profile).
         assert_eq!(
-            &direct[8..],
-            &id.iid[..],
-            "lower 64 bits must match LICHEN IID"
+            direct,
+            [
+                0x02, 0x00, 0xea, 0xee, 0x38, 0x45, 0x17, 0xec, 0x1c, 0xd4, 0x05, 0x5a, 0x49, 0xa5,
+                0x86, 0x8b
+            ],
+            "MUST equal upstream AddrForKey byte-for-byte"
         );
         // deterministic
         assert_eq!(direct, ygg_addr_from_pubkey(id.pubkey.as_bytes()));

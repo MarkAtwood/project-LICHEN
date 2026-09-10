@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.109",
+  "title": "[spec-gap][R-02-063] C persist-mode trust store refuses admission (-ENOSPC) instead of MUST LRU-evict on overflow (spec 02 4.2)",
+  "description": "Req R-02-063 (spec/02-physical-link.md 4.2 rule 6): trust store MUST be bounded to at most 256 entries; on overflow implementations MUST evict the least-recently-verified binding (LRU by last-verified). DIVERGENT: without CONFIG_LICHEN_LINK_REPLAY_PERSIST, C LRU-evicts (lichen_l2_peer.c:348-374 via peer_find_oldest_locked :63-83); WITH persist mode it returns -ENOSPC and refuses admission (lichen_l2_peer.c:341-347, rationale 'Durable replay history is trust lineage'). Rust bound 64 peers LRU by last_access (link_layer.rs:553-560, :991-1011); Python MAX_ENTRIES=64 OrderedDict LRU (link_layer.py:1657, :1696-1697); C Kconfig default 16 range 4-64 (link/Kconfig:28-35). All bounds are \u003c 256 (satisfies 'at most 256' but no test asserts the literal ceiling). The persist-mode refuse-admission behavior is a deliberate security posture that contradicts the MUST-evict clause — needs either an implementation change or an adjudicated spec carve-out (trust-lineage protection vs MUST-evict). Suggested placement: decide via spec amendment (mark) or add LRU eviction to C persist mode; related: 2dd7 (announce trust brick), a459 (durable SCHC floors exhaust TOFU capacity).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T19:28:10.318109327Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T19:28:10.318109327Z",
+  "labels": [
+    "spec-gap",
+    "c",
+    "link-layer"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.109",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T19:28:10.444022474Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

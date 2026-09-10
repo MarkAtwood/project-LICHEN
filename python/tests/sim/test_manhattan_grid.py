@@ -60,6 +60,20 @@ class TestManhattanGrid:
         pattern = self.make_pattern(area_bounds=(0, 95, 0, 95))
         assert pattern.snap_to_grid(94.0, 94.0) == (90.0, 90.0)
 
+    def test_snap_to_grid_exact_multiple_decimal_extent(self) -> None:
+        # 0.3 / 0.1 is an exact decimal multiple but 2.999...9 in binary
+        # floats: the area's max bound must stay reachable as a grid point.
+        pattern = self.make_pattern(area_bounds=(0, 0.3, 0, 0.3), spacing_m=0.1)
+        assert pattern._grid_size(0) == 3
+        assert pattern._grid_size(1) == 3
+        snapped = pattern.snap_to_grid(0.3, 0.3)
+        assert snapped[0] == pytest.approx(0.3)
+        assert snapped[1] == pytest.approx(0.3)
+        # A genuine partial last cell is still floored, not rounded up.
+        partial = self.make_pattern(area_bounds=(0, 0.35, 0, 0.35), spacing_m=0.1)
+        assert partial._grid_size(0) == 3
+        assert partial.snap_to_grid(0.34, 0.34) == (pytest.approx(0.3), pytest.approx(0.3))
+
     def test_rejects_bad_spacing(self) -> None:
         for bad_spacing in (0.0, -1.0):
             with pytest.raises(ValueError, match="spacing_m"):

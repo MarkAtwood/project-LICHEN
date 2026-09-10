@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.162",
+  "title": "[spec-gap][R-02AT-030] Root switch MUST send new DAO to new parent - absent in all stacks; SFN-reset half done (spec 02a-tdma.md:77)",
+  "description": "Spec 02a-tdma.md:77: After switching roots, the node MUST send a new DAO with the new parent and reset its SFN relative to the new root's epoch. Classification: divergent (half-implemented). SFN reset exists: C lichen_ccp_fsm_event LICHEN_CCP_EVENT_RPL_VERSION case resets superframe=0 and recomputes the slot (lichen/subsys/lichen/link/tdma.c:223-238, cites 2a.5.4 R-02a-045/022); python slot_coordination.py on_version_change :485-556 returns sfn_reset=True (:543 HOLDOFF_RESET, :553 ACCEPTED); rust lichen-rpl/src/multi_instance.rs on_version_change :1183-1245 (sfn_reset true on Accepted/HoldoffReset). But no stack sends a DAO as a consequence of a root switch: C rpl/rpl_dao_build.c builds DAOs but no root-change-triggered send exists; rust lichen-node only restarts DAO scheduling when the node is unjoined (rust/lichen-node/src/rpl_stack/mod.rs:207-221 dao_tx_advance); python node.py:1218-1251 sends a capability re-announcement on DODAGID change, not a DAO (node.py contains no DAO reference). Related: b7z9.25.3 consumed sfn_reset on version change (closed); project-LICHEN-worker6-99sg.3 added the Rust root-change detection hook + capability re-announce sender. Suggested placement: hook root-switch commitment (MultiRootState holdoff completion / select_root change) to a DAO transmission with the new parent in all three stacks, plus a test that a committed root switch produces exactly one fresh DAO and an SFN reset relative to the new root epoch. From spec-coverage sweep 2026-09-09 (docs/spec-coverage/02a-tdma.md R-02AT-030).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T23:31:43.722421924Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T23:31:43.722421924Z",
+  "labels": [
+    "tdma",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.162",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T23:31:43.852543085Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

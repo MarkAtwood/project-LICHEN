@@ -147,7 +147,10 @@ fn downward_routes_assembled_from_daos() {
     // n2 sends DAO: target=n2, parent=root
     let mut mgr2 = DaoManager::new(n2.into(), 0, dodag_id().into());
     assert!(root.process_dao(&mgr2.build_dao(root_addr.into())));
-    assert_eq!(root.routing_table().lookup(n2.into()), Some(&[n2.into()] as &[Ipv6Addr]));
+    assert_eq!(
+        root.routing_table().lookup(n2.into()),
+        Some(&[n2.into()] as &[Ipv6Addr])
+    );
 
     // n3 sends DAO: target=n3, parent=n2
     let mut mgr3 = DaoManager::new(n3.into(), 0, dodag_id().into());
@@ -160,7 +163,10 @@ fn downward_routes_assembled_from_daos() {
     // n5 sends DAO: target=n5, parent=root (single hop)
     let mut mgr5 = DaoManager::new(n5.into(), 0, dodag_id().into());
     assert!(root.process_dao(&mgr5.build_dao(root_addr.into())));
-    assert_eq!(root.routing_table().lookup(n5.into()), Some(&[n5.into()] as &[Ipv6Addr]));
+    assert_eq!(
+        root.routing_table().lookup(n5.into()),
+        Some(&[n5.into()] as &[Ipv6Addr])
+    );
 
     // n4 sends DAO: target=n4, parent=n2 (two hops: root→n2→n4)
     let mut mgr4 = DaoManager::new(n4.into(), 0, dodag_id().into());

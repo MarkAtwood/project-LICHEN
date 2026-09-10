@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-99sg.3",
+  "title": "99sg.c: Rust — root-change detection hook in rpl_stack + node capability re-announce sender",
+  "description": "Rust mirror of 99sg.a+b. (1) lichen-node rpl_stack: record DODAGID membership transitions when the stack becomes JOINED under a DODAGID different from the last one it joined (see python dodag.py select_parent recording block for exact semantics; drain API, bounded queue, deferred consumption — no under-lock callbacks). (2) Node-side sender: build the announcement using the COSE_Sign1 creation logic in rust/lichen-gateway/src/capability_announcements.rs create_announcement (may need hoisting to a shared crate — coordinate with 7ecb/010x which are touching identity_iid plumbing in the same file) and POST to the new root's /.well-known/capability-announce. Same design nuance as 99sg.b: consider announce-on-fresh-join for root-restart coverage. Tests: unit test the transition recording against DIO sequences (first join, DODAGID switch, same-dodag rejoin, version bump) mirroring python/tests/rpl/test_dodag.py. Independent of python slices.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T16:55:59.626143888Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T16:55:59.626143888Z",
+  "labels": [
+    "rust",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-99sg.3",
+      "depends_on_id": "project-LICHEN-worker6-99sg",
+      "type": "parent-child",
+      "created_at": "2026-09-09T16:55:59.751310965Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -25,7 +25,7 @@ use lichen_core::loadng::{Idle, RouteDiscovery, Rreq, Searching};
 pub enum AddressClass {
     /// fe80::/10 - direct neighbor, one hop away.
     LinkLocal,
-    /// Native 0200::/8 (plus legacy configured mesh prefixes) - peer in mesh.
+    /// Native 0200::/8 (plus configured mesh prefixes) - peer in mesh.
     MeshLocal,
     /// Other GUA or unknown - route via border router.
     External,
@@ -176,7 +176,7 @@ pub struct HybridRouter {
     rpl_parent: Option<[u8; 16]>,
     /// Whether this node is joined to an RPL DODAG.
     rpl_joined: bool,
-    /// Mesh-local prefixes (ULA or configured GUA).
+    /// Configured mesh-local prefixes.
     mesh_prefixes: Vec<MeshPrefix>,
     /// Packets waiting for route discovery.
     pending_queue: std::collections::HashMap<[u8; 16], VecDeque<PendingPacket>>,
@@ -228,11 +228,6 @@ impl HybridRouter {
             return AddressClass::MeshLocal;
         }
 
-        // ULA: fd00::/8
-        if addr[0] == 0xfd {
-            return AddressClass::MeshLocal;
-        }
-
         // Check configured mesh prefixes
         for prefix in &self.mesh_prefixes {
             if prefix.contains(addr) {
@@ -265,7 +260,7 @@ impl HybridRouter {
         }
     }
 
-    /// Route to a native or legacy mesh-local address.
+    /// Route to a native or configured mesh-local address.
     fn route_mesh_local(&mut self, dst: &[u8; 16], now_ms: u32) -> RouteResult {
         // Check gradient table for existing route
         if let Some(entry) = self.gradient_table.lookup(dst, now_ms) {
@@ -284,7 +279,7 @@ impl HybridRouter {
 
         // Local paths are always preferred for native addresses.  When local
         // discovery is unavailable/exhausted, use the identity-preserving
-        // Yggdrasil path by forwarding up the RPL DODAG.  Legacy configured
+        // Yggdrasil path by forwarding up the RPL DODAG.  Configured
         // prefixes have no implicit Yggdrasil fallback.
         if dst[0] == 0x02 {
             return self.route_external();
@@ -476,20 +471,32 @@ impl HybridRouter {
     }
 
     /// Process received announce and update gradient table.
+    ///
+    /// The gradient destination is the originator's routable
+    /// `AddrForKey(pubkey)` /128 (spec/decisions.jsonl
+    /// `upstream-yggdrasil-addressing`), mirroring
+    /// [`crate::announce::AnnounceProcessor::process`]; never the rejected
+    /// prefix++IID derivation.
+    ///
+    /// # Security
+    ///
+    /// The installed entry is consulted for routing decisions, so callers
+    /// MUST have cryptographically bound `originator_pubkey` to a
+    /// signature-verified, freshness-checked announce first — the checks
+    /// [`crate::announce::AnnounceProcessor::process`] performs (signature,
+    /// IID binding, TOFU pin, sequence floor). Passing an unauthenticated
+    /// wire key lets a radio adversary pin a victim's routable identity to
+    /// an attacker-chosen `from_neighbor`.
     pub fn process_announce(
         &mut self,
-        originator_iid: &[u8; 8],
+        originator_pubkey: &[u8; 32],
         from_neighbor: [u8; 16],
         hop_count: u8,
         seq_num: u16,
         coords: Option<GeoCoords>,
         now_ms: u32,
     ) -> bool {
-        // Construct full destination address (link-local with IID)
-        let mut dst = [0u8; 16];
-        dst[0] = 0xfe;
-        dst[1] = 0x80;
-        dst[8..].copy_from_slice(originator_iid);
+        let dst = lichen_core::addr::ygg_addr_from_pubkey(originator_pubkey);
 
         let entry = GradientEntry {
             destination: dst,
@@ -691,8 +698,14 @@ mod tests {
     }
 
     #[test]
-    fn classify_ula() {
-        let router = HybridRouter::new(link_local(1));
+    fn classify_ula_is_external_without_configured_prefix() {
+        // No-ULA model (zt3c.7, spec/05-routing.md §7.2): fd00::/8 has no
+        // hardcoded mesh-local status. It is external unless an operator
+        // configures a mesh prefix covering it.
+        let mut router = HybridRouter::new(link_local(1));
+        assert_eq!(router.classify_address(&ula(2)), AddressClass::External);
+
+        router.add_mesh_prefix(ula(0), 8);
         assert_eq!(router.classify_address(&ula(2)), AddressClass::MeshLocal);
     }
 
@@ -741,8 +754,9 @@ mod tests {
     }
 
     #[test]
-    fn route_mesh_local_no_gradient_is_queue() {
+    fn route_mesh_local_configured_prefix_no_gradient_is_queue() {
         let mut router = HybridRouter::new(link_local(1));
+        router.add_mesh_prefix(ula(0), 8);
         let result = router.route(&ula(2), 1000);
         assert_eq!(result.decision, RouteDecision::Queue);
     }
@@ -815,6 +829,7 @@ mod tests {
     #[test]
     fn route_mesh_local_with_gradient_is_forward() {
         let mut router = HybridRouter::new(link_local(1));
+        router.add_mesh_prefix(ula(0), 8);
 
         // Install gradient
         let entry = GradientEntry {
@@ -899,19 +914,25 @@ mod tests {
     #[test]
     fn process_announce_installs_gradient() {
         let mut router = HybridRouter::new(link_local(1));
-        let iid = [0x02, 0, 0, 0, 0, 0, 0, 5];
+        // Pinned upstream AddrForKey anchor (yggdrasil-go address_test.go
+        // @422836ee; test/vectors/yggdrasil_address.json
+        // `upstream_addr_for_key`) — the independent oracle, never derived
+        // from the implementation under test.
+        let pubkey: [u8; 32] =
+            hex::decode("bdbacfd82240de3dcd123924cbb55256fb8dab08aa98e305528ab84f419e6efb")
+                .unwrap()
+                .try_into()
+                .unwrap();
+        let expected_dst: [u8; 16] = hex::decode("0200848a604fbb7e438465db8db66895")
+            .unwrap()
+            .try_into()
+            .unwrap();
         let from = link_local(10);
 
-        let updated = router.process_announce(&iid, from, 3, 100, None, 1000);
+        let updated = router.process_announce(&pubkey, from, 3, 100, None, 1000);
         assert!(updated);
 
-        // Lookup by full address
-        let mut dst = [0u8; 16];
-        dst[0] = 0xfe;
-        dst[1] = 0x80;
-        dst[8..].copy_from_slice(&iid);
-
-        let entry = router.gradient_table.lookup(&dst, 1000).unwrap();
+        let entry = router.gradient_table.lookup(&expected_dst, 1000).unwrap();
         assert_eq!(entry.hop_count, 3);
         assert_eq!(entry.next_hop, from);
     }

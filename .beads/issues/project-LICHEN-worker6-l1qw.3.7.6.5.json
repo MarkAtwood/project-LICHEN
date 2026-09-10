@@ -1,0 +1,34 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.3.7.6.5",
+  "title": "schc_session: ACK/abort authorization + tombstone hold-down + Link/L2 API",
+  "description": "Parent project-LICHEN-worker6-l1qw.3.7.6 (spec/03-adaptation.md 5.6, authenticated bounded Zephyr SCHC session authority). Decomposed per Yegge's rule; this is one independently landable slice. Zephyr C in lichen/subsys/lichen/schc/ + host tests in lichen/tests/. Run host CMake tests on this Linux host (Attic toolchain absent; use local gcc/clang + cmake, ASan+UBSan per tests/cmake/test_common.cmake).\n\nSLICE 5 (terminal/control + integration seam, depends on slices 1-4): permit ACK/ACK-REQ/Sender-Abort/Receiver-Abort issuance ONLY from authenticated state transitions. Two-octet ACK-REQ vs compressed C=0 ACK ambiguity MUST be classified from the authenticated sender role + directional Rule ID BEFORE invoking an ACK decoder or mutating sender state. Receiver emits at most 4 ACK responses; a 5th otherwise-valid All-1/ACK-REQ triggers Receiver-Abort + terminal hold-down. Tombstone: on completion or authenticated abort, retain terminal outcome + session high-water + final ACK; for 60s (fragmentation inactivity interval) a repeated authenticated All-1/ACK-REQ with strictly newer counter replays the same terminal ACK/abort idempotently without starting a session; every authenticated late message in the current generation advances the tombstone high-water. After hold-down the generation-scoped high-water persists as the bounded durable admission floor. Expose the metadata/session API Link/L2 needs WITHOUT weakening existing replay/authentication and WITHOUT caller-selected authority. Unit tests: control authorization gating, ACK-REQ/ACK classification, 4-ACK-then-abort, tombstone idempotent replay within hold-down, floor persistence after expiry, atomic output/state on every error. LAND LAST; unblocks l1qw.3.7.3.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T16:04:36.734095614Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T18:45:22.16480547Z",
+  "started_at": "2026-09-09T18:17:10.505862374Z",
+  "closed_at": "2026-09-09T18:45:22.16480547Z",
+  "close_reason": "Implemented SLICE 5 (control/terminal + integration seam): new module schc_session_control.{c,h} composing slices 1-4. (a) Control authorization: every control path revalidates the slice-3 gate (authenticated + current generation); no API accepts a caller-supplied generation token. (b) ACK-REQ/C=0-ACK ambiguity classified from the AUTHENTICATED SENDER ROLE (same Rule ID both legs; data sender-\u003eACK_REQ, receiver-\u003eACK, mismatched rule/role-\u003eINVALID) BEFORE any decoder or state mutation. (c) 4-ACK-then-abort: receiver counts ACK responses per session; the 5th otherwise-valid All-1/ACK-REQ -\u003e Receiver-Abort + terminal hold-down (tombstone + floor recorded, session retired). (d) Tombstone hold-down: within 60s a strictly-newer counter replays the SAME terminal response idempotently without starting a session and advances the tombstone high-water; the floor tracks the generation-scoped high-water (monotonic raise) so after hold-down the floor persists as the durable admission floor gating the next session's opener. (e) Link/L2 seam: read-only metadata (session_active/high_water/ack_count/floor) + single-object install/revoke pass-throughs; revoke frees session records and atomically retires trust record + tables. (f) Atomicity: open checks gate/admission/both allocations before any write; stale/out-of-space counters mutate nothing; the ONLY failure with a control response is authenticated allocation exhaustion (one Receiver-Abort, no eviction, per spec). 7 unit tests green (classification, authorization gating, open admission, 4-ACK-then-abort+holddown replay, floor persistence after expiry, atomic errors, revoke retirement), ASan+UBSan -Werror -Wconversion, cppcheck clean; sibling suites still green (11/11, 14/14, 6/6, 11/11). REVIEW: delegated kimi-k3 timed out twice without verdict; implementer self-review (correctness) found+fixed one real defect (floor did not track the hold-down high-water advance) before commit. Unblocks l1qw.3.7.3.",
+  "labels": [
+    "schc",
+    "link",
+    "security",
+    "zephyr",
+    "decomposed",
+    "local-ok"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.3.7.6.5",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.3.7.6",
+      "type": "parent-child",
+      "created_at": "2026-09-09T16:04:36.886445183Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

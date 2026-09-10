@@ -1,0 +1,7 @@
+{
+  "id": "1788990439067929741-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.45",
+  "author": "Mark Atwood",
+  "text": "07-transport-app sweep 2026-09-09 correction: the claim 'C coap_client.c has ZERO 5.03/backoff/retry handling' appears STALE. C now has lichen/subsys/lichen/coap/backoff.c (DEFAULT 60s / MAX 3600s, :16-17) + coap_client.c:297-315,472-477 handling 5.03 backoff - consistent with child 81a8 being closed. Still accurate: C emission-side duty-cycle 5.03 remains absent (generic 5.03s only, no duty-cycle CBOR body) - child 5yea still valid. NEW related divergence filed as b7z9.138: C congestion thresholds are 700/850/950 permille (duty_response.c:33-42) vs spec/Py/Rs 500/800/950 (spec 07 :550-555). Re-verify the C sender-backoff half against current main before closing this bead; the emission half remains open.",
+  "created_at": "2026-09-09T21:47:19.067929741Z"
+}

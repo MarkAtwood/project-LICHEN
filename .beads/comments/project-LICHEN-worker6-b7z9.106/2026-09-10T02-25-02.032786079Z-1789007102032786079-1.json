@@ -1,0 +1,7 @@
+{
+  "id": "1789007102032786079-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.106",
+  "author": "Mark Atwood",
+  "text": "Additional stale density\u003e8 evidence from b7z9.204 review (2026-09-09, reviewer passes 2+3): (a) MACHINE-READABLE stale rule, not just prose: test/vectors/channel_plan_selection.schema.json:12 pins 'density \u003e 8 or n_channels \u003c= 1 ? 0 : ...' as a schema const, and test/vectors/ccp11.json:9 carries the same stale 'formula' field — ccp11.json:13-41's own boundary cases (density=10 no fallback, density=11 fallback) contradict its formula. (b) Generator re-propagation risk: test/vectors/generate.py:2416,2424,2440,2465,2763 still emit the stale description strings (logic at 2350/2364/2664/2676 correctly uses density \u003e 10), so any regeneration reintroduces the prose. (c) Full prose-sweep file:line list: ccp16.json:68,88,128,189; ccp15.json:92,107,122; ccp16_load_balance.json:6,49,54,338,351,495,608,621,796; ccp16_utilization.json:141. All numeric outputs are correct; text/schema only. The spec-text side (appendix-design-rationale.md:394) is now fixed in b7z9.204; the decision's grep_absent verify condition holds for spec/.",
+  "created_at": "2026-09-10T02:25:02.032786079Z"
+}

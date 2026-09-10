@@ -448,3 +448,76 @@ class TestIPv6AddressSupport:
         )
         assert valid is True
         assert error is None
+
+
+def test_root_dio_verified_over_received_wire_bytes() -> None:
+    """RootDioSignature retains+verifies wire bstrs (RFC 9052 4.4)."""
+    from hashlib import sha256
+
+    from lichen.crypto import schnorr48
+
+    root = Identity.from_seed(bytes(range(32)))
+    expiry = int(time.time()) + 3600
+    dodag = root.ygg_addr.packed if hasattr(root.ygg_addr, "packed") else bytes(root.ygg_addr)
+    # Foreign key order (7..1) the module's to_cbor() never emits.
+    payload_map = {7: 2, 6: 1, 5: expiry, 4: 256, 3: 1, 2: 1, 1: bytes(dodag)}
+    payload = cbor2.dumps(payload_map)
+    protected = cbor2.dumps({1: SCHNORR48_ED25519_ALG, 99: b"x"})
+    sig_structure = cbor2.dumps(["Signature1", protected, b"", payload])
+    signature = schnorr48.sign(root.privkey, root.pubkey, sha256(sig_structure).digest())
+    envelope = cbor2.dumps([protected, {COSE_KID_LABEL: root.iid}, payload, signature])
+    sig = RootDioSignature.from_cose_sign1(envelope)
+    valid, error = verify_root_dio_signature(
+        sig, pubkey=root.pubkey, current_time=int(time.time())
+    )
+    assert (valid, error) == (True, None)
+
+
+# ─── Wire-bstr/payload consistency + immutability (2vp1) ─────────────────────
+
+
+def test_root_dio_replace_desync_rejected() -> None:
+    root = Identity.from_seed(bytes(range(32)))
+    sig = create_root_dio_signature(
+        identity=root, dodag_id=root.ygg_addr, instance=1, version=1, rank=256,
+        expiry=int(time.time()) + 3600, root_seq=1, mop=2,
+    )
+    evil = RootDioSignaturePayload(
+        dodag_id=sig.payload.dodag_id, instance=1, version=2, rank=128,
+        expiry=sig.payload.expiry, root_seq=2, mop=2,
+    )
+    import dataclasses as dc
+
+    with pytest.raises(ValueError, match="do not decode"):
+        dc.replace(sig, payload=evil)
+
+
+def test_root_dio_is_frozen() -> None:
+    root = Identity.from_seed(bytes(range(32)))
+    sig = create_root_dio_signature(
+        identity=root, dodag_id=root.ygg_addr, instance=1, version=1, rank=256,
+        expiry=int(time.time()) + 3600, root_seq=1, mop=2,
+    )
+    import dataclasses as dc
+
+    with pytest.raises(dc.FrozenInstanceError):
+        sig.root_iid = b"\x00" * 8
+
+
+def test_root_dio_garbage_wire_bytes_raise_valueerror() -> None:
+    root = Identity.from_seed(bytes(range(32)))
+    payload = RootDioSignaturePayload(
+        dodag_id=bytes(root.ygg_addr.packed if hasattr(root.ygg_addr, "packed") else root.ygg_addr),
+        instance=1, version=1, rank=256, expiry=int(time.time()) + 3600, root_seq=1, mop=2,
+    )
+    with pytest.raises(ValueError, match="do not decode"):
+        RootDioSignature(
+            payload=payload, root_iid=root.iid, signature=bytes(48),
+            protected_bytes=cbor2.dumps({1: SCHNORR48_ED25519_ALG}),
+            payload_bytes=cbor2.dumps([1, 2]),
+        )
+
+
+def test_root_dio_from_cbor_rejects_non_map() -> None:
+    with pytest.raises(TypeError, match="CBOR map"):
+        RootDioSignaturePayload.from_cbor(cbor2.dumps([1, 2]))

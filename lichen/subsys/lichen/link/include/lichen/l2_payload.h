@@ -31,12 +31,14 @@ extern "C" {
 
 #define LICHEN_L2_DISPATCH_SCHC 0x14U
 #define LICHEN_L2_DISPATCH_ROUTING 0x15U
+#define LICHEN_L2_DISPATCH_SOS 0x16U
 #define LICHEN_L2_ROUTING_TYPE_ANNOUNCE 0x01U
 
 enum lichen_l2_payload_kind {
 	LICHEN_L2_PAYLOAD_UNKNOWN = 0,
 	LICHEN_L2_PAYLOAD_SCHC = 1,
 	LICHEN_L2_PAYLOAD_ROUTING = 2,
+	LICHEN_L2_PAYLOAD_SOS = 3,
 };
 
 static inline enum lichen_l2_payload_kind
@@ -51,6 +53,9 @@ lichen_l2_payload_classify(const uint8_t *_Nullable payload, size_t len)
 	}
 	if (payload[0] == LICHEN_L2_DISPATCH_ROUTING) {
 		return LICHEN_L2_PAYLOAD_ROUTING;
+	}
+	if (payload[0] == LICHEN_L2_DISPATCH_SOS) {
+		return LICHEN_L2_PAYLOAD_SOS;
 	}
 	return LICHEN_L2_PAYLOAD_UNKNOWN;
 }

@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.197",
+  "title": "[spec-gap][R-LOADNG-018/019] Rust LOADng: no RREQ/RREP receive path; HybridRouter discovery methods have no runtime callers",
+  "description": "Classification: not-implemented (rust receive side + runtime wiring).\n\nEvidence: rust/lichen-core/src/loadng.rs implements codecs + RouteDiscovery origination typestate (unit-tested, vectors consumed by rust/lichen-core/tests/loadng_vectors.rs) but there is no process_rreq/process_rrep equivalent anywhere in rust/ — no duplicate suppression (B2.6), reverse-route recording, intermediate RREP, or RREP forwarding. rust/lichen-node/src/hybrid.rs start_discovery/on_discovery_timeout/on_rrep_received (hybrid.rs:395-471) are called only from hybrid.rs tests; HybridRouter is referenced nowhere else (rg HybridRouter rust/ -\u003e lib.rs re-export + hybrid.rs). No RREQ_WAIT_TIME/RETRIES constants exist in rust. B2.6 suppression exists in python (discovery.py:369-407) and C (loadng.c:402-536) only.\n\nSuggested placement: rust/lichen-node — wire HybridRouter into the node/stack runtime and add RREQ/RREP receive processing (a lichen-core handler module mirroring python LoadngRouter: seen-window suppression, reverse routes, proxy-flag RREP downgrade already specced in loadng.rs module docs).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T01:16:45.457798815Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T01:16:45.457798815Z",
+  "labels": [
+    "rust",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.197",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-10T01:16:45.590893579Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

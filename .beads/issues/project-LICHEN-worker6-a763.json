@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-a763",
+  "title": "Regenerate lichen-gateway end_to_end.rs native-profile DODAGID/address expectations (i72x.2 follow-up)",
+  "description": "Follow-up to i72x.2 (commit 5c9f7ef657). rust/lichen-gateway/tests/end_to_end.rs has 8 failing integration tests (gateway_rejects_replayed_authenticated_wire_before_forwarding, gateway_dio_carries_root_metadata, gateway_dio_reply_has_valid_ipv6, gateway_maintains_rpl_state_across_dis_packets, gateway_handles_rpl_dis_from_mesh_node, runtime_ingress_handoff_commits_after_protected_response, runtime_ingress_dispatches_authenticated_gcp_slot_claim, runtime_ingress_handoff_rolls_back_when_sender_state_persistence_fails) — the DODAGID/root-address the harness constructs still uses the rejected SHA-512 native profile while the code now checks AddrForKey. Panics at end_to_end.rs:373,427,501,629,758,1074,1316. NOTE some embed signature material over native DODAGIDs (coordinated with i72x.6 root_dio_signature corpus regeneration). lichen-gateway --lib (270) and lichen-node --lib (359) are green; only the end_to_end harness needs its address/DODAGID expectations regenerated against upstream AddrForKey with independent-oracle values (NOT derived from the impl).",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T09:11:58.198987688Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T13:50:00.571493087Z",
+  "started_at": "2026-09-09T11:19:10.633393443Z",
+  "closed_at": "2026-09-09T13:50:00.571493087Z",
+  "close_reason": "Already fixed on main by 85a70ec445 'fix(rust): complete upstream AddrForKey migration fallout' (2026-09-09, predates this bead's claim; bead description was written from a stale branch). Verified on current beads-worker-3 (main merged): cargo test -p lichen-gateway --test end_to_end = 22 passed / 0 failed, including all 8 tests named in the bead (gateway_rejects_replayed_authenticated_wire_before_forwarding, gateway_dio_carries_root_metadata, gateway_dio_reply_has_valid_ipv6, gateway_maintains_rpl_state_across_dis_packets, gateway_handles_rpl_dis_from_mesh_node, runtime_ingress_handoff_commits_after_protected_response, runtime_ingress_dispatches_authenticated_gcp_slot_claim, runtime_ingress_handoff_rolls_back_when_sender_state_persistence_fails). The fix took a stronger form than the bead's 'regenerate pinned constants': the harness now DERIVES DODAGIDs/addresses from lichen_core::addr::ygg_addr_from_pubkey (the i72x.2 upstream AddrForKey implementation - trust.rs:497 delegates to it) instead of hardcoding native-profile bytes; zero hardcoded 16-byte address constants remain in the file. lichen-gateway --lib also green (269 passed). lichen-node --lib has ~12 unrelated failures mapped to other open beads (8rm3 unicast-DIO gate, 5217 DAO forwarding). No code change needed; closing as no-op.",
+  "labels": [
+    "rust",
+    "gateway",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-a763",
+      "depends_on_id": "project-LICHEN-worker6-i72x.2",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T09:11:58.336656414Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

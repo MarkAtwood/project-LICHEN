@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.93",
+  "title": "Tunnel-auth route_hash: spec+Python hash full 16-byte hop addresses; Rust+C+committed vector hash 8-byte IIDs (spec 8.11)",
+  "description": "spec/06-security.md §8.11 route-hash amendment (R-06-315): route_hash = SHA-256 over FULL 16-byte hop addresses in SRH visitation order, because under AddrForKey a 02xx address embeds no IID (slicing 8 bytes yields no identity meaning). Python conforms (python/src/lichen/gateway/tunnel_auth.py:155-163). Rust hashes 8-byte hops (rust/lichen-gateway/src/tunnel_auth.rs:493-503), C hashes 8-byte IIDs (lichen/subsys/lichen/gateway/tunnel_auth.c:201-216), and the committed vector pins the 8-byte form (test/vectors/tunnel_authorization.json:61-65 route_hops_hex 8-byte + route_hash_hex 2e7e354d...). Consequence: a Python-signed grant is unverifiable by a Rust/C egress and vice versa (interop break); also the 64-bit IID-collision false loop-rejection the spec amendment calls out remains in Rust/C. Fix: migrate Rust+C hash inputs to 16-byte reconstructed SRH hop addresses, regenerate test/vectors/tunnel_authorization.json (LICHEN-generated fixture, may change), update Rust/C tests (lichen/tests/tunnel_auth, tunnel_auth_vectors.rs). Suggested placement: rust/lichen-gateway/src/tunnel_auth.rs + lichen/subsys/lichen/gateway/tunnel_auth.c + test/vectors/tunnel_authorization.json.",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T19:04:58.752880485Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T02:26:13.872546534Z",
+  "started_at": "2026-09-10T02:26:13.872546534Z",
+  "lease_expires_at": "2026-09-10T02:31:13.872546534Z",
+  "heartbeat_at": "2026-09-10T02:26:13.872546534Z",
+  "labels": [
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.93",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T19:04:58.888024209Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

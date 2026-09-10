@@ -7,7 +7,7 @@ Language-neutral fixtures for the LICHEN protocol using **format_version=2** str
 
 ## File Index
 
-Complete index of every vector file (174 files, excluding `schema.json` and the per-family `*.schema.json` files). Byte strings are lowercase hex (possibly empty).
+Complete index of every vector file (excluding `schema.json` and the per-family `*.schema.json` files). Byte strings are lowercase hex (possibly empty).
 
 ### Schema
 
@@ -23,7 +23,7 @@ Complete index of every vector file (174 files, excluding `schema.json` and the 
 | `hash_32.json` | `lichen_hash_32` FNV-1a32 primitive (basis 0x811c9dc5) |
 | `oscore.json` | OSCORE key derivation, request/response protection, replay detection (RFC 8613) |
 | `schnorr48.json` | 48-byte Schnorr signatures per draft-lichen-schnorr-00 (Appendix A vectors) |
-| `x25519.json` | X25519/Ed25519 key derivation and RFC 8032 clamping |
+| `x25519.json` | X25519/Ed25519 key derivation and RFC 8032 clamping. QUARANTINE NOTE: per-vector `ygg_addr` field and the `ygg_addr[8:16]==iid` binding encode the rejected SHA-512 native address profile (legacy/ corpus); the `iid` is the retained link-local IID. Quarantined fields are internal-consistency pins only, not addressing oracles — regenerate against upstream `AddrForKey` when migration lands |
 
 ### Link Layer
 
@@ -63,7 +63,7 @@ Complete index of every vector file (174 files, excluding `schema.json` and the 
 | `address_classification.schema.json` | Closed schema for `address_classification.json` operation scenarios |
 | `dao_origin_signature.json` | Shared DAO Origin Signature conformance (v2 schema) |
 | `gradient_entry.json` | Gradient table entry ranking/comparison order (spec 11) |
-| `ipv6-addresses.json` | Pubkey → IID → fe80::/10 and primary/native address derivation |
+| `ipv6-addresses.json` | Pubkey → IID → fe80::/10 derivation (the primary/native 0200::/8 fields are the rejected SHA-512 profile, quarantined in `legacy/ipv6_addresses_native_sha512.json`) |
 | `ipv6-icmpv6.json` | ICMPv6 Echo/errors with pseudo-header checksum (RFC 4443, spec 6.4) |
 | `ipv6_malformed.json` | Malformed IPv6/ICMPv6/UDP rejection (RFC 8200/4443/768) |
 | `loadng.json` | LOADng 16-bit sequence-number wrap-aware freshness (RFC 1982) |
@@ -121,7 +121,7 @@ Complete index of every vector file (174 files, excluding `schema.json` and the 
 | `gcp_slot_claim.json` | GCP-6.5 slot-claim basic tier: COSE_Sign1 envelopes, Schnorr48 over SHA-256(CBOR(Sig_structure)); generator `generate_gcp_slot_claim.py` |
 | `gcp_slot_claim_cose_sign1.json` | GCP-6.5 slot-claim COSE_Sign1: slots-mutation forgery, claim_seq replay, expiry boundaries, alg decoy, kid mismatch, missing ordinal |
 | `gcp_handoff_cose_sign1.json` | GCP-7.1 handoff request/confirm COSE_Sign1: RFC 9052 Sig_structure, mutations, verification cases |
-| `gcp3_trust_models.json` | GCP-3 trust models (pubkey-derived keys, PSK, hybrid) |
+| `gcp3_trust_models.json` | GCP-3 trust models (pubkey-derived keys, PSK, hybrid). QUARANTINE NOTE: `ygg_addr`/`ygg_addr_str` fields encode the rejected SHA-512 native profile (legacy/ corpus); internal-consistency pins only, not addressing oracles — regenerate against upstream `AddrForKey` when migration lands |
 | `tofu_edge_cases.json` | Canonical TOFU contact, binding, malformed-input, persistence, reboot, rollback, concurrency, and replay invariants |
 | `gcp6_slot_coordination.json` | Superframe slot coordination (spec 08 §6) |
 | `node_handoff.json` | Node-handoff request/response (GCP-7) |
@@ -208,9 +208,11 @@ Complete index of every vector file (174 files, excluding `schema.json` and the 
 |------|--------|
 | `node-addresses.json` | Human-readable node addresses, canonical set (**content-overlaps `node_address.json`**) |
 | `node_address.json` | Base32-from-SHA-512(pubkey[:8]) 13-char node address (**content-overlaps `node-addresses.json`**) |
-| `yggdrasil-derivation.json` | Seed→address derivation matched across Rust/C/Python |
-| `yggdrasil.json` | `ygg_addr_from_pubkey` spot vectors (e.g. SHA-256(b"") key) |
-| `yggdrasil_address.json` | Native Yggdrasil-range derivation corpus: verbatim upstream Go `AddrForKey` anchor (divergence pinned) + LICHEN SHA-512 profile cases incl. length-rejections |
+| `legacy/ipv6_addresses_native_sha512.json` | QUARANTINED primary/native 0200::/8 fields moved out of `ipv6-addresses.json` key vectors (see `legacy/README.md`) — not a conformance oracle |
+| `legacy/yggdrasil_address_native_sha512.json` | QUARANTINED legacy SHA-512 native profile corpus, moved verbatim out of `yggdrasil_address.json` (see `legacy/README.md`) — not a conformance oracle |
+| `legacy/yggdrasil-derivation.json` | QUARANTINED legacy SHA-512 native profile derivation corpus (see `legacy/README.md`) — not a conformance oracle |
+| `legacy/yggdrasil.json` | QUARANTINED legacy-profile `ygg_addr_from_pubkey` spot vectors (see `legacy/README.md`) — not a conformance oracle |
+| `yggdrasil_address.json` | Conformance corpus: verbatim upstream Go `AddrForKey` anchor (pinned external oracle) + profile-agnostic pubkey length-rejections. The rejected LICHEN SHA-512 profile cases are quarantined in `legacy/` |
 
 ### Simulation Models
 

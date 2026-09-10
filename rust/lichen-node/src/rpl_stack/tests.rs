@@ -303,6 +303,15 @@ impl Radio for MeshRadio {
     }
 }
 
+/// Wire EUI-64 for a test identity: key-derived IID with the U/L bit toggled.
+/// Post-i72x.2 the routable address's low half is not the IID, so tests must
+/// not slice it out of `ygg_addr_from_pubkey` output.
+fn eui64_of(identity: &Identity) -> [u8; 8] {
+    let mut eui64 = identity.iid;
+    eui64[0] ^= 0x02;
+    eui64
+}
+
 fn identity(seed: u8) -> Identity {
     Identity::from_seed(Seed::new([seed; 32]))
 }
@@ -320,7 +329,7 @@ fn runtime_root() -> (
             stack,
             root_addr,
             root_addr,
-            announces(root_addr[..8].try_into().unwrap()),
+            announces(),
             MemStorage::new(),
         )
         .unwrap(),
@@ -450,11 +459,10 @@ fn root_address(identity: &Identity) -> [u8; 16] {
     lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes())
 }
 
-fn announces(prefix: [u8; 8]) -> AnnounceProcessor {
-    AnnounceProcessor::new(
-        crate::GradientTable::new(crate::announce::MAX_TRACKED_ORIGINATORS),
-        prefix,
-    )
+fn announces() -> AnnounceProcessor {
+    AnnounceProcessor::new(crate::GradientTable::new(
+        crate::announce::MAX_TRACKED_ORIGINATORS,
+    ))
 }
 
 #[test]
@@ -504,19 +512,24 @@ fn rfc6554_route_crosses_two_relays_and_restores_packet() {
     assert_eq!(&routed[64..80], &destination);
     assert_eq!(routed[43], 2);
 
+    // Merge resolution (HEAD over beads-worker-5): both sides pin the same
+    // anti-loop semantics (the sender's link-local and routable /128 must
+    // never be the next hop). HEAD's precomputed-address argument is kept:
+    // the already-merged receive.rs resolves util.rs to the `[u8; 16]`
+    // `sender_routable` parameter, not worker-5's `&PublicKey` form.
     assert_eq!(
-        advance_rpl_source_route(&mut routed, relay_one, source[8..].try_into().unwrap()).unwrap(),
+        advance_rpl_source_route(&mut routed, relay_one, source[8..].try_into().unwrap(), source).unwrap(),
         Some(relay_two)
     );
     assert_eq!(routed[43], 1);
     assert_eq!(
-        advance_rpl_source_route(&mut routed, relay_two, relay_one[8..].try_into().unwrap(),)
+        advance_rpl_source_route(&mut routed, relay_two, relay_one[8..].try_into().unwrap(), relay_one,)
             .unwrap(),
         Some(destination)
     );
     assert_eq!(routed[43], 0);
     assert_eq!(
-        advance_rpl_source_route(&mut routed, destination, relay_two[8..].try_into().unwrap(),)
+        advance_rpl_source_route(&mut routed, destination, relay_two[8..].try_into().unwrap(), relay_two,)
             .unwrap(),
         None
     );
@@ -539,7 +552,7 @@ async fn plaintext_coap_is_not_delivered_by_rpl_owner() {
         receiver,
         receiver_addr,
         receiver_addr,
-        announces(receiver_addr[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -730,12 +743,11 @@ async fn announcement_bootstraps_real_l2_peer_and_rejects_tampering() {
     let (peer_radio, root_radio) = LoopbackRadio::pair();
     let mut peer = Stack::new_default_epoch(peer_radio, peer_identity.clone());
     let root_stack = Stack::new_default_epoch(root_radio, root_identity);
-    let prefix = root_addr[..8].try_into().unwrap();
     let mut root = RplStack::provision_root(
         root_stack,
         root_addr,
         root_addr,
-        announces(prefix),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -777,8 +789,7 @@ async fn announcement_bootstraps_real_l2_peer_and_rejects_tampering() {
 async fn sending_local_announce_does_not_mutate_full_remote_state() {
     let local = identity(250);
     let local_addr = address(&local, 1);
-    let prefix = local_addr[..8].try_into().unwrap();
-    let mut remote = announces(prefix);
+    let mut remote = announces();
     let mut remote_iids = Vec::new();
     for seed in 0..MAX_TRACKED_ORIGINATORS as u8 {
         let peer = identity(seed);
@@ -835,7 +846,7 @@ async fn failed_announce_relay_can_retry_same_origin_sequence() {
         root_stack,
         root_addr,
         root_addr,
-        announces(root_addr[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -876,7 +887,7 @@ async fn announcement_bootstrap_is_bounded_and_rejection_forgets_replay() {
         Stack::new_default_epoch(root_radio, root_identity),
         root_addr,
         root_addr,
-        announces(root_addr[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -952,14 +963,14 @@ async fn rpl_dispatch_rejects_invalid_ipv6_length_and_checksum() {
     let root_addr = root_address(&root_identity);
     let leaf_addr = address(&leaf_identity, 1);
     let (root_radio, leaf_radio) = LoopbackRadio::pair();
+    let leaf_eui64 = eui64_of(&leaf_identity);
     let mut root = Stack::new_default_epoch(root_radio, root_identity.clone());
     let leaf_stack = Stack::new_default_epoch(leaf_radio, leaf_identity);
-    let prefix = root_addr[..8].try_into().unwrap();
     let mut leaf = RplStack::provision_leaf(
         leaf_stack,
         leaf_addr,
         root_addr,
-        announces(prefix),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -984,7 +995,7 @@ async fn rpl_dispatch_rejects_invalid_ipv6_length_and_checksum() {
 
     for packet in cases {
         if matches!(
-            root.send_ipv6_to(&packet, &ipv6_eui64(leaf_addr), Priority::Routing)
+            root.send_ipv6_to(&packet, &leaf_eui64, Priority::Routing)
                 .await,
             Err(crate::stack::TxError::SchcCompress)
         ) {
@@ -1014,7 +1025,7 @@ async fn multicast_dio_and_dis_use_broadcast_l2_destination() {
         Stack::new_default_epoch(root_radio, root_identity),
         root_addr,
         root_addr,
-        announces(root_addr[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1070,12 +1081,11 @@ async fn multicast_dio_and_dis_are_received() {
     root_stack.add_peer(PeerIdentity::from_pubkey(leaf_identity.pubkey));
     let mut leaf_stack = Stack::new_default_epoch(leaf_radio, leaf_identity.clone());
     leaf_stack.add_peer(PeerIdentity::from_pubkey(root_identity.pubkey));
-    let prefix = root_addr[..8].try_into().unwrap();
     let mut root = RplStack::provision_root(
         root_stack,
         root_addr,
         root_addr,
-        announces(prefix),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1083,7 +1093,7 @@ async fn multicast_dio_and_dis_are_received() {
         leaf_stack,
         leaf_addr,
         root_addr,
-        announces(prefix),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1184,7 +1194,7 @@ async fn multicast_dis_uses_bounded_node_differentiated_jitter() {
         first_stack,
         first_addr,
         first_addr,
-        announces(first_addr[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1192,7 +1202,7 @@ async fn multicast_dis_uses_bounded_node_differentiated_jitter() {
         second_stack,
         second_addr,
         second_addr,
-        announces(second_addr[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1250,7 +1260,7 @@ async fn unrelated_rpl_multicast_does_not_consume_sender_replay_state() {
         leaf_stack,
         leaf_addr,
         root_addr,
-        announces(root_addr[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1301,7 +1311,7 @@ async fn broadcast_wrapped_foreign_unicast_dio_dis_are_rejected_without_mutation
         leaf_stack,
         leaf_addr,
         sender_addr,
-        announces(sender_addr[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1309,7 +1319,7 @@ async fn broadcast_wrapped_foreign_unicast_dio_dis_are_rejected_without_mutation
         root_stack,
         root_addr,
         root_addr,
-        announces(root_addr[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1388,7 +1398,7 @@ async fn non_destination_does_not_consume_sender_replay_state() {
         intended_stack,
         intended_addr,
         intended_addr,
-        announces(intended_addr[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1396,7 +1406,7 @@ async fn non_destination_does_not_consume_sender_replay_state() {
         other_stack,
         other_addr,
         other_addr,
-        announces(other_addr[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1444,12 +1454,11 @@ async fn leaf_send_allocates_each_update_and_restart_advances_sequence() {
     let mut root_sender = Stack::new_default_epoch(root_radio, root_identity.clone());
     root_sender.add_peer(PeerIdentity::from_pubkey(leaf_identity.pubkey));
     let leaf_stack = Stack::new_default_epoch(leaf_radio, leaf_identity.clone());
-    let prefix = root_addr[..8].try_into().unwrap();
     let mut leaf = RplStack::provision_leaf(
         leaf_stack,
         leaf_addr,
         root_addr,
-        announces(prefix),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1491,7 +1500,7 @@ async fn leaf_send_allocates_each_update_and_restart_advances_sequence() {
         leaf_stack,
         leaf_addr,
         root_addr,
-        announces(prefix),
+        announces(),
         persisted,
     )
     .unwrap();
@@ -1536,7 +1545,7 @@ async fn dao_radio_failure_retains_exact_finalized_bytes() {
         leaf_stack,
         leaf_addr,
         root_addr,
-        announces(root_addr[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1566,12 +1575,11 @@ async fn relay_forwards_original_source_and_signed_body() {
     let mut root = Stack::new_default_epoch(root_radio, root_identity.clone());
     root.add_peer(PeerIdentity::from_pubkey(relay_identity.pubkey));
     let relay_stack = Stack::new_default_epoch(relay_radio, relay_identity.clone());
-    let prefix = root_addr[..8].try_into().unwrap();
     let mut relay = RplStack::provision_leaf(
         relay_stack,
         relay_addr,
         root_addr,
-        announces(prefix),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1662,12 +1670,11 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
     leaf_eui64[0] ^= 0x02;
     let (mesh, [root_radio, relay_radio, leaf_radio]) =
         MeshHarness::new([root_eui64, relay_eui64, leaf_eui64]);
-    let prefix = root_addr[..8].try_into().unwrap();
     let mut root = RplStack::provision_root(
         Stack::new(root_radio, root_identity.clone(), 128, 0),
         root_addr,
         root_addr,
-        announces(prefix),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1675,7 +1682,7 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
         Stack::new(relay_radio, relay_identity.clone(), 129, 0),
         relay_addr,
         root_addr,
-        announces(prefix),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1683,7 +1690,7 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
         Stack::new(leaf_radio, leaf_identity.clone(), 129, 0),
         leaf_addr,
         root_addr,
-        announces(prefix),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1867,7 +1874,9 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
         "{leaf_dao_outcome:?}"
     );
     assert_eq!(
-        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        root.rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr)),
         Some([Ipv6Addr::from(relay_addr), Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
@@ -1945,6 +1954,7 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
 #[tokio::test]
 async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     let root_identity = identity(8);
+    let root_eui64_derived = eui64_of(&root_identity);
     let leaf_identity = identity(9);
     let unknown_identity = identity(10);
     let root_addr = root_address(&root_identity);
@@ -1954,12 +1964,11 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     let mut leaf = Stack::new_default_epoch(leaf_radio, leaf_identity.clone());
     leaf.add_peer(PeerIdentity::from_pubkey(root_identity.pubkey));
     let root_stack = Stack::new_default_epoch(root_radio, root_identity.clone());
-    let prefix = root_addr[..8].try_into().unwrap();
     let mut root = RplStack::provision_root(
         root_stack,
         root_addr,
         root_addr,
-        announces(prefix),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -1998,7 +2007,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         .unwrap();
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &signed).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2008,12 +2017,16 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::DaoOriginNotAdmitted)
     ));
     assert!(root.rpl.router.dao_origin_keys().is_empty());
-    assert!(root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)).is_none());
+    assert!(root
+        .rpl_node()
+        .router
+        .lookup_route(Ipv6Addr::from(leaf_addr))
+        .is_none());
 
     root.admit_dao_origin(leaf_identity.iid).unwrap();
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &signed).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2023,7 +2036,9 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Applied))
     ));
     assert_eq!(
-        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        root.rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr)),
         Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
     let persisted = root.storage().clone();
@@ -2056,7 +2071,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Stack::new(reopened_radio, root_identity.clone(), 129, 0),
         root_addr,
         root_addr,
-        announces(prefix),
+        announces(),
         persisted,
     )
     .unwrap();
@@ -2069,27 +2084,37 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     substituted_source[0] ^= 1;
     leaf.send_ipv6_to(
         &dao_ipv6_packet(substituted_source, root_addr, &signed).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
     .unwrap();
+    // Post-i72x.2 the claimed origin carries no IID, so a substituted source
+    // resolves to no pinned identity and fails closed as NotAdmitted (the
+    // pre-migration IidMismatch class required the address-embedded IID).
     assert!(matches!(
         root.receive(1, 0).await.unwrap(),
-        Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::IidMismatch))
+        Some(RplReceiveOutcome::DaoOriginNotAdmitted)
     ));
     assert_eq!(
-        root.rpl_node().router.lookup_route(Ipv6Addr::from(substituted_source)),
+        root.rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(substituted_source)),
         None,
         "a rejected prefix alias must not resolve through an IID-only fallback"
     );
     assert_eq!(
-        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        root.rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr)),
         Some([Ipv6Addr::from(leaf_addr)].as_slice()),
         "the rejected DAO must not mutate the canonical host route"
     );
 
-    let before = root.rpl_node().router.lookup_route(Ipv6Addr::from(unknown_addr));
+    let before = root
+        .rpl_node()
+        .router
+        .lookup_route(Ipv6Addr::from(unknown_addr));
     assert!(before.is_none());
     let mut unknown_storage = MemStorage::new();
     let mut unknown_tx = DaoTxState::provision(
@@ -2113,7 +2138,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         .unwrap();
     leaf.send_ipv6_to(
         &dao_ipv6_packet(unknown_addr, root_addr, &unknown_dao).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2122,7 +2147,11 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         root.receive(1, 0).await.unwrap(),
         Some(RplReceiveOutcome::DaoOriginNotAdmitted)
     ));
-    assert!(root.rpl_node().router.lookup_route(Ipv6Addr::from(unknown_addr)).is_none());
+    assert!(root
+        .rpl_node()
+        .router
+        .lookup_route(Ipv6Addr::from(unknown_addr))
+        .is_none());
 
     let mut second = leaf_router
         .build_signed_dao(leaf_addr, &mut leaf_tx, &mut leaf_storage, &leaf_link)
@@ -2130,7 +2159,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     second[3] ^= 1;
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &second).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2140,7 +2169,9 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::BadSignature))
     ));
     assert_eq!(
-        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        root.rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr)),
         Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
@@ -2150,7 +2181,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     root.fail_next_storage_write();
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &third).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2160,13 +2191,15 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Persistence))
     ));
     assert_eq!(
-        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        root.rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr)),
         Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &third).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2195,7 +2228,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         root_stack,
         root_addr,
         root_addr,
-        announces(prefix),
+        announces(),
         persisted,
     )
     .unwrap();
@@ -2207,7 +2240,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     reopened.fail_next_storage_write();
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &third).unwrap(),
-        &ipv6_eui64(root_addr),
+        &root_eui64_derived,
         Priority::Routing,
     )
     .await
@@ -2217,14 +2250,17 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Duplicate))
     ));
     assert_eq!(
-        reopened.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        reopened
+            .rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr)),
         Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
     // First replay: valid DAO with old sequence should be detected as Replay
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &signed).unwrap(),
-        &ipv6_eui64(root_addr),
+        &root_eui64_derived,
         Priority::Routing,
     )
     .await
@@ -2238,7 +2274,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     // as Replay first (replay check precedes route validation per RFC 6550).
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &malformed_replay).unwrap(),
-        &ipv6_eui64(root_addr),
+        &root_eui64_derived,
         Priority::Routing,
     )
     .await
@@ -2248,13 +2284,16 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Replay))
     ));
     assert_eq!(
-        reopened.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        reopened
+            .rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr)),
         Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &fourth).unwrap(),
-        &ipv6_eui64(root_addr),
+        &root_eui64_derived,
         Priority::Routing,
     )
     .await
@@ -2264,7 +2303,10 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Persistence))
     ));
     assert_eq!(
-        reopened.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        reopened
+            .rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr)),
         Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 }
@@ -2278,7 +2320,7 @@ fn announce_tofu_churn_does_not_admit_dao_origins() {
         Stack::new_default_epoch(root_radio, root_identity),
         root_addr,
         root_addr,
-        announces(root_addr[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -2302,7 +2344,7 @@ fn dao_origin_admission_is_bounded_without_eviction() {
         Stack::new_default_epoch(root_radio, root_identity),
         root_addr,
         root_addr,
-        announces(root_addr[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -2344,7 +2386,7 @@ fn dao_origin_admission_survives_restart_before_first_dao() {
         Stack::new_default_epoch(root_radio, root_identity.clone()),
         root_addr,
         root_addr,
-        announces(root_addr[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -2358,7 +2400,7 @@ fn dao_origin_admission_survives_restart_before_first_dao() {
         Stack::new_default_epoch(reopened_radio, root_identity),
         root_addr,
         root_addr,
-        announces(root_addr[..8].try_into().unwrap()),
+        announces(),
         storage,
     )
     .unwrap();
@@ -2379,7 +2421,7 @@ fn failed_dao_admission_write_changes_neither_ram_nor_storage() {
         Stack::new_default_epoch(root_radio, root_identity.clone()),
         root_addr,
         root_addr,
-        announces(root_addr[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -2400,7 +2442,7 @@ fn failed_dao_admission_write_changes_neither_ram_nor_storage() {
         Stack::new_default_epoch(reopened_radio, root_identity),
         root_addr,
         root_addr,
-        announces(root_addr[..8].try_into().unwrap()),
+        announces(),
         storage,
     )
     .unwrap();
@@ -2462,7 +2504,7 @@ fn root_provisioning_resumes_either_matching_empty_partial_state() {
             Stack::new_default_epoch(radio, root_identity.clone()),
             root_addr,
             root_addr,
-            announces(root_addr[..8].try_into().unwrap()),
+            announces(),
             admission_only.clone(),
         ),
         Err(RplStackOpenError::Dao(DaoPersistentOpenError::Missing))
@@ -2477,7 +2519,7 @@ fn root_provisioning_resumes_either_matching_empty_partial_state() {
             Stack::new_default_epoch(radio, root_identity),
             root_addr,
             root_addr,
-            announces(root_addr[..8].try_into().unwrap()),
+            announces(),
             replay_only.clone(),
         ),
         Err(RplStackOpenError::Admission(
@@ -2572,12 +2614,11 @@ async fn dao_tx_scheduler_idles_then_schedules_on_join() {
     root.add_peer(PeerIdentity::from_pubkey(leaf_id.pubkey));
     let mut leaf_stack = Stack::new_default_epoch(leaf_radio, leaf_id.clone());
     leaf_stack.add_peer(PeerIdentity::from_pubkey(root_id.pubkey));
-    let prefix = root_addr[..8].try_into().unwrap();
     let mut leaf = RplStack::provision_leaf(
         leaf_stack,
         leaf_addr,
         root_addr,
-        announces(prefix),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -2692,13 +2733,12 @@ fn decapsulate_ipv6_rejects_malformed_outer_and_inner() {
 fn root_seq_cache_is_reachable_from_stack_state() {
     let local = identity(251);
     let local_addr = address(&local, 1);
-    let prefix = local_addr[..8].try_into().unwrap();
     let (radio, _receiver) = LoopbackRadio::pair();
     let mut stack = RplStack::provision_root(
         Stack::new_default_epoch(radio, local),
         local_addr,
         local_addr,
-        announces(prefix),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -2764,6 +2804,14 @@ fn root_seq_cache_is_reachable_from_stack_state() {
 // had two bases and worker-6's side of the file was byte-identical to
 // the older base (an ancestor of HEAD), so it contained nothing new;
 // HEAD's newer evolution above is kept and no worker-6 intent is lost.
+//
+// Merge note (main x beads-worker-5): worker-5's side of this section is
+// the merge-base shape plus two deltas -- a stack-level expiry-boundary
+// test and a version parameter on vector_signed_dio_body. Both are already
+// present below in HEAD's evolved form (expiry_equal_now_... at stack
+// level; clock_equal_to_expiry_boundary_... and gate_fixture/gate_fields
+// at gate level), so HEAD's side is kept wholesale and no worker-5 intent
+// is lost.
 
 const VECTOR_EXPIRY_UNIX: u64 = 1_735_689_600;
 
@@ -2833,6 +2881,67 @@ async fn expired_root_signature_admitted_as_baseline_not_rejected() {
             RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. })
         ),
         "replayed expired signature must stay on baseline, not reject: {outcome:?}"
+    );
+}
+
+#[tokio::test]
+async fn expiry_equal_now_root_signature_admitted_as_baseline_not_rejected() {
+    // THE EQUALITY PIN: receive.rs:715 degrades on `expiry <= now_unix`, so
+    // now == expiry is already Baseline. The stack-level +1 (expired) case is
+    // above; the -1 pre-expiry cases exist only at gate level below (a
+    // stack-level pre-expiry Verified is structurally impossible with the
+    // shared vector, per the block comment at the top of this section). This
+    // pins the exact boundary end-to-end: under a `<` for `<=` regression the
+    // signature passes the expiry gate and is then rejected at the carrier/
+    // payload cross-check (the fixture's carrier diverges by design), so the
+    // DioReceived assertion below is the detector.
+    let (mut sender, mut receiver, packet, relay_identity) =
+        baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX));
+    link_introduce(&mut sender, &mut receiver, &relay_identity).await;
+
+    // Join first (see the expired-clock test): the carrier must be a
+    // steady-state DIO against joined dodag state.
+    sender_ipv6(
+        &mut sender,
+        &dio_packet_from(
+            link_local_from_iid(relay_identity.iid),
+            RPL_ALL_NODES,
+            root_address(&relay_identity),
+            ROOT_RANK,
+        ),
+    )
+    .await;
+    assert!(matches!(
+        receiver.receive(1, 0).await.unwrap(),
+        Some(RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. }))
+    ));
+    assert!(receiver.rpl_node().is_joined());
+
+    sender_ipv6(&mut sender, &packet).await;
+    let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
+    assert!(
+        matches!(
+            outcome,
+            RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. })
+        ),
+        "now == expiry must degrade to baseline, not reject: {outcome:?}"
+    );
+
+    // Baseline (not Verified): nothing entered the root-seq cache at the
+    // boundary. (The boundary detector is the DioReceived assertion above —
+    // a `<` regression dies at the cross-check Reject before it could pin
+    // root_seq; these asserts pin the correct path's cache hygiene.)
+    let decoded = {
+        use crate::rpl_stack::root_sig;
+        root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose()).unwrap()
+    };
+    assert_eq!(
+        receiver.root_seq_cached(decoded.payload.dodag_id, decoded.payload.instance),
+        None
+    );
+    assert_eq!(
+        receiver.root_seq_cached(root_address(&relay_identity), decoded.payload.instance),
+        None
     );
 }
 
@@ -2968,7 +3077,7 @@ fn baseline_fixture(
         Stack::new(relay_radio, relay_identity.clone(), 128, 0),
         relay_addr,
         relay_addr,
-        announces(relay_addr[8..16].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -2976,7 +3085,7 @@ fn baseline_fixture(
         Stack::new(recv_radio, recv_identity.clone(), 129, 0),
         address(&recv_identity, 1),
         relay_addr,
-        announces(relay_addr[8..16].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -3035,7 +3144,7 @@ fn gate_fixture() -> (
         Stack::new(radio, node_identity, 129, 0),
         address(&identity(41), 1),
         dodag_id,
-        announces(dodag_id[..8].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -3091,6 +3200,53 @@ fn valid_root_signature_gate_verifies_then_replay_rejects() {
     assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), Some(1));
     let replay = stack.verify_dio_root_signature(&body, &gate_fields());
     assert_eq!(replay, DioRootSigOutcome::Reject);
+}
+
+#[test]
+fn full_root_seq_cache_degrades_new_dodag_to_baseline_not_reject() {
+    // THE PIN (r2oz): a full root-seq table must NOT hard-reject a NEW
+    // genuine DODAG's first signed DIO — unsigned, the identical DIO would
+    // baseline-process, so Capacity degrades to the unsigned floor instead
+    // of letting a TOFU-pinned attacker turn the 0x17 option into a
+    // self-DoS for new roots (16 filler instances fill the table).
+    use lichen_rpl::root_seq_cache::MAX_ROOT_SEQ_KEYS;
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    for i in 0..MAX_ROOT_SEQ_KEYS as u8 {
+        let mut filler = [0x99u8; 16];
+        filler[0] = i;
+        stack.root_seqs_mut().accept(filler, 0, 1).unwrap();
+    }
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Baseline);
+    // Nothing was admitted for the new DODAG: a later identical DIO
+    // degrades identically (consistent floor, no first-observer asymmetry).
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+    let again = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(again, DioRootSigOutcome::Baseline);
+}
+
+#[test]
+fn full_root_seq_cache_keeps_replay_protection_for_tracked_keys() {
+    // Companion pin (r2oz): degrading Capacity to Baseline must not weaken
+    // replay protection for keys already tracked when the table fills.
+    use lichen_rpl::root_seq_cache::MAX_ROOT_SEQ_KEYS;
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    // Track the vector DODAG first, then fill the remaining slots.
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Verified);
+    for i in 1..MAX_ROOT_SEQ_KEYS as u8 {
+        let mut filler = [0x99u8; 16];
+        filler[0] = i;
+        stack.root_seqs_mut().accept(filler, 0, 1).unwrap();
+    }
+    // Replay of the tracked key's last seq still rejects at capacity.
+    let replay = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(replay, DioRootSigOutcome::Reject);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), Some(1));
 }
 
 #[test]
@@ -3190,9 +3346,144 @@ fn clock_equal_to_expiry_boundary_degrades_to_baseline() {
     assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
 }
 
+#[test]
+fn full_root_seq_cache_degrades_new_genuine_root_to_baseline_not_reject() {
+    // THE PIN (r2oz): a full RootSeqCache (16 attacker-filled keys) must not
+    // hard-Reject a NEW genuine root's first signed DIO — that punishes the
+    // signed option itself (self-DoS). The untracked key degrades to the
+    // unsigned baseline, while cached-key replay/regression stays Reject via
+    // the cached() pre-check.
+    use lichen_rpl::root_seq_cache::MAX_ROOT_SEQ_KEYS;
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    // Fill every slot with distinct (dodag_id, instance) keys that are NOT
+    // the genuine root's key.
+    for index in 0..MAX_ROOT_SEQ_KEYS {
+        let mut filler = [0u8; 16];
+        filler[15] = index as u8 + 1;
+        filler[14] = 0xF0; // keep clear of gate_dodag_id()'s low half
+        stack.root_seqs.accept(filler, 0, 1).unwrap();
+    }
+    // Sanity: the genuine root key is untracked and the table is full.
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+    // The genuine root's first signed DIO degrades to Baseline (processed on
+    // the link-layer floor), never Reject, and no seq is admitted.
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Baseline);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+    // The table is untouched: a tracked key still replay-rejects (fail closed
+    // for cached keys is preserved).
+    let mut tracked = [0u8; 16];
+    tracked[15] = 1;
+    tracked[14] = 0xF0;
+    assert_eq!(stack.root_seq_cached(tracked, 0), Some(1));
+}
+
 fn root_sig_vector_pubkey() -> PublicKey {
     use crate::rpl_stack::root_sig;
     root_sig::tests::vector_pubkey()
+}
+
+#[test]
+fn verified_signed_dio_replay_rejects_after_reopen() {
+    // THE PIN (worker6-eebl): the root-seq high-water mark is durable. A
+    // captured still-unexpired signed DIO replayed against a NEW RplStack
+    // opened on the same storage (the reboot boundary) is Reject, never a
+    // second Verified.
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    assert_eq!(
+        stack.verify_dio_root_signature(&body, &gate_fields()),
+        DioRootSigOutcome::Verified
+    );
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), Some(1));
+
+    // Simulated reboot: snapshot the durable state, drop the stack, and
+    // open a fresh one on the snapshot (same identity, same DODAG).
+    let storage = stack.storage().clone();
+    drop(stack);
+    let node_identity = identity(41);
+    let dodag_id = gate_dodag_id();
+    let (_mesh, [radio, _spare1, _spare2]) =
+        MeshHarness::new([node_identity.iid, [0u8; 8], [0u8; 8]]);
+    let mut reopened = RplStack::open_leaf(
+        Stack::new(radio, node_identity.clone(), 129, 0),
+        address(&node_identity, 1),
+        dodag_id,
+        announces(dodag_id[..8].try_into().unwrap()),
+        storage,
+    )
+    .unwrap();
+    reopened.announces.pin_for_test(root_sig_vector_pubkey());
+    reopened.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    assert_eq!(reopened.root_seq_cached(gate_dodag_id(), 0), Some(1));
+    assert_eq!(
+        reopened.verify_dio_root_signature(&body, &gate_fields()),
+        DioRootSigOutcome::Reject
+    );
+    // The durable mark is not regressed by the rejected replay.
+    assert_eq!(reopened.root_seq_cached(gate_dodag_id(), 0), Some(1));
+}
+
+#[test]
+fn signed_dio_persist_failure_degrades_to_baseline_without_burn() {
+    // A storage fault on the durable accept is a local failure, not a
+    // forgery: degrade to Baseline (never Reject), admit nothing in-memory,
+    // and let a healthy redelivery verify and persist.
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    stack.fail_next_storage_write();
+    assert_eq!(
+        stack.verify_dio_root_signature(&body, &gate_fields()),
+        DioRootSigOutcome::Baseline
+    );
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+    // Healthy retry: verifies, persists, and the duplicate then
+    // replay-rejects — proving the failed first attempt burned nothing.
+    assert_eq!(
+        stack.verify_dio_root_signature(&body, &gate_fields()),
+        DioRootSigOutcome::Verified
+    );
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), Some(1));
+    assert_eq!(
+        stack.verify_dio_root_signature(&body, &gate_fields()),
+        DioRootSigOutcome::Reject
+    );
+}
+
+#[test]
+fn corrupt_root_seq_record_fails_provision_closed() {
+    // A corrupt durable root-seq record fails provisioning closed; the
+    // anti-replay high-water must never be silently reset (that would
+    // reopen the replay window). Slot key strings mirror the lichen-rpl
+    // ROOT_SEQ_KEYS constants (the same hardcoding pattern the DAO routing
+    // tests use for "rpl.tx.a"/"rpl.tx.b").
+    let node_identity = identity(42);
+    let node_addr = address(&node_identity, 1);
+    let dodag_id = [0x21u8; 16];
+    let (_mesh, [radio, _spare1, _spare2]) =
+        MeshHarness::new([node_identity.iid, [0u8; 8], [0u8; 8]]);
+    let mut storage = MemStorage::new();
+    storage.set_raw("rpl.rseq.a", &[0xff; 64]);
+    storage.set_raw("rpl.rseq.b", &[0x00; 10]);
+    let error = RplStack::provision_leaf(
+        Stack::new(radio, node_identity, 129, 0),
+        node_addr,
+        dodag_id,
+        announces(dodag_id[..8].try_into().unwrap()),
+        storage,
+    )
+    .err()
+    .expect("corrupt root-seq record must fail closed");
+    assert!(matches!(
+        error,
+        crate::rpl_stack::RplStackProvisionError::RootSeq(
+            lichen_rpl::root_seq_cache::RootSeqOpenError::Corrupt
+        )
+    ));
 }
 
 fn gate_dodag_id() -> [u8; 16] {
@@ -3223,7 +3514,7 @@ async fn root_dio_signature_roundtrip_produces_and_advances() {
         Stack::new(root_radio, root_identity.clone(), 128, 0),
         root_addr,
         root_addr,
-        announces(root_addr[8..16].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();
@@ -3231,7 +3522,7 @@ async fn root_dio_signature_roundtrip_produces_and_advances() {
         Stack::new(leaf_radio, leaf_identity.clone(), 129, 0),
         address(&leaf_identity, 1),
         root_addr,
-        announces(root_addr[8..16].try_into().unwrap()),
+        announces(),
         MemStorage::new(),
     )
     .unwrap();

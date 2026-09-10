@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-yzzz",
+  "title": "schc_session_rx: bool/uint8 semantic overload of INVALID_COORD as caller-error verdict",
+  "description": "Review finding (minor, pass 1 finding 3, l1qw.3.7.6.4): lichen/subsys/lichen/schc/schc_session_rx.c returns LICHEN_SCHC_RX_INVALID_COORD for non-coordinate caller contract violations (NULL/closed session, NULL tile, tile_len==0, tile_len\u003e179) as well as genuine wire-coordinate problems (W\u003e1, FCN\u003e62). The header doc was updated to cover both, but a caller still cannot distinguish 'malformed wire coordinate' from 'programming error'. Consider a dedicated LICHEN_SCHC_RX_INVALID_ARG verdict if the distinction ever matters to the slice-5 integration seam. P3 polish; not blocking.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T18:15:16.46438693Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T18:15:16.46438693Z",
+  "labels": [
+    "schc",
+    "zephyr"
+  ]
+}

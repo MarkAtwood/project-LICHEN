@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.131",
+  "title": "[spec-gap][R-04-025] C gateway lacks mesh-to-internet multicast egress drop (spec 04 6.3.4)",
+  "description": "Spec spec/04-network.md 6.3.4 MUST: Border routers MUST NOT forward mesh multicasts to the internet. Table row 'Mesh -\u003e Internet | Multicast | Drop' (internet-\u003emesh row has an explicit-config exception; the mesh-\u003einternet row has none).\n\nEvidence:\n- Python: implemented+tested. python/src/lichen/routing/router.py:491-497 BR multicast filter (both directions unless multicast_peering_enabled); tests python/tests/routing/test_router.py:522-635; vector test/vectors/br_multicast_filter.json.\n- Rust: implemented+tested. rust/lichen-gateway/src/gateway.rs:60 (config), :965 (peering gate), :1770 ('upstream multicast destination dropped (spec 04 6.3.4)'); test rust/lichen-gateway/tests/end_to_end.rs:567 upstream_multicast_dropped_without_multicast_peering.\n- C: divergent/not-implemented for mesh-\u003einternet egress. lichen/apps/gateway/src/forwarding.c lichen_forwarding_handle() (155-226) gates egress only on tunnel auth + MTU; no multicast destination check. lichen/subsys/lichen/routing/router.c:627-640 covers only backbone-\u003emesh ingress (crosses_boundary drop). A mesh-originated multicast handed to the Zephyr IP forwarder toward the backhaul iface passes the NPF egress gate (forwarding.c:82-107) unfiltered.\n\nSuggested placement: extend lichen_forwarding_handle() (or the router.c local-ingress multicast decision at router.c:641-645, which currently DELIVER_AND_FORWARDs scope\u003e=2 without an external egress distinction) to drop multicast egress to the backbone iface unless an explicit peering config exists; mirror the multicast_peering flag already present in router.h:148-149.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T20:48:44.66329457Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T20:48:44.66329457Z",
+  "labels": [
+    "network",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.131",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T20:48:44.799190602Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-fooq",
+  "title": "schc.h: remove dead constants (SCHC_MAX_ACK_REQUESTS/RETRANSMISSION_TIMEOUT/INACTIVITY/RCS_BYTES) + update spec-coverage citations",
+  "description": "Deferred from b7z9.92 (reviewer finding). lichen/subsys/lichen/schc/include/lichen/schc.h:106-109 defines SCHC_RCS_BYTES, SCHC_RETRANSMISSION_TIMEOUT_S, SCHC_MAX_ACK_REQUESTS, SCHC_INACTIVITY_TIMEOUT_S — zero code references (verified grep across lichen/, rust/, python/). BUT docs/spec-coverage/03-adaptation.md:63 (R-03-042) and :77 (R-03-056) cite these constants as the C evidence for those requirements. Removing the constants without updating the docs makes the traceability citations dangle. FIX: remove the 4 constants AND update docs/spec-coverage/03-adaptation.md rows R-03-042/R-03-056 to point at the real C evidence (or mark the C side as not-implemented if the fragmentation/session authority that owns these is not yet landed — see l1qw.3.7.6.x). Do not remove the constants alone.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T02:12:27.705494557Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T02:12:27.705494557Z",
+  "labels": [
+    "schc",
+    "c",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-fooq",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.92",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T02:12:27.842813108Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -23,6 +23,8 @@ from lichen.gateway.local_facts import (
     verify_local_fact,
 )
 
+_NOW = 1_800_000_000
+
 
 def _gateway() -> Identity:
     return Identity.from_seed(bytes(range(32)))
@@ -71,6 +73,13 @@ def test_claims_roundtrip_subset() -> None:
         {"channel": "ops"},  # bare str, not a sequence of tstr
         {"channel": 5},  # non-iterable
         {"emergency_callback": 123},  # tstr given int
+        {"expiry": 0},  # expiry must be positive
+        {"expiry": -1},  # negative expiry
+        {"expiry": True},  # bool is not a valid uint
+        {"expiry": "soon"},  # tstr given for uint
+        {"seq": -1},  # negative seq
+        {"seq": True},  # bool is not a valid uint
+        {"seq": "7"},  # tstr given for uint
     ],
 )
 def test_invalid_claim_values_rejected(kwargs: dict) -> None:
@@ -354,3 +363,140 @@ def test_decoded_fact_reserializes_byte_stably() -> None:
     assert reencoded[2] == payload
     relayed = LocalFact.from_cose_sign1(fact.to_cose_sign1())
     assert verify_local_fact(relayed, gw.pubkey) is True
+
+
+# ─── Wire-bstr/claims consistency (2vp1) ─────────────────────────────────────
+
+
+def test_local_fact_replace_desync_rejected() -> None:
+    import dataclasses as dc
+
+    fact = issue_local_fact(_gateway(), LocalFactClaims(relay=True, priority=0))
+    with pytest.raises(LocalFactError, match="do not decode"):
+        dc.replace(fact, claims=LocalFactClaims(relay=True, priority=3))
+
+
+def test_local_fact_mismatched_wire_bytes_rejected() -> None:
+    fact = issue_local_fact(_gateway(), LocalFactClaims(relay=True))
+    other = LocalFactClaims(relay=True, quota=5).to_cbor()
+    with pytest.raises(LocalFactError, match="do not decode"):
+        LocalFact(
+            claims=fact.claims,
+            issuer_iid=fact.issuer_iid,
+            signature=fact.signature,
+            protected_bytes=fact.protected_bytes,
+            payload_bytes=other,
+        )
+
+
+def test_local_fact_issue_with_list_channel() -> None:
+    # channel is accepted as list or tuple; issuance must not false-reject a
+    # list (2vp1 review: from_cbor normalizes to tuple, so the wire-bstr
+    # consistency check must see equal claims either way).
+    gw = _gateway()
+    fact = issue_local_fact(gw, LocalFactClaims(relay=True, channel=["ops", "eng"]))
+    assert fact.claims.channel == ("ops", "eng")
+    assert verify_local_fact(fact, gw.pubkey) is True
+
+
+# ─── Freshness claims (b4fu) ─────────────────────────────────────────────────
+
+
+def test_freshness_claims_roundtrip() -> None:
+    claims = LocalFactClaims(relay=True, expiry=_NOW + 3600, seq=7)
+    decoded = LocalFactClaims.from_cbor(claims.to_cbor())
+    assert decoded == claims
+    assert decoded.expiry == _NOW + 3600
+    assert decoded.seq == 7
+
+
+def test_freshness_claims_absent_by_default() -> None:
+    claims = LocalFactClaims(relay=True)
+    assert claims.expiry is None
+    assert claims.seq is None
+    assert b"lichen:expiry" not in claims.to_cbor()
+    assert b"lichen:seq" not in claims.to_cbor()
+
+
+def test_verify_accepts_unexpired_fact() -> None:
+    gw = _gateway()
+    fact = issue_local_fact(gw, LocalFactClaims(relay=True, expiry=_NOW + 3600))
+    assert verify_local_fact(fact, gw.pubkey, current_time=_NOW) is True
+
+
+def test_verify_rejects_expired_fact() -> None:
+    gw = _gateway()
+    fact = issue_local_fact(gw, LocalFactClaims(relay=True, expiry=_NOW + 3600))
+    assert verify_local_fact(fact, gw.pubkey, current_time=_NOW + 3600) is False
+    assert verify_local_fact(fact, gw.pubkey, current_time=_NOW + 7200) is False
+
+
+def test_verify_rejects_expiry_claim_without_current_time() -> None:
+    # Fail-closed: a fact carrying lichen:expiry cannot be verified without a
+    # time to check it against.
+    gw = _gateway()
+    fact = issue_local_fact(gw, LocalFactClaims(relay=True, expiry=_NOW + 3600))
+    assert verify_local_fact(fact, gw.pubkey) is False
+
+
+def test_verify_accepts_newer_seq() -> None:
+    gw = _gateway()
+    fact = issue_local_fact(gw, LocalFactClaims(relay=True, seq=8))
+    assert verify_local_fact(fact, gw.pubkey, cached_seq=7) is True
+
+
+def test_verify_rejects_replayed_seq() -> None:
+    gw = _gateway()
+    fact = issue_local_fact(gw, LocalFactClaims(relay=True, seq=7))
+    assert verify_local_fact(fact, gw.pubkey, cached_seq=7) is False
+    assert verify_local_fact(fact, gw.pubkey, cached_seq=8) is False
+
+
+def test_verify_rejects_seq_claim_without_cached_seq() -> None:
+    # Fail-closed: a fact carrying lichen:seq cannot be verified without the
+    # per-issuer seq cache to compare against.
+    gw = _gateway()
+    fact = issue_local_fact(gw, LocalFactClaims(relay=True, seq=1))
+    assert verify_local_fact(fact, gw.pubkey) is False
+
+
+def test_verify_seq_bootstrap_sentinel() -> None:
+    # First contact with an issuer: no cache entry exists; the documented
+    # bootstrap is cached_seq=-1, which accepts any non-negative seq.
+    gw = _gateway()
+    fact = issue_local_fact(gw, LocalFactClaims(relay=True, seq=0))
+    assert verify_local_fact(fact, gw.pubkey, cached_seq=-1) is True
+    fact5 = issue_local_fact(gw, LocalFactClaims(relay=True, seq=5))
+    assert verify_local_fact(fact5, gw.pubkey, cached_seq=-1) is True
+
+
+def test_verify_seq_bootstrap_then_supersede() -> None:
+    # Seed from the first verified fact, then enforce monotonic supersession.
+    gw = _gateway()
+    first = issue_local_fact(gw, LocalFactClaims(relay=True, seq=0))
+    assert verify_local_fact(first, gw.pubkey, cached_seq=-1) is True
+    cached = first.claims.seq
+    assert verify_local_fact(first, gw.pubkey, cached_seq=cached) is False  # replay
+    newer = issue_local_fact(gw, LocalFactClaims(relay=False, seq=1))
+    assert verify_local_fact(newer, gw.pubkey, cached_seq=cached) is True
+
+
+def test_verify_freshness_and_signature_together() -> None:
+    # Freshness checks do not substitute for signature verification: the same
+    # fact passes freshness but fails against a non-issuer key. (Issuer-key
+    # resolution is the caller's job; this only checks the signature over the
+    # fact against the supplied key.)
+    gw = _gateway()
+    other = _other()
+    fact = issue_local_fact(gw, LocalFactClaims(relay=True, expiry=_NOW + 60, seq=3))
+    assert verify_local_fact(fact, gw.pubkey, current_time=_NOW, cached_seq=2) is True
+    assert verify_local_fact(fact, other.pubkey, current_time=_NOW, cached_seq=2) is False
+
+
+def test_freshness_claims_survive_wire_roundtrip() -> None:
+    gw = _gateway()
+    fact = issue_local_fact(gw, LocalFactClaims(priority=2, expiry=_NOW + 10, seq=42))
+    decoded = LocalFact.from_cose_sign1(fact.to_cose_sign1())
+    assert decoded.claims.expiry == _NOW + 10
+    assert decoded.claims.seq == 42
+    assert verify_local_fact(decoded, gw.pubkey, current_time=_NOW, cached_seq=41) is True

@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
-"""Generate exact native IPv6 address vectors without importing LICHEN."""
+"""Generate exact IPv6 IID, link-local, and native address vectors without
+importing LICHEN.
+
+The native 0200::/8 fields are upstream Yggdrasil ``AddrForKey`` per the
+settled upstream-yggdrasil-addressing decision (spec/decisions.jsonl). The
+rejected SHA-512 native profile is quarantined in
+test/vectors/legacy/ipv6_addresses_native_sha512.json and is never emitted
+here.
+"""
 
 from __future__ import annotations
 
@@ -24,12 +32,56 @@ from atomic_json import (  # noqa: E402
 OUTPUT = VECTORS_DIR / "ipv6-addresses.json"
 
 
+def _addr_for_key(pubkey: bytes) -> bytes:
+    """Upstream Yggdrasil ``AddrForKey`` byte-for-byte (yggdrasil-go@422836ee
+    src/address/address.go; settled ``upstream-yggdrasil-addressing``
+    decision in spec/decisions.jsonl). Bit-invert the key; addr[0]=0x02;
+    addr[1] = leading-1 count mod 256; skip leading 1s + the first 0
+    separator bit; pack the rest MSB-first into whole bytes, discarding the
+    trailing partial byte; copy into addr[2:16], zero tail. No hashing.
+    """
+    inv = bytes(b ^ 0xFF for b in pubkey)
+    addr = bytearray(16)
+    addr[0] = 0x02
+    temp = bytearray()
+    done = False
+    ones = 0
+    cur = 0
+    nbits = 0
+    for idx in range(8 * len(inv)):
+        bit = (inv[idx // 8] >> (7 - (idx % 8))) & 0x01
+        if not done:
+            if bit:
+                ones = (ones + 1) & 0xFF
+                continue
+            done = True  # first leading 0 bit: separator, skipped
+            continue
+        cur = (cur << 1) | bit
+        nbits += 1
+        if nbits == 8:
+            nbits = 0
+            temp.append(cur)
+            cur = 0
+    addr[1] = ones
+    n = min(len(temp), 14)
+    addr[2 : 2 + n] = temp[:n]
+    return bytes(addr)
+
+
 def _key_vector(name: str, public_key: bytes) -> dict[str, object]:
     digest = hashlib.sha512(public_key).digest()
     iid = bytearray(digest[:8])
     iid[0] &= 0xFD
-    native = bytes((0x02,)) + digest[:7] + bytes(iid)
+    # Merge resolution: keep the beads-worker-3 native fields (upstream
+    # AddrForKey). HEAD's no-native-fields shape is incompatible with the
+    # staged conformance tests, which require native/native_packed here
+    # (test_native_corpora_agree_without_byte_reversal).
+    primary = _addr_for_key(public_key)
     link_local = b"\xfe\x80" + bytes(6) + bytes(iid)
+    # The rejected SHA-512 native profile ([0x02] || digest[:7] || iid) is
+    # quarantined in test/vectors/legacy/ipv6_addresses_native_sha512.json
+    # (spec/decisions.jsonl upstream-yggdrasil-addressing). The native fields
+    # emitted here are upstream Yggdrasil AddrForKey, the settled profile.
     return {
         "name": name,
         "profile": "key_derived_identity",
@@ -37,9 +89,9 @@ def _key_vector(name: str, public_key: bytes) -> dict[str, object]:
         "iid": bytes(iid).hex(),
         "link_local": str(IPv6Address(link_local)),
         "link_local_packed": link_local.hex(),
-        "native": str(IPv6Address(native)),
-        "native_packed": native.hex(),
-        "iid_in_native": native[8:] == bytes(iid),
+        "native": str(IPv6Address(primary)),
+        "native_packed": primary.hex(),
+        "iid_in_native": primary[8:] == bytes(iid),
     }
 
 
@@ -98,14 +150,24 @@ def document() -> dict[str, object]:
         "format_version": 2,
         "description": (
             "Exact Ed25519 pubkey to SHA-512 IID, link-local, and primary "
-            "0200::/8 native-address derivation. EUI-64 and short-address cases "
-            "are explicitly link-interoperability helpers, not node identities."
+            "0200::/8 native-address derivation; native is upstream "
+            "Yggdrasil AddrForKey (settled upstream-yggdrasil-addressing "
+            "decision, spec/decisions.jsonl). The rejected SHA-512 native "
+            "profile is quarantined in "
+            "test/vectors/legacy/ipv6_addresses_native_sha512.json. EUI-64 "
+            "and short-address cases are explicitly link-interoperability "
+            "helpers, not node identities."
         ),
         "oracle": {
-            "basis": "spec/03-addressing.md and spec/06-security.md Section 8.5",
+            "basis": (
+                "spec/03-addressing.md (link-local IID) and upstream "
+                "yggdrasil-go@422836ee src/address/address.go (primary, "
+                "settled upstream-yggdrasil-addressing decision)"
+            ),
             "derivation": (
                 "h=SHA-512(pubkey); iid=h[0:8] with U/L cleared; "
-                "native=0x02||h[0:7]||iid"
+                "native=upstream AddrForKey(pubkey) (bit-inverted key, "
+                "no hashing)"
             ),
             "implementation": "Python stdlib hashlib and ipaddress only",
             "generator_command": "python3 test/vectors/generate_ipv6_addresses.py",

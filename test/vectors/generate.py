@@ -157,13 +157,15 @@ EDHOC_REGRESSION_DESCRIPTION = (
 )
 L2_DISPATCH_SCHC = 0x14
 L2_DISPATCH_ROUTING = 0x15
+L2_DISPATCH_SOS = 0x16
 
 LL_SRC = IPv6Address("fe80::1")
 LL_DST = IPv6Address("fe80::2")
 # Global addresses use deterministic LICHEN native 0200::/8 derivation from known seeds:
 #   G_SRC: seed=0x00*32 -> pubkey=3b6a27bc... -> yggdrasil_address(pubkey)
 #   G_DST: seed=0xff*32 -> pubkey=76a15920... -> yggdrasil_address(pubkey)
-# See test/vectors/yggdrasil-derivation.json for canonical derivation test vectors.
+# See test/vectors/legacy/yggdrasil-derivation.json for the QUARANTINED legacy
+# derivation corpus (rejected SHA-512 native profile; not a conformance oracle).
 G_SRC = IPv6Address("27d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342")
 G_DST = IPv6Address("2f7:7a7b:aa12:26b5:f57a:7baa:1226:b50c")
 COAP_PORT = 5683
@@ -579,15 +581,28 @@ def l2_payload_vectors() -> list[dict]:
             "wrapped": bytes([L2_DISPATCH_ROUTING]).hex(),
         },
         {
-            "name": "reserved_0x16",
+            "name": "sos_0x16",
             "description": (
-                "Dispatch 0x16 is unassigned in the L2 namespace and must not be "
-                "confused with the unrelated RPL DODAG Version option type."
+                "Dispatch 0x16 is the SOS emergency alert (spec/02-physical-link.md "
+                "4.1); the body is the 12-apps.md 18.4.2 CBOR alert map. Distinct "
+                "from the unrelated RPL DODAG Version option type 0x16 (different "
+                "namespace)."
             ),
-            "dispatch": 0x16,
-            "kind": "unknown",
+            "dispatch": L2_DISPATCH_SOS,
+            "kind": "sos",
             "body": "01",
             "wrapped": "1601",
+        },
+        {
+            "name": "malformed_sos_dispatch_only",
+            "description": (
+                "A defined SOS dispatch without its required body byte is malformed "
+                "and must fail closed."
+            ),
+            "dispatch": L2_DISPATCH_SOS,
+            "kind": "unknown",
+            "body": "",
+            "wrapped": bytes([L2_DISPATCH_SOS]).hex(),
         },
     ]
 
@@ -3182,7 +3197,7 @@ def rpl_messages_vectors() -> list[dict]:
             "description": "LICHEN root RPL DIO whose DODAGID is AddrForKey for the deterministic all-zero identity seed, with the mandatory current SCHC Rule Version option.",
             "schc_version_mode": "insert_current",
             "options_hex": "",
-            "encoded": "0001010091000000027dd5cfc679ab637dd5cfc679ab6342130103",
+            "encoded": "0001010091000000020224aec2198a4ade94eae2b97eac87130103",
             "fields": {
                 "rpl_instance_id": 0,
                 "version": 1,
@@ -3192,7 +3207,7 @@ def rpl_messages_vectors() -> list[dict]:
                 "preference": 1,
                 "dtsn": 0,
                 "flags": 0,
-                "dodag_id": "27d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342",
+                "dodag_id": "202:24ae:c219:8a4a:de94:eae2:b97e:ac87",
             },
         },
         {
@@ -3202,7 +3217,7 @@ def rpl_messages_vectors() -> list[dict]:
             "schc_version_mode": "propagate_root",
             "root_originated_schc_version": 3,
             "options_hex": "130103",
-            "encoded": "0001020091000000027dd5cfc679ab637dd5cfc679ab6342130103",
+            "encoded": "0001020091000000020224aec2198a4ade94eae2b97eac87130103",
             "fields": {
                 "rpl_instance_id": 0,
                 "version": 1,
@@ -3212,7 +3227,7 @@ def rpl_messages_vectors() -> list[dict]:
                 "preference": 1,
                 "dtsn": 0,
                 "flags": 0,
-                "dodag_id": "27d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342",
+                "dodag_id": "202:24ae:c219:8a4a:de94:eae2:b97e:ac87",
             },
         },
         {
@@ -3222,7 +3237,7 @@ def rpl_messages_vectors() -> list[dict]:
             "schc_version_mode": "explicit",
             "advertised_schc_version": 2,
             "options_hex": "130102",
-            "encoded": "0001020091000000027dd5cfc679ab637dd5cfc679ab6342130102",
+            "encoded": "0001020091000000020224aec2198a4ade94eae2b97eac87130102",
             "fields": {
                 "rpl_instance_id": 0,
                 "version": 1,
@@ -3232,7 +3247,7 @@ def rpl_messages_vectors() -> list[dict]:
                 "preference": 1,
                 "dtsn": 0,
                 "flags": 0,
-                "dodag_id": "27d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342",
+                "dodag_id": "202:24ae:c219:8a4a:de94:eae2:b97e:ac87",
             },
         },
         {
@@ -3251,7 +3266,7 @@ def rpl_messages_vectors() -> list[dict]:
                 "preference": 1,
                 "dtsn": 0,
                 "flags": 0,
-                "dodag_id": "27d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342",
+                "dodag_id": "202:24ae:c219:8a4a:de94:eae2:b97e:ac87",
             },
         },
         {
@@ -3270,7 +3285,7 @@ def rpl_messages_vectors() -> list[dict]:
                 "preference": 1,
                 "dtsn": 0,
                 "flags": 0,
-                "dodag_id": "27d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342",
+                "dodag_id": "202:24ae:c219:8a4a:de94:eae2:b97e:ac87",
             },
         },
         {
@@ -3289,7 +3304,7 @@ def rpl_messages_vectors() -> list[dict]:
                 "preference": 1,
                 "dtsn": 0,
                 "flags": 0,
-                "dodag_id": "27d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342",
+                "dodag_id": "202:24ae:c219:8a4a:de94:eae2:b97e:ac87",
             },
         },
         {
@@ -3341,15 +3356,15 @@ def rpl_messages_vectors() -> list[dict]:
                 "AddrForKey DODAGID of the deterministic all-zero identity seed, "
                 "and DODAGVersionNumber 66."
             ),
-            "options_hex": "071300c0027dd5cfc679ab637dd5cfc679ab634242",
-            "encoded": "0000071300c0027dd5cfc679ab637dd5cfc679ab634242",
+            "options_hex": "071300c0020224aec2198a4ade94eae2b97eac8742",
+            "encoded": "0000071300c0020224aec2198a4ade94eae2b97eac8742",
             "fields": {
                 "flags": 0,
                 "reserved": 0,
                 "solicited_information": {
                     "rpl_instance_id": 0,
                     "flags": 192,
-                    "dodag_id": "027d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342",
+                    "dodag_id": "202:24ae:c219:8a4a:de94:eae2:b97e:ac87",
                     "version": 66,
                 },
             },
@@ -3410,13 +3425,13 @@ def rpl_messages_vectors() -> list[dict]:
                 "D-flag DAO-ACK carries the AddrForKey DODAGID of the "
                 "deterministic all-zero identity seed after the four-byte base."
             ),
-            "encoded": "00800900027dd5cfc679ab637dd5cfc679ab6342",
+            "encoded": "00800900020224aec2198a4ade94eae2b97eac87",
             "fields": {
                 "rpl_instance_id": 0,
                 "flags": 0,
                 "dao_sequence": 9,
                 "status": 0,
-                "dodag_id": "27d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342",
+                "dodag_id": "202:24ae:c219:8a4a:de94:eae2:b97e:ac87",
             },
         },
         {
@@ -3475,7 +3490,7 @@ def rpl_messages_vectors() -> list[dict]:
             "name": "dao_ack_malformed_options_d1",
             "type": "dao_ack",
             "description": "D=1 followed by a truncated type-5 option is rejected.",
-            "encoded": "00800900027dd5cfc679ab637dd5cfc679ab6342050401",
+            "encoded": "00800900020224aec2198a4ade94eae2b97eac87050401",
             "expect_error": "malformed_options",
         },
         {
@@ -4663,23 +4678,20 @@ def root_authorization_vectors() -> list[dict]:
     - DODAGID == AddrForKey(root_pubkey) (section 8.4)
     - RPL messages MUST be signed with Schnorr48 (section 8.2)
 
-    Fixture construction uses deterministic production primitives. The committed
-    results are independently checked by test_protocol_vector_security.py using
-    reference_schnorr48.py and the upstream yggdrasil-go AddrForKey derivation
-    (rubw; the SHA-512 native profile is rejected).
+    Fixture construction uses independent reference_schnorr48.py primitives
+    and the upstream AddrForKey bit-packing oracle
+    (test/vectors/yggdrasil_address.json anchor).
     """
-    from lichen.crypto.identity import Identity
-    from lichen.crypto.schnorr48 import sign
-    from lichen.ipv6.addr import upstream_addr_for_key
+    from reference_schnorr48 import ReferenceIdentity, addr_for_key, sign
 
     vectors = []
 
     # Vector 1: Valid signature with correct DODAGID binding
     seed_valid = bytes(range(32))
-    identity_valid = Identity.from_seed(seed_valid)
+    identity_valid = ReferenceIdentity.from_seed(seed_valid)
     message_valid = b"DIO: DODAG config, RPLInstanceID=0x01, Version=42"
-    sig_valid = sign(identity_valid.privkey, identity_valid.pubkey, message_valid)
-    dodagid_valid = upstream_addr_for_key(identity_valid.pubkey)
+    sig_valid = sign(identity_valid, message_valid)
+    dodagid_valid = IPv6Address(addr_for_key(identity_valid.pubkey))
 
     vectors.append(
         {
@@ -4714,10 +4726,10 @@ def root_authorization_vectors() -> list[dict]:
 
     # Vector 3: Valid signature but wrong DODAGID (attacker impersonation)
     attacker_seed = bytes([x ^ 0xFF for x in range(32)])
-    attacker = Identity.from_seed(attacker_seed)
-    attacker_dodagid = upstream_addr_for_key(attacker.pubkey)
+    attacker = ReferenceIdentity.from_seed(attacker_seed)
+    attacker_dodagid = IPv6Address(addr_for_key(attacker.pubkey))
     # Attacker signs correctly but claims victim's DODAGID
-    attacker_sig = sign(attacker.privkey, attacker.pubkey, message_valid)
+    attacker_sig = sign(attacker, message_valid)
 
     vectors.append(
         {
@@ -4770,10 +4782,10 @@ def root_authorization_vectors() -> list[dict]:
 
     # Vector 6: Valid root with different seed (deterministic cross-validation)
     seed_alt = bytes([0xAB] * 32)
-    identity_alt = Identity.from_seed(seed_alt)
+    identity_alt = ReferenceIdentity.from_seed(seed_alt)
     message_alt = b"DIO: instance=1, version=1, rank=256"
-    sig_alt = sign(identity_alt.privkey, identity_alt.pubkey, message_alt)
-    dodagid_alt = upstream_addr_for_key(identity_alt.pubkey)
+    sig_alt = sign(identity_alt, message_alt)
+    dodagid_alt = IPv6Address(addr_for_key(identity_alt.pubkey))
 
     vectors.append(
         {
@@ -5013,7 +5025,7 @@ VECTOR_FILES: tuple[_VectorFile, ...] = (
     ),
     _VectorFile(
         "root_authorization.json",
-        "Root authorization validation vectors (spec 8.2, 8.4). Tests DODAGID == AddrForKey(root_pubkey) binding and Schnorr48 signature verification. Covers valid root, invalid signature, DODAGID mismatch (impersonation), and pubkey validation. Fixed literals are independently checked with reference_schnorr48.py and the upstream yggdrasil-go AddrForKey derivation.",
+        "Root authorization validation vectors (spec 8.2, 8.4). Tests DODAGID == AddrForKey(root_pubkey) binding and Schnorr48 signature verification. Covers valid root, invalid signature, DODAGID mismatch (impersonation), and pubkey validation. Fixed literals are independently checked with reference_schnorr48.py and the upstream AddrForKey bit-packing oracle (test/vectors/yggdrasil_address.json anchor).",
         builder="root_authorization_vectors",
     ),
     _VectorFile(

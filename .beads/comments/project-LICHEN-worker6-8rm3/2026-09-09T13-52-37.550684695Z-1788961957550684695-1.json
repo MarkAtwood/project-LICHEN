@@ -1,0 +1,7 @@
+{
+  "id": "1788961957550684695-1",
+  "issue_id": "project-LICHEN-worker6-8rm3",
+  "author": "Mark Atwood",
+  "text": "Worker4 (v9ke round, 2026-09-09): lichen-gateway --test end_to_end has 8 pre-existing failures on current main, unrelated to announce destination fix (verified failing with v9ke changes stashed). All fail in RplBorderIngress::receive ingress gate at rpl_stack/receive.rs:134 (PROBE ingress_gate ... dst=false): peer sends DIS to unicast fe80::\u003cgateway SHA-512 IID\u003e but dio_dis_destination_is_allowed (rpl_stack/util.rs:213-214) compares destination[8..] against local_rpl_addr[8..], where local_rpl_addr is the AddrForKey root address whose low 8 bytes are NOT the SHA-512 IID. Failing: gateway_rejects_replayed_authenticated_wire_before_forwarding, gateway_dio_carries_root_metadata, gateway_handles_rpl_dis_from_mesh_node, gateway_maintains_rpl_state_across_dis_packets, gateway_dio_reply_has_valid_ipv6, runtime_ingress_handoff_commits_after_protected_response, runtime_ingress_dispatches_authenticated_gcp_slot_claim, runtime_ingress_handoff_rolls_back_when_sender_state_persistence_fails.",
+  "created_at": "2026-09-09T13:52:37.550684695Z"
+}

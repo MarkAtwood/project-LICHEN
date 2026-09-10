@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-ywec.4",
+  "title": "ywec.d: node.rs:387 DAO origin pin lookup derives IID from routable origin",
+  "description": "Child of project-LICHEN-worker6-ywec. lichen-node/src/node.rs:387 handle_dao does iid = origin[8..] then announces.pinned_pubkey_for(\u0026iid). Post-AddrForKey the DAO origin is a routable /128 whose low 64 bits are NOT the SHA-512 IID, so the indexed pin lookup misses and pinned-key verification degrades to the bounded-snapshot fallback (or fails). Pin store itself is correctly keyed by SHA-512 IID (identity handle). Fix needs an origin-\u003epubkey resolution path that does not assume IID embedding: e.g. scan bounded known_originators snapshot matching ygg_addr_from_pubkey(candidate) == origin. RELATED but distinct: plqy (spec decision on DAO transit-parent naming) and 7ecb (lichen-core iid_from_pubkey correlation). Entangled with i72x.6 vector regen (dao_origin_signature.json) - coordinate before changing observable DAO admission behavior.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T17:22:09.529375198Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T17:51:39.254434757Z",
+  "started_at": "2026-09-09T17:50:47.837616319Z",
+  "closed_at": "2026-09-09T17:51:39.254434757Z",
+  "close_reason": "Obsolete: fixed on main by d2de30e596 (fix(node): resolve peer identity by full AddrForKey, not addr[8..]). handle_dao now calls announces.pinned_pubkey_for_routable(\u0026origin) as primary — exactly the prescribed full-address scan — with resolve_dao_signer_from_bounded_snapshot as fallback. The origin[8..] IID slice is gone. Verified on main tip: node.rs:408.",
+  "labels": [
+    "rust",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ywec.4",
+      "depends_on_id": "project-LICHEN-worker6-ywec",
+      "type": "parent-child",
+      "created_at": "2026-09-09T17:22:09.657062049Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

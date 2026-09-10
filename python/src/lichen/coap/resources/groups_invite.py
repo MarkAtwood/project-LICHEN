@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import time
 from collections import deque
 from typing import Any
 
@@ -15,6 +16,12 @@ from lichen.coap.resources.cbor_validation import _decode_single_cbor
 from lichen.coap.resources.groups_collection import (
     GroupsCollectionResource,
     _origin_locally_trusted,
+)
+from lichen.crypto.delegation_tokens import (
+    DelegationScope,
+    DelegationToken,
+    check_delegation_scope,
+    verify_delegation_token,
 )
 from lichen.crypto.identity import _pubkey_to_iid
 from lichen.group_membership import (
@@ -41,6 +48,7 @@ class GroupsInviteResource(resource.Resource):
         collection: GroupsCollectionResource | None = None,
         invitee: str | None = None,
         node_pubkey: bytes | None = None,
+        delegation_seq_cache: dict[tuple[bytes, bytes, str], int] | None = None,
     ) -> None:
         super().__init__()
         self.accepted: list[GroupInvitation] = []
@@ -53,6 +61,10 @@ class GroupsInviteResource(resource.Resource):
         self.node_id = node_id
         self.collection = collection
         self.invitee = invitee
+        # Delegation-token replay cache (spec 18.8.6 validation step 7):
+        # highest accepted seq per (delegator_iid, delegate_iid, resource).
+        # In-RAM by policy, like the invitation nonce ring.
+        self.delegation_seq_cache = delegation_seq_cache if delegation_seq_cache is not None else {}
         if node_pubkey is not None:
             if type(node_pubkey) is not bytes or len(node_pubkey) != 32:
                 raise ValueError("node_pubkey must be a 32-byte Ed25519 public key")
@@ -125,6 +137,73 @@ class GroupsInviteResource(resource.Resource):
         self.accepted.append(invitation)
         return Message(code=CHANGED)
 
+    def _admit_via_delegation(
+        self, body: dict[str, Any], invitation: GroupInvitation
+    ) -> Message | None:
+        """Delegated-authority admission (spec 18.8.6 token presentation).
+
+        The inviter could not mint this invitation directly; accept it only
+        when the document carries a ``delegation`` COSE_Sign1 token signed by
+        a roster owner or admin for this exact group. Returns None when
+        delegated authority is proven (the seq cache is burned), otherwise
+        the rejection response: BAD_REQUEST for a malformed field, FORBIDDEN
+        for any failed validation step.
+        """
+        delegation = body.get("delegation")
+        if type(delegation) is not bytes:
+            return Message(code=BAD_REQUEST)
+        try:
+            token = DelegationToken.from_cose_sign1(delegation)
+        except Exception:
+            return Message(code=BAD_REQUEST)
+        if self.roster is None:
+            # No roster means no owner/admin authority to delegate from;
+            # this path is unreachable via render_post (can_invite is only
+            # consulted when a roster exists) -- fail closed regardless.
+            return Message(code=FORBIDDEN)
+        delegator_addr: str | None = None
+        for addr, pubkey in self.pubkeys.items():
+            if _pubkey_to_iid(pubkey) == token.delegator_iid:
+                delegator_addr = addr
+                break
+        if delegator_addr is None or not (
+            delegator_addr == self.roster.owner or delegator_addr in self.roster.admins
+        ):
+            # spec 18.8.6 step 2: kid must identify a known owner or admin.
+            return Message(code=FORBIDDEN)
+        inviter_pubkey = self.pubkeys.get(invitation.inviter)
+        if inviter_pubkey is None:
+            return Message(code=FORBIDDEN)
+        delegate_iid = _pubkey_to_iid(inviter_pubkey)
+        # Delegated invitations mint member-role only: the scope bitmap has
+        # no role distinction, and promotion is owner-reserved (18.8.2).
+        if invitation.role != "member":
+            return Message(code=FORBIDDEN)
+        if self.collection is not None:
+            current_time = int(self.collection._clock())
+        else:
+            current_time = int(time.time())
+        cache_key = (token.delegator_iid, delegate_iid, invitation.group_id)
+        valid, _error = verify_delegation_token(
+            token,
+            self.pubkeys[delegator_addr],
+            delegate_iid,
+            invitation.group_id,
+            current_time,
+            cached_seq=self.delegation_seq_cache.get(cache_key),
+            is_delegator_owner=delegator_addr == self.roster.owner,
+        )
+        if not valid:
+            return Message(code=FORBIDDEN)
+        if not check_delegation_scope(token, DelegationScope.INVITE):
+            # spec 18.8.6 step 8: the exercised capability must be granted.
+            return Message(code=FORBIDDEN)
+        # Burn the seq after every validation step passes: a presented token
+        # is one-shot regardless of what the downstream ledger does with the
+        # invitation (fail-closed; the delegator re-issues seq+1 on retry).
+        self.delegation_seq_cache[cache_key] = token.payload.seq
+        return None
+
     async def render_post(self, request: Message) -> Message:
         if not request.payload:
             return Message(code=BAD_REQUEST)
@@ -142,7 +221,14 @@ class GroupsInviteResource(resource.Resource):
         if self.roster is not None and not self.roster.can_invite(
             invitation.inviter, requested_role=invitation.role
         ):
-            return Message(code=FORBIDDEN)
+            if "delegation" in body:
+                rejection = self._admit_via_delegation(body, invitation)
+                if rejection is not None:
+                    return rejection
+                # Delegated authority proven (seq burned); fall through to
+                # the invitation signature check and the invitation ledger.
+            else:
+                return Message(code=FORBIDDEN)
         verified: bool | None = None
         if invitation.inviter == self.node_id and _origin_locally_trusted(request, self.node_id):
             # Provisioning carve-out: locally authored invitations skip

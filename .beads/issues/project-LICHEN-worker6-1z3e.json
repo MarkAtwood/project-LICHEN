@@ -1,0 +1,20 @@
+{
+  "id": "project-LICHEN-worker6-1z3e",
+  "title": "Migrate tests/coap/test_lci_identity_vectors.py embedded native-profile address corpus to upstream AddrForKey",
+  "description": "RECREATED RECORD: the original bead project-LICHEN-worker6-0qcc was lost in a shared-store sync race mid-work (2026-09-09). Original scope: tests/coap/test_lci_identity_vectors.py::test_full_identity_addresses_match_key_derivation failed because test/vectors/lci_identity.json pinned stale IID-embedding primary address 2ed:4242:ead4:ac69:ed42:42ea:d4ac:6948 while post-i72x derivation produces upstream AddrForKey 206:2f7c:2006:18f7:a0f1:4791:738c:5a1f. Regenerate the lci identity vectors with upstream AddrForKey-derived addresses (oracle: pinned yggdrasil_address.json anchors, not implementation output), then flip the test. Do NOT weaken the assertion. Follow-up beads already filed: 49ca (rust key_generation.rs), 60u0 (C coap_config main.c), 3hto (corpus anchor).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T12:39:16.63475484Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T12:40:27.931327388Z",
+  "started_at": "2026-09-09T12:40:27.486996675Z",
+  "closed_at": "2026-09-09T12:40:27.931327388Z",
+  "close_reason": "Completed (supersedes sync-lost 0qcc). Migrated lci_identity.json get_full_identity + get_addrs_only addrs.primary from stale IID-embedding 2ed:4242:ead4:ac69:ed42:42ea:d4ac:6948 to upstream AddrForKey 206:2f7c:2006:18f7:a0f1:4791:738c:5a1f (packed 02062f7c200618f7a0f14791738c5a1f); encoded_hex regenerated for both vectors. Oracle: independent reimplementation of upstream yggdrasil-go AddrForKey (@422836ee), validated byte-for-byte against all 9 full-length anchors in yggdrasil_address.json incl. the genuine Go reference vector (bdbacfd8...-\u003e0200848a...); Go byte-wrap semantics for degenerate keys confirmed via all_zero_key anchor. NOT derived from implementation output; agrees with post-7pt2 native_address_from_pubkey. Original 0qcc description had the two addresses swapped in prose - fix class identical. Tests: target file 16/16 pass; stash/pop baseline diff proves the only behavior delta is the target test FAIL-\u003epass; 40 other suite failures pre-existing (o5bl/lptm/xf1v/7jcp class, unchanged). 3x codereview delegated to kimi-k3 plan agent: correctness PASS, security PASS, edge-cases PASS (its unanchored-oracle concern rebutted by methodology; cross-fixture findings filed as 49ca, 60u0, 3hto).",
+  "labels": [
+    "python",
+    "yggdrasil"
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.150",
+  "title": "[spec-gap][R-05-081/083] IPv6-in-IPv6 encapsulation gaps: C no root encapsulation, Python no tunnel; tunnel_encapsulation.json orphaned (spec 8.9)",
+  "description": "Spec 8.9: whenever the root source-routes a packet it did not originate (including in-domain 02xx /128) it MUST use IPv6-in-IPv6 per RFC 6554; inner dst stays D, outer + SRH describe strict path root-to-E; E decapsulates after verifying inner dst; route MUST NOT be emitted if incomplete/cyclic/over 8 hops; root decrements inner Hop Limit by initial Segments Left plus forwarding decrement. Classification: divergent. Rust: both directions implemented+tested (rust/lichen-gateway/src/gateway.rs:1829-1939 mesh_to_mesh, :1713-1728 inner_hop_limit_after_encapsulation, tests encapsulation_*; egress decap rust/lichen-node/src/stack.rs:648 + rpl_stack/receive.rs:307,379). C: SRH codec + egress decapsulation only (lichen/subsys/lichen/rpl/rpl_srh.c, routing/router.c:560-594, test_ipv6_in_ipv6_egress_decap) - NO root-side encapsulation builder exists. Python: SRH only (python/src/lichen/rpl/routing.py:126-427) - no IPv6-in-IPv6 at all (NextHeader enum lacks 41, python/src/lichen/ipv6/packet.py:24-34). test/vectors/tunnel_encapsulation.json (5 encapsulation + 5 decapsulation cases pinning outer_hop_limit 64, forwarding_decrement 1) has zero consumers in any stack (orphan). Suggested placement: C root encapsulation in gateway rpl_root path; Python encapsulation/decapsulation; child bead to consume tunnel_encapsulation.json in all three stacks.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T22:53:37.539069063Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T22:53:37.539069063Z",
+  "labels": [
+    "routing",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.150",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T22:53:37.661913282Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

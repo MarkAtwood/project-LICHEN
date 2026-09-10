@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.133",
+  "title": "[spec-gap][R-10-011] logfmt structured-logging baseline absent in all three stacks (spec 16.8)",
+  "description": "Spec 10-implementation.md 16.8 MUST: all implementations MUST emit diagnostic log lines in logfmt (space-separated key=value, quoted strings with spaces), with ts/level/layer/event on every line (16.8.1) and standard field names per the 16.8.1 table. Classification: not-implemented in ALL THREE stacks. Evidence: repo-wide grep for logfmt/layer=/event=/CONFIG_LICHEN_DIAG_VERBOSE/info_span -\u003e only spec/10-implementation.md matches. Current state: Rust gateway/cli use tracing-subscriber default human fmt (rust/lichen-gateway/src/bin/lichend.rs:49, lichen-cli/src/main.rs:151; no info_span! anywhere); C uses freeform LOG_* (e.g. lichen/subsys/lichen/coap/coap_msg.c:433); Python packet path uses stdlib logging with pkt_id interpolated into prose (python/src/lichen/node.py:104,915; structlog confined to sim/radio: sim/batch.py:383, sim/server.py:442, radio/sim_client.py:54). CONFIG_LICHEN_DIAG_VERBOSE (16.8.2 C note) does not exist as a Kconfig symbol. Covers rows R-10-011, R-10-013, R-10-015, R-10-016, R-10-017, R-10-018 of docs/spec-coverage/10-implementation.md. Suggested placement: one convention decision (flagged F-2 in 10-implementation-flagged.md) then per-stack work: Rust logfmt formatter or JSONL layer, Python packet path onto structlog with bound pkt_id/layer, C key=value format strings + CONFIG_LICHEN_DIAG_VERBOSE gate.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T21:27:31.852357638Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T21:27:31.852357638Z",
+  "labels": [
+    "logging",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.133",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T21:27:31.976991877Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

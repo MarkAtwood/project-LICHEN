@@ -622,3 +622,68 @@ class TestCapabilityTableReplayFloor:
             iid = bytes([0x02]) + i.to_bytes(7, "big")
             assert table.record(iid, seq=i + 1, expiry=2000, capabilities=1, egress=True) is True
             assert len(table._seq_floors) <= capacity
+
+
+# ─── Wire-bstr/payload consistency + immutability (2vp1) ─────────────────────
+
+
+def test_capability_announcement_replace_desync_rejected() -> None:
+    import dataclasses as dc
+
+    identity = Identity.from_seed(bytes(range(32)))
+    announcement = create_capability_announcement(
+        identity=identity, capabilities=Capability.EGRESS, prefix=bytes(16),
+        prefix_len=128, expiry=int(time.time()) + 3600, seq=1,
+    )
+    evil = CapabilityPayload(
+        capabilities=int(Capability.EGRESS | Capability.PREFIX_DELEGATION),
+        prefix=bytes(16), prefix_len=128, expiry=announcement.payload.expiry,
+        seq=2, announcer_iid=identity.iid,
+    )
+    with pytest.raises(ValueError, match="do not decode"):
+        dc.replace(announcement, payload=evil)
+
+
+def test_capability_announcement_is_frozen() -> None:
+    import dataclasses as dc
+
+    identity = Identity.from_seed(bytes(range(32)))
+    announcement = create_capability_announcement(
+        identity=identity, capabilities=Capability.EGRESS, prefix=bytes(16),
+        prefix_len=128, expiry=int(time.time()) + 3600, seq=1,
+    )
+    with pytest.raises(dc.FrozenInstanceError):
+        announcement.signature = b"\x00" * 48
+
+
+def test_capability_garbage_wire_bytes_raise_valueerror() -> None:
+    identity = Identity.from_seed(bytes(range(32)))
+    payload = CapabilityPayload(
+        capabilities=int(Capability.EGRESS), prefix=bytes(16), prefix_len=128,
+        expiry=int(time.time()) + 3600, seq=1, announcer_iid=identity.iid,
+    )
+    with pytest.raises(ValueError, match="do not decode"):
+        CapabilityAnnouncement(
+            payload=payload, signature=bytes(48),
+            protected_bytes=cbor2.dumps({1: SCHNORR48_ED25519_ALG}),
+            payload_bytes=cbor2.dumps([1, 2]),
+        )
+
+
+def test_capability_truncated_wire_bytes_raise_valueerror() -> None:
+    identity = Identity.from_seed(bytes(range(32)))
+    payload = CapabilityPayload(
+        capabilities=int(Capability.EGRESS), prefix=bytes(16), prefix_len=128,
+        expiry=int(time.time()) + 3600, seq=1, announcer_iid=identity.iid,
+    )
+    with pytest.raises(ValueError, match="do not decode"):
+        CapabilityAnnouncement(
+            payload=payload, signature=bytes(48),
+            protected_bytes=cbor2.dumps({1: SCHNORR48_ED25519_ALG}),
+            payload_bytes=b"\xa1\x01",  # map(1) header, truncated value
+        )
+
+
+def test_capability_from_cbor_rejects_non_map() -> None:
+    with pytest.raises(TypeError, match="CBOR map"):
+        CapabilityPayload.from_cbor(cbor2.dumps([1, 2]))

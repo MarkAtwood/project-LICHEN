@@ -1,0 +1,7 @@
+{
+  "id": "1788976076374872870-1",
+  "issue_id": "project-LICHEN-worker6-eebl",
+  "author": "Mark Atwood",
+  "text": "worker5 concurrently implemented this from the open queue before worker3's claim propagated (worker3 commit 33b33705c1 landed on main 10:43). Independent implementation converged on the same design: RSQ1 redundant slots, stage-persist-commit ordering, Baseline on persist fault, fail-closed constructors; worker5's copy additionally pinned single-slot-torn failover (gen-2 record in slot B survives torn slot A), which is already covered generically by lichen-hal storage tests. worker5 reverted its duplicate (beads-worker-5 commit 70ba548d6f) to keep the branch merge-clean; main's implementation stands.",
+  "created_at": "2026-09-09T17:47:56.37487287Z"
+}
