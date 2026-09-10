@@ -61,7 +61,7 @@ where
         };
 
         let sx126x = Sx126x::new(spi, iv, config);
-        let lora = LoRa::new(sx126x, false, delay)
+        let lora = LoRa::new(sx126x, crate::ENABLE_PUBLIC_NETWORK, delay)
             .await
             .map_err(|_| RadioError::Hardware)?;
 
