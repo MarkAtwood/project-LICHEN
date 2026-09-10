@@ -1,0 +1,130 @@
+{
+  "$schema": "./x509_cert_profile.schema.json",
+  "vector_type": "x509_cert_profile",
+  "format_version": 1,
+  "description": "X.509v3 certificate-profile wire encodings (spec/appendix-x509-cert-profile.md sections 2/4/5): Ed25519 SPKI, subjectAltName native-address binding, mesh-role extension OID and extnValue. Building blocks toward the chain-validation vectors promised by appendix section 9. Native addresses use the settled upstream Yggdrasil AddrForKey profile pinned by yggdrasil_address.json; the appendix's pre-migration SHA-512-based normative text (sections 2, 4, 8 step 4) and worked example are the rejected native profile and are NOT pinned here.",
+  "spec": "spec/appendix-x509-cert-profile.md sections 2, 4, 5, 9",
+  "oracle": {
+    "basis": "RFC 8410 (Ed25519 SPKI), RFC 5280 (SAN extension form), ITU-T X.667 (2.25 UUID arc), upstream AddrForKey pinned by test/vectors/yggdrasil_address.json#upstream_addr_for_key, spec section-5 worked table; DER cross-checked against pyca/cryptography",
+    "implementation": "hand-rolled DER writer in this generator; no lichen package imports",
+    "generator_command": "python3 test/vectors/generate_x509_cert_profile.py",
+    "freshness_command": "python3 test/vectors/generate_x509_cert_profile.py --check"
+  },
+  "constants": {
+    "ed25519_oid": "1.3.101.112",
+    "ed25519_oid_der_hex": "06032b6570",
+    "san_oid": "2.5.29.17",
+    "san_oid_der_hex": "0603551d11",
+    "mesh_role_oid": "2.25.116347725289407359125616919235271862817",
+    "mesh_role_uuid": "5787c1be-467b-5e51-92c4-77bcaeb02a21",
+    "mesh_role_oid_der_hex": "06146981af87e0efc8e7daf9a392e29df7caf5c0d421",
+    "native_address_prefix": "0200::/8",
+    "ipaddress_generalname_tag": "87",
+    "role_bits": {
+      "leaf": 0,
+      "relay": 1,
+      "gateway": 2
+    }
+  },
+  "identities": [
+    {
+      "name": "node_a",
+      "public_key_hex": "bdbacfd82240de3dcd123924cbb55256fb8dab08aa98e305528ab84f419e6efb",
+      "native_address_hex": "0200848a604fbb7e438465db8db66895",
+      "native_address_ipv6": "200:848a:604f:bb7e:4384:65db:8db6:6895",
+      "oracle_source": "test/vectors/yggdrasil_address.json#upstream_addr_for_key"
+    }
+  ],
+  "cases": [
+    {
+      "name": "spki_der_node_a",
+      "description": "Section 2 + RFC 8410: SEQUENCE { SEQUENCE { id-Ed25519 }, BIT STRING <32-byte raw key> }; parameters absent. Cross-checked against pyca/cryptography.",
+      "subject_public_key_hex": "bdbacfd82240de3dcd123924cbb55256fb8dab08aa98e305528ab84f419e6efb",
+      "spki_der_hex": "302a300506032b6570032100bdbacfd82240de3dcd123924cbb55256fb8dab08aa98e305528ab84f419e6efb"
+    },
+    {
+      "name": "san_value_der_node_a",
+      "description": "Section 4: subjectAltName extnValue content = SEQUENCE of exactly one iPAddress GeneralName ([7] primitive, 16 bytes) carrying the node native address = upstream AddrForKey(SPKI) in 0200::/8. Cross-checked against pyca/cryptography. The appendix's normative section-2/section-4/section-8-step-4 text and worked example are pre-migration (rejected SHA-512 native profile); this vector intentionally pins the settled AddrForKey form (see document description).",
+      "native_address_hex": "0200848a604fbb7e438465db8db66895",
+      "san_value_der_hex": "301287100200848a604fbb7e438465db8db66895"
+    },
+    {
+      "name": "san_extension_critical_der_node_a",
+      "description": "Full SAN Extension with critical TRUE (required when the subject DN is empty, RFC 5280 4.2.1.6): extnID id-ce-subjectAltName (2.5.29.17), critical BOOLEAN TRUE, extnValue wrapping the pinned SAN value.",
+      "san_extension_der_hex": "301e0603551d110101ff0414301287100200848a604fbb7e438465db8db66895"
+    },
+    {
+      "name": "san_extension_non_critical_der_node_a",
+      "description": "Full SAN Extension, non-critical (required when a subject DN is present): extnID id-ce-subjectAltName, no critical field, extnValue wrapping the pinned SAN value.",
+      "san_extension_der_hex": "301b0603551d110414301287100200848a604fbb7e438465db8db66895"
+    },
+    {
+      "name": "role_extnvalue_empty_bit_string_unasserted",
+      "description": "Section 5: a present-but-empty BIT STRING (no named bits) MUST be treated as unasserted, exactly as if the extension were absent; authorization MUST NOT read absence as leaf.",
+      "roles": [],
+      "bit_string_content_hex": "",
+      "extn_value_hex": "0403030100",
+      "full_extension_hex": "301b06146981af87e0efc8e7daf9a392e29df7caf5c0d4210403030100",
+      "expect_semantics": "unasserted"
+    },
+    {
+      "name": "role_oid_der",
+      "description": "Section 5 extnID: 2.25.<UUID-arc> where the arc is UUID 5787c1be-467b-5e51-92c4-77bcaeb02a21 (UUIDv5, DNS namespace, x509-mesh-role.lichen.tech) as a 128-bit integer = 116347725289407359125616919235271862817. Registration-free ITU-T X.667 arc; DER OID content cross-checks the spec's decimal arc against the UUID.",
+      "oid_dotted": "2.25.116347725289407359125616919235271862817",
+      "oid_der_hex": "06146981af87e0efc8e7daf9a392e29df7caf5c0d421"
+    },
+    {
+      "name": "role_extnvalue_leaf",
+      "description": "Section 5 worked extnValue: OCTET STRING wrapping DER BIT STRING, roles leaf",
+      "roles": [
+        "leaf"
+      ],
+      "bit_string_content_hex": "80",
+      "extn_value_hex": "040403020780",
+      "full_extension_hex": "301c06146981af87e0efc8e7daf9a392e29df7caf5c0d421040403020780"
+    },
+    {
+      "name": "role_extnvalue_relay",
+      "description": "Section 5 worked extnValue: OCTET STRING wrapping DER BIT STRING, roles relay",
+      "roles": [
+        "relay"
+      ],
+      "bit_string_content_hex": "40",
+      "extn_value_hex": "040403020640",
+      "full_extension_hex": "301c06146981af87e0efc8e7daf9a392e29df7caf5c0d421040403020640"
+    },
+    {
+      "name": "role_extnvalue_gateway",
+      "description": "Section 5 worked extnValue: OCTET STRING wrapping DER BIT STRING, roles gateway",
+      "roles": [
+        "gateway"
+      ],
+      "bit_string_content_hex": "20",
+      "extn_value_hex": "040403020520",
+      "full_extension_hex": "301c06146981af87e0efc8e7daf9a392e29df7caf5c0d421040403020520"
+    },
+    {
+      "name": "role_extnvalue_leaf_relay",
+      "description": "Section 5 worked extnValue: OCTET STRING wrapping DER BIT STRING, roles leaf+relay",
+      "roles": [
+        "leaf",
+        "relay"
+      ],
+      "bit_string_content_hex": "c0",
+      "extn_value_hex": "0404030206c0",
+      "full_extension_hex": "301c06146981af87e0efc8e7daf9a392e29df7caf5c0d4210404030206c0"
+    },
+    {
+      "name": "role_extnvalue_leaf_relay_gateway",
+      "description": "Section 5 worked extnValue: OCTET STRING wrapping DER BIT STRING, roles leaf+relay+gateway",
+      "roles": [
+        "leaf",
+        "relay",
+        "gateway"
+      ],
+      "bit_string_content_hex": "e0",
+      "extn_value_hex": "0404030205e0",
+      "full_extension_hex": "301c06146981af87e0efc8e7daf9a392e29df7caf5c0d4210404030205e0"
+    }
+  ]
+}
