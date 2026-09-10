@@ -55,7 +55,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use lichen_oscore::Context as OscoreContext;
 use sha2::{Digest, Sha512};
-use x509_parser::prelude::parse_x509_certificate;
+use x509_parser::extensions::{GeneralName, ParsedExtension};
+use x509_parser::prelude::{parse_x509_certificate, X509Certificate};
 use zeroize::Zeroizing;
 
 // Re-export Schnorr types from lichen-link
@@ -274,6 +275,7 @@ pub fn validate_pkix_chain(chain: &[&[u8]], trust_anchors: &[&[u8]]) -> Result<(
             "leaf keyUsage lacks digitalSignature".into(),
         ));
     }
+    validate_leaf_san_binding(leaf)?;
 
     for index in 0..certificates.len() - 1 {
         let certificate = &certificates[index];
@@ -309,6 +311,65 @@ pub fn validate_pkix_chain(chain: &[&[u8]], trust_anchors: &[&[u8]]) -> Result<(
                 ));
             }
         }
+    }
+    Ok(())
+}
+
+fn validate_leaf_san_binding(leaf: &X509Certificate<'_>) -> Result<(), TrustError> {
+    if leaf.subject_pki.algorithm.algorithm.to_id_string() != "1.3.101.112" {
+        return Err(TrustError::InvalidCertificate(
+            "leaf subject key must be Ed25519".into(),
+        ));
+    }
+    let public_key = leaf.subject_pki.subject_public_key.data.as_ref();
+    let public_key: &[u8; 32] = public_key.try_into().map_err(|_| {
+        TrustError::InvalidCertificate("leaf Ed25519 public key must be 32 bytes".into())
+    })?;
+    let expected = ygg_addr_from_pubkey(public_key);
+    let extension = leaf.extensions().iter().find_map(|extension| {
+        matches!(
+            extension.parsed_extension(),
+            ParsedExtension::SubjectAlternativeName(_)
+        )
+        .then_some(extension)
+    });
+    let Some(extension) = extension else {
+        return Err(TrustError::InvalidCertificate(
+            "leaf certificate SAN is required".into(),
+        ));
+    };
+    let subject_empty = leaf.subject().iter_attributes().next().is_none();
+    if extension.critical != subject_empty {
+        return Err(TrustError::InvalidCertificate(
+            "leaf certificate SAN criticality is invalid".into(),
+        ));
+    }
+    let ParsedExtension::SubjectAlternativeName(san) = extension.parsed_extension() else {
+        unreachable!("extension was selected by its parsed type");
+    };
+    let mut native_count = 0;
+    for name in &san.general_names {
+        match name {
+            GeneralName::DNSName(_) | GeneralName::RFC822Name(_) | GeneralName::URI(_) => {
+                return Err(TrustError::InvalidCertificate(
+                    "leaf certificate SAN contains a forbidden name".into(),
+                ));
+            }
+            GeneralName::IPAddress(address) if address.len() == 16 && address[0] == 0x02 => {
+                native_count += 1;
+                if *address != expected.as_slice() {
+                    return Err(TrustError::InvalidCertificate(
+                        "leaf certificate SAN address does not match subject key".into(),
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+    if native_count != 1 {
+        return Err(TrustError::InvalidCertificate(
+            "leaf certificate SAN must contain one native address".into(),
+        ));
     }
     Ok(())
 }
@@ -2611,6 +2672,21 @@ mod tests {
     }
 
     fn pkix_chain(leaf_is_ca: bool) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        use rcgen::SanType;
+        use std::net::{IpAddr, Ipv6Addr};
+
+        pkix_chain_with_sans(
+            leaf_is_ca,
+            vec![SanType::IpAddress(IpAddr::V6(Ipv6Addr::from(hex!(
+                "0200514acffcfa9dea90556802586d37"
+            ))))],
+        )
+    }
+
+    fn pkix_chain_with_sans(
+        leaf_is_ca: bool,
+        subject_alt_names: Vec<rcgen::SanType>,
+    ) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
         use rcgen::{BasicConstraints, CertificateParams, IsCa, KeyPair, KeyUsagePurpose};
 
         let mut root_params = CertificateParams::new(vec!["root.example".into()]).unwrap();
@@ -2636,7 +2712,11 @@ mod tests {
             IsCa::ExplicitNoCa
         };
         leaf_params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
-        let leaf_key = KeyPair::generate().unwrap();
+        leaf_params.subject_alt_names = subject_alt_names;
+        let leaf_key = KeyPair::from_pem(
+            "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIJ1hsZ3v/VpguoRK9JLsLMREScVpezJpGXA7rAMcrn9g\n-----END PRIVATE KEY-----",
+        )
+        .unwrap();
         let leaf = leaf_params
             .signed_by(&leaf_key, &intermediate, &intermediate_key)
             .unwrap();
@@ -2646,6 +2726,58 @@ mod tests {
     #[test]
     fn pkix_validates_signature_chain_to_configured_anchor() {
         let (leaf, intermediate, root) = pkix_chain(false);
+        validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]).unwrap();
+    }
+
+    #[test]
+    fn pkix_rejects_missing_san() {
+        let (leaf, intermediate, root) = pkix_chain_with_sans(false, Vec::new());
+        let result = validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]);
+        assert!(matches!(result, Err(TrustError::InvalidCertificate(_))));
+    }
+
+    #[test]
+    fn pkix_rejects_san_mismatch_and_duplicate_native_address() {
+        use rcgen::SanType;
+        use std::net::{IpAddr, Ipv6Addr};
+
+        let mismatch = SanType::IpAddress(IpAddr::V6(Ipv6Addr::LOCALHOST));
+        let (leaf, intermediate, root) = pkix_chain_with_sans(false, vec![mismatch]);
+        let result = validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]);
+        assert!(matches!(result, Err(TrustError::InvalidCertificate(_))));
+
+        let native = SanType::IpAddress(IpAddr::V6(Ipv6Addr::from(hex!(
+            "0200514acffcfa9dea90556802586d37"
+        ))));
+        let duplicate = SanType::IpAddress(IpAddr::V6(Ipv6Addr::from(hex!(
+            "0200514acffcfa9dea90556802586d37"
+        ))));
+        let (leaf, intermediate, root) =
+            pkix_chain_with_sans(false, vec![native, duplicate]);
+        let result = validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]);
+        assert!(matches!(result, Err(TrustError::InvalidCertificate(_))));
+    }
+
+    #[test]
+    fn pkix_rejects_forbidden_san_name() {
+        use rcgen::SanType;
+
+        let (leaf, intermediate, root) =
+            pkix_chain_with_sans(false, vec![SanType::DnsName("gateway.example".try_into().unwrap())]);
+        let result = validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]);
+        assert!(matches!(result, Err(TrustError::InvalidCertificate(_))));
+    }
+
+    #[test]
+    fn pkix_ignores_non_native_ip_san() {
+        use rcgen::SanType;
+        use std::net::{IpAddr, Ipv6Addr};
+
+        let native = SanType::IpAddress(IpAddr::V6(Ipv6Addr::from(hex!(
+            "0200514acffcfa9dea90556802586d37"
+        ))));
+        let link_local = SanType::IpAddress(IpAddr::V6(Ipv6Addr::LOCALHOST));
+        let (leaf, intermediate, root) = pkix_chain_with_sans(false, vec![native, link_local]);
         validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]).unwrap();
     }
 
