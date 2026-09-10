@@ -3,7 +3,7 @@
 Priority chain (highest to lowest):
 1. Announce-driven: use rx_channel from last Announce for known peer
 2. GNSS-synced: use synchronized_hop_channel when GNSS time available
-3. Hash-based: channel = 1 + hash_32(sfn, peer_eui) % (n_ch - 1)
+3. Hash-based: channel = 1 + hash_32(eui64, epoch_LE) % (n_ch - 1)
 4. Fallback: control channel CH0 for unknown peers / initial contact
 """
 
@@ -138,15 +138,12 @@ def select_channel(
             logger.debug("select_channel: gnss-synced channel=%d sfn=%d", ch, computed_sfn)
             return ch
 
-    # Priority 3: hash-based for known peers
+    # Priority 3: hash-based for known peers (CCP-16: EUI64+Epoch only —
+    # spec/appendix-ccp12-hopping.md §3.1).
     if peer_known and peer_eui64 is not None and len(peer_eui64) == 8:
         if n_channels <= 1:
             return 0
-        data = (
-            peer_eui64
-            + (epoch & 0xFFFFFFFF).to_bytes(4, "little")
-            + (sfn & 0xFFFFFFFF).to_bytes(4, "little")
-        )
+        data = peer_eui64 + (epoch & 0xFFFFFFFF).to_bytes(4, "little")
         h = hash_32(data)
         n = max(n_channels - 1, 1)
         ch = 1 + (h % n)
