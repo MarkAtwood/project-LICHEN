@@ -27,11 +27,6 @@ MAX_ROLLCALLS = 256
 MAX_ROLLCALL_TIMEOUT_S = 7 * 86400
 MAX_CHECKINS = 256  # Maximum stored check-ins
 
-# RFC 7967 No-Response option bitmask: suppress 2.xx/4.xx/5.xx responses.
-# Spec 18.4.1: missing/malformed/invalid SOS origin signatures are silently
-# dropped, so bad-signature paths return this instead of 4.01.
-_NO_RESPONSE_OPT = 26
-
 # SOS rate limiting per spec (per-source limits)
 SOS_COOLDOWN_S = 600  # 10-minute cooldown period per source
 SOS_HOURLY_MAX = 3  # Maximum 3 requests per hour from same source
@@ -43,6 +38,11 @@ _SOS_ENVELOPE_FIELDS = frozenset({"pubkey", "sig"})
 
 # Valid check-in status values per spec 18.6.1
 CHECKIN_STATUS_VALUES = frozenset({"ok", "help", "delayed"})
+
+# RFC 7967 No-Response option bitmask: suppress 2.xx/4.xx/5.xx responses.
+# Spec 18.4.1: missing/malformed/invalid SOS origin signatures are silently
+# dropped, so bad-signature paths return this instead of 4.01.
+_NO_RESPONSE_OPT = 26
 
 
 def _silent_drop() -> Message:
