@@ -157,13 +157,28 @@ class RootDioSignaturePayload:
 
         Raises:
             TypeError: If the payload is not a CBOR map.
+            ValueError: If a decoded field has the wrong wire type.
             KeyError: If a required field is missing.
         """
         payload_map = cbor2.loads(data)
         if not isinstance(payload_map, dict):
             raise TypeError("payload must be a CBOR map")
+        dodag_id = payload_map[_PAYLOAD_DODAG_ID]
+        if type(dodag_id) is not bytes:
+            raise ValueError("dodag_id must be bytes")
+        fields = (
+            (_PAYLOAD_INSTANCE, "instance"),
+            (_PAYLOAD_VERSION, "version"),
+            (_PAYLOAD_RANK, "rank"),
+            (_PAYLOAD_EXPIRY, "expiry"),
+            (_PAYLOAD_ROOT_SEQ, "root_seq"),
+            (_PAYLOAD_MOP, "mop"),
+        )
+        for key, name in fields:
+            if type(payload_map[key]) is not int:
+                raise ValueError(f"{name} must be an integer")
         return cls(
-            dodag_id=payload_map[_PAYLOAD_DODAG_ID],
+            dodag_id=dodag_id,
             instance=payload_map[_PAYLOAD_INSTANCE],
             version=payload_map[_PAYLOAD_VERSION],
             rank=payload_map[_PAYLOAD_RANK],
