@@ -30,7 +30,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
 from ipaddress import IPv6Address, ip_address
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, unquote
 
 import aiocoap  # no official stubs
@@ -45,10 +45,14 @@ from lichen.coap.params import (
     CongestionState,
     check_congestion_allows,
 )
-from lichen.crypto.identity import hash_32
+from lichen.crypto.identity import hash_32, yggdrasil_address
 from lichen.link.tx_queue import Priority
 
+if TYPE_CHECKING:
+    from .secure.types import _VerifiedPeer
+
 ReceiveCallback = Callable[[bytes, str], None]
+_VerifiedReceiveCallback = Callable[[bytes, str, "_VerifiedPeer | None"], None]
 DEFAULT_COAP_PORT = 5683
 _REG_NAME = re.compile(r"[A-Za-z0-9._-]+\Z")
 _logger = logging.getLogger(__name__)
@@ -389,6 +393,19 @@ class DatagramChannel(ABC):
     :meth:`congestion_level` and optionally :meth:`retry_after_ms` to
     enable congestion-aware transmission.
     """
+
+    def _set_verified_receiver(self, receiver: _VerifiedReceiveCallback) -> ReceiveCallback:
+        """Register internal delivery, returning the callback used for removal.
+
+        Raw links provide no authentication evidence. Secure channels override
+        this boundary only after successful unprotect and replay persistence.
+        """
+
+        def raw_receiver(data: bytes, source: str) -> None:
+            receiver(data, source, None)
+
+        self.set_receiver(raw_receiver)
+        return raw_receiver
 
     @abstractmethod
     def send_datagram(
@@ -743,6 +760,7 @@ class LichenRemote(interfaces.EndpointAddress):  # aiocoap lacks py.typed
         local: str | Endpoint | None = None,
         *,
         owner: object | None = None,
+        _evidence: _VerifiedPeer | None = None,
     ) -> None:
         self._peer = peer if isinstance(peer, Endpoint) else parse_channel_endpoint(peer)
         self._local = (
@@ -753,6 +771,18 @@ class LichenRemote(interfaces.EndpointAddress):  # aiocoap lacks py.typed
             else parse_channel_endpoint(local)
         )
         self._owner = owner
+        self._evidence = _evidence
+
+    @property
+    def oscore_context_id(self) -> str | None:
+        """Authenticated peer identity for resource gates, for this datagram only.
+
+        Despite the legacy attribute name, this is the bound peer's canonical
+        IPv6 identity, not the context identifier or transport source address.
+        """
+        if self._evidence is None:
+            return None
+        return str(yggdrasil_address(self._evidence.peer_pubkey))
 
     @property
     def hostinfo(self) -> str:
@@ -771,8 +801,10 @@ class LichenRemote(interfaces.EndpointAddress):  # aiocoap lacks py.typed
         return f"coap://{self._local.uri_authority}"
 
     @property
-    def blockwise_key(self) -> tuple[int, Endpoint]:
-        return (id(self._owner), self._peer)
+    def blockwise_key(self) -> tuple[int, Endpoint, _VerifiedPeer | None]:
+        # Reassembly retains the first block's remote. Never let plaintext or
+        # another verified context inherit that block's authentication evidence.
+        return (id(self._owner), self._peer, self._evidence)
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -807,7 +839,7 @@ class LichenTransport(interfaces.MessageInterface):  # aiocoap lacks py.typed
         self._shutdown_task: asyncio.Task[None] | None = None
         self._lifecycle = _AiocoapLifecycleAdapter(message_manager, channel)
         try:
-            channel.set_receiver(self._on_datagram)
+            self._receive_callback = channel._set_verified_receiver(self._on_datagram)
         except BaseException:
             self._lifecycle.close()
             raise
@@ -821,11 +853,16 @@ class LichenTransport(interfaces.MessageInterface):  # aiocoap lacks py.typed
     ) -> LichenTransport:
         return cls(message_manager, channel, local_host)
 
-    def _on_datagram(self, data: bytes, source: str) -> None:
+    def _on_datagram(self, data: bytes, source: str, evidence: _VerifiedPeer | None = None) -> None:
         try:
-            message = Message.decode(data, LichenRemote(source, self._local, owner=self))
+            message = Message.decode(
+                data, LichenRemote(source, self._local, owner=self, _evidence=evidence)
+            )
         except (error.UnparsableMessage, IndexError, struct.error, TypeError, ValueError):
             return
+        if evidence is not None:
+            # Some existing resource gates read the message rather than remote.
+            message.oscore_context_id = message.remote.oscore_context_id
         exchange_key = (message.remote, message.mid)
         active_exchanges = self._mm._active_exchanges
         matched_exchange = (
@@ -901,7 +938,7 @@ class LichenTransport(interfaces.MessageInterface):  # aiocoap lacks py.typed
         self._shutdown = True
         error: BaseException | None = None
         try:
-            self._channel.clear_receiver(self._on_datagram)
+            self._channel.clear_receiver(self._receive_callback)
         except BaseException as exc:
             error = exc
         try:

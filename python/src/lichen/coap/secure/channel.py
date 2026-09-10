@@ -29,6 +29,7 @@ from ..transport import (
     LichenRemote,
     LichenTransport,
     ReceiveCallback,
+    _VerifiedReceiveCallback,
 )
 from .memory_store import OscoreContextStore
 from .resolvers import EdhocPeerResolver, TofuPeerResolver
@@ -40,6 +41,7 @@ from .types import (
     _RequestCorrelation,
     _SendOperation,
     _UnprotectedDatagram,
+    _VerifiedPeer,
 )
 
 if TYPE_CHECKING:
@@ -226,6 +228,7 @@ class SecureDatagramChannel(DatagramChannel):
         self._edhoc_timeout = edhoc_timeout
         self._receiver: ReceiveCallback | None = None
         self._inner_receiver_registered = False
+        self._verified_receiver: _VerifiedReceiveCallback | None = None
         self._pending_edhoc: dict[str, asyncio.Future[None]] = {}
         # Temporary CoAP context and channel for EDHOC exchange (created lazily)
         self._edhoc_ctx: aiocoap.Context | None = None
@@ -736,12 +739,18 @@ class SecureDatagramChannel(DatagramChannel):
         self._inner_receiver_registered = True
         self._receiver = receiver
 
+    def _set_verified_receiver(self, receiver: _VerifiedReceiveCallback) -> ReceiveCallback:
+        raw_receiver = super()._set_verified_receiver(receiver)
+        self._verified_receiver = receiver
+        return raw_receiver
+
     def clear_receiver(self, receiver: ReceiveCallback) -> bool:
         if self._receiver == receiver:
             if self._inner_receiver_registered:
                 self._inner.clear_receiver(self._on_datagram)
                 self._inner_receiver_registered = False
             self._receiver = None
+            self._verified_receiver = None
             return True
         return False
 
@@ -864,7 +873,10 @@ class SecureDatagramChannel(DatagramChannel):
                 if result is not None and self._receiver is not None:
                     peer_key = self._endpoint_key(source)
                     try:
-                        self._receiver(result.data, source)
+                        if self._verified_receiver is not None:
+                            self._verified_receiver(result.data, source, result.evidence)
+                        else:
+                            self._receiver(result.data, source)
                     except Exception:
                         # Delivery failed: roll back the inbound mapping staged
                         # during unprotection so a peer retry starts fresh.
@@ -972,6 +984,11 @@ class SecureDatagramChannel(DatagramChannel):
                     peer_ctx.oscore.export_replay_window()
                 )
                 unprotected_msg, new_request_id = peer_ctx.oscore.unprotect(msg, request_id)
+                # Snapshot the binding used by unprotect before persistence can
+                # yield. Publish it only after the replay transaction succeeds.
+                peer_pubkey = bytes(peer_ctx.peer_pubkey)
+                context_id = bytes(peer_ctx.oscore.durable_context_id())
+                generation = peer_ctx.generation
                 replay_index, replay_bitfield = peer_ctx.oscore.export_replay_window()
                 try:
                     await self._context_store.compare_and_set_replay_window(
@@ -1024,6 +1041,15 @@ class SecureDatagramChannel(DatagramChannel):
                     unprotected_msg,
                     added_correlation,
                     correlation,
+                    # Legacy callers may provision placeholder keys. They can
+                    # still use raw delivery, but cannot assert a peer identity.
+                    _VerifiedPeer(
+                        peer_pubkey,
+                        context_id,
+                        generation,
+                    )
+                    if len(peer_pubkey) == 32
+                    else None,
                 )
             except Exception:
                 # SECURITY: Use same generic message as other drop paths to prevent
@@ -1712,6 +1738,7 @@ class SecureDatagramChannel(DatagramChannel):
         if self._inner_teardown_started:
             return None
         self._inner_teardown_started = True
+        self._verified_receiver = None
         if self._inner_receiver_registered:
             try:
                 self._inner.clear_receiver(self._on_datagram)

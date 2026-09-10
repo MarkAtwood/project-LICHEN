@@ -79,12 +79,27 @@ class _SendOperation:
     finished: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class _VerifiedPeer:
+    """Internal per-datagram proof of unprotect and committed replay state.
+
+    Contains only copied binding metadata, never a live security context or
+    secret key material. The peer key is the provisioned/EDHOC binding, not a claim
+    made by the packet's source address or outer options.
+    """
+
+    peer_pubkey: bytes
+    context_id: bytes
+    generation: int
+
+
 @dataclass
 class _UnprotectedDatagram:
     data: bytes
     message: Message
     added_correlation: _RequestCorrelation | None = None
     matched_correlation: _RequestCorrelation | None = None
+    evidence: _VerifiedPeer | None = None
 
 
 @dataclass(frozen=True)
