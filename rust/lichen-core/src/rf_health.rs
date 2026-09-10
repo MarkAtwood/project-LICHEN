@@ -792,12 +792,12 @@ mod tests {
         let (sf, _) = m.adaptive_sf_select(Some(9), None, None);
         assert_eq!(sf, 11);
 
-        // Floor (d): load_factor_fp >= 52429 floors at 11.
+        // Floor (d): load_factor_fp >= 52429 floors at 11 after step 5.
         let mut m = RfHealthMetrics::new();
         m.record_rx(10);
         m.record_load_factor(52429);
         let (sf, _) = m.adaptive_sf_select(Some(11), None, None);
-        assert_eq!(sf, 11);
+        assert_eq!(sf, 12);
     }
 
     #[test]
@@ -807,12 +807,14 @@ mod tests {
         m.record_rx(10);
         m.record_load_factor(52429);
         let (sf, _) = m.adaptive_sf_select(Some(11), None, None);
-        assert_eq!(sf, 11);
+        assert_eq!(sf, 12);
 
         let mut m = RfHealthMetrics::new();
         m.record_rx(10);
         m.record_load_factor(52428);
-        // No floor at 52428: step 4 (good SNR, low density) applies -1.
+        // No floor at 52428: step 4 applies -1 after three good cycles.
+        let _ = m.adaptive_sf_select(Some(9), None, None);
+        let _ = m.adaptive_sf_select(Some(9), None, None);
         let (sf, _) = m.adaptive_sf_select(Some(9), None, None);
         assert_eq!(sf, 8);
     }
@@ -834,7 +836,7 @@ mod tests {
 
     #[test]
     fn new_metrics_are_zeroed() {
-        let mut m = RfHealthMetrics::new();
+        let m = RfHealthMetrics::new();
         assert_eq!(m.packets_tx, 0);
         assert_eq!(m.packets_rx, 0);
         assert_eq!(m.tx_failures, 0);
@@ -902,7 +904,7 @@ mod tests {
 
     #[test]
     fn packet_loss_zero_when_no_tx() {
-        let mut m = RfHealthMetrics::new();
+        let m = RfHealthMetrics::new();
         let loss = m.packet_loss_rate_fp();
         assert_eq!(loss.as_percent(), 0);
         assert_eq!(loss.as_fp(), 0);
@@ -997,6 +999,8 @@ mod tests {
         m.record_rx(12);
         m.record_load_factor(0);
         assert_eq!(m.adaptive_sf(), 9);
+        let _ = m.adaptive_sf_select(None, None, None);
+        let _ = m.adaptive_sf_select(None, None, None);
         let (sf, allowed) = m.adaptive_sf_select(None, None, None);
         assert_eq!(sf, 9);
         assert!(allowed);
@@ -1098,9 +1102,27 @@ mod tests {
         m.record_density(2);
         m.record_rx(15);
         m.record_load_factor(0);
+        let _ = m.adaptive_sf_select(Some(8), None, None);
+        let _ = m.adaptive_sf_select(Some(8), None, None);
         let (sf, allowed) = m.adaptive_sf_select(Some(8), None, None);
         assert_eq!(sf, 7);
         assert!(allowed);
+    }
+
+    #[test]
+    fn adaptive_sf_upgrade_requires_three_qualifying_cycles() {
+        let mut m = RfHealthMetrics::new();
+        m.record_density(2);
+        m.record_rx(15);
+
+        assert_eq!(m.adaptive_sf_select(Some(8), None, None).0, 8);
+        assert_eq!(m.adaptive_sf_select(Some(8), None, None).0, 8);
+        assert_eq!(m.adaptive_sf_select(Some(8), None, None).0, 7);
+
+        m.record_density(5);
+        assert_eq!(m.adaptive_sf_select(Some(8), None, None).0, 8);
+        m.record_density(2);
+        assert_eq!(m.adaptive_sf_select(Some(8), None, None).0, 8);
     }
 
     #[test]
@@ -1192,6 +1214,8 @@ mod tests {
                 .get("ema_loss_permille")
                 .and_then(|x| x.as_f64())
                 .map(|l| (l * FP_SCALE as f64 / 1000.0) as u32);
+            let _ = m.adaptive_sf_select(assigned, util_fp, loss_fp);
+            let _ = m.adaptive_sf_select(assigned, util_fp, loss_fp);
             let (sf_sel, allowed) = m.adaptive_sf_select(assigned, util_fp, loss_fp);
             assert_eq!(sf_sel, exp_sf);
             assert!(allowed);

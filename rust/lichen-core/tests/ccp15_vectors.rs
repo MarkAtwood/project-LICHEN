@@ -206,6 +206,16 @@ fn ccp15_vectors_drive_rust_implementations() {
                 metrics.record_load_factor(u32::from(input.load_factor_permille) * FP_SCALE / 1000);
                 let utilization = u32::from(input.utilization) * FP_SCALE / 100;
                 let loss = u32::from(input.ema_loss_permille) * FP_SCALE / 1000;
+                let _ = metrics.adaptive_sf_select(
+                    Some(input.assigned_sf),
+                    Some(utilization),
+                    Some(loss),
+                );
+                let _ = metrics.adaptive_sf_select(
+                    Some(input.assigned_sf),
+                    Some(utilization),
+                    Some(loss),
+                );
                 let (sf, tx_allowed) = metrics.adaptive_sf_select(
                     Some(input.assigned_sf),
                     Some(utilization),
