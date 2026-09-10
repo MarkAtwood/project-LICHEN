@@ -76,33 +76,28 @@ while :; do
         rm -f "$REPO/.fleet-stalled"
     fi
 
-    # WASTE ALARM: cost-per-close over trailing 24h
+    # WASTE ALARM: cost-per-close against a retained 24h burn baseline.
+    # The snapshot is the window baseline: written only on the first valid
+    # observation or after a full window elapses. (Previously it was
+    # overwritten every cycle, so AGE never crossed 24h and this alarm
+    # never evaluated — lh2z.) Logic lives in fleet_burn.py for testability.
     USED=$(total_used)
-    SNAP="$STATE/burn-snapshot.json"
     NOW_S=$(date +%s)
-    if [ -f "$SNAP" ]; then
-        PREV_USED=$(python3 -c "import json; print(int(json.load(open('$SNAP'))['usage']))" 2>/dev/null || echo 0)
-        PREV_TS=$(python3 -c "import json; print(int(json.load(open('$SNAP'))['ts']))" 2>/dev/null || echo 0)
-        AGE=$((NOW_S - PREV_TS))
-        if [ "$AGE" -gt 86400 ] && [ "${CLOSES:-0}" -gt 0 ]; then
-            BURN=$((USED - PREV_USED))
-            if [ "$BURN" -gt 0 ]; then
-                CPC=$(python3 -c "print(f'{$BURN/$CLOSES:.2f}')")
-                echo "   cost-per-close (24h): \$$CPC (burn \$$BURN / $CLOSES)"
-                if [ "$CLOSES" -gt 0 ]; then
-                    OVER=$(python3 -c "print(1 if $BURN/$CLOSES > 3.0 else 0)")
-                    if [ "$OVER" = "1" ] && [ ! -f "$REPO/.fleet-waste" ]; then
-                        date '+%F %T' > "$REPO/.fleet-waste"
-                        bd create --title="[ALARM] Waste: cost-per-close \$$CPC exceeds \$3" --description="24h burn \$$BURN / $CLOSES closures = \$$CPC/close (baseline ~\$1.20). Spend buying less than half its normal function. Check: stalls? failed merge sessions? store conflicts degrading bd? self-modification issues?" -t bug -p 1 --json >/dev/null 2>&1
-                        echo "   ALARM: waste signature — \$$CPC/close"
-                    elif [ "$OVER" = "0" ]; then
-                        rm -f "$REPO/.fleet-waste"
-                    fi
-                fi
-            fi
+    WASTE=$(python3 "$REPO/scripts/fleet_burn.py" "$STATE" "$USED" "${CLOSES:-0}" "$NOW_S" 2>/dev/null)
+    W_EVAL=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('evaluated', False))" 2>/dev/null || echo False)
+    if [ "$W_EVAL" = "True" ]; then
+        W_BURN=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['burn'])")
+        W_CPC=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['cpc_str'])")
+        W_OVER=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['over'])")
+        echo "   cost-per-close (24h): \$$W_CPC (burn \$$W_BURN / $CLOSES)"
+        if [ "$W_OVER" = "True" ] && [ ! -f "$REPO/.fleet-waste" ]; then
+            date '+%F %T' > "$REPO/.fleet-waste"
+            bd create --title="[ALARM] Waste: cost-per-close \$$W_CPC exceeds \$3" --description="24h-window burn \$$W_BURN / $CLOSES closures = \$$W_CPC/close (baseline ~\$1.20). Spend buying less than half its normal function. Check: stalls? failed merge sessions? store conflicts degrading bd? self-modification issues?" -t bug -p 1 --json >/dev/null 2>&1
+            echo "   ALARM: waste signature — \$$W_CPC/close"
+        elif [ "$W_OVER" = "False" ]; then
+            rm -f "$REPO/.fleet-waste"
         fi
     fi
-    python3 -c "import json,time; json.dump({'usage': $USED, 'ts': $NOW_S}, open('$SNAP','w'))"
 
     # BURN MARKER: $2000 milestone (on record, never pauses)
     if [ "$USED" -ge 2000 ] && [ ! -f "$REPO/.fleet-burn-2000" ]; then
