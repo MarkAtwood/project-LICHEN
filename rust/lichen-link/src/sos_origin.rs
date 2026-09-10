@@ -213,7 +213,10 @@ pub fn verify_sos_origin(
 
 /// Verify and gate in one step: the signature is only accepted when both
 /// the Schnorr48 check passes **and** the sequence strictly advances the
-/// origin (fail closed otherwise — including when the gate is capacity-exhausted).
+/// origin. Fail closed on a bad signature, a non-advancing sequence, or an
+/// unknown origin at zero capacity. A *new* origin at capacity evicts the
+/// least-recently-accepted entry and is accepted (the gate is bounded, not
+/// fail-closed for new origins).
 #[cfg(all(feature = "schnorr", feature = "alloc"))]
 pub fn verify_sos_origin_gated(
     tracker: &mut OriginSequenceTracker,
