@@ -23,6 +23,7 @@ Complete index of every vector file (excluding `schema.json` and the per-family 
 | `hash_32.json` | `lichen_hash_32` FNV-1a32 primitive (basis 0x811c9dc5) |
 | `oscore.json` | OSCORE key derivation, request/response protection, replay detection (RFC 8613) |
 | `schnorr48.json` | 48-byte Schnorr signatures per draft-lichen-schnorr-00 (Appendix A vectors) |
+| `x509_cert_profile.json` | X.509 cert-profile wire encodings (appendix-x509-cert-profile §2/4/5/9): Ed25519 SPKI, SAN native-address binding (settled upstream `AddrForKey`, pinned via `yggdrasil_address.json`), mesh-role extension OID/extnValue; generator `generate_x509_cert_profile.py` |
 | `x25519.json` | X25519/Ed25519 key derivation and RFC 8032 clamping. QUARANTINE NOTE: per-vector `iid`/`ygg_addr` fields encode the rejected SHA-512 native profile (legacy/ corpus); internal-consistency pins only, not addressing oracles — regenerate against upstream `AddrForKey` when migration lands |
 
 ### Link Layer
