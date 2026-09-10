@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.121.3",
+  "title": "Python SOS: silent-drop (not 4.01) on bad/missing origin sig + AddrForKey origin addr",
+  "description": "Python slice of b7z9.121 (spec 18.4.1 + sos_signature.json:30 error_response:false). python/src/lichen/coap/resources/emergency.py:235-251 returns aiocoap.UNAUTHORIZED (4.01) for missing/malformed/invalid origin signature; spec mandates SILENT DROP (no response). Change all bad-signature early returns to silent drop. ALSO: origin_addr synthesized at emergency.py:247 as b'\\x02\\x00'+zeros+iid must become AddrForKey(pubkey) per upstream-yggdrasil-addressing (same cross-stack constraint as the C slice - land with a shared vector). Python seq gate (sos_origin.py:182-209) and trust_store pinning already conform; no change needed there. Tests: update python/tests/coap/test_sos_origin.py to assert no response (not 4.01) on bad sig.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T02:30:24.730709284Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T02:30:24.730709284Z",
+  "labels": [
+    "python",
+    "apps",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.121.3",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.121",
+      "type": "parent-child",
+      "created_at": "2026-09-10T02:30:24.855310766Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
