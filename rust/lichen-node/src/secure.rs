@@ -1868,9 +1868,11 @@ fn preflight_secure_frame(
     if coap_len > 256 - IPV6_HEADER_LEN - UDP_HEADER_LEN {
         return Err(SecureError::CoapEncode);
     }
-    // Account for the authenticated frame's mandatory signer EUI-64. Extended
-    // addressing additionally carries the eight-byte link destination.
-    let max_schc_len = if l2_destination.len() == 8 { 185 } else { 193 };
+    // The mandatory signer EUI-64 and dispatch leave 193 SCHC bytes before
+    // accounting for the link destination (zero, two, or eight bytes).
+    let max_schc_len = 193usize
+        .checked_sub(l2_destination.len())
+        .ok_or(SecureError::CoapEncode)?;
     let schc_len = if source_route.len() > 1 {
         let routing_len = 8usize
             .checked_add(
@@ -2486,6 +2488,158 @@ mod tests {
             &*events.lock().unwrap(),
             &["persist-failed", "persist", "transmit"]
         );
+    }
+
+    #[tokio::test]
+    async fn short_destination_frame_boundary_precedes_sender_reservation() {
+        use lichen_link::frame::{AddrMode, LichenFrame};
+
+        // Outer CoAP: header 4 + token 1 + OSCORE option header 1 +
+        // option value 3 (flags, PIV, KID) + payload marker 1 +
+        // ciphertext (code 1 + Uri-Path header 2 + path + AEAD tag 8).
+        // Thus paths 121/122/123 give outer CoAP 142/143/144 and Rule 255
+        // SCHC 191/192/193 (rule byte 1 + IPv6 40 + UDP 8 + CoAP).
+        // Signed short-address framing adds 64 bytes: length 1 + header 4 +
+        // destination 2 + signer 8 + dispatch 1 + signature 48.
+        for (path_len, schc_len) in [(121, 191), (122, 192), (123, 193)] {
+            let alice_id = Identity::from_seed(Seed::new([0x01; 32]));
+            let bob_id = Identity::from_seed(Seed::new([0x02; 32]));
+            let bob_iid = bob_id.iid;
+            let (radio_a, mut radio_b) = LoopbackRadio::pair();
+            let mut alice = SecureStack::new(Stack::new(radio_a, alice_id, 128, 0));
+            let mut store = RecordingStore {
+                record: None,
+                existing: SenderSequenceState {
+                    next_sequence: 7,
+                    exhausted: false,
+                },
+                events: Arc::new(Mutex::new(Vec::new())),
+                fail: false,
+            };
+            let context = OscoreContext::new(&[0xAB; 16], None, None, &[1], &[2])
+                .unwrap()
+                .restore_existing(&mut store)
+                .unwrap();
+            alice.restore_context(bob_iid, context, &mut store).unwrap();
+            store.events.lock().unwrap().clear();
+            let before = store.record;
+            let source = alice.local_addr();
+            let destination = Addr(lichen_core::addr::ygg_addr_from_pubkey(
+                bob_id.pubkey.as_bytes(),
+            ));
+            let path = "x".repeat(path_len);
+            let result = alice
+                .send_secure_get_to(
+                    SecureRoute {
+                        source: &source,
+                        destination: &destination,
+                        l2_destination: &[0x12, 0x34],
+                        source_route: &[],
+                    },
+                    &bob_iid,
+                    &[path.as_str()],
+                    &[0xAB],
+                    &mut store,
+                )
+                .await;
+            if schc_len == 191 {
+                result.unwrap();
+                assert_eq!(&*store.events.lock().unwrap(), &["persist"]);
+                assert_eq!(store.record.unwrap().1.next_sequence, 8);
+                let mut wire = [0u8; 255];
+                let packet = radio_b
+                    .receive(radio_b.rx_channel(), &mut wire, 1000)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(packet.len, 255);
+                let frame = LichenFrame::from_bytes(&wire[..packet.len]).unwrap();
+                assert_eq!(frame.addr_mode, AddrMode::Short);
+                assert_eq!(frame.dst_addr, &[0x12, 0x34]);
+                assert_eq!(frame.payload.len(), 192); // dispatch + SCHC
+                assert_eq!(frame.payload[1], 255); // uncompressed Rule 255
+            } else {
+                assert_eq!(result.unwrap_err(), SecureError::CoapEncode);
+                assert!(store.events.lock().unwrap().is_empty());
+                assert_eq!(store.record, before);
+                assert_eq!(store.existing.next_sequence, 7);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn secure_get_preserves_explicit_l2_destination() {
+        use lichen_link::frame::{AddrMode, LichenFrame};
+
+        let alice_id = Identity::from_seed(Seed::new([0x01; 32]));
+        let bob_id = Identity::from_seed(Seed::new([0x02; 32]));
+        let bob_iid = bob_id.iid;
+        let alice_pubkey = alice_id.pubkey;
+        let (radio_a, mut radio_b) = LoopbackRadio::pair();
+        let mut alice = SecureStack::new(Stack::new(radio_a, alice_id, 128, 0));
+        let mut store = RecordingStore {
+            record: None,
+            existing: SenderSequenceState {
+                next_sequence: 0,
+                exhausted: false,
+            },
+            events: Arc::new(Mutex::new(Vec::new())),
+            fail: false,
+        };
+        let context = OscoreContext::new(&[0xAB; 16], None, None, &[1], &[2])
+            .unwrap()
+            .restore_existing(&mut store)
+            .unwrap();
+        alice.restore_context(bob_iid, context, &mut store).unwrap();
+
+        let source = alice.local_addr();
+        let destination = Addr([0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9]);
+        // Fixed next hops deliberately differ from the end-to-end destination.
+        for (next_hop, mode) in [
+            (
+                &[0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0][..],
+                AddrMode::Extended,
+            ),
+            (&[0x12, 0x34][..], AddrMode::Short),
+            (&[][..], AddrMode::None),
+        ] {
+            alice
+                .send_secure_get_to(
+                    SecureRoute {
+                        source: &source,
+                        destination: &destination,
+                        l2_destination: next_hop,
+                        source_route: &[],
+                    },
+                    &bob_iid,
+                    &["sensors"],
+                    &[0xAB],
+                    &mut store,
+                )
+                .await
+                .unwrap();
+            let mut wire = [0u8; 255];
+            let packet = radio_b
+                .receive(radio_b.rx_channel(), &mut wire, 1000)
+                .await
+                .unwrap()
+                .unwrap();
+            let frame = LichenFrame::from_bytes(&wire[..packet.len]).unwrap();
+            assert_eq!(frame.dst_addr, next_hop);
+            assert_eq!(frame.addr_mode, mode);
+            // Exercise the existing Schnorr verification path, not just parsing.
+            assert!(lichen_link::schnorr::verify_frame(
+                wire[0],
+                wire[1],
+                frame.epoch,
+                frame.seqnum,
+                frame.dst_addr,
+                frame.signer_eui64,
+                frame.payload,
+                frame.mic,
+                &alice_pubkey,
+            ));
+        }
     }
 
     #[tokio::test]

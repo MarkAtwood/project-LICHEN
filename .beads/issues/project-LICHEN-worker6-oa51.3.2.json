@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-oa51.3.2",
+  "title": "Account for short next-hop frame overhead",
+  "description": "Independent correctness and robustness reviews of Rust send_coap_raw_to next-hop fix found preflight_secure_frame allows193 SCHC bytes for2-byte short destination but actual signed frame limit is191:61 fixed/signature+2destination+1dispatch+191=255.192/193 currently pass preflight then fail after OSCORE sender reservation and link sequence consumption. Fix framing preflight only, preserve crypto/context policy; cover191/192/193 boundary and no reservation on rejected sizes.",
+  "acceptance_criteria": "Boundary regression independently checks wire overhead and state unchanged on oversize preflight rejection; existing secure/stack tests pass; triple independent review clear.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T19:06:52.522949083Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T19:36:31.127663368Z",
+  "closed_at": "2026-09-10T19:36:31.127663368Z",
+  "close_reason": "Short-destination overhead fixed193-len; regression failed before fix and now proves191-byte success/192-193 rejection before state reservation;15 secure tests pass; three independent final reviews clear.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-oa51.3.2",
+      "depends_on_id": "project-LICHEN-worker6-oa51.3",
+      "type": "parent-child",
+      "created_at": "2026-09-10T19:06:52.671840677Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

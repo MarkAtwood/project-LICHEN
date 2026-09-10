@@ -403,7 +403,7 @@ impl<R: Radio> Stack<R> {
         src: &Addr,
         dst: &Addr,
         coap: &[u8],
-        _l2_destination: &[u8],
+        l2_destination: &[u8],
         source_route: &[[u8; 16]],
         priority: Priority,
     ) -> Result<(), TxError> {
@@ -450,7 +450,7 @@ impl<R: Radio> Stack<R> {
         let mut wire = [0u8; MAX_FRAME_SIZE];
         let wire_len = self
             .link
-            .build_frame(epoch, seqnum, &[], l2_data, &mut wire)
+            .build_frame(epoch, seqnum, l2_destination, l2_data, &mut wire)
             .map_err(|e| match e {
                 FrameError::BufferTooSmall(_) => TxError::BufferTooSmall,
                 _ => TxError::FrameEncode,
