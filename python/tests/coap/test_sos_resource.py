@@ -612,7 +612,12 @@ class TestSosNonConfirmableSilentDrop:
         client, server, sos = await _setup()
         try:
             # Positive control: the server answers over this transport.
-            resp = await client.request(Message(code=GET, uri="coap://srv/sos")).response
+            # wait_for matches the drop wait below: a wedged SUT fails fast
+            # instead of stalling ~93s in aiocoap CON retransmission.
+            resp = await asyncio.wait_for(
+                client.request(Message(code=GET, uri="coap://srv/sos")).response,
+                timeout=1.0,
+            )
             assert resp.code == aiocoap.CONTENT
 
             body = cbor2.dumps({"from": _EUI.hex(), "t": _T0})
@@ -629,7 +634,10 @@ class TestSosNonConfirmableSilentDrop:
             assert sos._active is False
 
             # Positive control: server survived the drop; state is inactive.
-            resp = await client.request(Message(code=GET, uri="coap://srv/sos")).response
+            resp = await asyncio.wait_for(
+                client.request(Message(code=GET, uri="coap://srv/sos")).response,
+                timeout=1.0,
+            )
             assert resp.code == aiocoap.CONTENT
             assert cbor2.loads(resp.payload)["active"] is False
         finally:
