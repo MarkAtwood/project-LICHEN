@@ -157,6 +157,7 @@ EDHOC_REGRESSION_DESCRIPTION = (
 )
 L2_DISPATCH_SCHC = 0x14
 L2_DISPATCH_ROUTING = 0x15
+L2_DISPATCH_SOS = 0x16
 
 LL_SRC = IPv6Address("fe80::1")
 LL_DST = IPv6Address("fe80::2")
@@ -580,15 +581,28 @@ def l2_payload_vectors() -> list[dict]:
             "wrapped": bytes([L2_DISPATCH_ROUTING]).hex(),
         },
         {
-            "name": "reserved_0x16",
+            "name": "sos_alert_dispatch",
             "description": (
-                "Dispatch 0x16 is unassigned in the L2 namespace and must not be "
-                "confused with the unrelated RPL DODAG Version option type."
+                "Authenticated L2 SOS dispatch (0x16) wrapping a §18.4.2 CBOR "
+                "alert map fragment. SOS is NOT SCHC-compressed; relays classify "
+                "solely by this byte (spec 02-physical-link.md §4.1, "
+                "12-apps.md §18.4.3)."
             ),
-            "dispatch": 0x16,
+            "dispatch": L2_DISPATCH_SOS,
+            "kind": "sos",
+            "body": "a26274731a",
+            "wrapped": (bytes([L2_DISPATCH_SOS]) + bytes.fromhex("a26274731a")).hex(),
+        },
+        {
+            "name": "malformed_sos_dispatch_only",
+            "description": (
+                "A defined SOS dispatch without its required CBOR body byte "
+                "is malformed and must fail closed."
+            ),
+            "dispatch": L2_DISPATCH_SOS,
             "kind": "unknown",
-            "body": "01",
-            "wrapped": "1601",
+            "body": "",
+            "wrapped": bytes([L2_DISPATCH_SOS]).hex(),
         },
     ]
 

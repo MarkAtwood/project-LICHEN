@@ -30,6 +30,8 @@ ZTEST(l2_dispatch, test_all_dispatch_octets_and_short_payloads_fail_closed)
 			expected = LICHEN_L2_PAYLOAD_SCHC;
 		} else if (dispatch == LICHEN_L2_DISPATCH_ROUTING) {
 			expected = LICHEN_L2_PAYLOAD_ROUTING;
+		} else if (dispatch == LICHEN_L2_DISPATCH_SOS) {
+			expected = LICHEN_L2_PAYLOAD_SOS;
 		}
 		zassert_equal(lichen_l2_payload_classify(payload, sizeof(payload)), expected,
 			      "dispatch 0x%02x", dispatch);
@@ -40,9 +42,28 @@ ZTEST(l2_dispatch, test_all_dispatch_octets_and_short_payloads_fail_closed)
 	zassert_equal(lichen_l2_payload_classify(NULL, 0U), LICHEN_L2_PAYLOAD_UNKNOWN);
 }
 
+ZTEST(l2_dispatch, test_sos_dispatch_classifies_and_short_fails_closed)
+{
+	/* spec 02-physical-link.md §4.1 / 12-apps.md §18.4.3: dispatch 0x16
+	 * carries the §18.4.2 CBOR alert map, NOT SCHC-compressed. */
+	static const uint8_t sos[] = {LICHEN_L2_DISPATCH_SOS, 0xa2U, 0x62U};
+	static const uint8_t sos_short[] = {LICHEN_L2_DISPATCH_SOS};
+	size_t body_len = 0U;
+	const uint8_t *body;
+
+	zassert_equal(lichen_l2_payload_classify(sos, sizeof(sos)),
+		      LICHEN_L2_PAYLOAD_SOS);
+	zassert_equal(lichen_l2_payload_classify(sos_short, sizeof(sos_short)),
+		      LICHEN_L2_PAYLOAD_UNKNOWN);
+	body = lichen_l2_payload_body(sos, sizeof(sos), &body_len);
+	zassert_not_null(body);
+	zassert_equal(body_len, sizeof(sos) - 1U);
+	zassert_equal(body[0], 0xa2U);
+}
+
 ZTEST(l2_dispatch, test_reserved_and_malformed_inputs_do_not_expose_body)
 {
-	static const uint8_t reserved[] = {0x16U, 0x01U};
+	static const uint8_t reserved[] = {0x17U, 0x01U};
 	static const uint8_t schc_short[] = {LICHEN_L2_DISPATCH_SCHC};
 	static const uint8_t routing_short[] = {LICHEN_L2_DISPATCH_ROUTING};
 	size_t body_len = SIZE_MAX;

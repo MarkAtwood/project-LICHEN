@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from lichen.constants import L2_DISPATCH_ROUTING, L2_DISPATCH_SCHC
+from lichen.constants import L2_DISPATCH_ROUTING, L2_DISPATCH_SCHC, L2_DISPATCH_SOS
 
 L2_ROUTING_TYPE_ANNOUNCE = 0x01
 
@@ -17,11 +17,13 @@ class L2PayloadKind(Enum):
     The first byte of an authenticated L2 payload indicates its type:
     - SCHC: SCHC-compressed IPv6 packet
     - ROUTING: Routing protocol message (Announce, RPL, LOADng)
+    - SOS: SOS emergency alert (dispatch 0x16, spec 02-physical-link.md §4.1)
     - UNKNOWN: Unrecognized dispatch byte
     """
 
     SCHC = "schc"
     ROUTING = "routing"
+    SOS = "sos"
     UNKNOWN = "unknown"
 
 
@@ -35,6 +37,8 @@ def classify_l2_payload(payload: bytes) -> L2PayloadKind:
         return L2PayloadKind.SCHC
     if payload[0] == L2_DISPATCH_ROUTING:
         return L2PayloadKind.ROUTING
+    if payload[0] == L2_DISPATCH_SOS:
+        return L2PayloadKind.SOS
     return L2PayloadKind.UNKNOWN
 
 
@@ -49,3 +53,12 @@ def wrap_schc_payload(schc_payload: bytes) -> bytes:
 
 def wrap_routing_payload(routing_payload: bytes) -> bytes:
     return bytes([L2_DISPATCH_ROUTING]) + routing_payload
+
+
+def wrap_sos_payload(sos_cbor: bytes) -> bytes:
+    """Prefix a §18.4.2 CBOR SOS alert map with the L2 SOS dispatch byte.
+
+    The body is NOT SCHC-compressed (SOS is small and latency-critical,
+    spec 02-physical-link.md §4.1).
+    """
+    return bytes([L2_DISPATCH_SOS]) + sos_cbor

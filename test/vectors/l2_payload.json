@@ -44,12 +44,20 @@
       "wrapped": "15"
     },
     {
-      "name": "reserved_0x16",
-      "description": "Dispatch 0x16 is unassigned in the L2 namespace and must not be confused with the unrelated RPL DODAG Version option type.",
+      "name": "sos_alert_dispatch",
+      "description": "Authenticated L2 SOS dispatch (0x16) wrapping a \u00a718.4.2 CBOR alert map fragment. SOS is NOT SCHC-compressed; relays classify solely by this byte (spec 02-physical-link.md \u00a74.1, 12-apps.md \u00a718.4.3).",
+      "dispatch": 22,
+      "kind": "sos",
+      "body": "a26274731a",
+      "wrapped": "16a26274731a"
+    },
+    {
+      "name": "malformed_sos_dispatch_only",
+      "description": "A defined SOS dispatch without its required CBOR body byte is malformed and must fail closed.",
       "dispatch": 22,
       "kind": "unknown",
-      "body": "01",
-      "wrapped": "1601"
+      "body": "",
+      "wrapped": "16"
     }
   ]
 }
