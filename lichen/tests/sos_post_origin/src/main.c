@@ -79,15 +79,36 @@ static const uint8_t fixture_sig_accept[48] = {
 	0x31, 0x15, 0xba, 0xd0, 0x44, 0xa5, 0x4e, 0x09,
 };
 
-/* Same signer/payload but the transcript origin is the legacy synthesized
+/* Reject fixture: same alert shape with the inner seq bumped to 2, and a
+ * trailer Origin Sequence of 2. The distinct trailer seq keeps the reject
+ * arm load-bearing against the accept arm's committed gate state: with
+ * last_seq=1 already committed for this origin, a frame carrying seq=2
+ * passes the monotonic gate, so a verify-skipping regression in
+ * coap_server.c would emit a response and fail this test instead of
+ * being masked by the gate (security review pass 2, finding 1). */
+#define FIXTURE_REJECT_SEQ 2ULL
+
+static const uint8_t fixture_cbor_reject[] = {
+	0xa4, 0x64, 0x74, 0x79, 0x70, 0x65, 0x63, 0x73,
+	0x6f, 0x73, 0x64, 0x6e, 0x6f, 0x64, 0x65, 0x78,
+	0x27, 0x30, 0x32, 0x30, 0x32, 0x3a, 0x66, 0x35,
+	0x36, 0x38, 0x3a, 0x33, 0x39, 0x37, 0x33, 0x3a,
+	0x32, 0x34, 0x33, 0x37, 0x3a, 0x31, 0x36, 0x64,
+	0x64, 0x3a, 0x64, 0x36, 0x36, 0x64, 0x3a, 0x65,
+	0x38, 0x66, 0x35, 0x3a, 0x30, 0x36, 0x38, 0x61,
+	0x62, 0x74, 0x73, 0x1a, 0x66, 0x53, 0x6a, 0x90,
+	0x63, 0x73, 0x65, 0x71, 0x02,
+};
+
+/* Same signer/alert but the transcript origin is the legacy synthesized
  * 0x02||0*7||iid address (must be rejected: silent drop). */
 static const uint8_t fixture_sig_legacy[48] = {
-	0x93, 0x64, 0xf6, 0xb2, 0xcb, 0xff, 0x71, 0xe1,
-	0x29, 0x12, 0xc8, 0x1a, 0x99, 0x9c, 0x41, 0xc3,
-	0xe0, 0x09, 0xce, 0xe3, 0x85, 0x9c, 0x19, 0xdf,
-	0x47, 0x24, 0x3a, 0xa1, 0x28, 0x92, 0x1b, 0x71,
-	0xb3, 0xf7, 0xb5, 0x02, 0xc6, 0x5a, 0x27, 0x9e,
-	0x58, 0xeb, 0x57, 0x45, 0xd9, 0xf4, 0xdf, 0x00,
+	0x14, 0xc1, 0xe5, 0x72, 0xe9, 0x0a, 0xe9, 0xec,
+	0x13, 0x7d, 0x72, 0xb7, 0x37, 0xac, 0x66, 0xf9,
+	0xe8, 0xd0, 0x55, 0x36, 0xe7, 0x6a, 0xe9, 0x55,
+	0x9a, 0x16, 0x49, 0x53, 0xed, 0x3c, 0xd1, 0x56,
+	0x3e, 0xa9, 0x17, 0x5f, 0x05, 0xee, 0x78, 0x82,
+	0x65, 0x3e, 0x29, 0x28, 0x4c, 0x4c, 0xef, 0x05,
 };
 
 /* ------------------------------------------------------------------ */
@@ -195,20 +216,21 @@ int coap_oscore_authorize_mutating(struct coap_resource *resource,
 /* ------------------------------------------------------------------ */
 
 static void init_sos_post(struct coap_packet *request, uint8_t *buf,
-			  size_t buf_size, const uint8_t *sig)
+			  size_t buf_size, const uint8_t *cbor, size_t cbor_len,
+			  uint64_t origin_seq, const uint8_t *sig)
 {
 	uint8_t seq_be[8];
 
 	for (int i = 7; i >= 0; i--) {
-		seq_be[7 - i] = (uint8_t)(FIXTURE_SEQ >> (8 * i));
+		seq_be[7 - i] = (uint8_t)(origin_seq >> (8 * i));
 	}
 
 	zassert_ok(coap_packet_init(request, buf, (uint16_t)buf_size,
 				    COAP_VERSION_1, COAP_TYPE_CON, 0U, NULL,
 				    COAP_METHOD_POST, 0x1234U));
 	zassert_ok(coap_packet_append_payload_marker(request));
-	zassert_ok(coap_packet_append_payload(request, fixture_cbor,
-					      (uint16_t)sizeof(fixture_cbor)));
+	zassert_ok(coap_packet_append_payload(request, cbor,
+					      (uint16_t)cbor_len));
 	zassert_ok(coap_packet_append_payload(request, seq_be,
 					      (uint16_t)sizeof(seq_be)));
 	zassert_ok(coap_packet_append_payload(request, sig, 48U));
@@ -254,6 +276,7 @@ ZTEST(sos_post_origin, test_addrforkey_transcript_accepted_then_replay_dropped)
 	int ret;
 
 	init_sos_post(&request, request_buf, sizeof(request_buf),
+		      fixture_cbor, sizeof(fixture_cbor), FIXTURE_SEQ,
 		      fixture_sig_accept);
 	init_global_addr(&addr);
 
@@ -268,6 +291,7 @@ ZTEST(sos_post_origin, test_addrforkey_transcript_accepted_then_replay_dropped)
 
 	/* Same bytes again: replay must be dropped silently (no response). */
 	init_sos_post(&request, request_buf, sizeof(request_buf),
+		      fixture_cbor, sizeof(fixture_cbor), FIXTURE_SEQ,
 		      fixture_sig_accept);
 	ret = lichen_sos.post(&lichen_sos, &request, (struct sockaddr *)&addr,
 			      sizeof(addr));
@@ -290,7 +314,8 @@ ZTEST(sos_post_origin, test_legacy_transcript_signature_silently_dropped)
 	int ret;
 
 	init_sos_post(&request, request_buf, sizeof(request_buf),
-		      fixture_sig_legacy);
+		      fixture_cbor_reject, sizeof(fixture_cbor_reject),
+		      FIXTURE_REJECT_SEQ, fixture_sig_legacy);
 	init_global_addr(&addr);
 
 	ret = lichen_sos.post(&lichen_sos, &request, (struct sockaddr *)&addr,
