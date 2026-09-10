@@ -55,7 +55,7 @@ Response:
                              |
                     +--------+--------+
                     |  Border Router  |
-                    | native /128     |
+                    | Yggdrasil /128  |
                     | DODAG Root      |
                     +--------+--------+
                              |
@@ -63,7 +63,7 @@ Response:
             |                                 |
     +-------+-------+                 +-------+-------+
     |   Router A    |                 |   Router B    |
-    | native /128   |                 | native /128   |
+    | Yggdrasil /128|                 | Yggdrasil /128|
     +-------+-------+                 +-------+-------+
             |                                 |
       +-----+-----+                     +-----+-----+
