@@ -14,12 +14,13 @@ static void fixture_assert(bool condition);
 
 #include "tunnel_auth_vectors.h"
 
-static struct lichen_tunnel_auth_ctx fresh_with(const uint8_t root[8], const uint8_t pubkey[32])
+static struct lichen_tunnel_auth_ctx fresh_with(const uint8_t root[8], const uint8_t egress[16],
+						const uint8_t pubkey[32])
 {
 	struct lichen_tunnel_auth_ctx ctx;
 	struct lichen_tunnel_crypto crypto;
 	zassert_ok(lichen_tunnel_auth_default_crypto(&crypto));
-	zassert_ok(lichen_tunnel_auth_init(&ctx, egress_iid, egress_addr, root, pubkey, &crypto));
+	zassert_ok(lichen_tunnel_auth_init(&ctx, egress_iid, egress, root, pubkey, &crypto));
 	return ctx;
 }
 
