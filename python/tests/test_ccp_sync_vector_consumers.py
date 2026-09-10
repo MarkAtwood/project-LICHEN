@@ -461,7 +461,7 @@ def test_hyphen_hash_based_peer_rendezvous_vector_literal() -> None:
     vec = _case(CCP9_HYPHEN, "hash_based_peer_rendezvous")
     assert vec["mechanism"] == "hash_based"
     eui64 = bytes.fromhex(vec["peer_eui64"])
-    ch = select_channel(peer_known=True, peer_eui64=eui64, sfn=vec["sfn"], epoch=0,
+    ch = select_channel(peer_known=True, peer_eui64=eui64, epoch=0,
                         n_channels=vec["n_channels"])
     assert ch == vec["expected_channel"]
 

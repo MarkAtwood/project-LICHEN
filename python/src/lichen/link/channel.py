@@ -100,7 +100,9 @@ def select_channel(
         peer_eui64: Peer's EUI-64 for hash-based selection.
         peer_known: Whether this peer is known (has been heard from before).
         announce_rx_channel: rx_channel from peer's last Announce, if any.
-        sfn: Superframe number for hash-based calculation.
+        sfn: Unused. Retained for call-site compatibility; priority 3 hashes
+            EUI64+Epoch only (CCP-16), and priority 2 derives its own SFN
+            from the time provider.
         epoch: Current epoch for hash seeding.
         n_channels: Number of available channels (default 8).
         time_provider: Optional time provider for GNSS-synced hopping.
