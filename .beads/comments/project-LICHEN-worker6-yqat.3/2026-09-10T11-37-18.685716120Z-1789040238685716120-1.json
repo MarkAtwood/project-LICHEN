@@ -1,0 +1,7 @@
+{
+  "id": "1789040238685716120-1",
+  "issue_id": "project-LICHEN-worker6-yqat.3",
+  "author": "opencode-worker-8",
+  "text": "Released worker8 2026-09-10: core wrap_sos_payload/classifier landed in 9c9da821a4, but no lichen-node SOS sender or canonical CBOR construction exists. stack.rs only exposes IPv6/SCHC transmit paths; rpl_stack/receive.rs drops Sos. Completing this leaf requires a new node API and integration design, beyond the stated narrow scope.",
+  "created_at": "2026-09-10T11:37:18.68571612Z"
+}
