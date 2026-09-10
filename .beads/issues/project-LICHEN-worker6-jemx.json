@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-jemx",
+  "title": "docs/spec-coverage/appendix-ccp12-hopping.md stale after b7z9.173 renumbering",
+  "description": "Codereview of b7z9.173 (correctness pass, kimi-k3). The spec fix renumbered the duplicate '### 4.3' headings (Example Calculation is now §4.4, Desync Recovery now §4.5) and fixed the 'N = MAX(8, 3) = 8' example contradiction. The coverage doc was not propagated: docs/spec-coverage/appendix-ccp12-hopping.md:9-11 still says '§4.3 appears twice in the spec (heading numbering bug)' and cites old numbers §4.3a/§4.3b; line 44 still flags the N=MAX(8,3) contradiction as present; line 47 cites §4.3a; line 48 cites §4.4 for desync recovery. Update the coverage rows to the new numbering and mark the resolved items.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T05:26:09.881808394Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-09-10T06:04:47.851345526Z",
+  "labels": [
+    "link"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-jemx",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.173",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T05:26:10.047521277Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

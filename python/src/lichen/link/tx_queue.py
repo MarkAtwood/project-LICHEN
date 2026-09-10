@@ -283,6 +283,10 @@ class TxQueue:
         self._avg_latency_ema: float = 0.0
         self._pkt_id: int = 0
 
+    def now(self) -> int:
+        """Current queue time in monotonic ms (for explicit deadline callers)."""
+        return self._clock()
+
     def set_pkt_id_source(self, source: Callable[[], int]) -> None:
         """Share the node-wide pkt_id counter with this queue.
 

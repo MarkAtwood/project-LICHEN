@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.121.4",
+  "title": "Rust SOS: add per-origin monotonic seq gate + AddrForKey origin addr on RX/TX",
+  "description": "Rust slice of b7z9.121 (spec 18.4.1). Rust lichen-node SOS RX path has NO per-origin monotonic Origin Sequence gate (C gate exists but unwired, Python has one) - add last-seen-per-origin tracking in the SOS RX handler and reject non-advancing sequences. Also synthesize origin IPv6 via AddrForKey(pubkey) (lichen-core addr.rs) on both TX (sign) and RX (verify), not any 0200::IID synthesis. Rust is the only stack with a real pinned transcript digest (sos_origin.rs:160-173) - extend that oracle to cover the AddrForKey origin address and the seq gate. Cross-stack wire compat: coordinate with C/Python address slices.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T02:30:25.118708128Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T03:30:14.679004911Z",
+  "closed_at": "2026-09-10T03:30:14.679004911Z",
+  "close_reason": "Implemented in rust/lichen-link/src/sos_origin.rs + lib.rs re-exports (landed commit 15386220f4): (1) OriginSequenceTracker — per-origin monotonic u64 gate, capacity-bounded (default 256), touch-ordered least-recently-accepted eviction, zero-capacity fail-closed, mirrors python OriginSequenceTracker; (2) origin_addr_from_pubkey — upstream yggdrasil-go AddrForKey of raw pubkey bytes, ungated (no schnorr coupling); (3) sign_sos_origin_for_key — TX against the AddrForKey origin; (4) verify_sos_origin_gated — Schnorr48 verify first, gate accept only after verify (forgery never advances the gate). Tests: 14 unit tests pass (--all-features); gate semantics, eviction order, replay rejection, forgery-never-advances, AddrForKey pinned against external test/vectors/yggdrasil_address.json upstream_addr_for_key oracle; clippy --all-features --all-targets -D warnings clean; cargo fmt applied. 3x codereview delegated to kimi-k3 (correctness/security/edge): 5 findings filed as new beads (P2 default-feature test build break, P3 gated-verify origin_addr binding obligation, P3 dead Seed import [6tw3], P3 gated-verify doc fail-closed wording [z3vn], P3 u64::MAX boundary test [ez7n]). 6tw3/z3vn/ez7n closed in tail batch; fgmi (eviction-loses-replay-state doc) also closed. NOTE: this close was lost in a store merge overnight; code + tests verified intact on HEAD before re-closing.",
+  "labels": [
+    "rust",
+    "apps",
+    "spec-gap",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.121.4",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.121",
+      "type": "parent-child",
+      "created_at": "2026-09-10T02:30:25.263772974Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

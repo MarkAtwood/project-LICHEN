@@ -24,7 +24,7 @@ Every protocol layer uses existing IETF standards:
 ### 1.2. Design Goals
 
 1. **Real IPv6:** Globally routable addresses, not proprietary node IDs
-2. **Efficient:** SCHC compresses headers to 6-15 bytes
+2. **Efficient:** SCHC compresses IPv6+UDP+CoAP headers to 23 bytes (link-local, Rule 0) or 37 bytes (Yggdrasil, Rule 1)
 3. **Authenticated:** Every packet cryptographically signed
 4. **Interoperable:** Standard CoAP/MQTT-SN applications work unmodified
 5. **Mesh:** RPL provides multi-hop routing without central coordination

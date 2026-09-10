@@ -47,7 +47,7 @@ Multi-byte integers unsigned big-endian (network order). Full byte layout:
 | Offset | Bytes | Field          | Description |
 |--------|-------|----------------|-------------|
 | 0      | 4     | epoch          | u32 BE schedule generation and SFN base |
-| 4      | 1     | num_slots      | u8 (default 8); hash modulus |
+| 4      | 1     | num_slots      | u8 (default 8); hash modulus; MUST be nonzero — receivers MUST reject a beacon with num_slots == 0 |
 | 5      | 4     | sfn            | u32 BE superframe number |
 | 9      | 4     | timestamp      | u32 BE for epoch_floor validation |
 | 13     | 1     | flags          | bits 0=scheduled, 1=CSMA, 2=CH0-RX, 3=GNSS-PPS, 4-7=0 |

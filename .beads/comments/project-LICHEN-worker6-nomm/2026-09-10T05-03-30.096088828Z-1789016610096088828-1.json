@@ -1,0 +1,7 @@
+{
+  "id": "1789016610096088828-1",
+  "issue_id": "project-LICHEN-worker6-nomm",
+  "author": "Mark Atwood",
+  "text": "Slice-A inventory result (closed via comment): (a) python/schc/headers.py:295 has explicit ULA fd00::/8 predicate — delete and simplify is_mesh_local; (b) python/coap/node_channel.py docstrings at lines 8-9 \u0026 46-47 legalize legacy fd00 prefix — reword to 02xx-only; (c) spec/comment hygiene: rust/lichen-node/src/node.rs/hybrid.rs, python/routing/router.py contain 'ULA is external' prose — sweep wording; (d) test-vector sites: python/tests/loadng/test_{discovery,messages,error,cache}.py use fd00::1/2/3 placeholder addresses — migrate to 02xx::/8; (e) rust/lichen-ipv6/src/lib.rs and rust/lichen-core/src/addr.rs 'is unique local' helpers are utilities, not callers; leave or deprecate. Acceptability of file list above establishes slice B scope.",
+  "created_at": "2026-09-10T05:03:30.096088828Z"
+}

@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-2hp4",
+  "title": "schc CMakeLists lists two authority implementations; Zephyr link breaks on duplicate symbols",
+  "description": "On main (post dcc757cfcc 'authenticated session authority lifecycle (l1qw.3.7.6.3)'), lichen/subsys/lichen/schc/CMakeLists.txt lists BOTH schc_session_authority.c (new lifecycle impl, header cites l1qw.3.7.6.3) and schc_authority.c (original trust-record impl). Both define lichen_schc_authority_init / lichen_schc_authority_revoke (different signatures + data models), so ANY Zephyr build pulling the schc module fails at link: 'multiple definition of lichen_schc_authority_revoke' (schc_authority.c.obj vs schc_session_authority.c.obj). Repro on heft: source ~/Developer/lichen-env.sh \u0026\u0026 west build -b qemu_x86 -d \u003cbuild\u003e lichen/tests/tunnel_auth_zephyr -- -DZEPHYR_EXTRA_MODULES=$PWD/lichen (also blocks every other schc-dependent Zephyr test/app). Host tests are unaffected (each test CMakeLists compiles exactly one file). Resolution belongs to l1qw.3.7.6 (the session-authority family): either schc_session_authority.c supersedes schc_authority.c (drop the old file + port its host test schc_authority/) or the new impl needs its own symbol namespace (l1qw.3.7.6's adjudication - the two models are not drop-in equivalents, so the implementer must decide, not a drive-by). Filed discovered-from b7z9.93 because the collision blocked the tunnel_auth_zephyr verification build (route_hash 16-byte migration).",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T03:06:15.383085808Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T03:25:51.340818852Z",
+  "started_at": "2026-09-10T03:10:05.926629225Z",
+  "closed_at": "2026-09-10T03:25:51.340818852Z",
+  "close_reason": "Fixed: removed superseded schc_authority.c from zephyr_library_sources in lichen/subsys/lichen/schc/CMakeLists.txt. Resolution per bead adjudication: schc_session_authority.c (dcc757cfcc, l1qw.3.7.6.3, the impl production schc_session_control.c actually calls) supersedes schc_authority.c (3867820349, orphaned — only its own host test references it, compiling it directly so unaffected). Verified on heft: (a) BEFORE, linking schc_authority.o + schc_session_authority.o reproduces the exact bead error 'multiple definition of lichen_schc_authority_init/install/revoke'; (b) AFTER, schc_authority.c appears 0 times in CMakeLists so the module link input no longer contains it. tunnel_auth_zephyr Zephyr build now progresses past the schc module (only remaining failure is a PRE-EXISTING unrelated main.c 'fresh_with' conflicting-types bug, out of scope). Host tests all pass: schc_authority 11/11, schc_session_authority 6/6, schc_session_control 7/7. Codereview 3x kimi-k3 all PASS; hygiene finding filed as orze (superseded files remain in-tree). Heft restored clean.",
+  "labels": [
+    "schc",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-2hp4",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.93",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T03:06:15.533358263Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

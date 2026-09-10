@@ -45,6 +45,8 @@ def harness():
 @pytest.mark.asyncio
 async def test_activation_starts_boost_timer(harness) -> None:
     clock, resource, driver, pulses = harness
+    # Dummy 16-byte 0200::/8 origin (activate() requires 16 bytes; the value
+    # itself is never asserted). Distinct byte pairs keep the length obvious.
     resource.activate(bytes.fromhex("02001111222233334444555566667777"), clock.t)
     driver.tick()
     assert driver._last_boost == clock.t

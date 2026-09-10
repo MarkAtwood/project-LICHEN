@@ -158,10 +158,24 @@ bool lichen_rpl_root_send_dio(struct lichen_rpl_root *root)
 	/* Build DODAG config option */
 	struct lichen_rpl_dodag_config dcfg;
 	lichen_rpl_dodag_config_init(&dcfg);
-	dcfg.dio_int_min = CONFIG_LICHEN_RPL_TRICKLE_IMIN_MS / 1000;
-	if (dcfg.dio_int_min < 1) {
-		dcfg.dio_int_min = 1;
+	/* RFC 6550 6.7.6: dio_int_min is log2 of the Trickle Imin in
+	 * milliseconds, NOT Imin/1000. CONFIG_LICHEN_RPL_TRICKLE_IMIN_MS is a
+	 * millisecond value (default 4000), so advertise floor(log2(ms)) and
+	 * clamp into the runtime-acceptable range [1, 30] (dodag.c rejects
+	 * dio_int_min >= 31). 4000 ms -> 12, matching the 1<<12 = 4096 ms
+	 * Trickle Imin the runtime and the Rust/Python stacks actually run. */
+	uint8_t imin_log2 = 0;
+	uint32_t imin_ms = CONFIG_LICHEN_RPL_TRICKLE_IMIN_MS;
+	while (imin_ms > 1U) {
+		imin_ms >>= 1;
+		imin_log2++;
 	}
+	if (imin_log2 < 1U) {
+		imin_log2 = 1U;
+	} else if (imin_log2 > 30U) {
+		imin_log2 = 30U;
+	}
+	dcfg.dio_int_min = imin_log2;
 	dcfg.dio_int_doublings = CONFIG_LICHEN_RPL_TRICKLE_IMAX_DOUBLINGS;
 	dcfg.dio_redundancy_const = CONFIG_LICHEN_RPL_TRICKLE_K;
 
@@ -172,7 +186,7 @@ bool lichen_rpl_root_send_dio(struct lichen_rpl_root *root)
 	dio.version = root->dodag.version;
 	dio.rank = root->dodag.rank;
 	dio.grounded = true;
-	dio.mode_of_operation = 0;
+	dio.mode_of_operation = 1;
 	dio.preference = 0;
 	dio.dtsn = root->dodag.dtsn;
 	memcpy(dio.dodag_id, root->dodag.dodag_id, 16);

@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-ez7n",
+  "title": "sos_origin: pin u64::MAX sequence boundary semantics with a test",
+  "description": "3x codereview on b7z9.121.4 (edge finding 4): OriginSequenceTracker.accept (rust/lichen-link/src/sos_origin.rs:66-84) has no u64::MAX boundary test. No arithmetic so no overflow, but the boundary semantics are unpinned: first-seq accepted at u64::MAX, then the origin is permanently locked out (no strictly-greater seq exists). Lock the behavior in with a test.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T03:05:08.739108712Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T03:14:26.705455262Z",
+  "started_at": "2026-09-10T03:11:35.804187911Z",
+  "closed_at": "2026-09-10T03:14:26.705455262Z",
+  "close_reason": "Added tracker_u64_max_first_seq_locks_origin_out: first-seen u64::MAX accepted, no strictly-greater seq exists so equal/repeat rejected permanently — boundary semantics now pinned by test. 14/14 sos_origin tests pass with --features schnorr. 3x codereview (correctness/security/edge, kimi-k3): all PASS — no arithmetic on seq (comparison only, no overflow), test integrity independent of implementation, no cfg risk.",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ez7n",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.121.4",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T03:05:08.857152843Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

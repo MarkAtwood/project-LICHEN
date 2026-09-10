@@ -1,0 +1,7 @@
+{
+  "id": "1789019244382414669-1",
+  "issue_id": "project-LICHEN-worker6-rk1q",
+  "author": "opencode-worker-1",
+  "text": "HAZARD for merge operator: branch beads-worker-3 tip (fc4841402d) still contains the broken spliced rust/lichen-node/src/rpl_stack/mod.rs (unclosed 'return Some(RoutePlan {' block followed by the competing i72x.2 block). Merging beads-worker-3 without resolving this file to main's version will re-break the build. Take main's side of the hunk.",
+  "created_at": "2026-09-10T05:47:24.382414669Z"
+}

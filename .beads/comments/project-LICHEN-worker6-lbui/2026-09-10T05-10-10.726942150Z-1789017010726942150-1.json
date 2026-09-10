@@ -1,0 +1,7 @@
+{
+  "id": "1789017010726942150-1",
+  "issue_id": "project-LICHEN-worker6-lbui",
+  "author": "Mark Atwood",
+  "text": "Security pass on tpcn fix (kimi-k3) adds two vectors not explicit here: (1) 2\u003e\"$W_ERR\" redirect (fleet-guards.sh:125) follows a pre-planted fleet_burn.err SYMLINK -\u003e clobbers/truncates any victim-owned file every cycle (no noclobber, only set -u); (2) W_HINT=$(tail -n 1 \"$W_ERR\") (:127) echoes attacker-chosen content unsanitized into operator logs (:130) — control-sequence injection. Also: path is shared with fleet-headless.sh:23 and fleet-driver.sh:61,159,214, so the mode-0700 home-dir move must migrate ALL consumers together.",
+  "created_at": "2026-09-10T05:10:10.72694215Z"
+}

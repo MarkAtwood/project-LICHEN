@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-qtjs",
+  "title": "fleet-guards: TOCTOU between -f test and stat on pause flag files",
+  "description": "Codereview of a7p2 fix (edge pass, kimi-k3). Lines 72-73 and 82-83: if .fleet-paused / .fleet-workers-paused is removed between the [ -f ] test and the stat -c %Y substitution, the empty stat output is treated as 0 in arithmetic, PAUSE_AGE/WP_AGE ~= epoch-now \u003e 3600, and a spurious '[ALARM] Pause expired' bd issue is filed (plus rm -f of flags). Low likelihood (single writer), real consequence class. Fix: capture stat output into a variable and test it, or re-test -f after stat.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T03:03:59.885481403Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T03:03:59.885481403Z",
+  "labels": [
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-qtjs",
+      "depends_on_id": "project-LICHEN-worker6-a7p2",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T03:04:00.01598199Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

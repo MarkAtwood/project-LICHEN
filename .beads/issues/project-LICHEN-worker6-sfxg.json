@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-sfxg",
+  "title": "SOS OriginSequenceTracker LRU eviction enables stale-but-unseen replay (Sybil)",
+  "description": "Pre-existing, found by kimi-k3 codereview pass 2 of 3dpc.3 (NOT a regression from that bead; unchanged by cef9467ff3). python/src/lichen/coap/sos_origin.py:173-181 - OriginSequenceTracker caps at 256 origins with LRU eviction. A Sybil attacker can mint 256 valid keypairs (cheap; each is a fresh per-source rate-limit bucket), evict a victim's last_seen entry, then replay an old captured SOS that passes the 'unseen' gate at emergency.py:271-281 - reopening the exact stale-but-unseen replay the tracker was built to close. Same cost before and after the 3dpc.3 migration; the _request_times/_period_start dicts (emergency.py:104-106) are likewise unbounded per-source. Options: bound by (origin AddrForKey) with no eviction of non-expired floors (fail-closed like tunnel-auth), or tie eviction to a verified-expiry horizon.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T05:22:22.075717029Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-09-10T05:22:22.075717029Z",
+  "labels": [
+    "python",
+    "apps",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-sfxg",
+      "depends_on_id": "project-LICHEN-worker6-3dpc.3",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T05:22:39.646430808Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

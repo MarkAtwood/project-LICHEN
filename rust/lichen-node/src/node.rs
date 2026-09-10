@@ -1106,7 +1106,7 @@ mod tests {
         let parent_id = NodeId(parent_eui64);
         let leaf_id = NodeId(leaf_eui64);
         // The DODAG id is the root's upstream routable address (settled
-        // upstream-yggdrasil-addressing), not a synthetic ULA.
+        // upstream-yggdrasil-addressing), not ULA (not assigned).
         let root_addr = lichen_core::addr::ygg_addr_from_pubkey(root_identity.pubkey.as_bytes());
         let parent_addr =
             lichen_core::addr::ygg_addr_from_pubkey(parent_identity.pubkey.as_bytes());
@@ -1350,13 +1350,13 @@ mod tests {
         let parent_id = NodeId(parent_eui64);
         let leaf_id = NodeId(leaf_eui64);
         // The DODAG id is the root's upstream routable address (settled
-        // upstream-yggdrasil-addressing), not a synthetic ULA.
+        // upstream-yggdrasil-addressing), not ULA (not assigned).
         let root_addr = lichen_core::addr::ygg_addr_from_pubkey(root_identity.pubkey.as_bytes());
         let parent_addr =
             lichen_core::addr::ygg_addr_from_pubkey(parent_identity.pubkey.as_bytes());
         let leaf_addr = lichen_core::addr::ygg_addr_from_pubkey(leaf_identity.pubkey.as_bytes());
         // §8.7.2 delegated prefix advertised alongside the leaf's own /128.
-        // Routed /64s come from SubnetForKey space (0300::/8), not ULA
+        // Routed /64s come from SubnetForKey space (0300::/8) instead of ULA
         // (spec/05-routing.md:30, upstream-yggdrasil-addressing).
         let delegated_prefix = [0x03, 0x00, 0, 0, 0, 0, 0, 0x64, 0, 0, 0, 0, 0, 0, 0, 0];
 

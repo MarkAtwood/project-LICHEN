@@ -452,11 +452,6 @@ int lichen_link_copy_identity(const struct lichen_link_ctx *_Nonnull ctx,
  * prefix. The SHA-512 IID (lichen_key_pubkey_to_iid) does NOT appear in
  * the routable address; it remains link-local-only.
  *
- * QUARANTINED-PENDING-UPSTREAM-MIGRATION: this profile and its vectors are the
- * rejected SHA-512 native profile; per the upstream-yggdrasil-addressing
- * decision in spec/decisions.jsonl the address MUST equal upstream
- * AddrForKey. Do not extend; tracked by bead project-LICHEN-worker6-q6ko.
- *
  * @param pubkey 32-byte Ed25519 public key
  * @param ygg_addr Output buffer for 16-byte address
  * @return 0 on success, negative errno on error

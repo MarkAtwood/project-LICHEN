@@ -5,9 +5,7 @@ so that aiocoap traffic travels through the full SCHC-compress → route → lin
 stack rather than the in-memory loopback used in single-node tests.
 
 Host addresses are mesh IPv6 address strings (upstream Yggdrasil-derived
-``0200::/8`` under the single-primary model; legacy configured prefixes such
-as ``"fd00::1"`` only when the Router is configured with a matching mesh
-prefix).  Outbound CoAP bytes
+``0200::/8`` under the single-primary model).  Outbound CoAP bytes
 are framed as IPv6 + UDP, compressed with SCHC, routed by the Node's Router, and
 transmitted via the signed link layer.  Inbound SCHC packets are decompressed and
 the CoAP payload is extracted before delivery to aiocoap.
@@ -43,8 +41,7 @@ class NodeChannel(DatagramChannel):
     """Routes CoAP datagrams through a Node for multi-hop mesh delivery.
 
     The ``local_host`` and destination strings must be valid IPv6 address
-    strings (e.g. an 0200::/8 mesh address; ``"fd00::1"`` requires a
-    configured fd00::/8 mesh prefix on the Router).  The Node must have its
+    strings (e.g. an 0200::/8 mesh address).  The Node must have its
     gradient table pre-populated so that ``node.send()`` can find a next-hop.
 
     Why NodeChannel vs SchcChannel: SchcChannel wraps an InMemoryChannel for

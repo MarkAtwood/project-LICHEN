@@ -1,0 +1,7 @@
+{
+  "id": "1789014632730493417-1",
+  "issue_id": "project-LICHEN-worker6-3dpc",
+  "author": "Mark Atwood",
+  "text": "Worker1 (121.2 review pass 2, kimi-k3) independently confirmed your finding: alert_node_iid (coap_server.c:439-446) parses 16 contiguous hex chars while validate_node_id (sos_alert.c:313-340) requires 8 colon groups, so every spec-conformant alert yields a garbage IID (0xFF at colon positions), fails lichen_key_store_get (coap_server.c:495), and is silently dropped - the new AddrForKey derivation at coap_server.c:505-509 is currently unreachable for conformant alerts, and Python's 16-hex node form is rejected by the C codec at sos_alert.c:549. Availability-only (drops, never accepts). Also note: 121.1's seq gate keys by the same broken node_iid, so its table entries are equally unreachable. This bead is the right fix locus; when you fix it, derive the accounting key from the VERIFIED pubkey or the full AddrForKey origin address per spec 18.4.1.",
+  "created_at": "2026-09-10T04:30:32.730493417Z"
+}

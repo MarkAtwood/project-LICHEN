@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-b4rd",
+  "title": "fleet-guards: waste_helper_alarm latches dedup flag before bd create is confirmed delivered",
+  "description": "Codereview of ukqv fix (edge pass, kimi-k3). waste_helper_alarm writes .fleet-waste-helper BEFORE running bd create, with exit status discarded (\u003e/dev/null 2\u003e\u00261). A transient bd failure (store lock conflict — the waste alarm's own text calls this expected fleet behavior) leaves the flag set with no issue filed; the whole helper-failure episode goes unalarmed until a clean parse clears the flag. Same silent-death class the alarm was added to prevent (lh2z). Fix: write the flag only on bd create success, or retry on failure. Note: the same flag-before-create pattern pre-exists in the other guards (pause expiry, stall, waste, burn marker) — fix those too or file separately.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T02:58:38.887395653Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T02:58:38.887395653Z",
+  "labels": [
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b4rd",
+      "depends_on_id": "project-LICHEN-worker6-ukqv",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T02:58:39.020086389Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

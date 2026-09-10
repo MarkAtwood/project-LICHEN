@@ -82,7 +82,7 @@ from .receipts import (
 )
 from .replay import ReplayCapacityError, ReplayProtector, logical_counter
 from .schc_handler import SchcHandler
-from .tx_queue import Priority, TxQueue
+from .tx_queue import DEADLINE_ACK_MS, Priority, TxQueue
 
 # Re-export extracted classes for backwards compatibility
 __all__ = [
@@ -1280,6 +1280,18 @@ class LinkLayer:
             + signer_eui64
             + payload
         )
+
+    def ack_deadline_ms(self) -> int:
+        """Absolute monotonic-ms deadline for link-layer ACK/NACK traffic.
+
+        spec/appendix-bufferbloat.md B.2 gives ACK/NACKs their own 10 s
+        deadline, distinct from the ROUTING 5 s queue default (Priority.ACK
+        is a numeric alias of ROUTING, so the queue cannot tell them apart);
+        per the C/Rust pattern, ACK senders pass this deadline explicitly
+        (bead b7z9.142). Computed on the TX queue's own clock so injected
+        test clocks stay consistent.
+        """
+        return self.tx_queue.now() + DEADLINE_ACK_MS
 
     async def send(
         self,

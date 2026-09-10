@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-wnbg",
+  "title": "SOS: NON/multicast silent-drop branch untested",
+  "description": "Found by codereview (edge pass) on b7z9.121.3. 所有 _expect_silent_drop 用例走 CON(empty ACK 分支);真实 LoRa/组播流量是 NON(messagemanager 的 no-ACK-pending 完全丢弃分支)无测试。补一个 NON(transport_tuning=Unreliable)或组播路径的静默丢弃断言。",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T04:33:01.470043972Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T05:44:09.064748891Z",
+  "closed_at": "2026-09-10T05:44:09.064748891Z",
+  "close_reason": "FIXED: added TestSosNonConfirmableSilentDrop to python/tests/coap/test_sos_resource.py covering the SOS silent-drop on the NON (non-confirmable) transport path — the branch every pre-existing _assert_silently_dropped case missed (they call render_post() directly, bypassing the message manager entirely; the CON-vs-NON divergence lives only in aiocoap's MessageManager). The test sends an unsigned SOS POST over the in-memory CoAP stack with transport_tuning=aiocoap.Unreliable (selects NON without the deprecated mtype= kwarg, mirroring the multicast test) and asserts the response future never resolves within 1.0s (pytest.raises(asyncio.TimeoutError) on wait_for(shield(fut))) — on NON a silent drop sends no response at all (no ACK to carry No-Response) — plus sos._active stays False. Tests: 116/116 pass (1 new); ruff check + format clean. 3x codereview ALL delegated to kimi-k3: correctness round-1 found the two direct-render NON tests were byte-for-byte duplicates providing zero NON-branch coverage (render_post never reads transport_tuning) — removed them, kept only the over-stack test; correctness round-2 PASS except a P4 docstring factual error (mis-described other tests as exercising the CON branch) — fixed; security PASS (oracle is two-pronged and cannot vacuously pass; NON premise backed by the positive multicast control); edge-cases PASS (1.0s window not flaky over call_soon fabric, shield/cleanup correct, no scheduling race). Both findings were defects in my own new test code, fixed inline during the loop. NOTE: closed with --force — store records this worker's claims as Mark Atwood but current actor resolves as opencode-worker-2.",
+  "labels": [
+    "python",
+    "tests"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-wnbg",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.121.3",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T04:33:01.653360272Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

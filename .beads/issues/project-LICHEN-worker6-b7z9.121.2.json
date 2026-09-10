@@ -1,0 +1,33 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.121.2",
+  "title": "C SOS: origin_ipv6 = AddrForKey(pubkey), not synthesized 0200::IID",
+  "description": "C slice of b7z9.121 (spec 18.4.1 + upstream-yggdrasil-addressing decision). coap_server.c:498-499 synthesizes the SOS transcript origin address as {0x02,0,...}+node_iid (8-byte IID in low half). Spec: 'the origin IPv6 address is the originator's 16-octet primary 02xx address preserved end to end' = upstream Yggdrasil AddrForKey(Ed25519PublicKey), which bit-packs the inverted key (no hashing, no embedded IID) - NOT derivable from the IID alone. The verifier has key_entry.pubkey, so compute origin_ipv6 = AddrForKey(pubkey) via the C AddrForKey helper (rust lichen-core addr.rs / yggdrasil_address.json oracle). Coordinate with signers (Python emergency.py:247, Rust SOS TX) which must sign with the same AddrForKey origin - cross-stack wire compat depends on all three agreeing; land AFTER/with the Rust+Python address slices or behind a shared vector so C verify doesn't reject interop peers mid-migration. Verify against yggdrasil_address.json AddrForKey vectors.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T02:30:24.331128111Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T04:33:59.591100022Z",
+  "started_at": "2026-09-10T04:11:50.474804771Z",
+  "closed_at": "2026-09-10T04:33:59.591100022Z",
+  "close_reason": "Landed as 2fcfe0760c (+ prerequisite repairs): sos_post now derives the SOS transcript origin address via lichen_identity_ygg_addr_from_ed25519(key_entry.pubkey) — upstream Yggdrasil AddrForKey per the settled upstream-yggdrasil-addressing decision — instead of the rejected {0x02}+node_iid synthesis. Wire-compatible with the Python slices (121.3/worker8 both sign over upstream_addr_for_key). Verification: (1) host-compiled the actual link/identity_addr.c TU against test/vectors/yggdrasil_address.json — 12/12 byte-exact (monocypher stubbed; the function under test uses no crypto); (2) native_sim build of coap_config_put_auth (compiles coap_server.c) clean, 9/9 tests pass, with a fail-closed test stub for the unlinked derivation (same pattern as its other SOS stubs). 3x codereview delegated to kimi-k3: pass1 correctness PASS, pass2 security -\u003e cancel-path finding was pre-existing 3dpc (dedup-commented there) + coverage gap filed as 117r; pass3 edge-case PASS (pubkey type/alignment, uninitialized paths, transcript consumers, include hygiene, no duplication). Repo repairs this round: restored sos_origin_table.h + host test lost from main (121.1's commit landed only on beads-worker-8); repaired the worker8 merge's dropped _NO_RESPONSE_OPT definition (F821). Note for family owner: C TX path (no signer in C today) will need AddrForKey origin when SOS TX lands; 121.4 (Rust) still open.",
+  "labels": [
+    "c",
+    "zephyr",
+    "apps",
+    "spec-gap",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.121.2",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.121",
+      "type": "parent-child",
+      "created_at": "2026-09-10T02:30:24.471449779Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

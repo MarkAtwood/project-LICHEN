@@ -9,12 +9,93 @@
 //! Transcript (hashed with SHA-512, then signed):
 //! `LICHEN-SOS-ORIGIN-v1` || origin IPv6 (16) || sequence (u64 BE) ||
 //! canonical CBOR payload.
+//!
+//! The origin IPv6 MUST be the upstream Yggdrasil `AddrForKey` of the
+//! signer (spec decisions `upstream-yggdrasil-addressing`), not an
+//! IID-embedded `0200::` synthesis; [`origin_addr_from_pubkey`] derives it,
+//! [`sign_sos_origin_for_key`] signs against it, and
+//! [`verify_sos_origin_gated`] additionally rejects non-advancing sequences
+//! per origin ([`OriginSequenceTracker`]).
+
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
 
 /// Domain separator; 20 ASCII octets, no terminating NUL.
 pub const SOS_ORIGIN_DOMAIN: &[u8; 20] = b"LICHEN-SOS-ORIGIN-v1";
 
 /// Wire length: 8-byte sequence + 48-byte Schnorr48.
 pub const SOS_ORIGIN_SIGNATURE_LENGTH: usize = 8 + 48;
+
+/// Default bound on tracked origins (matches the Python gate).
+#[cfg(feature = "alloc")]
+pub const SOS_ORIGIN_GATE_DEFAULT_CAPACITY: usize = 256;
+
+/// Per-origin monotonic sequence gate (spec 18.4.1 replay protection),
+/// mirroring `python/coap/sos_origin.py OriginSequenceTracker`.
+///
+/// A sequence is accepted only when strictly greater than the highest
+/// sequence previously accepted from that origin. The set of tracked
+/// origins is bounded by `capacity`; a full set evicts the
+/// least-recently-accepted origin (touch order), never arbitrary entries.
+/// A zero capacity rejects every new origin (fail closed).
+#[cfg(feature = "alloc")]
+#[derive(Debug, Default)]
+pub struct OriginSequenceTracker {
+    // (origin addr, last accepted seq); most-recently-accepted is last.
+    entries: Vec<([u8; 16], u64)>,
+    capacity: usize,
+}
+
+#[cfg(feature = "alloc")]
+impl OriginSequenceTracker {
+    /// Create a gate tracking at most `capacity` origins.
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            entries: Vec::new(),
+            capacity,
+        }
+    }
+
+    /// Return `true` and record `seq` iff it strictly advances `origin`.
+    ///
+    /// ponytail: linear scan over a capacity-bounded set (default 256);
+    /// a hash map is the upgrade path only if this ever shows in profiles.
+    pub fn accept(&mut self, origin: &[u8; 16], seq: u64) -> bool {
+        if let Some(pos) = self.entries.iter().position(|e| &e.0 == origin) {
+            if seq <= self.entries[pos].1 {
+                return false;
+            }
+            let mut entry = self.entries.remove(pos);
+            entry.1 = seq;
+            self.entries.push(entry); // touch: most-recently-accepted last
+            return true;
+        }
+        if self.capacity == 0 {
+            return false; // fail closed: no slots, unknown origin
+        }
+        if self.entries.len() >= self.capacity {
+            self.entries.remove(0); // evict least-recently-accepted origin
+        }
+        self.entries.push((*origin, seq));
+        true
+    }
+
+    /// Highest accepted sequence for `origin`, or `None` if unseen.
+    pub fn last_seen(&self, origin: &[u8; 16]) -> Option<u64> {
+        self.entries.iter().find(|e| &e.0 == origin).map(|e| e.1)
+    }
+}
+
+/// Origin IPv6 for SOS signature transcripts: upstream Yggdrasil
+/// `AddrForKey` of the signer's raw public-key bytes (bit-packs the inverted
+/// pubkey in `0200::/8`; no IID synthesis, no hashing). Decoupled from the
+/// `schnorr` feature so non-signing stacks can derive it too.
+pub fn origin_addr_from_pubkey(pubkey: &[u8; 32]) -> [u8; 16] {
+    lichen_core::addr::ygg_addr_from_pubkey(pubkey)
+}
 
 /// Parsed SOS origin signature.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,6 +185,19 @@ pub fn sign_sos_origin(
     SosOriginSignature::new(origin_sequence, bytes)
 }
 
+/// Sign against the `AddrForKey` origin address of `pubkey` (spec 18.4.1
+/// origin binding; no IID synthesis).
+#[cfg(feature = "schnorr")]
+pub fn sign_sos_origin_for_key(
+    privkey: &crate::keys::PrivateKey,
+    pubkey: &crate::keys::PublicKey,
+    origin_sequence: u64,
+    payload_cbor: &[u8],
+) -> SosOriginSignature {
+    let origin_addr = origin_addr_from_pubkey(pubkey.as_bytes());
+    sign_sos_origin(privkey, pubkey, &origin_addr, origin_sequence, payload_cbor)
+}
+
 /// Verify an origin signature over canonical SOS payload bytes.
 #[cfg(feature = "schnorr")]
 pub fn verify_sos_origin(
@@ -117,9 +211,45 @@ pub fn verify_sos_origin(
     verify(pubkey, &digest, &signature.signature)
 }
 
+/// Verify and gate in one step: the signature is only accepted when both
+/// the Schnorr48 check passes **and** the sequence strictly advances the
+/// origin. Fail closed on a bad signature, a non-advancing sequence, or an
+/// unknown origin at zero capacity. A *new* origin at capacity evicts the
+/// least-recently-accepted entry and is accepted (the gate is bounded, not
+/// fail-closed for new origins).
+///
+/// **Eviction discards replay state:** if an origin is evicted, it is
+/// treated as new on reappearance — previously-seen (including lower)
+/// sequences become acceptable again. Anti-replay is guaranteed only while
+/// an origin remains tracked.
+#[cfg(all(feature = "schnorr", feature = "alloc"))]
+pub fn verify_sos_origin_gated(
+    tracker: &mut OriginSequenceTracker,
+    pubkey: &crate::keys::PublicKey,
+    origin_addr: &[u8; 16],
+    payload_cbor: &[u8],
+    signature: &SosOriginSignature,
+) -> bool {
+    if !verify_sos_origin(pubkey, origin_addr, payload_cbor, signature) {
+        return false;
+    }
+    tracker.accept(origin_addr, signature.origin_sequence)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn hex_to_bytes<const N: usize>(hex: &str) -> [u8; N] {
+        let v: std::vec::Vec<u8> = (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+            .collect();
+        assert_eq!(v.len(), N);
+        let mut out = [0u8; N];
+        out.copy_from_slice(&v);
+        out
+    }
 
     #[test]
     fn domain_matches_vector() {
@@ -131,6 +261,167 @@ mod tests {
             .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
             .collect();
         assert_eq!(SOS_ORIGIN_DOMAIN.as_slice(), expected.as_slice());
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn tracker_accepts_strictly_advancing_sequences() {
+        let mut t = OriginSequenceTracker::new(SOS_ORIGIN_GATE_DEFAULT_CAPACITY);
+        let origin = [0xAA; 16];
+        assert!(t.accept(&origin, 1));
+        assert!(!t.accept(&origin, 1)); // equal rejected
+        assert!(!t.accept(&origin, 0)); // stale rejected
+        assert!(t.accept(&origin, 2));
+        assert_eq!(t.last_seen(&origin), Some(2));
+        assert_eq!(t.last_seen(&[0xBB; 16]), None); // unseen origin unaffected
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn tracker_bound_evicts_least_recently_accepted() {
+        let mut t = OriginSequenceTracker::new(2);
+        let (a, b, c) = ([1; 16], [2; 16], [3; 16]);
+        assert!(t.accept(&a, 10));
+        assert!(t.accept(&b, 10));
+        assert!(t.accept(&c, 99)); // at capacity: evicts a (oldest)
+        assert_eq!(t.last_seen(&a), None);
+        assert_eq!(t.last_seen(&b), Some(10));
+        assert_eq!(t.last_seen(&c), Some(99));
+        // A rejoining old origin displaces the next-oldest, still fail-open-ish
+        // only for advancing sequences.
+        assert!(t.accept(&a, 11));
+        assert_eq!(t.last_seen(&b), None);
+        assert_eq!(t.last_seen(&a), Some(11));
+        // Rejecting a stale seq on a tracked origin does not evict/order-shift.
+        assert!(!t.accept(&c, 5));
+        assert_eq!(t.last_seen(&c), Some(99));
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn tracker_u64_max_first_seq_locks_origin_out() {
+        // Boundary: a first-seen u64::MAX is accepted, and nothing can ever
+        // strictly advance past it — the origin is locked out for good.
+        let mut t = OriginSequenceTracker::new(SOS_ORIGIN_GATE_DEFAULT_CAPACITY);
+        let origin = [0xCC; 16];
+        assert!(t.accept(&origin, u64::MAX));
+        assert!(!t.accept(&origin, u64::MAX));
+        assert_eq!(t.last_seen(&origin), Some(u64::MAX));
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn tracker_zero_capacity_fails_closed() {
+        let mut t = OriginSequenceTracker::new(0);
+        assert!(!t.accept(&[1; 16], 1));
+        assert_eq!(t.last_seen(&[1; 16]), None);
+    }
+
+    #[test]
+    fn origin_addr_matches_upstream_pinned_vector() {
+        // External oracle: test/vectors/yggdrasil_address.json
+        // `upstream_addr_for_key` — pinned upstream yggdrasil-go AddrForKey.
+        let pubkey_bytes: [u8; 32] =
+            hex_to_bytes("bdbacfd82240de3dcd123924cbb55256fb8dab08aa98e305528ab84f419e6efb");
+        let addr: [u8; 16] = origin_addr_from_pubkey(&pubkey_bytes);
+        let expected: [u8; 16] = hex_to_bytes("0200848a604fbb7e438465db8db66895");
+        assert_eq!(addr, expected);
+    }
+
+    #[cfg(feature = "schnorr")]
+    mod schnorr_tests {
+        use super::*;
+
+        fn make_keypair() -> (crate::keys::PrivateKey, crate::keys::PublicKey) {
+            crate::schnorr::derive_keypair(&crate::keys::Seed::new([0x42; 32]))
+        }
+
+        #[test]
+        fn sign_for_key_binds_addrforkey_origin() {
+            let (privkey, pubkey) = make_keypair();
+            let payload = b"\xa0";
+            let sig = sign_sos_origin_for_key(&privkey, &pubkey, 7, payload);
+            let addr = origin_addr_from_pubkey(pubkey.as_bytes());
+            assert!(verify_sos_origin(&pubkey, &addr, payload, &sig));
+            // An IID-synthesized origin must NOT verify (anti-synthesis guard).
+            let mut iid_addr = [0x02, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+            iid_addr[8..].copy_from_slice(&pubkey.as_bytes()[..8]); // wrong on purpose
+            assert!(!verify_sos_origin(&pubkey, &iid_addr, payload, &sig));
+        }
+
+        #[test]
+        fn gated_verify_rejects_replays_and_advances() {
+            let (privkey, pubkey) = make_keypair();
+            let addr = origin_addr_from_pubkey(pubkey.as_bytes());
+            let payload = b"\xa0";
+            let mut tracker = OriginSequenceTracker::new(SOS_ORIGIN_GATE_DEFAULT_CAPACITY);
+            // First accept records and admits.
+            let s1 = sign_sos_origin_for_key(&privkey, &pubkey, 1, payload);
+            assert!(verify_sos_origin_gated(
+                &mut tracker,
+                &pubkey,
+                &addr,
+                payload,
+                &s1
+            ));
+            assert_eq!(tracker.last_seen(&addr), Some(1));
+            // Same sequence again is a replay: rejected.
+            assert!(!verify_sos_origin_gated(
+                &mut tracker,
+                &pubkey,
+                &addr,
+                payload,
+                &s1
+            ));
+            // Lower sequence rejected without touching the gate.
+            let s0 = sign_sos_origin_for_key(&privkey, &pubkey, 0, payload);
+            assert!(!verify_sos_origin_gated(
+                &mut tracker,
+                &pubkey,
+                &addr,
+                payload,
+                &s0
+            ));
+            // Advanced sequence accepted.
+            let s2 = sign_sos_origin_for_key(&privkey, &pubkey, 2, payload);
+            assert!(verify_sos_origin_gated(
+                &mut tracker,
+                &pubkey,
+                &addr,
+                payload,
+                &s2
+            ));
+        }
+
+        #[test]
+        fn gated_verify_never_advances_gate_on_bad_signature() {
+            let (privkey, pubkey) = make_keypair();
+            let addr = origin_addr_from_pubkey(pubkey.as_bytes());
+            let payload = b"\xa0";
+            let mut tracker = OriginSequenceTracker::new(SOS_ORIGIN_GATE_DEFAULT_CAPACITY);
+            let good = sign_sos_origin_for_key(&privkey, &pubkey, 5, payload);
+            // Forge a 48-byte wrong signature at seq 5.
+            let mut forged = good.to_bytes();
+            forged[8] ^= 0xFF;
+            let forged = SosOriginSignature::from_bytes(&forged).unwrap();
+            assert!(!verify_sos_origin_gated(
+                &mut tracker,
+                &pubkey,
+                &addr,
+                payload,
+                &forged
+            ));
+            assert_eq!(tracker.last_seen(&addr), None);
+            // Real seq-5 signature is still admitted afterward (no lock-out).
+            assert!(verify_sos_origin_gated(
+                &mut tracker,
+                &pubkey,
+                &addr,
+                payload,
+                &good
+            ));
+            assert_eq!(tracker.last_seen(&addr), Some(5));
+        }
     }
 
     #[test]

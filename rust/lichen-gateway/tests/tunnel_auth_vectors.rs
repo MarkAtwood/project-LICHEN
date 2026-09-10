@@ -46,8 +46,10 @@ fn denial(error: TunnelAuthError) -> &'static str {
         TunnelAuthError::WrongEgress => "wrong-egress",
         TunnelAuthError::InvalidRoute => "invalid-route",
         TunnelAuthError::WrongDirection => "wrong-direction",
-        TunnelAuthError::SourceOutsideMesh => "source-scope",
-        TunnelAuthError::DestinationInMesh => "destination-scope",
+        TunnelAuthError::SourceOutsideMesh | TunnelAuthError::SourceScope => "source-scope",
+        TunnelAuthError::DestinationInMesh | TunnelAuthError::DestinationScope => {
+            "destination-scope"
+        }
         TunnelAuthError::Expired => "expired",
         TunnelAuthError::ClockRollback => "clock-regression",
         TunnelAuthError::Replay => "replay",
@@ -182,6 +184,7 @@ fn canonical_tunnel_authorization_vector_matches_byte_for_byte() {
             DecapsulationRequest {
                 direction: TunnelDirection::MeshToExternal,
                 inner_source: claim.prefix,
+                inner_destination: [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
                 source_is_mesh: true,
                 destination_is_mesh: false,
                 route: &route,
@@ -297,6 +300,7 @@ fn canonical_decapsulation_cases_enforce_least_privilege() {
                     TunnelDirection::ExternalToMesh
                 },
                 inner_source: source,
+                inner_destination: destination,
                 source_is_mesh: source[0] == 0x02,
                 destination_is_mesh: matches!(destination[0], 0x02 | 0xff),
                 route: &route,
@@ -390,6 +394,9 @@ fn overlap_request(fixture: &OverlapFixture) -> DecapsulationRequest<'_> {
     DecapsulationRequest {
         direction: TunnelDirection::MeshToExternal,
         inner_source: fixture.source,
+        // Scope-clean external destination: overlap tests pin grant/expiry
+        // behavior, not address scope.
+        inner_destination: [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
         source_is_mesh: true,
         destination_is_mesh: false,
         route: &fixture.route,

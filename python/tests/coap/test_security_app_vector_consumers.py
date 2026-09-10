@@ -47,6 +47,7 @@ All former divergences from bead project-LICHEN-worker6-a6qg have been resolved:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import time
@@ -348,17 +349,21 @@ class TestSosSignatureVectors:
         sos = SosResource(time_func=_Clock())
         client, server = await _stack(sos_resource=sos)
         try:
-            response = await client.request(
-                Message(
-                    code=aiocoap.POST,
-                    uri="coap://srv/sos",
-                    payload=cbor2.dumps(
-                        {"node": str(yggdrasil_address(_identity()[1])), "ts": 1716742800}
-                    ),
-                    content_format=60,
+            # Silent drop: no response at all (not even an error code).
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(
+                    client.request(
+                        Message(
+                            code=aiocoap.POST,
+                            uri="coap://srv/sos",
+                            payload=cbor2.dumps(
+                                {"node": str(yggdrasil_address(_identity()[1])), "ts": 1716742800}
+                            ),
+                            content_format=60,
+                        )
+                    ).response,
+                    timeout=1.0,
                 )
-            ).response
-            assert response.code.is_successful() is False
         finally:
             await _teardown(client, server)
 
@@ -369,22 +374,26 @@ class TestSosSignatureVectors:
         sos = SosResource(time_func=_Clock())
         client, server = await _stack(sos_resource=sos)
         try:
-            response = await client.request(
-                Message(
-                    code=aiocoap.POST,
-                    uri="coap://srv/sos",
-                    payload=_signed_sos_body(
-                        1716742800,
-                        signer_priv,
-                        signer_pub,
-                        node=str(yggdrasil_address(victim_pub)),
-                    ),
-                    content_format=60,
-                )
-            ).response
             # Signature is valid for B's key but B's AddrForKey is not the
-            # claimed (victim's) address: the binding gate fires.
-            assert response.code.is_successful() is False
+            # claimed (victim's) address: the binding gate fires and the
+            # message is SILENTLY dropped (spec 18.4.1).
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(
+                    client.request(
+                        Message(
+                            code=aiocoap.POST,
+                            uri="coap://srv/sos",
+                            payload=_signed_sos_body(
+                                1716742800,
+                                signer_priv,
+                                signer_pub,
+                                node=str(yggdrasil_address(victim_pub)),
+                            ),
+                            content_format=60,
+                        )
+                    ).response,
+                    timeout=1.0,
+                )
         finally:
             await _teardown(client, server)
 

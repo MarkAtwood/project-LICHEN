@@ -444,6 +444,7 @@ static bool test_tx_loop_initial_retry_refresh(void) {
   tests_run++;
   return true;
 }
+
 /* ── Composed orchestrator (spec 09 14.2) ────────────────────────────────── */
 static uint32_t orch_rng_next;
 

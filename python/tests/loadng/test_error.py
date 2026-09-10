@@ -11,11 +11,11 @@ from lichen.loadng.cache import RouteCache, RouteEntry
 from lichen.loadng.error import RouteErrorManager
 from lichen.loadng.messages import RERR
 
-DEST = IPv6Address("fd00::100")
+DEST = IPv6Address("0200::100")
 NEXT = IPv6Address("fe80::a")
 OTHER = IPv6Address("fe80::b")
-SRC1 = IPv6Address("fd00::1")
-SRC2 = IPv6Address("fd00::2")
+SRC1 = IPv6Address("0200::1")
+SRC2 = IPv6Address("0200::2")
 
 
 def _populated() -> tuple[RouteErrorManager, GradientTable, RouteCache]:
@@ -88,7 +88,7 @@ def test_process_rerr_ignored_if_no_route() -> None:
 def test_remove_via_only_removes_matching_next_hop() -> None:
     grad = GradientTable()
     grad.update(GradientEntry(DEST, NEXT, 1, 1, GradientSource.RREP, 10_000))
-    keep = IPv6Address("fd00::200")
+    keep = IPv6Address("0200::200")
     grad.update(GradientEntry(keep, OTHER, 1, 1, GradientSource.RREP, 10_000))
     removed = grad.remove_via(NEXT)
     assert removed == [DEST]
