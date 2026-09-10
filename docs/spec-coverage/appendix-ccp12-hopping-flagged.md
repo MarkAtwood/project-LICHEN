@@ -106,7 +106,7 @@ unresolved spec/implementation tension. oscore/EDHOC: none in this section.
   with the intent, or should a hop-state machine (explicit "hop if changed
   after TX") exist and be tested? If the latter, which stack owns it first?
 
-## F7. R-CCP12-014 — §4.3a sync-accuracy/guard table (ambiguous, informational)
+## F7. R-CCP12-014 — §4.3 sync-accuracy/guard table (ambiguous, informational)
 
 - Requirement: CCP-12 requires SFN alignment; guard 200ms @ 2000ms SF,
   ~100ms accuracy achievable via GNSS PPS/NTS/mesh-sync; "mesh-derived sync
@@ -116,12 +116,12 @@ unresolved spec/implementation tension. oscore/EDHOC: none in this section.
   is slot-level (02a), not hop-guard.
 - Question for Opus: confirm this table is deployment guidance (no code
   required), or decide whether CCP-12 guard constants belong in code and
-  vectors. Also: the spec has two "### 4.3" headings (numbering bug) —
-  renumber §4.3b → §4.4 etc. (folded into spec-fix bead).
+  vectors. (The duplicate "### 4.3" headings were renumbered by b7z9.173:
+  Example Calculation is now §4.4, Desync Recovery is now §4.5.)
 
 ## F8. R-CCP12-015 — desync recovery step 1 "fall back to CH0 listening" (not-implemented, partial)
 
-- Requirement: §4.4 — (1) fall back to CH0 listening; (2) wait 3 consecutive
+- Requirement: §4.5 (formerly §4.4) — (1) fall back to CH0 listening; (2) wait 3 consecutive
   valid beacons on CH0; (3) re-sync SFN from beacon timestamp; (4) resume
   hopping.
 - Classification: steps 2-4 implemented+tested in all three stacks (rust
