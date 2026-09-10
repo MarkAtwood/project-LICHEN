@@ -213,7 +213,9 @@ def test_tofu_edge_vectors_and_c_fixture_are_fresh() -> None:
         "rule_versioning.json",
         "schc_adaptation.json",
         "schc_tile_sizing.json",
-        "density_adaptive.json",
+        # density_adaptive.json intentionally absent (project-LICHEN-worker6-1p2r.6):
+        # the schema's density_adaptive_vector family (announce tier/interval fields)
+        # is planned work, and no consumer exists yet.
         "dtn_sflag_hbh.json",
     ],
 )
@@ -1884,12 +1886,13 @@ def test_ccp9_rendezvous_vector(name: str, vector: dict) -> None:
     mechanism = vector.get("mechanism") or vector.get("expected", {}).get("mechanism", "")
     if mechanism == "hash_based":
         peer_eui = bytes.fromhex(vector["peer_eui64"])
-        sfn = vector["sfn"]
         epoch = vector.get("epoch", 0)  # default epoch=0 per vector description
         n_channels = vector["n_channels"]
-        # hash_32(eui || epoch_le || sfn_le) per spec 02a-coordinated-capacity.md
-        hash_input = peer_eui + epoch.to_bytes(4, "little") + sfn.to_bytes(4, "little")
+        # hash_32(eui || epoch_le) per appendix-ccp12-hopping.md §3.1 (CCP-16)
+        hash_input = peer_eui + epoch.to_bytes(4, "little")
         h = _oracle_hash_32(hash_input)
+        if "hash_32" in vector:
+            assert h == vector["hash_32"]
         computed_channel = 1 + (h % (n_channels - 1))
         assert computed_channel == vector["expected_channel"]
         if "expected_slot" in vector:

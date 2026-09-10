@@ -32,8 +32,9 @@ from lichen.coap.resources.emergency import (
 from lichen.coap.sos_origin import sign_sos_origin
 from lichen.coap.transport import InMemoryNetwork, create_lichen_context
 from lichen.coap.udp_server import bind_coap_udp
-from lichen.crypto.identity import _pubkey_to_iid
+from lichen.crypto.identity import _pubkey_to_iid, yggdrasil_address
 from lichen.crypto.schnorr48 import derive_keypair
+from lichen.crypto.trust import TrustEntry, TrustLevel, TrustStore
 
 # Deterministic signer identity; /sos requires origin signatures (spec 18.4.1),
 # so the POSTing node's EUI-64 must be the one its pubkey derives to.
@@ -102,8 +103,8 @@ def _find_multicast_interface() -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _origin_addr(iid: bytes) -> IPv6Address:
-    return IPv6Address(b"\x02\x00" + b"\x00" * 6 + iid)
+def _origin_addr(pub: bytes) -> IPv6Address:
+    return IPv6Address(yggdrasil_address(pub).packed)
 
 
 def _signed_body(
@@ -117,7 +118,7 @@ def _signed_body(
     """Build a spec-18.4.1 signed /sos POST body."""
     core: dict[str, object] = {"from": _EUI.hex(), "t": t}
     core.update(overrides)
-    sig = sign_sos_origin(priv, pub, _origin_addr(_EUI), seq, core)
+    sig = sign_sos_origin(priv, pub, _origin_addr(pub), seq, core)
     return cbor2.dumps({**core, "pubkey": pub, "sig": sig.to_bytes()})
 
 
@@ -129,6 +130,23 @@ async def _setup() -> tuple[aiocoap.Context, aiocoap.Context, SosResource]:
     server = await create_lichen_context(net.channel("srv"), "srv", site=site)
     client = await create_lichen_context(net.channel("cli"), "cli")
     return client, server, sos
+
+
+NO_RESPONSE_OPT = 26  # RFC 7967 bitmask suppressing 2.xx/4.xx/5.xx responses
+
+
+def _sos_resource() -> SosResource:
+    """A resource for direct render calls (no network)."""
+    return SosResource(time_func=lambda: _T0)
+
+
+def _request(body: bytes, code: int = POST) -> Message:
+    return Message(code=code, uri="coap://srv/sos", payload=body, content_format=60)
+
+
+def _assert_silently_dropped(resp: Message) -> None:
+    """Spec 18.4.1 silent drop: the reply carries RFC 7967 No-Response."""
+    assert resp.opt.no_response == NO_RESPONSE_OPT
 
 
 # ---------------------------------------------------------------------------
@@ -376,23 +394,15 @@ class TestSosPutDelete:
 
     async def test_post_cancel_by_non_originator_rejected(self) -> None:
         """Only the active alert's originator may cancel (anti-griefing)."""
-        client, server, sos = await _setup()
-        try:
-            activate_body = _signed_body(seq=1)
-            await client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=activate_body, content_format=60)
-            ).response
-            assert sos._active is True
-            other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
-            forged = _signed_body(seq=2, priv=other_priv, pub=other_pub, type="cancel")
-            resp = await client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=forged, content_format=60)
-            ).response
-            assert resp.code == aiocoap.UNAUTHORIZED
-            assert sos._active is True
-        finally:
-            await client.shutdown()
-            await server.shutdown()
+        sos = _sos_resource()
+        resp = await sos.render_post(_request(_signed_body(seq=1)))
+        assert resp.code == aiocoap.CHANGED
+        assert sos._active is True
+        other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
+        forged = _signed_body(seq=2, priv=other_priv, pub=other_pub, type="cancel")
+        resp = await sos.render_post(_request(forged))
+        _assert_silently_dropped(resp)
+        assert sos._active is True
 
 
 # ---------------------------------------------------------------------------
@@ -421,6 +431,16 @@ class TestSosRateLimiting:
         current_time = _T0 + 1
         sos._time_func = lambda: current_time
         assert sos.check_rate_limit(_EUI.hex()) is True
+
+    def test_rate_limit_entries_bounded(self) -> None:
+        """Minted-identity floods cannot grow the rate-limit dict (TOFU)."""
+        sos = SosResource()
+        for idx in range(6000):
+            sos._record_request(f"source{idx}")
+        assert len(sos._request_times) <= 256
+        assert len(sos._period_start) <= 256
+        # The newest source is still tracked after eviction.
+        assert "source5999" in sos._request_times
 
     def test_third_request_within_cooldown_blocked(self) -> None:
         """Third request while the period's burst budget is spent is blocked."""
@@ -518,94 +538,120 @@ class TestSosRateLimiting:
 
 
 class TestSosSignatureEnforcement:
-    """POST /sos origin-signature gate per spec 18.4.1."""
+    """POST /sos origin-signature gate per spec 18.4.1.
+
+    Bad-signature paths are silently dropped: the render returns a message
+    carrying the RFC 7967 No-Response option (asserted directly so no wire
+    wait is involved).
+    """
 
     async def test_valid_signature_accepted(self) -> None:
-        client, server, sos = await _setup()
-        try:
-            resp = await client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=_signed_body(), content_format=60)
-            ).response
-            assert resp.code == aiocoap.CHANGED
-            assert sos._active is True
-        finally:
-            await client.shutdown()
-            await server.shutdown()
+        sos = _sos_resource()
+        resp = await sos.render_post(_request(_signed_body()))
+        assert resp.code == aiocoap.CHANGED
+        assert sos._active is True
 
     async def test_unsigned_post_dropped(self) -> None:
-        client, server, sos = await _setup()
-        try:
-            body = cbor2.dumps({"from": _EUI.hex(), "t": _T0})
-            resp = await client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
-            ).response
-            assert resp.code.is_successful() is False
-            assert sos._active is False
-        finally:
-            await client.shutdown()
-            await server.shutdown()
+        sos = _sos_resource()
+        body = cbor2.dumps({"from": _EUI.hex(), "t": _T0})
+        resp = await sos.render_post(_request(body))
+        _assert_silently_dropped(resp)
+        assert sos._active is False
 
     async def test_tampered_signature_dropped(self) -> None:
-        client, server, sos = await _setup()
-        try:
-            body = bytearray(_signed_body())
-            # Flip a bit late in the payload (inside the 48-byte sig).
-            body[-1] ^= 0x01
-            resp = await client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=bytes(body), content_format=60)
-            ).response
-            assert resp.code.is_successful() is False
-            assert sos._active is False
-        finally:
-            await client.shutdown()
-            await server.shutdown()
+        sos = _sos_resource()
+        body = bytearray(_signed_body())
+        # Flip a bit late in the payload (inside the 48-byte sig).
+        body[-1] ^= 0x01
+        resp = await sos.render_post(_request(bytes(body)))
+        _assert_silently_dropped(resp)
+        assert sos._active is False
 
     async def test_wrong_key_signature_dropped(self) -> None:
-        client, server, sos = await _setup()
-        try:
-            other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
-            body = _signed_body(priv=other_priv, pub=other_pub)
-            resp = await client.request(
-                Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
-            ).response
-            # Other key does not derive to the claimed IID: binding gate fires.
-            assert resp.code.is_successful() is False
-            assert sos._active is False
-        finally:
-            await client.shutdown()
-            await server.shutdown()
+        sos = _sos_resource()
+        other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
+        body = _signed_body(priv=other_priv, pub=other_pub)
+        resp = await sos.render_post(_request(body))
+        # Other key does not derive to the claimed IID: binding gate fires.
+        _assert_silently_dropped(resp)
+        assert sos._active is False
 
     async def test_replayed_sequence_dropped(self) -> None:
-        client, server, sos = await _setup()
-        try:
-            first = Message(
-                code=POST, uri="coap://srv/sos", payload=_signed_body(seq=7), content_format=60
-            )
-            assert (await client.request(first).response).code == aiocoap.CHANGED
-            replay = Message(
-                code=POST, uri="coap://srv/sos", payload=_signed_body(seq=7), content_format=60
-            )
-            resp = await client.request(replay).response
-            assert resp.code.is_successful() is False
-        finally:
-            await client.shutdown()
-            await server.shutdown()
+        sos = _sos_resource()
+        resp = await sos.render_post(_request(_signed_body(seq=7)))
+        assert resp.code == aiocoap.CHANGED
+        resp = await sos.render_post(_request(_signed_body(seq=7)))
+        _assert_silently_dropped(resp)
 
     async def test_sequence_must_advance(self) -> None:
-        client, server, sos = await _setup()
-        try:
-            first = Message(
-                code=POST, uri="coap://srv/sos", payload=_signed_body(seq=9), content_format=60
-            )
-            assert (await client.request(first).response).code == aiocoap.CHANGED
-            stale = Message(
-                code=POST, uri="coap://srv/sos", payload=_signed_body(seq=8), content_format=60
-            )
-            resp = await client.request(stale).response
-            assert resp.code.is_successful() is False
-        finally:
-            await client.shutdown()
-            await server.shutdown()
+        sos = _sos_resource()
+        resp = await sos.render_post(_request(_signed_body(seq=9)))
+        assert resp.code == aiocoap.CHANGED
+        resp = await sos.render_post(_request(_signed_body(seq=8)))
+        _assert_silently_dropped(resp)
+
+
+class TestSosTrustStoreGate:
+    """POST /sos trust-store gate (spec 18.4.1 + 8.7 TOFU).
+
+    With a trust_store wired, a signature-valid POST whose pubkey conflicts
+    with the pinned key for its IID is silently dropped (same No-Response
+    treatment as a bad signature), and a first-contact valid POST pins the
+    key and activates.
+    """
+
+    async def test_first_valid_signature_pins_and_activates(self) -> None:
+        store = TrustStore()
+        sos = SosResource(time_func=lambda: _T0, trust_store=store)
+        resp = await sos.render_post(_request(_signed_body()))
+        assert resp.code == aiocoap.CHANGED
+        assert sos._active is True
+        # TOFU: the signer's key is now pinned under its derived IID.
+        entry = store.get(_EUI)
+        assert entry is not None
+        assert entry.pubkey == _SOS_PUB
+        assert entry.trust_level is TrustLevel.TOFU
+
+    async def test_pinned_peer_reaccepted_on_advancing_sequence(self) -> None:
+        store = TrustStore()
+        sos = SosResource(time_func=lambda: _T0, trust_store=store)
+        assert (await sos.render_post(_request(_signed_body(seq=1)))).code == aiocoap.CHANGED
+        sos.cancel()
+        # Steady state: the same key on a strictly advancing sequence hits
+        # the existing-entry/pubkey-matches branch of verify_or_pin.
+        resp = await sos.render_post(_request(_signed_body(seq=2)))
+        assert resp.code == aiocoap.CHANGED
+        assert sos._active is True
+
+    async def test_forged_post_pins_nothing(self) -> None:
+        store = TrustStore()
+        sos = SosResource(time_func=lambda: _T0, trust_store=store)
+        # Pinning happens only AFTER signature verification: a bad-signature
+        # POST must be dropped without inserting a TOFU pin (store poisoning).
+        body = bytearray(_signed_body())
+        body[-1] ^= 0x01
+        resp = await sos.render_post(_request(bytes(body)))
+        _assert_silently_dropped(resp)
+        assert sos._active is False
+        assert store.get(_EUI) is None
+
+    async def test_pinned_key_conflict_dropped(self) -> None:
+        store = TrustStore()
+        sos = SosResource(time_func=lambda: _T0, trust_store=store)
+        resp = await sos.render_post(_request(_signed_body()))
+        assert resp.code == aiocoap.CHANGED
+        # Pin conflict: the store now maps the signer's IID to a DIFFERENT
+        # pubkey. No public TrustStore API can produce this state (anchors
+        # key under their own derived IID), so inject it directly - it
+        # models a second-preimage IID collision or a corrupt/compromised
+        # pin. A subsequent POST from the original key is cryptographically
+        # valid but mismatches the pin: KeyMismatchError -> silent drop.
+        _other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
+        store._entries[_EUI] = TrustEntry.from_pubkey(other_pub, TrustLevel.TOFU)
+        sos2 = SosResource(time_func=lambda: _T0, trust_store=store)
+        resp2 = await sos2.render_post(_request(_signed_body(seq=2)))
+        _assert_silently_dropped(resp2)
+        assert sos2._active is False
 
 
 class TestSosMulticast:
@@ -899,6 +945,24 @@ class TestRollcallPostValidation:
             ).response
             assert resp.code == aiocoap.BAD_REQUEST
             assert "roll-001" not in rollcall._rollcalls
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_post_empty_id_rejected(self) -> None:
+        """Empty-string id is unaddressable and MUST be rejected."""
+        client, server, rollcall = await _setup_rollcall()
+        try:
+            resp = await client.request(
+                Message(
+                    code=POST,
+                    uri="coap://srv/rollcall",
+                    payload=_rollcall_post_body(id=""),
+                    content_format=60,
+                )
+            ).response
+            assert resp.code == aiocoap.BAD_REQUEST
+            assert "" not in rollcall._rollcalls
         finally:
             await client.shutdown()
             await server.shutdown()

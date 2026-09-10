@@ -4,12 +4,12 @@
   "vectors": [
     {
       "name": "hash_based_peer_rendezvous",
-      "description": "Hash-based rendezvous per 2a.3.2. channel = 1 + hash_32(eui || epoch_le || sfn_le) % (n_ch-1). Real priority-3 preimage at epoch=0.",
-      "sfn": 12345,
+      "description": "Hash-based rendezvous per appendix-ccp12-hopping 3.1: channel = 1 + hash_32(eui64 || epoch_le) % (n_ch-1).",
       "peer_eui64": "aabbccddeeff0011",
       "n_channels": 8,
-      "expected_channel": 5,
-      "mechanism": "hash_based"
+      "expected_channel": 1,
+      "mechanism": "hash_based",
+      "hash_32": 3630276237
     },
     {
       "name": "scheduled_rendezvous",
