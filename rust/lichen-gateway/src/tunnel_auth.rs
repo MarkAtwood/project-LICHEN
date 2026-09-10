@@ -428,7 +428,6 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
                 continue;
             };
             let matches = entry.claim.route_hash == request_route_hash
-                && request.route.last() == Some(&entry.claim.egress_iid)
                 && entry.claim.matches_source(&request.inner_source);
             if !matches {
                 continue;
@@ -1069,7 +1068,7 @@ mod tests {
 
     #[test]
     fn accept_on_full_floor_history_fails_closed_without_eviction() {
-        let (base, route, root, own, egress_addr, private, public, egress_public) = fixture();
+        let (base, _route, root, own, egress_addr, private, public, egress_public) = fixture();
         let mut table = TunnelAuthorizationTable::<1>::default();
         table.set_root(root);
         assert_eq!(table.max_history(), 4);
@@ -1342,14 +1341,14 @@ mod tests {
 
     #[test]
     fn canonical_bounds_and_malformed_inputs_are_rejected() {
-        let (claim, route, root, own, private, public) = fixture();
+        let (claim, route, root, own, _egress_addr, private, public, egress_public) = fixture();
         assert_eq!(route_hash(&[]), Err(TunnelAuthError::InvalidRoute));
         assert_eq!(
-            route_hash(&[[1; 8], [1; 8]]),
+            route_hash(&[[1; 16], [1; 16]]),
             Err(TunnelAuthError::InvalidRoute)
         );
         assert_eq!(
-            route_hash(&[[1; 8]; MAX_ROUTE_HOPS + 1]),
+            route_hash(&[[1; 16]; MAX_ROUTE_HOPS + 1]),
             Err(TunnelAuthError::InvalidRoute)
         );
         let mut noncanonical = claim.prefix;
@@ -1359,14 +1358,15 @@ mod tests {
             Err(TunnelAuthError::InvalidPrefix)
         );
         assert_eq!(
-            build_root_post(claim, &route[..2], root, &private, &public).map(|_| ()),
+            build_root_post(claim, &route[..2], &egress_public, root, &private, &public)
+                .map(|_| ()),
             Err(TunnelAuthError::InvalidRoute)
         );
         assert_eq!(
-            build_root_post(claim, &route, [9; 8], &private, &public).map(|_| ()),
+            build_root_post(claim, &route, &egress_public, [9; 8], &private, &public).map(|_| ()),
             Err(TunnelAuthError::RootIdentityMismatch)
         );
-        let post = build_root_post(claim, &route, root, &private, &public).unwrap();
+        let post = build_root_post(claim, &route, &egress_public, root, &private, &public).unwrap();
         let mut table = TunnelAuthorizationTable::<2>::default();
         table.set_root(root);
         for cut in 0..post.body.as_bytes().len() {

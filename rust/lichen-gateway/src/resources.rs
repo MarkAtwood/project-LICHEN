@@ -1925,7 +1925,7 @@ impl GatewayCoordinator {
         &mut self,
         inner_source: [u8; 16],
         destination_is_mesh: bool,
-        route: &[[u8; 8]],
+        route: &[[u8; 16]],
     ) -> Result<(), tunnel_auth::TunnelAuthError> {
         self.tunnel_auth.authorize_decapsulation(
             tunnel_auth::DecapsulationRequest {
@@ -1934,6 +1934,9 @@ impl GatewayCoordinator {
                 source_is_mesh: true,
                 destination_is_mesh,
                 route,
+                // This gateway is the egress; the route must terminate at
+                // its own primary address.
+                egress_addr: self.info.iid,
             },
             u64::try_from(unix_now()).unwrap_or(0),
         )

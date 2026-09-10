@@ -120,6 +120,7 @@ void lichen_forwarding_set_mesh_iface(struct net_if *iface)
 
 #if defined(CONFIG_LICHEN_TUNNEL_AUTH)
 int lichen_gateway_tunnel_auth_init(const uint8_t egress_iid[8],
+				    const uint8_t egress_addr[16],
 				    const uint8_t root_iid[8],
 				    const uint8_t root_pubkey[32])
 {
@@ -129,8 +130,8 @@ int lichen_gateway_tunnel_auth_init(const uint8_t egress_iid[8],
 	if (ret != 0) {
 		return ret;
 	}
-	ret = lichen_tunnel_auth_init(&s_tunnel_ctx, egress_iid, root_iid,
-				      root_pubkey, &crypto);
+	ret = lichen_tunnel_auth_init(&s_tunnel_ctx, egress_iid, egress_addr,
+				      root_iid, root_pubkey, &crypto);
 	s_tunnel_ready = (ret == 0);
 	return ret;
 }
@@ -189,7 +190,10 @@ bool lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
 				LOG_WRN("Egress dropped: unreadable IPv6 header");
 				return false;
 			}
-			/* Single-hop route: this gateway is the egress.
+			/* Single-hop route: this gateway is the egress. The
+			 * single hop is the gateway's own primary 02xx
+			 * address (spec 8.11: route hops are full 16-byte
+			 * addresses; a routable hop embeds no IID).
 			 * ponytail: multi-hop SRH route extraction is not
 			 * wired, so grants issued over longer routes fail
 			 * closed here; upgrade path is SRH parsing at the
@@ -197,7 +201,7 @@ bool lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
 			 * for unix time (expiry dormant, replay floors not). */
 			r = lichen_tunnel_auth_decapsulate(
 				&s_tunnel_ctx, ip6 + 8, ip6 + 24,
-				s_tunnel_ctx.egress_iid, 1,
+				s_tunnel_ctx.egress_addr, 1,
 				LICHEN_TUNNEL_MESH_TO_EXTERNAL,
 				(uint64_t)k_uptime_get() / MSEC_PER_SEC);
 			if (!r.allowed) {
