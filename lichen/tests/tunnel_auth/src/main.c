@@ -13,7 +13,8 @@
 #include <lichen/schnorr48.h>
 #include <monocypher.h>
 
-static struct lichen_tunnel_auth_ctx fresh_with(const uint8_t root[8], const uint8_t pubkey[32]);
+static struct lichen_tunnel_auth_ctx fresh_with(const uint8_t root[8], const uint8_t egress[16],
+						const uint8_t pubkey[32]);
 static struct lichen_tunnel_result receive_as(struct lichen_tunnel_auth_ctx *ctx,
 	const uint8_t *wire, size_t len, bool authenticated, const uint8_t sender[8], uint64_t now);
 static void check_result(const char *name, struct lichen_tunnel_result result,
@@ -56,14 +57,15 @@ static int capture_post(const uint8_t peer[8], const char *resource, const char 
 	return capture->result;
 }
 
-static struct lichen_tunnel_auth_ctx fresh_with(const uint8_t root[8], const uint8_t pubkey[32])
+static struct lichen_tunnel_auth_ctx fresh_with(const uint8_t root[8], const uint8_t egress[16],
+						const uint8_t pubkey[32])
 {
 	struct lichen_tunnel_auth_ctx ctx;
-	assert(lichen_tunnel_auth_init(&ctx, egress_iid, root, pubkey, &crypto) == 0);
+	assert(lichen_tunnel_auth_init(&ctx, egress_iid, egress, root, pubkey, &crypto) == 0);
 	return ctx;
 }
 
-static struct lichen_tunnel_auth_ctx fresh(void) { return fresh_with(root_iid, root_pubkey); }
+static struct lichen_tunnel_auth_ctx fresh(void) { return fresh_with(root_iid, egress_addr, root_pubkey); }
 
 static struct lichen_tunnel_result receive_as(struct lichen_tunnel_auth_ctx *ctx,
 	const uint8_t *wire, size_t len, bool authenticated, const uint8_t sender[8], uint64_t now)
@@ -146,24 +148,24 @@ static void test_encoder_exact_vector(void)
 	assert(memcmp(public_key, root_pubkey, 32) == 0);
 	memcpy(claims.prefix, valid_prefix, 16); memcpy(claims.route_hash, valid_route_hash, 16); memcpy(claims.egress_iid, egress_iid, 8);
 	assert(lichen_tunnel_auth_encode(&crypto, private_key, public_key, root_iid, &claims,
-					 valid_route, 2, out, sizeof(out), &len) == 0);
+					 valid_route, 2, egress_addr, out, sizeof(out), &len) == 0);
 	assert(len == sizeof(wire_valid) && memcmp(out, wire_valid, len) == 0);
 	memset(guard, 0xa5, sizeof(guard)); len = 99;
 	assert(lichen_tunnel_auth_encode(&crypto, private_key, public_key, root_iid, &claims,
-					 valid_route, 2, guard, sizeof(guard), &len) == -ENOBUFS);
+					 valid_route, 2, egress_addr, guard, sizeof(guard), &len) == -ENOBUFS);
 	assert(len == 99); for (size_t i = 0; i < sizeof(guard); i++) assert(guard[i] == 0xa5);
 	struct post_capture capture = { 0 };
 	struct lichen_tunnel_result result = lichen_tunnel_auth_route_installed(
 		&crypto, private_key, public_key, root_iid, &claims, valid_route, 2,
-		true, capture_post, &capture);
+		egress_addr, true, capture_post, &capture);
 	assert(result.allowed && capture.called && memcmp(capture.peer, egress_iid, 8) == 0);
 	capture.called = false; capture.result = -EIO;
 	result = lichen_tunnel_auth_route_installed(&crypto, private_key, public_key,
-		root_iid, &claims, valid_route, 2, true, capture_post, &capture);
+		root_iid, &claims, valid_route, 2, egress_addr, true, capture_post, &capture);
 	assert(!result.allowed && result.denial == LICHEN_TUNNEL_DENIAL_DELIVERY_FAILED);
 	capture.called = false;
 	result = lichen_tunnel_auth_route_installed(&crypto, private_key, public_key,
-		root_iid, &claims, valid_route, 2, false, capture_post, &capture);
+		root_iid, &claims, valid_route, 2, egress_addr, false, capture_post, &capture);
 	assert(!result.allowed && !capture.called && result.denial == LICHEN_TUNNEL_DENIAL_DESTINATION_SCOPE);
 	crypto_wipe(private_key, sizeof(private_key));
 }
@@ -240,10 +242,10 @@ static void test_decap_expired_shadow(void)
 	 * same route, lives to 1900000300. */
 	claims.prefix_len = 64;
 	assert(lichen_tunnel_auth_encode(&crypto, private_key, public_key, root_iid, &claims,
-					 valid_route, 2, wire_a, sizeof(wire_a), &len_a) == 0);
+					 valid_route, 2, egress_addr, wire_a, sizeof(wire_a), &len_a) == 0);
 	claims.prefix_len = 48; claims.path_seq = 2; claims.expiry = UINT64_C(1900000300);
 	assert(lichen_tunnel_auth_encode(&crypto, private_key, public_key, root_iid, &claims,
-					 valid_route, 2, wire_b, sizeof(wire_b), &len_b) == 0);
+					 valid_route, 2, egress_addr, wire_b, sizeof(wire_b), &len_b) == 0);
 	assert(receive_as(&ctx, wire_a, len_a, true, root_iid, UINT64_C(1900000000)).allowed);
 	assert(receive_as(&ctx, wire_b, len_b, true, root_iid, UINT64_C(1900000000)).allowed);
 

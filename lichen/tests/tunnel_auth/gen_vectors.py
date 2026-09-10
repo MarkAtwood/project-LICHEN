@@ -17,6 +17,16 @@ def array(name: str, value: str) -> str:
     return f"static const uint8_t {name}[] = {{{body}}};\n"
 
 
+def array2d(name: str, values: list[str]) -> str:
+    """Emit a fixed-width (16-byte hop) 2D array for the route tables."""
+    rows = []
+    for value in values:
+        octets = bytes.fromhex(value)
+        assert len(octets) == 16, "route hops are full 16-byte addresses"
+        rows.append("{" + ",".join(f"0x{byte:02x}" for byte in octets) + "}")
+    return f"static const uint8_t {name}[][16] = {{{','.join(rows)}}};\n"
+
+
 DENIAL = {
     "none": "LICHEN_TUNNEL_DENIAL_NONE",
     "malformed": "LICHEN_TUNNEL_DENIAL_MALFORMED",
@@ -75,11 +85,12 @@ def main() -> None:
     identities = {item["name"]: item for item in data["identities"]}
     names = tuple(messages)
     out = ["/* Generated from test/vectors/tunnel_authorization.json. */\n"]
-    for identity_name in ("root", "other_root", "egress", "other_egress"):
+    for identity_name in ("root", "other_root", "egress", "other_egress", "transit"):
         value = identities[identity_name]
         out += [array(f"{identity_name}_seed", value["seed_hex"]),
                 array(f"{identity_name}_pubkey", value["public_key_hex"]),
-                array(f"{identity_name}_iid", value["iid_hex"])]
+                array(f"{identity_name}_iid", value["iid_hex"]),
+                array(f"{identity_name}_addr", value["address_hex"])]
     for name in names:
         safe = ident(name)
         message = messages[name]
@@ -87,7 +98,7 @@ def main() -> None:
                 array(f"prefix_{safe}", message["prefix_hex"]),
                 f"static const uint8_t prefix_len_{safe} = {message['prefix_len']};\n",
                 array(f"route_hash_{safe}", message["route_hash_hex"]),
-                array(f"route_{safe}", "".join(message["route_hops_hex"]))]
+                array2d(f"route_{safe}", message["route_hops_hex"])]
     out += ["#define valid_prefix prefix_valid\n",
             "#define valid_route_hash route_hash_valid\n",
             "#define valid_route route_valid\n"]
@@ -99,7 +110,7 @@ def main() -> None:
         sender = ident(case["oscore_sender"])
         message = ident(case["message"])
         expected = case["expected"]
-        out.append(f"/* {case['name']} */ ctx = fresh_with({active}_iid, {active}_pubkey);\n")
+        out.append(f"/* {case['name']} */ ctx = fresh_with({active}_iid, egress_addr, {active}_pubkey);\n")
         out.extend(line + "\n" for line in setup_lines(case["setup"]))
         auth = "true" if case["oscore_authenticated"] else "false"
         out.append(
@@ -117,17 +128,17 @@ def main() -> None:
         route_name = f"decap_route_{index}"
         src_name = f"decap_src_{index}"
         dst_name = f"decap_dst_{index}"
-        out.append(array(route_name, "".join(case["route_hops_hex"])))
+        out.append(array2d(route_name, case["route_hops_hex"]))
         out.append(array(src_name, IPv6Address(case["inner_source"]).packed.hex()))
         out.append(array(dst_name, IPv6Address(case["inner_destination"]).packed.hex()))
-        out.append(f"/* {case['name']} */ ctx = fresh_with({active}_iid, {active}_pubkey);\n")
+        out.append(f"/* {case['name']} */ ctx = fresh_with({active}_iid, egress_addr, {active}_pubkey);\n")
         out.extend(line + "\n" for line in setup_lines(case["setup"]))
         direction = ("LICHEN_TUNNEL_MESH_TO_EXTERNAL" if case["direction"] == "mesh-to-external"
                      else "LICHEN_TUNNEL_EXTERNAL_TO_MESH")
         expected = case["expected"]
         out.append(
             f"z = lichen_tunnel_auth_decapsulate(&ctx, {src_name}, {dst_name}, {route_name}, "
-            f"sizeof({route_name}) / 8U, {direction}, UINT64_C({case['now']})); "
+            f"sizeof({route_name}) / 16U, {direction}, UINT64_C({case['now']})); "
             f"check_result(\"{case['name']}\", z, {'true' if expected['allowed'] else 'false'}, "
             f"{DENIAL[expected['denial']]}, {expected['response_code']});\n"
         )

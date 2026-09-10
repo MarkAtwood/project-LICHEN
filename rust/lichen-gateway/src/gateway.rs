@@ -1415,15 +1415,14 @@ impl Gateway {
         if self.coordinator.tunnel_auth_root().is_none() {
             return true;
         }
-        // Route evidence is this gateway's own IID — it is the egress — not
-        // the DODAG root IID, which may differ after a root rebind.
-        // Merge resolution: take the IID from the canonical key derivation,
-        // not the low half of `coordinator.info.iid` — after the upstream
-        // AddrForKey migration the routable address bit-packs the inverted
-        // key and does not embed the IID (i72x.2).
-        let egress_iid: [u8; 8] = self.rpl_stack.local_iid();
+        // Route evidence is this gateway's own primary address — it is the
+        // egress — not the DODAG root IID, which may differ after a root
+        // rebind. Spec 8.11 (post-AddrForKey): the route hash input is the
+        // full 16-byte hop addresses; a primary 02xx address embeds no IID,
+        // so the old own-IID route evidence cannot match any migrated grant.
+        let egress_addr: [u8; 16] = self.coordinator.info.iid;
         let inner_source: [u8; 16] = received.ipv6[8..24].try_into().expect("len checked");
-        let route = [egress_iid];
+        let route = [egress_addr];
         match self
             .coordinator
             .authorize_egress(inner_source, false, &route)

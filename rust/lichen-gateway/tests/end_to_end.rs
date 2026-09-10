@@ -12,7 +12,7 @@
 //!   - Invalid frames are dropped gracefully
 
 use lichen_coap::message::MessageCode;
-use lichen_core::addr::Ipv6Addr;
+use lichen_core::addr::{ygg_addr_from_pubkey, Ipv6Addr};
 use lichen_core::announce::{write_announce_signed_data, AnnounceBuilder};
 use lichen_core::constants::{L2_DISPATCH_SCHC, RPL_ICMPV6_TYPE, RPL_INSTANCE_ID};
 use lichen_core::icmpv6;
@@ -476,10 +476,11 @@ async fn gateway_rejects_replayed_authenticated_wire_before_forwarding() {
     // test below is unchanged by that gate.
     let identity = gateway_identity();
     let gw_iid = iid_from_pubkey(identity.pubkey.as_bytes());
+    let gw_addr = ygg_addr_from_pubkey(identity.pubkey.as_bytes());
     let mut prefix = [0u8; 16];
     prefix[0] = 0xfe;
     prefix[1] = 0x80;
-    let route = [gw_iid];
+    let route = [gw_addr];
     let claim = TunnelAuthorization::new(
         prefix,
         64,
@@ -489,7 +490,15 @@ async fn gateway_rejects_replayed_authenticated_wire_before_forwarding() {
         gw_iid,
     )
     .unwrap();
-    let post = build_root_post(claim, &route, gw_iid, &identity.privkey, &identity.pubkey).unwrap();
+    let post = build_root_post(
+        claim,
+        &route,
+        &identity.pubkey,
+        gw_iid,
+        &identity.privkey,
+        &identity.pubkey,
+    )
+    .unwrap();
     let response = gw.coordinator_mut().handle_request(
         CoapMethod::Post,
         "tunnel-auth",
