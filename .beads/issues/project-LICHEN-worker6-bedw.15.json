@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-bedw.15",
+  "title": "[spec-gap][R-X509-052/054] Role-assertion trust scope: roles honored only from role-granting trust anchors",
+  "description": "spec/appendix-x509-cert-profile.md section 8 role-assertion trust scope and section 5: the mesh role extension MUST be honored only when the chain validates to a trust anchor the deployment separately configured as authorized to grant roles; chains to any other anchor (including the optional public default CA of 06-security 8.13) establish key-to-address binding only and MUST NOT be read as asserting any role; when honored, a relay-role assertion satisfies a lichen:relay=true requirement without contacting the gateway, unless the deployment requires the short-lived COSE local-fact form. Classification: not-implemented (depends on chain validation bead + role extension bead; anchor authorization config does not exist). Suggested placement: credential verifier authorization layer per stack (bedw consumers); python TrustAnchorStore metadata field could carry the role-granting flag.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T01:32:02.065032857Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T01:32:02.065032857Z",
+  "labels": [
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-bedw.15",
+      "depends_on_id": "project-LICHEN-worker6-bedw",
+      "type": "parent-child",
+      "created_at": "2026-09-10T01:32:02.190376314Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

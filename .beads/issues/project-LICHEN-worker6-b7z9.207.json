@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.207",
+  "title": "[spec-gap][R-ADR-014] RPL DAO-ACK channel_map (root-assigned data channels) not implemented in any stack",
+  "description": "spec/appendix-design-rationale.md:416: Data channels via hash or root-assigned (RPL DAO-ACK carries channel_map). Hash-based data channels are implemented+tested (CCP-12), but no DAO-ACK in any stack carries a channel map: Rust DAO-ACK carries address assignment only (rust/lichen-rpl/src/address_assignment.rs:385-471; option registry message.rs:71-85 has no channel option); C rpl option registry rpl_messages.h:59-78 has none; python/src/lichen/rpl/ none. The root-published GCP channel_map (rust/lichen-gateway/src/resources.rs:1173, vector gateway_coordination.json:218, consumer python/tests/gateway/test_gcp6_vectors.py:158) is CoAP gateway coordination, not RPL. Related: R-02-013 gateway-assigned channel DIO option not-implemented, flagged for spec simplification (docs/spec-coverage/02-physical-link.md:33). Found during appendix-design-rationale sweep. Suggested: implement a DAO-ACK/DIO channel option, or amend the appendix to name the GCP channel_map as the root-assigned mechanism.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T01:41:55.743611964Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T01:41:55.743611964Z",
+  "labels": [
+    "rpl",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.207",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-10T01:41:55.873787905Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

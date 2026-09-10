@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-bedw.19",
+  "title": "[spec-gap] X.509 profile test vectors absent from test/vectors/ (appendix section 9 promise)",
+  "description": "spec/appendix-x509-cert-profile.md section 9: test vectors for chain validation and cross-signing are tracked separately and will live in test/vectors/. Also sections 4 and 5 give worked encodings (SAN DER 87 10 02 0F FD FC FB FA F9 F8 F7 F6 F5 F4 F3 F2 F1 F0; role extnValue 04 04 03 02 07 80 etc.) that should be pinned. Classification: not-implemented (no x509/certificate corpus in test/vectors). Suggested placement: test/vectors/x509_cert_profile.json + schema.json entry + generator generate_x509_cert_profile.py with --check freshness command (pattern: gcp_slot_claim_cose_sign1); oracles: pinned upstream AddrForKey anchor (yggdrasil_address.json), pyca/cryptography, openssl for DER byte-equality.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T01:32:03.60176469Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T01:32:03.60176469Z",
+  "labels": [
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-bedw.19",
+      "depends_on_id": "project-LICHEN-worker6-bedw",
+      "type": "parent-child",
+      "created_at": "2026-09-10T01:32:03.733762392Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

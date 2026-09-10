@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-i68d",
+  "title": "[ALARM] Pause expired after 60 min - auto-resumed",
+  "description": "Fleet pause outlived 60 minutes (3797s). Auto-resumed by the guards loop; the operator who paused should verify their repair landed.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T02:00:35.909143866Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T02:00:35.909143866Z"
+}

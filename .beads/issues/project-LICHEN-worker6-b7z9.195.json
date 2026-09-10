@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.195",
+  "title": "[spec-gap][R-LOADNG-018/002/003] Python LOADng discovery never driven: originate_rreq has no production caller, no ring progression, no wait/retry loop",
+  "description": "Spec B2.1/B2.5: RREQ_WAIT_TIME 5000 ms between attempts, RREQ_RETRIES 3, expanding ring 4-\u003e8-\u003e15. Classification: not-implemented (python runtime wiring).\n\nEvidence: LoadngRouter.originate_rreq (python/src/lichen/loadng/discovery.py:130-145) has no production caller (only python/tests/loadng/test_discovery.py). Router.route() returns RouteDecision.QUEUE on gradient miss (python/src/lichen/routing/router.py:557-567) but nothing converts QUEUE into originate_rreq + RREQ transmission, and LoadngRouter has no ring-progression or retry state machine at all. node.py contributes only pending_timeout_ms=5000 (node.py:242, queue expiry) and RREQ jitter (node.py:1738-1773, tested python/tests/loadng/test_rreq_jitter.py). C and Rust both implement the ring state machine (lichen/subsys/lichen/routing/loadng.c:550-630; rust/lichen-core/src/loadng.rs:322-390).\n\nSuggested placement: python/src/lichen/node.py (or routing/router.py): on QUEUE, originate ring RREQ and send via scheduled_send (jitter), advance to next ring after RREQ_WAIT_TIME, fail after EXPANDING_RING exhaustion, then apply Yggdrasil fallback per 05-routing 10.1.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T01:16:41.11504983Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T01:16:41.11504983Z",
+  "labels": [
+    "python",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.195",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-10T01:16:41.246574452Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

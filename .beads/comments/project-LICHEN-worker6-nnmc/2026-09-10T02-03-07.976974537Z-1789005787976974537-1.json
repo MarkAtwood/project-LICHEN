@@ -1,0 +1,7 @@
+{
+  "id": "1789005787976974537-1",
+  "issue_id": "project-LICHEN-worker6-nnmc",
+  "author": "Mark Atwood",
+  "text": "worker2 2026-09-10: second red test with the same post-AddrForKey parent-form root cause, found while working b7z9.184 (unrelated scheduler const fix). cargo test -p lichen-node --lib node::tests::leaf_dao_is_forwarded_by_parent_and_processed_by_root FAILS on the beads-worker-2 checkout (verified pre-existing: fails identically with dao_tx_sched.rs changes stashed). Panic at lichen-node/src/node.rs:1157: assertion left == right failed, left: (166, DaoForwarded { next_hop: [2,0,0,..,1] }), right: (0, None) - i.e. the leaf DAO IS forwarded but the test expects no forwarding, consistent with nnmc's design-level diagnosis (parent form / route-lookup mismatch post-migration). Evidence only; not claiming this bead.",
+  "created_at": "2026-09-10T02:03:07.976974537Z"
+}
