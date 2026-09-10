@@ -8,7 +8,11 @@
 set -u
 REPO="/home/mark/Developer/lichen-workspace/project-LICHEN"
 CYCLE_MIN="${1:-10}"
-case "$CYCLE_MIN" in ''|*[!0-9]*|0*) echo "fleet-guards: cycle_minutes must be a positive integer without leading zeros (got '$CYCLE_MIN')" >&2; exit 1;; esac
+case "$CYCLE_MIN" in ''|*[!0123456789]*|0*) echo "fleet-guards: cycle_minutes must be a positive integer without leading zeros (got '$CYCLE_MIN')" >&2; exit 1;; esac
+# Form pattern uses an explicit 0123456789 range: [!0-9] is collation-dependent
+# and under glibc UTF-8 locales admits Unicode digits (e.g. Arabic-Indic,
+# fullwidth, Devanagari), which reach the numeric test as non-integers
+# (rc 2 = condition false) and bypass the magnitude cap below. (048n)
 # Magnitude cap: the pattern constrains form only; 64-bit wraparound turns a
 # huge digit string into a negative (sleep fails instantly -> hot loop on the
 # metered credits API) or an epoch-scale sleep (guards silently hang). Length
