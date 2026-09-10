@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-oa51.2",
+  "title": "Bind authenticated peers across message adapters",
+  "description": "Audit finds Python SecureDatagramChannel verifies/decrypts but dispatches only bytes/source; LichenTransport reconstructs remote without context metadata required by messaging authorization. C coap_oscore resource lookup derives peer from routable source low64 bits, conflicting with upstream AddrForKey. Rust resolves origin through key tables. Need peer-evidence/context mapping through existing public boundaries before authenticated receipt acceptance. Preserve actual auth/replay checks; OSCORE/EDHOC security-semantic changes require human-only review and must not be implemented as blind integration fixes.",
+  "acceptance_criteria": "Authenticated full endpoint identity survives receive adapters and is available to messaging/receipt handlers; wrong-peer/forged metadata rejected using real protection paths; human-only boundary adjudicated before sensitive changes.",
+  "notes": "COMPLETE scoped endpoint-binding implementation after user approved both adapter and necessary C lifetime extension. Python immutable per-datagram authenticated evidence passes451 focused tests; lead reran15 evidence cases. C full-address key lookup/atomic context binding/reference-safe responses passes180 distinct native_sim tests and15 final inbox/fallback cases; lifecycle9 pass. Review findings .2.1/.2.2/.2.3 fixed, final3 reviews clear. Full6-way messaging remains incomplete under oa51; no app delivery claim. All implementation source uncommitted.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T18:25:33.508867893Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T20:44:22.72609508Z",
+  "started_at": "2026-09-10T19:39:58.751287952Z",
+  "closed_at": "2026-09-10T20:44:08.630933821Z",
+  "close_reason": "Approved C and Python endpoint evidence adapters implemented and lifetime review findings resolved. Python451 focused tests passed, lead reran15 evidence tests; C180 distinct tests plus15 final fallback tests pass, lifecycle9 pass.3 independent reviews clear after fixes. Full six-way messaging milestone remains open.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-oa51.2",
+      "depends_on_id": "project-LICHEN-worker6-oa51",
+      "type": "parent-child",
+      "created_at": "2026-09-10T18:25:33.67592261Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

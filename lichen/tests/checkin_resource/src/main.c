@@ -97,7 +97,7 @@ int coap_oscore_authorize_mutating(
 	 * merged production callers in checkin_resource.c pass the extended
 	 * out-params (plain_buf, payload_out, ctx_out, piv, is_protected). */
 	uint8_t *plain_buf, size_t plain_buf_len, const uint8_t **payload_out,
-	uint16_t *payload_len_out, struct oscore_ctx **ctx_out,
+	uint16_t *payload_len_out, struct oscore_ctx_ref *ctx_out,
 	uint8_t *piv_out, size_t *piv_len_out, bool *is_protected)
 {
 	uint16_t len = 0U;
@@ -109,7 +109,7 @@ int coap_oscore_authorize_mutating(
 	ARG_UNUSED(addr_len);
 	last_unprotect_method = expected_method;
 	*is_protected = oscore_protect;
-	*ctx_out = NULL;
+	*ctx_out = (struct oscore_ctx_ref){0};
 	*piv_len_out = 0;
 	if (oscore_protect) {
 		if (plain_buf == NULL || plain_buf_len == 0U) {
@@ -147,6 +147,16 @@ int coap_oscore_respond_resource(
 	ARG_UNUSED(result);
 	return lichen_coap_respond(resource, request, addr, addr_len, code,
 				   content_format, payload, payload_len);
+}
+
+int coap_oscore_send_protected(struct coap_resource *resource,
+	struct coap_packet *request, struct sockaddr *addr, socklen_t addr_len,
+	struct oscore_ctx_ref ctx, const uint8_t *piv, size_t piv_len, uint8_t code)
+{
+	ARG_UNUSED(ctx);
+	ARG_UNUSED(piv);
+	ARG_UNUSED(piv_len);
+	return lichen_coap_respond(resource, request, addr, addr_len, code, 0, NULL, 0);
 }
 
 /* --- helpers --- */

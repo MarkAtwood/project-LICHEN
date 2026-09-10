@@ -140,7 +140,7 @@ int lichen_checkin_post_handler(struct coap_resource *resource,
 	uint8_t oscore_plain_buf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX];
 	uint8_t piv[OSCORE_PIV_MAX_LEN];
 	size_t piv_len = 0;
-	struct oscore_ctx *oscore_ctx = NULL;
+	struct oscore_ctx_ref oscore_ctx = {0};
 	const uint8_t *payload = NULL;
 	uint16_t payload_len = 0;
 	bool is_protected = false;
@@ -240,7 +240,7 @@ int lichen_rollcall_post_handler(struct coap_resource *resource,
 	uint8_t oscore_plain_buf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX];
 	uint8_t piv[OSCORE_PIV_MAX_LEN];
 	size_t piv_len = 0;
-	struct oscore_ctx *oscore_ctx = NULL;
+	struct oscore_ctx_ref oscore_ctx = {0};
 	const uint8_t *payload = NULL;
 	uint16_t payload_len = 0;
 	bool is_protected = false;
@@ -352,7 +352,7 @@ int lichen_checkin_config_put_handler(struct coap_resource *resource,
 	uint8_t oscore_plain_buf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX];
 	uint8_t piv[OSCORE_PIV_MAX_LEN];
 	size_t piv_len = 0;
-	struct oscore_ctx *oscore_ctx = NULL;
+	struct oscore_ctx_ref oscore_ctx = {0};
 	const uint8_t *payload = NULL;
 	uint16_t payload_len = 0;
 	bool is_protected = false;

@@ -14,6 +14,7 @@
 
 #include <monocypher.h>
 #include <lichen/coap_keys.h>
+#include <lichen/link_ctx.h>
 #include "coap_keys_internal.h"
 
 LOG_MODULE_DECLARE(lichen_coap_keys, CONFIG_LICHEN_COAP_KEYS_LOG_LEVEL);
@@ -459,6 +460,47 @@ int lichen_key_store_get(const uint8_t iid[_Nonnull LICHEN_KEY_IID_LEN],
 	*entry = s_keys[slot];
 	k_mutex_unlock(&s_mutex);
 	return 0;
+}
+
+int lichen_key_store_get_by_ygg_addr(const uint8_t addr[16],
+				     struct lichen_key_entry *entry)
+{
+	int slot = -1;
+	int ret = -ENOENT;
+	uint8_t derived[16];
+
+	if (addr == NULL || entry == NULL) {
+		return -EINVAL;
+	}
+	/* AddrForKey node identities only; SubnetForKey is not a peer identity. */
+	if (addr[0] != 0x02) {
+		return -ENOENT;
+	}
+	k_mutex_lock(&s_mutex, K_FOREVER);
+	for (int i = 0; i < CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES; i++) {
+		if (!s_keys[i].valid) {
+			continue;
+		}
+		ret = lichen_identity_ygg_addr_from_ed25519(s_keys[i].pubkey, derived);
+		if (ret != 0) {
+			goto out;
+		}
+		if (memcmp(addr, derived, sizeof(derived)) == 0) {
+			if (slot >= 0) {
+				ret = -EEXIST;
+				goto out;
+			}
+			slot = i;
+		}
+	}
+	ret = -ENOENT;
+	if (slot >= 0) {
+		*entry = s_keys[slot];
+		ret = 0;
+	}
+out:
+	k_mutex_unlock(&s_mutex);
+	return ret;
 }
 
 int lichen_key_store_delete(const uint8_t iid[_Nonnull LICHEN_KEY_IID_LEN])

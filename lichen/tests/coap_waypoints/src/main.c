@@ -154,11 +154,19 @@ int coap_oscore_unprotect_resource_request(
   return 0;
 }
 
+int coap_oscore_authorize_mutating_result(
+    struct coap_resource *resource, struct coap_packet *request,
+    struct sockaddr *addr, socklen_t addr_len, uint8_t expected_method,
+    struct coap_oscore_unprotect_result *result) {
+  return coap_oscore_unprotect_resource_request(resource, request, addr,
+                                               addr_len, expected_method, result);
+}
+
 int coap_oscore_authorize_mutating(
     struct coap_resource *resource, struct coap_packet *request,
     struct sockaddr *addr, socklen_t addr_len, uint8_t expected_method,
     uint8_t *plain_buf, size_t plain_buf_len, const uint8_t **payload_out,
-    uint16_t *payload_len_out, struct oscore_ctx **ctx_out,
+    uint16_t *payload_len_out, struct oscore_ctx_ref *ctx_out,
     uint8_t *piv_out, size_t *piv_len_out, bool *is_protected) {
   /* Merge resolution: keep the explicit-buffer signature (HEAD). The
    * settled merged-tree callers in coap_waypoints.c (POST, detail DELETE)
@@ -174,7 +182,7 @@ int coap_oscore_authorize_mutating(
   ARG_UNUSED(addr_len);
   last_expected_method = expected_method;
   *is_protected = protected_request;
-  *ctx_out = NULL;
+  *ctx_out = (struct oscore_ctx_ref){0};
   *piv_len_out = 0;
   if (protected_request) {
     if (request_payload_len > plain_buf_len) {

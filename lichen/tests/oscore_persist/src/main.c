@@ -33,6 +33,9 @@ struct mock_authority {
 
 static struct memory_settings memory_store;
 static struct mock_authority authority;
+static void (*bound_callback)(void);
+static bool memory_registered;
+void oscore_test_after_selection(void (*hook)(void));
 
 struct core_backend {
 	uint8_t slots[2][OSCORE_PERSIST_BLOB_MAX];
@@ -142,6 +145,9 @@ static int memory_save(struct settings_store *store, const char *name,
 	memcpy(item->value, value, length);
 	item->length = length;
 	item->present = true;
+	if (bound_callback != NULL) {
+		bound_callback();
+	}
 	return 0;
 }
 
@@ -149,6 +155,17 @@ static const struct settings_store_itf memory_itf = {
 	.csi_load = memory_load,
 	.csi_save = memory_save,
 };
+
+static void register_memory(void)
+{
+	zassert_ok(settings_subsys_init());
+	if (!memory_registered) {
+		memory_store.store.cs_itf = &memory_itf;
+		settings_src_register(&memory_store.store);
+		settings_dst_register(&memory_store.store);
+		memory_registered = true;
+	}
+}
 
 static int derive_key(void *user, const uint8_t *context, size_t context_len,
 		      uint8_t out[32])
@@ -278,10 +295,7 @@ ZTEST(oscore_persist, test_settings_reboot_replay_and_atomic_failures)
 	size_t response_option_len = sizeof(response_option);
 	uint64_t restored_sender;
 
-	zassert_ok(settings_subsys_init());
-	memory_store.store.cs_itf = &memory_itf;
-	settings_src_register(&memory_store.store);
-	settings_dst_register(&memory_store.store);
+	register_memory();
 	memset(authority.root_key, 0x5a, sizeof(authority.root_key));
 	zassert_ok(oscore_settings_register_protection(&protection_ops, &authority));
 	zassert_ok(oscore_init());
@@ -451,6 +465,136 @@ ZTEST(oscore_persist, test_monotonic_atomic_and_bounded_records)
 	memset(binding, 0xee, sizeof(binding));
 	zassert_equal(oscore_persist_commit(&core_persistence, binding, &state),
 		      -ENOSPC);
+}
+
+/* Published RFC 8613 C.1/C.4 inputs, independent of local encryption. */
+static const uint8_t bound_secret[16] = {1, 2, 3, 4, 5, 6, 7, 8,
+	9, 10, 11, 12, 13, 14, 15, 16};
+static const uint8_t bound_salt[8] = {0x9e, 0x7c, 0xa9, 0x22, 0x23, 0x78, 0x63, 0x40};
+static const uint8_t bound_peer[8] = {1};
+static struct oscore_ctx *bound_ctx;
+static unsigned mutation_calls;
+
+static void bound_setup(void)
+{
+	oscore_settings_close();
+	memset(memory_store.items, 0, sizeof(memory_store.items));
+	memset(&authority, 0, sizeof(authority));
+	memset(authority.root_key, 0x5a, sizeof(authority.root_key));
+	register_memory();
+	zassert_ok(oscore_settings_register_protection(&protection_ops, &authority));
+	zassert_ok(oscore_init());
+	zassert_ok(oscore_ctx_create_with_eui64(bound_secret, bound_salt, sizeof(bound_salt),
+		(uint8_t[]){1}, 1, NULL, 0, bound_peer, &bound_ctx));
+}
+
+static int bound_auth(struct oscore_ctx_ref *ref)
+{
+	const uint8_t ct[] = {0x61, 0x2f, 0x10, 0x92, 0xf1, 0x77, 0x6f,
+		0x1c, 0x16, 0x68, 0xb3, 0x82, 0x5e};
+	uint8_t code, options[8], payload[8];
+	size_t options_len = sizeof(options), payload_len = sizeof(payload);
+	return oscore_unprotect_request_by_peer(bound_peer, (uint8_t[]){9, 20}, 2,
+		ct, sizeof(ct), &code, options, &options_len, payload, &payload_len, ref);
+}
+
+static void attempt_mutation(void)
+{
+	struct oscore_ctx *created = NULL;
+	mutation_calls++;
+	oscore_ctx_free(bound_ctx);
+	zassert_equal(oscore_ctx_set_peer_eui64(bound_ctx, (uint8_t[8]){7}),
+		OSCORE_ERR_CONTEXT_STALE);
+	zassert_equal(oscore_ctx_set_sender_seq(bound_ctx, 100), OSCORE_ERR_CONTEXT_STALE);
+	zassert_equal(oscore_ctx_create(bound_secret, NULL, 0, (uint8_t[]){2}, 1,
+		NULL, 0, &created), OSCORE_ERR_CONTEXT_STALE);
+	zassert_is_null(created);
+}
+
+ZTEST(oscore_persist, test_z_bound_callbacks_cannot_mutate_request_context)
+{
+	struct oscore_ctx_ref ref = {0};
+	bound_setup();
+	mutation_calls = 0;
+	bound_callback = attempt_mutation;
+	zassert_equal(bound_auth(&ref), OSCORE_ERR_CONTEXT_STALE);
+	bound_callback = NULL;
+	zassert_true(mutation_calls > 0);
+	zassert_is_null(ref.ctx);
+	zassert_equal(ref.generation, 0);
+	struct oscore_ctx *found = NULL;
+	zassert_ok(oscore_ctx_get_by_eui64(bound_peer, &found));
+	zassert_equal(found, bound_ctx);
+	oscore_ctx_free(bound_ctx);
+	oscore_settings_close();
+}
+
+ZTEST(oscore_persist, test_z_bound_callbacks_cannot_mutate_response_context)
+{
+	struct oscore_ctx_ref ref;
+	uint8_t ct[32], opt[8];
+	size_t ct_len = sizeof(ct), opt_len = sizeof(opt);
+	bound_setup();
+	zassert_ok(bound_auth(&ref));
+	mutation_calls = 0;
+	bound_callback = attempt_mutation;
+	zassert_equal(oscore_protect_response_ref(&ref, (uint8_t[]){20}, 1, 69,
+		NULL, 0, NULL, 0, ct, &ct_len, opt, &opt_len), OSCORE_ERR_CONTEXT_STALE);
+	bound_callback = NULL;
+	zassert_true(mutation_calls > 0);
+	struct oscore_ctx *found = NULL;
+	zassert_ok(oscore_ctx_get_by_eui64(bound_peer, &found));
+	zassert_equal(found, bound_ctx);
+	oscore_ctx_free(bound_ctx);
+	oscore_settings_close();
+}
+
+static K_SEM_DEFINE(recycle_start, 0, 1);
+static K_SEM_DEFINE(recycle_entered, 0, 1);
+static K_SEM_DEFINE(recycle_done, 0, 1);
+static K_THREAD_STACK_DEFINE(recycle_stack, 4096);
+static struct k_thread recycle_thread;
+static struct oscore_ctx *replacement;
+
+static void recycle_worker(void *a, void *b, void *c)
+{
+	ARG_UNUSED(a); ARG_UNUSED(b); ARG_UNUSED(c);
+	k_sem_take(&recycle_start, K_FOREVER);
+	k_sem_give(&recycle_entered);
+	oscore_ctx_free(bound_ctx);
+	zassert_ok(oscore_ctx_create_with_eui64(bound_secret, bound_salt, sizeof(bound_salt),
+		(uint8_t[]){1}, 1, NULL, 0, (uint8_t[8]){7}, &replacement));
+	k_sem_give(&recycle_done);
+}
+
+static void concurrent_recycle(void)
+{
+	bound_callback = NULL;
+	k_sem_give(&recycle_start);
+	zassert_ok(k_sem_take(&recycle_entered, K_SECONDS(1)));
+	zassert_not_equal(k_sem_take(&recycle_done, K_NO_WAIT), 0);
+	struct oscore_ctx *found;
+	zassert_ok(oscore_ctx_get_by_eui64(bound_peer, &found));
+	zassert_equal(found, bound_ctx);
+}
+
+ZTEST(oscore_persist, test_z_concurrent_recycle_waits_for_actual_unprotect)
+{
+	struct oscore_ctx_ref ref;
+	bound_setup();
+	k_thread_create(&recycle_thread, recycle_stack, K_THREAD_STACK_SIZEOF(recycle_stack),
+		recycle_worker, NULL, NULL, NULL, 0, 0, K_NO_WAIT);
+	oscore_test_after_selection(concurrent_recycle);
+	zassert_ok(bound_auth(&ref));
+	zassert_ok(k_sem_take(&recycle_done, K_SECONDS(1)));
+	zassert_ok(k_thread_join(&recycle_thread, K_SECONDS(1)));
+	zassert_equal(ref.ctx, replacement, "force same-slot reuse");
+	uint8_t ct[32], opt[8];
+	size_t ct_len = sizeof(ct), opt_len = sizeof(opt);
+	zassert_equal(oscore_protect_response_ref(&ref, (uint8_t[]){20}, 1, 69,
+		NULL, 0, NULL, 0, ct, &ct_len, opt, &opt_len), OSCORE_ERR_CONTEXT_STALE);
+	oscore_ctx_free(replacement);
+	oscore_settings_close();
 }
 
 ZTEST_SUITE(oscore_persist, NULL, NULL, NULL, NULL, NULL);

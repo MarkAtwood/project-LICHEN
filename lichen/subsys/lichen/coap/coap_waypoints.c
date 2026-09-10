@@ -931,8 +931,8 @@ static int send_created(struct coap_resource *resource,
 
 #ifdef CONFIG_LICHEN_COAP_SERVER_OSCORE
   if (oscore->is_protected && oscore->ctx != NULL && oscore->piv_len > 0U) {
-    ret = coap_oscore_protect_response(
-        oscore->ctx, oscore->piv, oscore->piv_len, request,
+    ret = coap_oscore_protect_response_ref(
+        oscore->origin.response_ctx, oscore->piv, oscore->piv_len, request,
         COAP_RESPONSE_CODE_CREATED, NULL, 0U, NULL, 0U, &response, buf,
         sizeof(buf));
   } else
@@ -983,12 +983,13 @@ int lichen_waypoints_post_handler(struct coap_resource *resource,
   ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
                                        COAP_METHOD_POST, oscore.plainbuf,
                                        sizeof(oscore.plainbuf), &payload,
-                                       &oscore.payload_len, &oscore.ctx,
+                                       &oscore.payload_len, &oscore.origin.response_ctx,
                                        oscore.piv, &oscore.piv_len,
                                        &oscore.is_protected);
   if (ret != 0) {
     return ret;
   }
+  oscore.ctx = oscore.origin.response_ctx.ctx;
   ret = request_actor(addr, addr_len, actor, &local_admin);
   if (ret < 0) {
     return coap_oscore_respond_resource(
@@ -1142,12 +1143,13 @@ int lichen_waypoint_detail_delete_handler(struct coap_resource *resource,
   ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
                                        COAP_METHOD_DELETE, oscore.plainbuf,
                                        sizeof(oscore.plainbuf), &payload,
-                                       &oscore.payload_len, &oscore.ctx,
+                                       &oscore.payload_len, &oscore.origin.response_ctx,
                                        oscore.piv, &oscore.piv_len,
                                        &oscore.is_protected);
   if (ret != 0) {
     return ret;
   }
+  oscore.ctx = oscore.origin.response_ctx.ctx;
   if (oscore.payload_len != 0U) {
     return coap_oscore_respond_resource(resource, request, addr, addr_len,
                                         &oscore, COAP_RESPONSE_CODE_BAD_REQUEST,

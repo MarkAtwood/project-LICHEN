@@ -74,7 +74,7 @@ int __wrap_coap_resource_send(
 int coap_oscore_send_protected(struct coap_resource *resource,
 			       struct coap_packet *request,
 			       struct sockaddr *addr, socklen_t addr_len,
-			       struct oscore_ctx *ctx,
+			       struct oscore_ctx_ref ctx,
 			       const uint8_t *piv, size_t piv_len, uint8_t code)
 {
 	ARG_UNUSED(resource);
@@ -139,7 +139,7 @@ int __wrap_coap_oscore_authorize_mutating(struct coap_resource *resource,
 					  uint8_t *plain_buf, size_t plain_buf_len,
 					  const uint8_t **payload_out,
 					  uint16_t *payload_len_out,
-					  struct oscore_ctx **ctx_out,
+					  struct oscore_ctx_ref *ctx_out,
 					  uint8_t *piv_out, size_t *piv_len_out,
 					  bool *is_protected)
 {
@@ -151,7 +151,7 @@ int __wrap_coap_oscore_authorize_mutating(struct coap_resource *resource,
 	ARG_UNUSED(plain_buf_len);
 	ARG_UNUSED(piv_out);
 
-	*ctx_out = NULL;
+	*ctx_out = (struct oscore_ctx_ref){0};
 	*piv_len_out = 0U;
 	*is_protected = false;
 

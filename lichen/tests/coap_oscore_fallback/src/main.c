@@ -38,15 +38,15 @@
 #define OVERSIZE_EXTRA 64
 
 static const uint8_t master_secret[16] = {
-	0x4e, 0x0f, 0x28, 0x1b, 0xc5, 0x77, 0x93, 0x62,
-	0xa1, 0x38, 0xd4, 0x50, 0x6b, 0x7c, 0x19, 0xef,
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
 };
 static const uint8_t master_salt[8] = {
-	0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+	0x9e, 0x7c, 0xa9, 0x22, 0x23, 0x78, 0x63, 0x40,
 };
 
 static struct oscore_ctx *server_ctx;
 static struct oscore_ctx *client_ctx;
+static struct oscore_ctx_ref server_ref;
 
 static int client_fd = -1;
 static struct sockaddr_in6 client_addr;
@@ -94,6 +94,16 @@ static void *suite_setup(void)
 				(uint8_t[]){0x01}, 1, NULL, 0, &server_ctx);
 	zassert_equal(ret, OSCORE_OK, "server ctx create failed: %d", ret);
 	zassert_not_null(server_ctx);
+	/* Capture lifetime evidence by authenticating the published RFC 8613
+	 * C.4 request; never manufacture a reference from a pointer at reply. */
+	const uint8_t peer[8] = {1};
+	const uint8_t ct[] = {0x61, 0x2f, 0x10, 0x92, 0xf1, 0x77, 0x6f,
+		0x1c, 0x16, 0x68, 0xb3, 0x82, 0x5e};
+	uint8_t code, options[8], payload[8];
+	size_t options_len = sizeof(options), payload_len = sizeof(payload);
+	zassert_ok(oscore_ctx_set_peer_eui64(server_ctx, peer));
+	zassert_ok(oscore_unprotect_request_by_peer(peer, (uint8_t[]){9, 20}, 2,
+		ct, sizeof(ct), &code, options, &options_len, payload, &payload_len, &server_ref));
 	/* Client context: sender_id = "", recipient_id = {0x01} */
 	ret = oscore_ctx_create(master_secret, master_salt, sizeof(master_salt),
 				NULL, 0, (uint8_t[]){0x01}, 1, &client_ctx);
@@ -185,7 +195,14 @@ static bool has_oscore_option(const struct coap_packet *resp)
 	return coap_find_options(resp, COAP_OPTION_OSCORE, &opt, 1) > 0;
 }
 
-ZTEST_SUITE(coap_oscore_fallback, NULL, suite_setup, NULL, NULL, NULL);
+static void suite_teardown(void *fixture)
+{
+	ARG_UNUSED(fixture);
+	oscore_ctx_free(server_ctx);
+	oscore_ctx_free(client_ctx);
+}
+
+ZTEST_SUITE(coap_oscore_fallback, NULL, suite_setup, NULL, NULL, suite_teardown);
 
 /*
  * A protected request with a normal payload round-trips: the response
@@ -212,6 +229,7 @@ ZTEST(coap_oscore_fallback, test_protected_response_roundtrip)
 	memset(&result, 0, sizeof(result));
 	result.is_protected = true;
 	result.ctx = server_ctx;
+	result.origin.response_ctx = server_ref;
 	memcpy(result.piv, piv, sizeof(piv));
 	result.piv_len = sizeof(piv);
 
@@ -281,6 +299,7 @@ ZTEST(coap_oscore_fallback, test_protected_response_carries_content_format)
 	memset(&result, 0, sizeof(result));
 	result.is_protected = true;
 	result.ctx = server_ctx;
+	result.origin.response_ctx = server_ref;
 	memcpy(result.piv, piv, sizeof(piv));
 	result.piv_len = sizeof(piv);
 
@@ -350,6 +369,7 @@ ZTEST(coap_oscore_fallback, test_protect_failure_sends_protected_empty_500)
 	memset(&result, 0, sizeof(result));
 	result.is_protected = true;
 	result.ctx = server_ctx;
+	result.origin.response_ctx = server_ref;
 	memcpy(result.piv, piv, sizeof(piv));
 	result.piv_len = sizeof(piv);
 
@@ -428,6 +448,7 @@ ZTEST(coap_oscore_fallback, test_protect_failure_twice_drops_silently)
 	memset(&result, 0, sizeof(result));
 	result.is_protected = true;
 	result.ctx = server_ctx;
+	result.origin.response_ctx = server_ref;
 	memcpy(result.piv, piv, sizeof(piv));
 	result.piv_len = sizeof(piv);
 
@@ -501,6 +522,7 @@ ZTEST(coap_oscore_fallback, test_protected_no_piv_drops)
 	memset(&result, 0, sizeof(result));
 	result.is_protected = true;
 	result.ctx = server_ctx;
+	result.origin.response_ctx = server_ref;
 	result.piv_len = 0;
 
 	ret = coap_oscore_respond_resource(&fb_res, &req,

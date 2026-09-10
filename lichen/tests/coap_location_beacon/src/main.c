@@ -209,7 +209,7 @@ int coap_oscore_authorize_mutating(
     struct coap_resource *resource, struct coap_packet *request,
     struct sockaddr *addr, socklen_t addr_len, uint8_t expected_method,
     uint8_t *plain_buf, size_t plain_buf_len, const uint8_t **payload_out,
-    uint16_t *payload_len_out, struct oscore_ctx **ctx_out,
+    uint16_t *payload_len_out, struct oscore_ctx_ref *ctx_out,
     uint8_t *piv_out, size_t *piv_len_out, bool *is_protected) {
   /* Merge resolution: keep the explicit-buffer signature (HEAD). The
    * settled merged-tree callers (coap_location.c, coap_server.c,
@@ -254,7 +254,7 @@ int coap_oscore_respond_resource(
 int coap_oscore_send_protected(struct coap_resource *resource,
                                struct coap_packet *request,
                                struct sockaddr *addr, socklen_t addr_len,
-                               struct oscore_ctx *ctx, const uint8_t *piv,
+                               struct oscore_ctx_ref ctx, const uint8_t *piv,
                                size_t piv_len, uint8_t response_code) {
   ARG_UNUSED(resource);
   ARG_UNUSED(request);

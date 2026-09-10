@@ -31,7 +31,6 @@
 #ifdef CONFIG_LICHEN_COAP_SERVER_OSCORE
 #include <lichen/coap_oscore.h>
 #include <lichen/oscore.h>
-#include <lichen/l2/ipv6_addr.h>
 #endif
 
 LOG_MODULE_REGISTER(lichen_coap_keys, CONFIG_LICHEN_COAP_KEYS_LOG_LEVEL);
@@ -100,50 +99,17 @@ bool lichen_coap_is_local_admin(const struct sockaddr *addr, socklen_t addr_len)
 #ifdef CONFIG_LICHEN_COAP_SERVER_OSCORE
 /*
  * Protected OSCORE response helper for /keys handlers.
- * Symmetric with deaddrop_oscore_respond in coap_dtn.c.
- * Uses coap_oscore_protect_response and falls back on error.
+ * Retains the reference captured at authentication, including on retry.
  */
 static int keys_oscore_respond(struct coap_resource *resource,
 			       struct coap_packet *request,
 			       struct sockaddr *addr, socklen_t addr_len,
-			       struct oscore_ctx *ctx,
+			       const struct oscore_ctx_ref *ctx,
 			       const uint8_t *piv, size_t piv_len,
 			       uint8_t code)
 {
-	uint8_t buf[CONFIG_COAP_SERVER_MESSAGE_SIZE];
-	struct coap_packet resp;
-	int ret = coap_oscore_protect_response(ctx, piv, piv_len, request, code,
-					       NULL, 0, NULL, 0,
-					       &resp, buf, sizeof(buf));
-	if (ret < 0) {
-		return lichen_coap_respond(resource, request, addr, addr_len,
-					   COAP_RESPONSE_CODE_INTERNAL_ERROR, 0, NULL, 0);
-	}
-	ret = coap_resource_send(resource, &resp, addr, addr_len, NULL);
-	return ret;
-}
-
-/*
- * Extract the peer EUI-64 (IID form) from the request source address for
- * OSCORE context lookup. Symmetric with the extraction in coap_dtn.c and
- * coap_oscore.c. Zero-fills and returns false for non-IPv6 addresses; the
- * subsequent oscore_ctx_get_by_eui64() then fails and the handler answers
- * 4.01 Unauthorized. lichen_eui64_to_iid() is in-place safe (memmove).
- */
-static bool keys_peer_eui64_from_addr(const struct sockaddr *addr,
-				      socklen_t addr_len,
-				      uint8_t peer_eui64[8])
-{
-	memset(peer_eui64, 0, 8);
-	if (addr == NULL || addr_len < sizeof(struct sockaddr_in6) ||
-	    addr->sa_family != AF_INET6) {
-		return false;
-	}
-	const struct sockaddr_in6 *in6 = (const struct sockaddr_in6 *)addr;
-
-	memcpy(peer_eui64, &in6->sin6_addr.s6_addr[8], 8);
-	lichen_eui64_to_iid(peer_eui64, peer_eui64);
-	return true;
+	return coap_oscore_send_protected(resource, request, addr, addr_len,
+		*ctx, piv, piv_len, code);
 }
 #endif /* CONFIG_LICHEN_COAP_SERVER_OSCORE */
 
@@ -245,33 +211,19 @@ static int keys_single_put(struct coap_resource *resource,
 	int ret;
 
 #ifdef CONFIG_LICHEN_COAP_SERVER_OSCORE
-	struct oscore_ctx *ctx = NULL;
-	uint8_t peer_eui64[8] = {0};
+	struct oscore_ctx_ref response_ctx = {0};
+	const struct oscore_ctx_ref *ctx = &response_ctx;
+	uint8_t plain[LICHEN_COAP_SERVER_MAX_PAYLOAD];
 	uint8_t piv[OSCORE_PIV_MAX_LEN];
 	size_t piv_len = sizeof(piv);
 	bool is_protected = coap_oscore_is_protected(request);
 	if (is_protected) {
-		(void)keys_peer_eui64_from_addr(addr, addr_len, peer_eui64);
-		if (oscore_ctx_get_by_eui64(peer_eui64, &ctx) != OSCORE_OK || ctx == NULL) {
-			return coap_oscore_send_unauthorized(resource, request, addr, addr_len);
+		int r = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+			COAP_METHOD_PUT, plain, sizeof(plain), &payload, &payload_len,
+			&response_ctx, piv, &piv_len, &is_protected);
+		if (r != 0) {
+			return r;
 		}
-		uint8_t orig_code;
-		uint8_t opts[32];
-		size_t opt_len = sizeof(opts);
-		uint8_t plain[LICHEN_COAP_SERVER_MAX_PAYLOAD];
-		size_t plain_len = sizeof(plain);
-		int r = coap_oscore_unprotect_request(ctx, request, &orig_code, opts, &opt_len,
-						      plain, &plain_len, piv, &piv_len);
-		if (r != OSCORE_OK) {
-			/* RFC 8613 8.2: failed verification -> 4.01 (deaddrop
-			 * pattern uses UNAUTHORIZED as well) */
-			return COAP_RESPONSE_CODE_UNAUTHORIZED;
-		}
-		if (orig_code != COAP_METHOD_PUT) {
-			return COAP_RESPONSE_CODE_NOT_ALLOWED;
-		}
-		payload = plain;
-		payload_len = (uint16_t)plain_len;
 	}
 #endif
 
@@ -408,30 +360,20 @@ static int keys_single_delete(struct coap_resource *resource,
 	int ret;
 
 #ifdef CONFIG_LICHEN_COAP_SERVER_OSCORE
-	struct oscore_ctx *ctx = NULL;
-	uint8_t peer_eui64[8] = {0};
+	struct oscore_ctx_ref response_ctx = {0};
+	const struct oscore_ctx_ref *ctx = &response_ctx;
 	uint8_t piv[OSCORE_PIV_MAX_LEN];
 	size_t piv_len = sizeof(piv);
 	bool is_protected = coap_oscore_is_protected(request);
 	if (is_protected) {
-		(void)keys_peer_eui64_from_addr(addr, addr_len, peer_eui64);
-		if (oscore_ctx_get_by_eui64(peer_eui64, &ctx) != OSCORE_OK || ctx == NULL) {
-			return coap_oscore_send_unauthorized(resource, request, addr, addr_len);
-		}
-		uint8_t orig_code;
-		uint8_t opts[32];
-		size_t opt_len = sizeof(opts);
 		uint8_t plain[16]; /* DELETE has no payload */
-		size_t plain_len = sizeof(plain);
-		int r = coap_oscore_unprotect_request(ctx, request, &orig_code, opts, &opt_len,
-						      plain, &plain_len, piv, &piv_len);
-		if (r != OSCORE_OK) {
-			/* RFC 8613 8.2: failed verification -> 4.01 (deaddrop
-			 * pattern uses UNAUTHORIZED as well) */
-			return COAP_RESPONSE_CODE_UNAUTHORIZED;
-		}
-		if (orig_code != COAP_METHOD_DELETE) {
-			return COAP_RESPONSE_CODE_NOT_ALLOWED;
+		const uint8_t *payload;
+		uint16_t payload_len;
+		int r = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+			COAP_METHOD_DELETE, plain, sizeof(plain), &payload, &payload_len,
+			&response_ctx, piv, &piv_len, &is_protected);
+		if (r != 0) {
+			return r;
 		}
 	}
 #endif

@@ -1367,12 +1367,13 @@ static int sensors_location_post(struct coap_resource *resource,
   ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
                                        COAP_METHOD_POST, oscore.plainbuf,
                                        sizeof(oscore.plainbuf), &payload,
-                                       &oscore.payload_len, &oscore.ctx,
+                                       &oscore.payload_len, &oscore.origin.response_ctx,
                                        oscore.piv, &oscore.piv_len,
                                        &oscore.is_protected);
   if (ret != 0) {
     return ret;
   }
+  oscore.ctx = oscore.origin.response_ctx.ctx;
   if (payload == NULL || oscore.payload_len == 0) {
     return coap_oscore_respond_resource(resource, request, addr, addr_len,
                                         &oscore, COAP_RESPONSE_CODE_BAD_REQUEST,

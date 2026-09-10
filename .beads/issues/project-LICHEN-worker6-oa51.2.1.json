@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-oa51.2.1",
+  "title": "Bind C origin evidence to authenticated context",
+  "description": "Security review: origin_context snapshots claimed A identity then oscore_ctx_get_by_eui64 returns raw slot after unlocking. Concurrent free/reuse asB before unprotect permits B ciphertext to authenticate but new adapter publishes A evidence. Need atomic unique peer-context selection through unprotect and origin publication with stable generation; current public API lacks enumeration/pinning. Also first-match duplicate peer binding unresolved. This crosses context-layer human-only boundary; no core edit authorized yet. Do not claim oa51.2 complete.",
+  "acceptance_criteria": "Human-approved minimal context API prevents slot-reuse misattribution and rejects ambiguous active peer contexts; deterministic race/ambiguity regressions plus RFC vectors pass;3 independent reviews clear.",
+  "notes": "IMPLEMENTED after explicit human approval. Atomic unique-peer request wrapper holds context mutex through real auth; RAM generation-tagged response references reject free/reuse/rebind, duplicates, init/overflow and callback lifecycle mutation. CoAP server responders migrated to auth-time reference, inbox stale plaintext fallback .2.3 fixed. Original proposal retained in event history.180 distinct C tests plus focused15 final fallback checks pass;3 final independent reviews clear. No cipher/replay algorithm/persistence format/EDHOC changes; source uncommitted.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T19:56:20.763496089Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T20:44:22.361191964Z",
+  "started_at": "2026-09-10T20:03:57.977491263Z",
+  "closed_at": "2026-09-10T20:44:08.033477104Z",
+  "close_reason": "User-approved atomic unique-peer lookup+unprotect and generation-checked response API implemented with lifecycle/reentry guards and migrated server responses.180/180 distinct native_sim tests passed plus54 repeated optional-caller tests; final inbox fallback15/15 passes. RFC8613 vectors and deterministic recycle/ambiguity/rebind/exhaustion tests;3 final independent reviews clear. Algorithms/persistence formats/EDHOC unchanged.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-oa51.2.1",
+      "depends_on_id": "project-LICHEN-worker6-oa51.2",
+      "type": "parent-child",
+      "created_at": "2026-09-10T19:56:20.918440938Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

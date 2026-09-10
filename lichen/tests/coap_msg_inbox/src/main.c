@@ -74,33 +74,9 @@ int coap_oscore_unprotect_resource_request(
 int coap_oscore_authorize_mutating_result(
     struct coap_resource *resource, struct coap_packet *request,
     struct sockaddr *addr, socklen_t addr_len, uint8_t expected_method,
-    uint8_t *plain_buf, size_t plain_buf_len, const uint8_t **payload_out,
-    uint16_t *payload_len_out, struct oscore_ctx **ctx_out, uint8_t *piv_out,
-    size_t *piv_len_out, bool *is_protected) {
-  struct coap_oscore_unprotect_result result;
-  int ret = coap_oscore_unprotect_resource_request(resource, request, addr,
-                                                   addr_len, expected_method,
-                                                   &result);
-  size_t copied = 0;
-  if (ret == 0 && result.is_protected) {
-    /* result.payload points into the local result.plainbuf, which dies at
-     * return: copy into the caller's plain_buf and hand out THAT pointer. */
-    copied = result.payload_len > plain_buf_len ? plain_buf_len
-                                                : result.payload_len;
-    memcpy(plain_buf, result.payload, copied);
-    *payload_out = plain_buf;
-    *payload_len_out = (uint16_t)copied;
-  } else {
-    /* Unprotected request: the payload aliases the request packet, which
-     * outlives this call. */
-    *payload_out = result.payload;
-    *payload_len_out = result.payload_len;
-  }
-  *ctx_out = result.ctx;
-  memcpy(piv_out, result.piv, result.piv_len);
-  *piv_len_out = result.piv_len;
-  *is_protected = result.is_protected;
-  return ret;
+    struct coap_oscore_unprotect_result *result) {
+  return coap_oscore_unprotect_resource_request(resource, request, addr,
+                                               addr_len, expected_method, result);
 }
 
 int coap_oscore_respond_resource(

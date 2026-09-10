@@ -17,9 +17,19 @@ target_sources(app PRIVATE
   ${LICHEN_ROOT}/subsys/lichen/coap/coap_keys_store.c
   ${LICHEN_ROOT}/subsys/lichen/coap/coap_keys_settings.c
   ${LICHEN_ROOT}/subsys/lichen/crypto/monocypher.c
+  ${LICHEN_ROOT}/subsys/lichen/crypto/monocypher-ed25519.c
+  ${LICHEN_ROOT}/subsys/lichen/link/identity_addr.c
+)
+# Preserve this lifecycle suite's existing IID test double while linking the
+# production AddrForKey helper from the same translation unit.
+set_source_files_properties(
+  ${LICHEN_ROOT}/subsys/lichen/link/identity_addr.c
+  PROPERTIES COMPILE_DEFINITIONS
+  "lichen_key_pubkey_to_iid=lichen_lifecycle_unused_production_iid"
 )
 target_include_directories(app PRIVATE
   ${LICHEN_ROOT}/subsys/lichen/coap/include
   ${LICHEN_ROOT}/subsys/lichen/coap
   ${LICHEN_ROOT}/subsys/lichen/crypto
+  ${LICHEN_ROOT}/subsys/lichen/link/include
 )

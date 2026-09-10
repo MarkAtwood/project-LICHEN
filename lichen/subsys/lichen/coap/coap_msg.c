@@ -1024,7 +1024,7 @@ int lichen_msg_sent_post(struct coap_resource *resource,
 		char id_str[MSG_ID_DECIMAL_SIZE];
 		int id_len;
 
-		int r = coap_oscore_protect_response(oscore.ctx, oscore.piv,
+		int r = coap_oscore_protect_response_ref(oscore.origin.response_ctx, oscore.piv,
 						     oscore.piv_len, request,
 						     COAP_RESPONSE_CODE_CREATED,
 						     NULL, 0, NULL, 0, &resp, buf,
@@ -1338,7 +1338,9 @@ int lichen_msg_sent_get_handler(struct coap_resource *resource,
 {
 	struct coap_oscore_unprotect_result oscore;
 	struct coap_option observe_options[2];
-	uint8_t cbor_buf[MSG_CBOR_MAX_SIZE];
+	/* CoAP dispatch is serialized, as for the OSCORE response buffer.
+	 * Keep the response scratch off-stack alongside the larger auth result. */
+	static uint8_t cbor_buf[MSG_CBOR_MAX_SIZE];
 	size_t len;
 	int observe_count;
 	int ret;

@@ -29,6 +29,12 @@ enum oscore_persist_blob_slot {
 	OSCORE_PERSIST_BLOB_B = 1,
 };
 
+/* Callbacks run synchronously under OSCORE locks. They MUST NOT re-enter
+ * OSCORE operations or wait for work requiring those locks. Contexts and
+ * their peer bindings are immutable for the duration of a bound operation.
+ * Lifecycle mutation attempts are rejected and fail the bound operation;
+ * void lifecycle calls (free/registration) become no-ops in that case.
+ */
 struct oscore_persist_store_ops {
 	int (*load)(void *user, enum oscore_persist_blob_slot slot,
 		    uint8_t *out, size_t capacity, size_t *length);
@@ -47,6 +53,7 @@ struct oscore_persist_authority_state {
  * load returns -ENOENT only for authenticated virgin hardware.  commit is an
  * atomic compare-and-swap; expected is NULL only for the virgin transition.
  */
+/* The same non-reentrant lock contract as oscore_persist_store_ops applies. */
 struct oscore_persist_protection_ops {
 	int (*derive_key)(void *user, const uint8_t *context, size_t context_len,
 			  uint8_t out[32]);

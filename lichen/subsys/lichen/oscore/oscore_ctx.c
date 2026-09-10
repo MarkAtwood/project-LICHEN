@@ -31,6 +31,147 @@ bool s_seq_initialized[CONFIG_LICHEN_OSCORE_MAX_CONTEXTS];
 bool s_initialized;
 K_MUTEX_DEFINE(s_ctx_mutex);
 
+/* Never reset during initialization: old RAM references must not resurrect.
+ * Protected by s_ctx_mutex; no generation is persisted or reused. */
+static uint64_t s_generation;
+static bool s_bound_operation;
+static bool s_bound_mutation_attempted;
+
+static bool mutation_blocked_locked(void)
+{
+	if (s_bound_operation) {
+		s_bound_mutation_attempted = true;
+		return true;
+	}
+	return false;
+}
+
+static int member_index_locked(const struct oscore_ctx *ctx)
+{
+	for (int i = 0; i < CONFIG_LICHEN_OSCORE_MAX_CONTEXTS; i++) {
+		if (ctx == &s_contexts[i]) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+#ifdef CONFIG_ZTEST
+static void (*s_after_selection)(void);
+void oscore_test_after_selection(void (*hook)(void));
+void oscore_test_after_selection(void (*hook)(void))
+{
+	k_mutex_lock(&s_ctx_mutex, K_FOREVER);
+	if (!mutation_blocked_locked()) {
+		s_after_selection = hook;
+	}
+	k_mutex_unlock(&s_ctx_mutex);
+}
+
+/* Irreversible test hook: exercise exhaustion without ever reusing an epoch. */
+void oscore_test_exhaust_generations(void);
+void oscore_test_exhaust_generations(void)
+{
+	k_mutex_lock(&s_ctx_mutex, K_FOREVER);
+	if (!mutation_blocked_locked()) {
+		s_generation = UINT64_MAX;
+	}
+	k_mutex_unlock(&s_ctx_mutex);
+}
+#endif
+
+int oscore_unprotect_request_by_peer(
+	const uint8_t peer[OSCORE_EUI64_LEN],
+	const uint8_t *oscore_opt, size_t oscore_opt_len,
+	const uint8_t *ciphertext, size_t ciphertext_len, uint8_t *code,
+	uint8_t *options, size_t *options_len,
+	uint8_t *payload, size_t *payload_len, struct oscore_ctx_ref *response_ctx)
+{
+	struct oscore_ctx *selected = NULL;
+	int ret = OSCORE_ERR_NO_CONTEXT;
+
+	if (response_ctx == NULL) {
+		return OSCORE_ERR_INVALID_PARAM;
+	}
+	memset(response_ctx, 0, sizeof(*response_ctx));
+	if (peer == NULL) {
+		return OSCORE_ERR_INVALID_PARAM;
+	}
+	k_mutex_lock(&s_ctx_mutex, K_FOREVER);
+	if (mutation_blocked_locked()) {
+		ret = OSCORE_ERR_CONTEXT_STALE;
+		goto out;
+	}
+	for (int i = 0; i < CONFIG_LICHEN_OSCORE_MAX_CONTEXTS; i++) {
+		struct oscore_ctx *candidate = &s_contexts[i];
+		if (candidate->active && candidate->has_peer_eui64 &&
+		    memcmp(candidate->peer_eui64, peer, OSCORE_EUI64_LEN) == 0) {
+			if (selected != NULL) {
+				goto out;
+			}
+			selected = candidate;
+		}
+	}
+	if (selected == NULL) {
+		goto out;
+	}
+	s_bound_operation = true;
+	s_bound_mutation_attempted = false;
+#ifdef CONFIG_ZTEST
+	/* One-shot scheduling barrier at the original lookup/unprotect gap. */
+	if (s_after_selection != NULL) {
+		void (*hook)(void) = s_after_selection;
+		s_after_selection = NULL;
+		hook();
+	}
+#endif
+	ret = oscore_unprotect_request(selected, oscore_opt, oscore_opt_len,
+		ciphertext, ciphertext_len, code, options, options_len, payload, payload_len);
+	s_bound_operation = false;
+	if (s_bound_mutation_attempted) {
+		ret = OSCORE_ERR_CONTEXT_STALE;
+	}
+	if (ret == OSCORE_OK) {
+		response_ctx->ctx = selected;
+		response_ctx->generation = selected->generation;
+	}
+out:
+	k_mutex_unlock(&s_ctx_mutex);
+	return ret;
+}
+
+int oscore_protect_response_ref(
+	const struct oscore_ctx_ref *ref,
+	const uint8_t *request_piv, size_t request_piv_len, uint8_t code,
+	const uint8_t *options, size_t options_len,
+	const uint8_t *payload, size_t payload_len,
+	uint8_t *ciphertext, size_t *ciphertext_len,
+	uint8_t *oscore_opt, size_t *oscore_opt_len)
+{
+	int ret = OSCORE_ERR_CONTEXT_STALE;
+	if (ref == NULL) {
+		return ret;
+	}
+	k_mutex_lock(&s_ctx_mutex, K_FOREVER);
+	if (mutation_blocked_locked() || member_index_locked(ref->ctx) < 0 ||
+	    !ref->ctx->active || ref->generation == 0 ||
+	    ref->generation != ref->ctx->generation) {
+		goto out;
+	}
+	s_bound_operation = true;
+	s_bound_mutation_attempted = false;
+	ret = oscore_protect_response(ref->ctx, request_piv, request_piv_len,
+		code, options, options_len, payload, payload_len,
+		ciphertext, ciphertext_len, oscore_opt, oscore_opt_len);
+	s_bound_operation = false;
+	if (s_bound_mutation_attempted) {
+		ret = OSCORE_ERR_CONTEXT_STALE;
+	}
+out:
+	k_mutex_unlock(&s_ctx_mutex);
+	return ret;
+}
+
 /* NVM persistence callbacks */
 oscore_nvm_write_cb s_nvm_write_cb;
 oscore_nvm_read_cb s_nvm_read_cb;
@@ -163,6 +304,10 @@ int ctx_get_index(const struct oscore_ctx *ctx)
 int oscore_init(void)
 {
 	k_mutex_lock(&s_ctx_mutex, K_FOREVER);
+	if (mutation_blocked_locked()) {
+		k_mutex_unlock(&s_ctx_mutex);
+		return OSCORE_ERR_CONTEXT_STALE;
+	}
 	if (s_initialized) {
 		k_mutex_unlock(&s_ctx_mutex);
 		return 0;
@@ -183,6 +328,10 @@ void oscore_nvm_register_callbacks(oscore_nvm_write_cb _Nullable write_cb,
 				   oscore_nvm_read_cb _Nullable read_cb)
 {
 	k_mutex_lock(&s_ctx_mutex, K_FOREVER);
+	if (mutation_blocked_locked()) {
+		k_mutex_unlock(&s_ctx_mutex);
+		return;
+	}
 	if (s_nvm_write_cb != write_cb || s_nvm_read_cb != read_cb) {
 		s_nvm_write_cb = write_cb;
 		s_nvm_read_cb = read_cb;
@@ -343,6 +492,10 @@ static int oscore_ctx_create_internal(const uint8_t *master_secret,
 
 	k_mutex_lock(&s_ctx_mutex, K_FOREVER);
 
+	if (mutation_blocked_locked() || s_generation == UINT64_MAX) {
+		k_mutex_unlock(&s_ctx_mutex);
+		return OSCORE_ERR_CONTEXT_STALE;
+	}
 	if (!s_initialized) {
 		k_mutex_unlock(&s_ctx_mutex);
 		LOG_ERR("oscore_init() must be called before oscore_ctx_create()");
@@ -392,6 +545,7 @@ static int oscore_ctx_create_internal(const uint8_t *master_secret,
 	/* Initialize context */
 	replay_clear_pending_context_locked(ctx_idx);
 	memset(ctx, 0, sizeof(*ctx));
+	ctx->generation = ++s_generation;
 	memcpy(ctx->master_secret, master_secret, OSCORE_KEY_LEN);
 
 	if (master_salt != NULL && master_salt_len > 0) {
@@ -531,6 +685,10 @@ void oscore_ctx_free(struct oscore_ctx *ctx)
 	}
 
 	k_mutex_lock(&s_ctx_mutex, K_FOREVER);
+	if (mutation_blocked_locked() || member_index_locked(ctx) < 0) {
+		k_mutex_unlock(&s_ctx_mutex);
+		return;
+	}
 
 	ctx_idx = ctx_get_index(ctx);
 	if (ctx_idx >= 0) {
@@ -565,16 +723,23 @@ int oscore_ctx_create_with_eui64(const uint8_t *_Nonnull master_secret,
 	}
 
 	/* First, create the context using the base function */
+	k_mutex_lock(&s_ctx_mutex, K_FOREVER);
+	if (mutation_blocked_locked() || s_generation >= UINT64_MAX - 1U) {
+		k_mutex_unlock(&s_ctx_mutex);
+		if (ctx_out != NULL) {
+			*ctx_out = NULL;
+		}
+		return OSCORE_ERR_CONTEXT_STALE;
+	}
 	ret = oscore_ctx_create(master_secret, master_salt, master_salt_len,
 				sender_id, sender_id_len,
 				recipient_id, recipient_id_len, ctx_out);
 	if (ret != OSCORE_OK) {
+		k_mutex_unlock(&s_ctx_mutex);
 		return ret;
 	}
 
 	ctx = *ctx_out;
-
-	k_mutex_lock(&s_ctx_mutex, K_FOREVER);
 
 	/*
 	 * SECURITY: Verify context identity hasn't changed while mutex was
@@ -593,6 +758,11 @@ int oscore_ctx_create_with_eui64(const uint8_t *_Nonnull master_secret,
 		return OSCORE_ERR_NO_CONTEXT;
 	}
 
+	if (mutation_blocked_locked() || s_generation == UINT64_MAX) {
+		k_mutex_unlock(&s_ctx_mutex);
+		return OSCORE_ERR_CONTEXT_STALE;
+	}
+	ctx->generation = ++s_generation;
 	/* Set the EUI-64 */
 	memcpy(ctx->peer_eui64, peer_eui64, OSCORE_EUI64_LEN);
 	ctx->has_peer_eui64 = true;
@@ -641,6 +811,17 @@ int oscore_ctx_set_peer_eui64(struct oscore_ctx *ctx,
 	}
 
 	k_mutex_lock(&s_ctx_mutex, K_FOREVER);
+	if (mutation_blocked_locked() || member_index_locked(ctx) < 0 ||
+	    !ctx->active || s_generation == UINT64_MAX) {
+		k_mutex_unlock(&s_ctx_mutex);
+		return OSCORE_ERR_CONTEXT_STALE;
+	}
+	if (ctx->has_peer_eui64 &&
+	    memcmp(ctx->peer_eui64, peer_eui64, OSCORE_EUI64_LEN) == 0) {
+		k_mutex_unlock(&s_ctx_mutex);
+		return OSCORE_OK;
+	}
+	ctx->generation = ++s_generation;
 
 	memcpy(ctx->peer_eui64, peer_eui64, OSCORE_EUI64_LEN);
 	ctx->has_peer_eui64 = true;
@@ -686,6 +867,10 @@ int oscore_ctx_set_sender_seq(struct oscore_ctx *ctx, uint64_t sender_seq)
 	int idx;
 
 	k_mutex_lock(&s_ctx_mutex, K_FOREVER);
+	if (mutation_blocked_locked()) {
+		k_mutex_unlock(&s_ctx_mutex);
+		return OSCORE_ERR_CONTEXT_STALE;
+	}
 
 	idx = ctx_get_index(ctx);
 	if (idx < 0 || !ctx->active || sender_seq > OSCORE_SSN_MAX + 1U) {
@@ -863,6 +1048,10 @@ int oscore_ctx_persist_ssn(struct oscore_ctx *ctx)
 	}
 
 	k_mutex_lock(&s_ctx_mutex, K_FOREVER);
+	if (mutation_blocked_locked()) {
+		k_mutex_unlock(&s_ctx_mutex);
+		return OSCORE_ERR_CONTEXT_STALE;
+	}
 
 	/*
 	 * The in-RAM advance below requires a valid, stable slot, so the

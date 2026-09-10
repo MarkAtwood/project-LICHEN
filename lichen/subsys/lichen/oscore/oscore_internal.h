@@ -28,6 +28,7 @@
  * All direct field access must be confined to oscore_*.c files.
  */
 struct oscore_ctx {
+	uint64_t generation;                    /**< RAM-only lifetime/binding incarnation */
 	/* Common context (shared) */
 	uint8_t master_secret[OSCORE_KEY_LEN]; /**< Master Secret */
 	uint8_t master_salt[8];                 /**< Master Salt (optional) */

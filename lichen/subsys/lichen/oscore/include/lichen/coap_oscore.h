@@ -32,6 +32,22 @@
 extern "C" {
 #endif
 
+/** Copied origin evidence, published only after successful authentication and
+ * method validation. Zero/invalid for plaintext and every failure. Contexts
+ * must already be provisioned for the resolved peer; this API never repairs
+ * or creates bindings. iid is the canonical IID, address is the full source.
+ * Routable context peer indexes must equal the key store's canonical IID;
+ * established link-local indexes retain the U/L-flipped address suffix.
+ * Authentication selects exactly one bound context atomically. Deferred
+ * responses must carry the reference captured during authentication.
+ */
+struct coap_oscore_origin {
+	struct oscore_ctx_ref response_ctx;
+	bool authenticated;
+	uint8_t iid[8];
+	uint8_t address[16];
+};
+
 /**
  * @brief Result of unprotecting an OSCORE CoAP resource request.
  *
@@ -43,10 +59,11 @@ extern "C" {
  * when the caller uses oscore.payload after the helper returns.
  */
 struct coap_oscore_unprotect_result {
-	struct oscore_ctx *ctx;           /**< OSCORE context (NULL if not protected) */
+	struct oscore_ctx *ctx;           /**< Non-owning pointer; replies use origin.response_ctx */
 	uint8_t piv[OSCORE_PIV_MAX_LEN]; /**< Partial IV for response protection */
 	size_t piv_len;                   /**< PIV length (0 if not protected) */
 	bool is_protected;                /**< true if request was OSCORE-protected */
+	struct coap_oscore_origin origin;
 	uint8_t *payload;                 /**< Pointer to decrypted payload or raw CoAP payload */
 	uint16_t payload_len;             /**< Decrypted payload length or 0 */
 	uint8_t plainbuf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX]; /**< Buffer for decrypted payload */
@@ -71,7 +88,7 @@ struct coap_oscore_unprotect_result {
  *
  * @param[in]  resource    CoAP resource
  * @param[in]  request     CoAP request packet
- * @param[in]  addr        Client address (for EUI64 extraction + ctx lookup)
+ * @param[in]  addr        Origin address (full routable lookup or link-local)
  * @param[in]  addr_len    Address length
  * @param[in]  expected_method Expected CoAP method code (checked after unprotect)
  * @param[out] result      Unprotect result (ctx, piv, payload)
@@ -245,11 +262,12 @@ int coap_oscore_send_unauthorized(struct coap_resource *_Nonnull resource,
  * @brief Authorize an LCI mutating CoAP operation.
  *
  * Handles the authorization flow shared by all mutating handlers:
- *   - For OSCORE-protected requests: extracts the peer EUI64 from sockaddr,
+ *   - For OSCORE-protected requests: resolves the origin peer from sockaddr,
  *     looks up the OSCORE context via oscore_ctx_get_by_eui64(), unprotects
  *     the request, and validates the expected method.
  *   - For unprotected requests: checks local admin access via
- *     lichen_coap_is_local_admin() and publishes the raw payload.
+ *     lichen_coap_is_local_admin() and publishes the raw payload. Without
+ *     CONFIG_LICHEN_COAP_KEYS (which owns that provider), fails closed.
  *
  * On success, sets the output parameters for payload and OSCORE context.
  * The caller processes the request body and protects the response via
@@ -268,7 +286,7 @@ int coap_oscore_send_unauthorized(struct coap_resource *_Nonnull resource,
  * @param[in]     plain_buf_len   Size of plain_buf
  * @param[out]    payload_out     Decrypted (OSCORE) or raw (plain) payload
  * @param[out]    payload_len_out Payload length
- * @param[out]    ctx_out         OSCORE context (NULL if plain CoAP)
+ * @param[out]    ctx_out         Captured response reference (zero if plain CoAP)
  * @param[out]    piv_out         Request PIV buffer (at least
  *                                 OSCORE_PIV_MAX_LEN bytes)
  * @param[out]    piv_len_out     Request PIV length
@@ -284,16 +302,28 @@ int coap_oscore_authorize_mutating(struct coap_resource *_Nonnull resource,
 				   uint8_t *_Nullable plain_buf, size_t plain_buf_len,
 				   const uint8_t *_Nullable *payload_out,
 				   uint16_t *_Nonnull payload_len_out,
-				   struct oscore_ctx *_Nullable *ctx_out,
+				   struct oscore_ctx_ref *_Nonnull ctx_out,
 				   uint8_t *_Nonnull piv_out, size_t *_Nonnull piv_len_out,
 				   bool *_Nonnull is_protected);
+
+/** Same local-admin/plaintext policy as coap_oscore_authorize_mutating(),
+ * with optional copied authenticated origin evidence. The legacy helper
+ * delegates here without requesting evidence.
+ */
+int coap_oscore_authorize_mutating_with_origin(
+	struct coap_resource *resource, struct coap_packet *request,
+	struct sockaddr *addr, socklen_t addr_len, uint8_t expected_method,
+	uint8_t *plain_buf, size_t plain_buf_len, const uint8_t **payload_out,
+	uint16_t *payload_len_out, struct oscore_ctx **ctx_out,
+	uint8_t *piv_out, size_t *piv_len_out, bool *is_protected,
+	struct coap_oscore_origin *origin);
 
 /**
  * @brief Build and send an OSCORE-protected CoAP response
  *
  * Centralizes the duplicated pattern across LCI mutating handlers where an
  * OSCORE response must be built from a ctx + PIV.  Falls back to plain
- * lichen_coap_respond only when ctx is NULL (unprotected request).  For a
+ * lichen_coap_respond only when the reference is zero (unprotected request). For a
  * protected request, a protect failure retries once with a protected empty
  * 5.00 INTERNAL_ERROR through the same context and otherwise drops the
  * response silently (negative return) - a protected peer is never answered
@@ -303,17 +333,23 @@ int coap_oscore_authorize_mutating(struct coap_resource *_Nonnull resource,
  * @param[in] request   Original CoAP request
  * @param[in] addr      Client address
  * @param[in] addr_len  Address length
- * @param[in] ctx       OSCORE context (may be NULL, in which case plain
- *                       lichen_coap_respond is used as fallback)
- * @param[in] piv       Request PIV (may be NULL if ctx is NULL)
+ * @param[in] ctx       Captured response reference (zero for plaintext only)
+ * @param[in] piv       Request PIV (may be NULL for plaintext)
  * @param[in] piv_len   PIV length
  * @param[in] code      CoAP response code
  * @return 0 on success, negative error code on failure
  */
+int coap_oscore_protect_response_ref(struct oscore_ctx_ref ref,
+	const uint8_t *request_piv, size_t request_piv_len,
+	const struct coap_packet *original_request, uint8_t response_code,
+	const uint8_t *options, size_t options_len,
+	const uint8_t *payload, size_t payload_len, struct coap_packet *response,
+	uint8_t *resp_buf, size_t resp_buf_len);
+
 int coap_oscore_send_protected(struct coap_resource *_Nonnull resource,
 			       struct coap_packet *_Nonnull request,
 			       struct sockaddr *_Nonnull addr, socklen_t addr_len,
-			       struct oscore_ctx *_Nullable ctx,
+			       struct oscore_ctx_ref ctx,
 			       const uint8_t *_Nullable piv, size_t piv_len,
 			       uint8_t code);
 

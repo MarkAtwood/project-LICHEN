@@ -373,16 +373,45 @@ int oscore_ctx_create_with_eui64(const uint8_t *_Nonnull master_secret,
 				 const uint8_t peer_eui64[_Nonnull OSCORE_EUI64_LEN],
 				 struct oscore_ctx *_Nullable *_Nonnull ctx);
 
-/**
- * @brief Associate a peer EUI-64 with an existing context.
- *
- * Links an EUI-64 address to an existing OSCORE context, enabling lookup
- * via oscore_ctx_get_by_eui64(). If the context already has an EUI-64, it
- * is replaced.
- *
- * @param[in] ctx        Security context
- * @param[in] peer_eui64 8-byte peer EUI-64 address
- * @return 0 on success, OSCORE_ERR_INVALID_PARAM if ctx or peer_eui64 is NULL
+/** Copied RAM-only context lifetime evidence. Obtain only from successful
+ * by-peer authentication; never construct from a raw pointer at reply time.
+ * Free/reuse or peer rebind invalidates it, including rebind away and back.
+ */
+struct oscore_ctx_ref {
+	struct oscore_ctx *ctx;
+	uint64_t generation; /* zero is invalid; not a wire/persistence identifier */
+};
+
+/** Exactly-one peer selection and authentication under the context mutex.
+ * Unknown/ambiguous peers fail before unprotect, irrespective of packet KID.
+ * Reference is cleared on failure and published only after authentication.
+ * Input buffers must remain immutable for the call. Persistence callbacks
+ * must obey oscore_persist.h's non-reentrant contract. Attempted lifecycle
+ * mutation fails this operation with CONTEXT_STALE, possibly after replay
+ * commit; callers must discard all outputs on failure.
+ */
+int oscore_unprotect_request_by_peer(
+	const uint8_t peer[OSCORE_EUI64_LEN],
+	const uint8_t *oscore_opt, size_t oscore_opt_len,
+	const uint8_t *ciphertext, size_t ciphertext_len, uint8_t *code,
+	uint8_t *options, size_t *options_len,
+	uint8_t *payload, size_t *payload_len, struct oscore_ctx_ref *response_ctx);
+
+/** Validate lifetime and protect a no-PIV response under one mutex hold.
+ * Stale references fail closed; never substitute a newly looked-up context.
+ */
+int oscore_protect_response_ref(
+	const struct oscore_ctx_ref *ref,
+	const uint8_t *request_piv, size_t request_piv_len, uint8_t code,
+	const uint8_t *options, size_t options_len,
+	const uint8_t *payload, size_t payload_len,
+	uint8_t *ciphertext, size_t *ciphertext_len,
+	uint8_t *oscore_opt, size_t *oscore_opt_len);
+
+/** Associate a peer with an existing active context. An actual binding change
+ * invalidates outstanding references. Invalid/freed contexts, generation
+ * exhaustion, and mutation during a bound operation fail with CONTEXT_STALE.
+ * NULL arguments fail with INVALID_PARAM. No context is created here.
  */
 int oscore_ctx_set_peer_eui64(struct oscore_ctx *_Nonnull ctx,
 			      const uint8_t peer_eui64[_Nonnull OSCORE_EUI64_LEN]);
@@ -393,6 +422,8 @@ int oscore_ctx_set_peer_eui64(struct oscore_ctx *_Nonnull ctx,
  * Returns a pointer to the internal context associated with the given
  * peer EUI-64 address. This requires that the context was created with
  * oscore_ctx_create_with_eui64() or had oscore_ctx_set_peer_eui64() called.
+ * This legacy raw-pointer lookup conveys no lifetime guarantee. Resource
+ * authentication must use oscore_unprotect_request_by_peer() instead.
  *
  * @param[in]  peer_eui64 8-byte peer EUI-64 address to search for
  * @param[out] ctx_out    Pointer to receive context pointer

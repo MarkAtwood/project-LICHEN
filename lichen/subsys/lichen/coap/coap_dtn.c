@@ -154,7 +154,7 @@ static int deaddrop_post(struct coap_resource *resource,
 	struct coap_oscore_unprotect_result oscore = {0};
 	uint8_t piv[OSCORE_PIV_MAX_LEN];
 	size_t piv_len = 0;
-	struct oscore_ctx *oscore_ctx = NULL;
+	struct oscore_ctx_ref oscore_ctx = {0};
 	const uint8_t *payload = NULL;
 	uint16_t payload_len = 0;
 	bool is_protected = false;
@@ -170,7 +170,8 @@ static int deaddrop_post(struct coap_resource *resource,
 						 piv, &piv_len,
 						 &is_protected);
 	if (ret != 0) return ret;
-	oscore.ctx = oscore_ctx;
+	oscore.ctx = oscore_ctx.ctx;
+	oscore.origin.response_ctx = oscore_ctx;
 	oscore.piv_len = piv_len;
 	oscore.is_protected = is_protected;
 	memcpy(oscore.piv, piv, piv_len);
@@ -469,7 +470,7 @@ static int confessions_post(struct coap_resource *resource,
 	 * oscore_ctx/payload/payload_len locals directly. */
 	uint8_t piv[OSCORE_PIV_MAX_LEN];
 	size_t piv_len = 0;
-	struct oscore_ctx *oscore_ctx = NULL;
+	struct oscore_ctx_ref oscore_ctx = {0};
 	const uint8_t *payload = NULL;
 	uint16_t payload_len = 0;
 	bool is_protected = false;

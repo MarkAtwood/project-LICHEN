@@ -1573,7 +1573,7 @@ static int slots_post(struct coap_resource *resource,
 	uint8_t piv[OSCORE_PIV_MAX_LEN];
 	size_t piv_len;
 	bool is_protected;
-	struct oscore_ctx *oscore_ctx;
+	struct oscore_ctx_ref oscore_ctx;
 	int ret;
 
 	ret = coap_oscore_authorize_mutating(resource, request, addr,
@@ -1586,7 +1586,8 @@ static int slots_post(struct coap_resource *resource,
 	if (ret != 0) {
 		return ret;
 	}
-	oscore.ctx = oscore_ctx;
+	oscore.ctx = oscore_ctx.ctx;
+	oscore.origin.response_ctx = oscore_ctx;
 	memcpy(oscore.piv, piv, piv_len);
 	oscore.piv_len = piv_len;
 	oscore.is_protected = is_protected;

@@ -100,6 +100,16 @@ struct lichen_key_entry {
 	bool valid;             /**< Entry in use */
 };
 
+/**
+ * Read-only full AddrForKey reverse lookup over the bounded existing store.
+ * Copies the unique entry under the store lock; never pins, touches, or
+ * creates a context. Only 0200::/8 node addresses are accepted.
+ * Returns -ENOENT if absent/unsupported, -EEXIST if ambiguous, -EINVAL for
+ * NULL arguments. Output is unchanged on failure.
+ */
+int lichen_key_store_get_by_ygg_addr(const uint8_t addr[_Nonnull 16],
+				     struct lichen_key_entry *_Nonnull entry);
+
 /** Result of an authenticated TOFU observation. */
 enum lichen_key_pin_result {
 	LICHEN_KEY_PIN_NEW = 0,

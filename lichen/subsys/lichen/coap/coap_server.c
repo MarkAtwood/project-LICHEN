@@ -133,7 +133,7 @@ static int config_put(struct coap_resource *resource,
 {
 	uint8_t piv[OSCORE_PIV_MAX_LEN];
 	size_t piv_len = 0;
-	struct oscore_ctx *oscore_ctx = NULL;
+	struct oscore_ctx_ref oscore_ctx = {0};
 	const uint8_t *payload = NULL;
 	uint16_t payload_len = 0;
 	bool is_protected = false;
@@ -289,7 +289,7 @@ static int msg_inbox_post(struct coap_resource *resource,
 	 * uses the bare is_protected/payload/oscore_ctx/piv out-params). */
 	uint8_t piv[OSCORE_PIV_MAX_LEN];
 	size_t piv_len = 0;
-	struct oscore_ctx *oscore_ctx = NULL;
+	struct oscore_ctx_ref oscore_ctx = {0};
 	const uint8_t *payload = NULL;
 	uint16_t payload_len = 0;
 	bool is_protected = false;
@@ -326,19 +326,19 @@ static int msg_inbox_post(struct coap_resource *resource,
 	}
 
 #ifdef CONFIG_LICHEN_COAP_SERVER_OSCORE
-	if (is_protected && oscore_ctx != NULL && piv_len > 0) {
+	if (is_protected && oscore_ctx.ctx != NULL && piv_len > 0) {
 		/* OSCORE response with Location-Path options */
 		uint8_t buf[CONFIG_COAP_SERVER_MESSAGE_SIZE];
 		struct coap_packet resp;
-		int r = coap_oscore_protect_response(oscore_ctx, piv, piv_len,
+		int r = coap_oscore_protect_response_ref(oscore_ctx, piv, piv_len,
 						     request,
 						     COAP_RESPONSE_CODE_CREATED,
 						     NULL, 0, NULL, 0, &resp, buf,
 						     sizeof(buf));
 		if (r < 0) {
-			return lichen_coap_respond(resource, request, addr, addr_len,
-						   COAP_RESPONSE_CODE_INTERNAL_ERROR,
-						   0, NULL, 0);
+			return coap_oscore_send_protected(resource, request, addr,
+						  addr_len, oscore_ctx, piv, piv_len,
+						  COAP_RESPONSE_CODE_INTERNAL_ERROR);
 		}
 		r = coap_packet_append_option(&resp, COAP_OPTION_LOCATION_PATH,
 					      "msg", 3);
@@ -603,7 +603,7 @@ static int tunnel_auth_post(struct coap_resource *resource,
 {
 	uint8_t piv[OSCORE_PIV_MAX_LEN];
 	size_t piv_len = 0;
-	struct oscore_ctx *oscore_ctx = NULL;
+	struct oscore_ctx_ref oscore_ctx = {0};
 	const uint8_t *payload = NULL;
 	uint16_t payload_len = 0;
 	bool is_protected = false;
@@ -680,7 +680,7 @@ static int capability_announce_post(struct coap_resource *resource,
 {
 	uint8_t piv[OSCORE_PIV_MAX_LEN];
 	size_t piv_len = 0;
-	struct oscore_ctx *oscore_ctx = NULL;
+	struct oscore_ctx_ref oscore_ctx = {0};
 	const uint8_t *payload = NULL;
 	uint16_t payload_len = 0;
 	bool is_protected = false;
