@@ -431,7 +431,27 @@ class TestSosRateLimiting:
         sos._time_func = lambda: current_time
         assert sos.check_rate_limit(_EUI.hex()) is True
 
+    def test_rate_limit_entries_bounded(self) -> None:
+        """Minted-identity floods cannot grow the rate-limit dict (TOFU)."""
+        sos = SosResource()
+        for idx in range(6000):
+            sos._record_request(f"source{idx}")
+        assert len(sos._request_times) <= 256
+        assert len(sos._period_start) <= 256
+        # The newest source is still tracked after eviction.
+        assert "source5999" in sos._request_times
+
     def test_third_request_within_cooldown_blocked(self) -> None:
+        """Third request while the period's burst budget is spent is blocked."""
+        current_time = _T0
+        sos = SosResource(time_func=lambda: current_time)
+        # Fill the period: original + one burst, both at t0.
+        sos._record_request(_EUI.hex())
+        sos._record_request(_EUI.hex())
+        # Request 5 minutes later should be blocked (burst budget spent)
+        current_time = _T0 + 300  # 5 minutes
+        sos._time_func = lambda: current_time
+        assert sos.check_rate_limit(_EUI.hex()) is False
         """Third request while the period's burst budget is spent is blocked."""
         current_time = _T0
         sos = SosResource(time_func=lambda: current_time)
@@ -871,6 +891,24 @@ class TestRollcallPostValidation:
             ).response
             assert resp.code == aiocoap.BAD_REQUEST
             assert "roll-001" not in rollcall._rollcalls
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_post_empty_id_rejected(self) -> None:
+        """Empty-string id is unaddressable and MUST be rejected."""
+        client, server, rollcall = await _setup_rollcall()
+        try:
+            resp = await client.request(
+                Message(
+                    code=POST,
+                    uri="coap://srv/rollcall",
+                    payload=_rollcall_post_body(id=""),
+                    content_format=60,
+                )
+            ).response
+            assert resp.code == aiocoap.BAD_REQUEST
+            assert "" not in rollcall._rollcalls
         finally:
             await client.shutdown()
             await server.shutdown()
