@@ -876,9 +876,9 @@
       }
     },
     {
-      "name": "reject_fresh_cross_prefix_target",
-      "description": "Reject fresh cross prefix target.",
-      "coverage": "fresh_cross_prefix_target",
+      "name": "reject_fresh_cross_prefix_iid_mismatch",
+      "description": "Reject fresh cross prefix iid mismatch.",
+      "coverage": "fresh_cross_prefix_iid_mismatch",
       "signing_seed": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "public_key": "207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6",
       "source_ipv6": "fe800000000000000ed144787022f9dc",
