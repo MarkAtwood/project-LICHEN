@@ -205,7 +205,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// scheduler idle, the initial DAO is scheduled 0-2 s out (R-09-017).
     /// Returns the scheduler outcome for the TX path.
     pub(crate) fn dao_tx_advance(&mut self, now_ms: u64) -> DaoTxAdvance {
-        let joined = self.rpl.router.is_joined();
+        let joined = matches!(self.role, RplRole::Leaf(_)) && self.rpl.router.is_joined();
         if !joined {
             self.dao_tx_sched = DaoTxScheduler::new();
             return DaoTxAdvance::Idle;

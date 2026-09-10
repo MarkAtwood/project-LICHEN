@@ -332,6 +332,34 @@ fn runtime_root() -> (
 }
 
 #[tokio::test]
+async fn runtime_root_never_schedules_leaf_dao() {
+    let (mut root, _) = runtime_root();
+    let mut runtime = RplRuntime::new(RplRuntimeConfig::default(), 0);
+    for now in [0, 3_000, 900_000] {
+        let poll = root.runtime_poll(&mut runtime, now).unwrap();
+        assert_eq!(poll.action, RplRuntimeAction::Receive { timeout_ms: 1_000 });
+        assert_eq!(*root.dao_tx_sched.phase(), DaoTxPhase::Idle);
+        root.runtime_receive(&mut runtime, poll.action, || now)
+            .await
+            .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn runtime_due_dao_cannot_bypass_pending_receive() {
+    let (mut root, _) = runtime_root();
+    let mut runtime = RplRuntime::new(RplRuntimeConfig::default(), 0);
+    let first = root.runtime_poll(&mut runtime, 0).unwrap();
+    assert_eq!(
+        root.runtime_poll(&mut runtime, 3_000),
+        Err(RplRuntimeActionError::PollWithPending)
+    );
+    root.runtime_receive(&mut runtime, first.action, || 3_000)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn runtime_receive_uses_planned_timeout_and_post_await_clock() {
     let (mut root, radio) = runtime_root();
     let mut runtime = RplRuntime::new(RplRuntimeConfig::default(), 0);
@@ -1565,6 +1593,284 @@ async fn dao_radio_failure_retains_exact_finalized_bytes() {
     let received = receive_ipv6(&mut root).await;
     assert_eq!(dao_parts(&received.ipv6).unwrap().1, finalized);
     assert_eq!(leaf.last_signed_dao(), None);
+}
+
+async fn joined_runtime_leaf() -> (RplStack<FailOnceRadio, MemStorage>, Stack<LoopbackRadio>) {
+    let root_identity = identity(101);
+    let leaf_identity = identity(102);
+    let root_addr = root_address(&root_identity);
+    let leaf_addr = address(&leaf_identity, 1);
+    let (root_radio, leaf_radio) = LoopbackRadio::pair();
+    let mut root = Stack::new_default_epoch(root_radio, root_identity.clone());
+    root.add_peer(PeerIdentity::from_pubkey(leaf_identity.pubkey));
+    let leaf_stack = Stack::new_default_epoch(
+        FailOnceRadio {
+            inner: leaf_radio,
+            fail_next: false,
+        },
+        leaf_identity,
+    );
+    let mut leaf = RplStack::provision_leaf(
+        leaf_stack,
+        leaf_addr,
+        root_addr,
+        announces(),
+        MemStorage::new(),
+    )
+    .unwrap();
+    join_leaf(&mut root, &mut leaf, &root_identity, root_addr, leaf_addr).await;
+    // Isolate DAO deadlines from Trickle; fix the initial deadline at 1000ms.
+    leaf.rpl.router.trickle = lichen_rpl::trickle::TrickleTimer::new(4096, 4096, 10);
+    leaf.dao_tx_sched.schedule_initial(1_000, 0);
+    (leaf, root)
+}
+
+#[tokio::test]
+async fn runtime_dao_pending_retry_bytes_refresh_and_clock_cadence() {
+    let (mut leaf, mut root) = joined_runtime_leaf().await;
+    let config = RplRuntimeConfig::new(1_000, 1_000_000).unwrap();
+    let mut runtime = RplRuntime::new(config, 0);
+    let receive = leaf.runtime_poll(&mut runtime, 999).unwrap();
+    assert_eq!(receive.action, RplRuntimeAction::Receive { timeout_ms: 1 });
+    assert_eq!(
+        leaf.runtime_poll(&mut runtime, 1_000),
+        Err(RplRuntimeActionError::PollWithPending)
+    );
+    assert_eq!(
+        *leaf.dao_tx_sched.phase(),
+        DaoTxPhase::Initial { deadline_ms: 1_000 }
+    );
+    leaf.runtime_receive(&mut runtime, receive.action, || 1_000)
+        .await
+        .unwrap();
+
+    // A regressing observation cannot move the DAO deadline or skip maintenance.
+    let dao = leaf.runtime_poll(&mut runtime, 900).unwrap();
+    assert_eq!(dao.now_ms, 1_000);
+    assert_eq!(dao.action, RplRuntimeAction::DaoTransmit);
+    assert_eq!(
+        leaf.runtime_poll(&mut runtime, 1_000),
+        Err(RplRuntimeActionError::PollWithPending)
+    );
+    leaf.stack.radio().fail_next();
+    assert_eq!(
+        leaf.send_dao().await,
+        Err(DaoSendError::Transmit(TxError::RadioTx))
+    );
+    let finalized = leaf.last_signed_dao().unwrap().to_vec();
+    leaf.runtime_fail_dao_transmit(&mut runtime, 1_100).unwrap();
+    assert_eq!(
+        *leaf.dao_tx_sched.phase(),
+        DaoTxPhase::Retry {
+            attempt: 0,
+            deadline_ms: 5_100
+        }
+    );
+    assert_eq!(
+        leaf.runtime_fail_dao_transmit(&mut runtime, 1_100),
+        Err(RplRuntimeActionError::ActionNotPending)
+    );
+
+    let wait = leaf.runtime_poll(&mut runtime, 5_099).unwrap();
+    assert!(wait.maintenance.is_some());
+    assert_eq!(wait.action, RplRuntimeAction::Receive { timeout_ms: 1 });
+    leaf.runtime_receive(&mut runtime, wait.action, || 5_100)
+        .await
+        .unwrap();
+    assert_eq!(
+        leaf.runtime_poll(&mut runtime, 5_100).unwrap().action,
+        RplRuntimeAction::DaoTransmit
+    );
+    leaf.send_dao().await.unwrap();
+    let received = receive_ipv6(&mut root).await;
+    // Retry must preserve the original signed DAO, not rebuild/re-sign it.
+    assert_eq!(dao_parts(&received.ipv6).unwrap().1, finalized);
+    assert_eq!(leaf.last_signed_dao(), None);
+    leaf.runtime_complete_dao_transmit(&mut runtime, 5_200)
+        .unwrap();
+    assert_eq!(
+        *leaf.dao_tx_sched.phase(),
+        DaoTxPhase::Refresh {
+            deadline_ms: 905_200
+        }
+    );
+    assert_eq!(
+        leaf.runtime_complete_dao_transmit(&mut runtime, 5_200),
+        Err(RplRuntimeActionError::ActionNotPending)
+    );
+    let wait = leaf.runtime_poll(&mut runtime, 5_199).unwrap();
+    assert_eq!(wait.now_ms, 5_200);
+    assert_eq!(wait.action, RplRuntimeAction::Receive { timeout_ms: 800 });
+    leaf.runtime_receive(&mut runtime, wait.action, || 905_199)
+        .await
+        .unwrap();
+    let wait = leaf.runtime_poll(&mut runtime, 905_199).unwrap();
+    assert_eq!(wait.action, RplRuntimeAction::Receive { timeout_ms: 1 });
+    leaf.runtime_receive(&mut runtime, wait.action, || 905_200)
+        .await
+        .unwrap();
+    assert_eq!(
+        leaf.runtime_poll(&mut runtime, 905_200).unwrap().action,
+        RplRuntimeAction::DaoTransmit
+    );
+    leaf.send_dao().await.unwrap();
+    let refresh = receive_ipv6(&mut root).await;
+    assert_eq!(
+        SignedDaoEnvelope::from_bytes(dao_parts(&refresh.ipv6).unwrap().1)
+            .unwrap()
+            .origin
+            .origin_sequence,
+        2
+    );
+    leaf.runtime_complete_dao_transmit(&mut runtime, 905_200)
+        .unwrap();
+}
+
+#[tokio::test]
+async fn runtime_dao_failure_burst_refreshes_without_rejoin_or_resigning() {
+    let (mut leaf, mut root) = joined_runtime_leaf().await;
+    let config = RplRuntimeConfig::new(1_000_000, 1_000_000).unwrap();
+    let mut runtime = RplRuntime::new(config, 0);
+    let mut first = None;
+    // Initial send plus exactly three retries: 4s, 8s, 16s after each failure.
+    for (now, expected) in [
+        (
+            1_000,
+            DaoTxPhase::Retry {
+                attempt: 0,
+                deadline_ms: 5_000,
+            },
+        ),
+        (
+            5_000,
+            DaoTxPhase::Retry {
+                attempt: 1,
+                deadline_ms: 13_000,
+            },
+        ),
+        (
+            13_000,
+            DaoTxPhase::Retry {
+                attempt: 2,
+                deadline_ms: 29_000,
+            },
+        ),
+        (
+            29_000,
+            DaoTxPhase::Refresh {
+                deadline_ms: 929_000,
+            },
+        ),
+    ] {
+        assert_eq!(
+            leaf.runtime_poll(&mut runtime, now).unwrap().action,
+            RplRuntimeAction::DaoTransmit
+        );
+        leaf.stack.radio().fail_next();
+        assert_eq!(
+            leaf.send_dao().await,
+            Err(DaoSendError::Transmit(TxError::RadioTx))
+        );
+        let signed = leaf.last_signed_dao().unwrap();
+        if let Some(first) = &first {
+            assert_eq!(signed, first);
+        } else {
+            first = Some(signed.to_vec());
+        }
+        leaf.runtime_fail_dao_transmit(&mut runtime, now).unwrap();
+        assert_eq!(*leaf.dao_tx_sched.phase(), expected);
+    }
+    let wait = leaf.runtime_poll(&mut runtime, 29_001).unwrap();
+    assert_eq!(
+        wait.action,
+        RplRuntimeAction::Receive {
+            timeout_ms: 899_999
+        }
+    );
+    leaf.runtime_receive(&mut runtime, wait.action, || 928_999)
+        .await
+        .unwrap();
+    let wait = leaf.runtime_poll(&mut runtime, 928_999).unwrap();
+    assert_eq!(wait.action, RplRuntimeAction::Receive { timeout_ms: 1 });
+    leaf.runtime_receive(&mut runtime, wait.action, || 929_000)
+        .await
+        .unwrap();
+    assert!(leaf.rpl_node().is_joined());
+    assert_eq!(
+        leaf.runtime_poll(&mut runtime, 929_000).unwrap().action,
+        RplRuntimeAction::DaoTransmit
+    );
+    leaf.send_dao().await.unwrap();
+    let received = receive_ipv6(&mut root).await;
+    assert_eq!(dao_parts(&received.ipv6).unwrap().1, first.unwrap());
+    assert_eq!(leaf.last_signed_dao(), None);
+    leaf.runtime_complete_dao_transmit(&mut runtime, 929_100)
+        .unwrap();
+    assert_eq!(
+        *leaf.dao_tx_sched.phase(),
+        DaoTxPhase::Refresh {
+            deadline_ms: 1_829_100
+        }
+    );
+    assert!(matches!(
+        leaf.runtime_poll(&mut runtime, 929_100).unwrap().action,
+        RplRuntimeAction::Receive { .. }
+    ));
+}
+
+#[tokio::test]
+async fn runtime_dao_post_await_generation_validation_preserves_schedule() {
+    let (mut leaf, _root) = joined_runtime_leaf().await;
+    let mut runtime = RplRuntime::new(RplRuntimeConfig::default(), 0);
+    assert_eq!(
+        leaf.runtime_poll(&mut runtime, 1_000).unwrap().action,
+        RplRuntimeAction::DaoTransmit
+    );
+    leaf.send_dao().await.unwrap();
+    leaf.trickle_reset(1_001, 0);
+    let before = *leaf.dao_tx_sched.phase();
+    assert_eq!(
+        leaf.runtime_complete_dao_transmit(&mut runtime, 1_002),
+        Err(RplRuntimeActionError::StaleGeneration)
+    );
+    assert_eq!(
+        leaf.runtime_fail_dao_transmit(&mut runtime, 1_002),
+        Err(RplRuntimeActionError::StaleGeneration)
+    );
+    assert_eq!(*leaf.dao_tx_sched.phase(), before);
+}
+
+#[tokio::test]
+async fn runtime_maintenance_prunes_parent_before_due_dao() {
+    let (mut leaf, _root) = joined_runtime_leaf().await;
+    let mut runtime = RplRuntime::new(RplRuntimeConfig::default(), 0);
+    let poll = leaf.runtime_poll(&mut runtime, 10_001).unwrap();
+    assert!(poll.maintenance.unwrap().neighbors_pruned);
+    assert_ne!(poll.action, RplRuntimeAction::DaoTransmit);
+    assert_eq!(*leaf.dao_tx_sched.phase(), DaoTxPhase::Idle);
+}
+
+#[tokio::test]
+async fn runtime_dao_terminal_clock_stops_rescheduling() {
+    let (mut leaf, _root) = joined_runtime_leaf().await;
+    let config = RplRuntimeConfig::new(1, u64::MAX).unwrap();
+    let mut runtime = RplRuntime::new(config, u64::MAX - 2);
+    assert_eq!(
+        leaf.runtime_poll(&mut runtime, u64::MAX - 2)
+            .unwrap()
+            .action,
+        RplRuntimeAction::DaoTransmit
+    );
+    leaf.send_dao().await.unwrap();
+    leaf.runtime_complete_dao_transmit(&mut runtime, u64::MAX)
+        .unwrap();
+    assert_eq!(*leaf.dao_tx_sched.phase(), DaoTxPhase::Exhausted);
+    assert_eq!(
+        leaf.runtime_poll(&mut runtime, u64::MAX).unwrap().action,
+        RplRuntimeAction::Receive {
+            timeout_ms: u32::MAX
+        }
+    );
 }
 
 #[tokio::test]

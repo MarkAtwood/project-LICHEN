@@ -177,26 +177,32 @@ impl RplRuntime {
         Ok(timeout_ms)
     }
 
-    /// Clear the pending DaoTransmit action after the executor sent the DAO.
+    /// Incorporate the owner's DAO deadline immediately after a successful poll.
+    /// Both the returned action and the pending token must describe the same work.
+    pub(crate) fn constrain_to_dao(&mut self, poll: &mut RplRuntimePoll, remaining_ms: u64) {
+        if remaining_ms == 0 {
+            poll.action = RplRuntimeAction::DaoTransmit;
+        } else if let RplRuntimeAction::Receive { timeout_ms } = &mut poll.action {
+            *timeout_ms = u64::from(*timeout_ms).min(remaining_ms) as u32;
+        }
+        self.pending_action = Some(poll.action);
+    }
+
+    /// Clear the pending DaoTransmit action after the executor attempted the DAO.
     pub(crate) fn complete_dao_transmit(
         &mut self,
         node: &mut RplNode,
         observed_now_ms: u64,
         stack_generation: u64,
-    ) -> Result<Option<RplMaintenanceOutcome>, RplRuntimeActionError> {
+    ) -> Result<(u64, Option<RplMaintenanceOutcome>), RplRuntimeActionError> {
         if self
             .bound_generation
             .is_some_and(|bound| bound != stack_generation)
         {
             return Err(RplRuntimeActionError::StaleGeneration);
         }
-        if self.pending_action != Some(RplRuntimeAction::DaoTransmit) {
-            return Err(RplRuntimeActionError::ActionNotPending);
-        }
-        self.pending_action = None;
-        let (now_ms, maintenance) = self.observe(node, observed_now_ms);
-        self.next_maintenance_ms = Some(now_ms + 1);
-        Ok(maintenance)
+        self.take_pending(RplRuntimeAction::DaoTransmit)?;
+        Ok(self.observe(node, observed_now_ms))
     }
 
     pub(crate) fn complete_trickle_transmit(

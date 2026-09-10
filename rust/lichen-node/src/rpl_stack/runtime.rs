@@ -10,6 +10,7 @@ use crate::routing::TrickleSafeLivenessPolicy;
 use crate::runtime::{RplRuntime, RplRuntimeAction, RplRuntimeActionError, RplRuntimePoll};
 use crate::stack::{RxError, MAX_FRAME_SIZE};
 
+use super::dao_tx_sched::DaoTxAdvance;
 use super::error::{RplReceiveError, RplRuntimeReceiveError, RplRuntimeTrickleError};
 use super::util::RPL_ALL_NODES;
 use super::RplTrickleTransmitOutcome;
@@ -39,31 +40,49 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         runtime: &mut RplRuntime,
         observed_now_ms: u64,
     ) -> Result<RplRuntimePoll, RplRuntimeActionError> {
-        self.routing_now_ms = self.routing_now_ms.max(observed_now_ms);
-        // DAO TX scheduler (b7z9.16.1): a due leaf DAO preempts the poll so
-        // the executor sees DaoTransmit before the receive window opens.
-        if matches!(
-            self.dao_tx_advance(observed_now_ms),
-            crate::rpl_stack::dao_tx_sched::DaoTxAdvance::Due
-        ) {
-            return Ok(RplRuntimePoll {
-                now_ms: observed_now_ms,
-                maintenance: None,
-                action: RplRuntimeAction::DaoTransmit,
-                generation: self.generation,
-            });
+        let mut poll = runtime.poll(&mut self.rpl, observed_now_ms, self.generation)?;
+        self.routing_now_ms = self.routing_now_ms.max(poll.now_ms);
+        // Maintenance and token validation precede the join/deadline check.
+        match self.dao_tx_advance(poll.now_ms) {
+            DaoTxAdvance::Due => runtime.constrain_to_dao(&mut poll, 0),
+            DaoTxAdvance::NotYet { remaining_ms } => {
+                runtime.constrain_to_dao(&mut poll, remaining_ms);
+            }
+            DaoTxAdvance::Idle | DaoTxAdvance::Exhausted => {}
         }
-        runtime.poll(&mut self.rpl, observed_now_ms, self.generation)
+        Ok(poll)
     }
 
-    /// Complete a completed DaoTransmit action (executor already sent the DAO).
+    /// Complete a successful [`Self::send_dao`] using a post-await clock sample.
+    ///
+    /// Call only for a pending `DaoTransmit` action. A failed send must instead
+    /// be completed with [`Self::runtime_fail_dao_transmit`]. Generation and
+    /// pending-action checks precede any scheduler transition.
     pub fn runtime_complete_dao_transmit(
         &mut self,
         runtime: &mut RplRuntime,
         observed_now_ms: u64,
     ) -> Result<(), RplRuntimeActionError> {
-        self.routing_now_ms = self.routing_now_ms.max(observed_now_ms);
-        runtime.complete_dao_transmit(&mut self.rpl, observed_now_ms, self.generation)?;
+        let (now_ms, _) =
+            runtime.complete_dao_transmit(&mut self.rpl, observed_now_ms, self.generation)?;
+        self.routing_now_ms = self.routing_now_ms.max(now_ms);
+        self.dao_tx_sched.on_dao_sent(now_ms);
+        Ok(())
+    }
+
+    /// Complete a failed [`Self::send_dao`] using a post-await clock sample.
+    ///
+    /// Advances the bounded 4/8/16-second retry ladder. The finalized DAO stays
+    /// in the owned sender state so retries use exactly the same signed bytes.
+    pub fn runtime_fail_dao_transmit(
+        &mut self,
+        runtime: &mut RplRuntime,
+        observed_now_ms: u64,
+    ) -> Result<(), RplRuntimeActionError> {
+        let (now_ms, _) =
+            runtime.complete_dao_transmit(&mut self.rpl, observed_now_ms, self.generation)?;
+        self.routing_now_ms = self.routing_now_ms.max(now_ms);
+        self.dao_tx_sched.on_dao_failed(now_ms);
         Ok(())
     }
 

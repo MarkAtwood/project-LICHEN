@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-oa51.3.5",
+  "title": "Preserve DAO refresh after retry exhaustion",
+  "description": "Robustness review of oa51.3.4 lifecycle wiring: failed initial DAO plus3 retries sets Exhausted, runtime ignores it forever while joined. Transient TX failures can permanently stop15min refresh and expire downward route. End current retry burst without disabling future periodic refresh; preserve terminal-clock exhaustion when future deadline unrepresentable. Reference draft-lichen-rpl-lora-00 section refresh cadence and current scheduler constants.",
+  "acceptance_criteria": "Failed burst retries bounded, then future900s refresh scheduled; no immediate busy loop; recovery succeeds without rejoin; regression and3 reviews pass.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T19:32:36.279626958Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T19:36:33.049742943Z",
+  "closed_at": "2026-09-10T19:36:33.049742943Z",
+  "close_reason": "After bounded failed retry burst next900s refresh survives without rejoin; overflow still exhausted. Literal deadline regression failed before and passes after,4 runtime DAO+6 scheduler tests pass;3 independent final reviews clear.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-oa51.3.5",
+      "depends_on_id": "project-LICHEN-worker6-oa51.3",
+      "type": "parent-child",
+      "created_at": "2026-09-10T19:32:36.430006542Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

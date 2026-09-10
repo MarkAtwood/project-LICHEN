@@ -7,15 +7,13 @@
 //! DODAG join, retries on the 4/8/16 s exponential ladder, and periodic
 //! refresh at half the soft-state lifetime. All timing constants come from
 //! [`lichen_rpl::dao_timing`] — the single oracle; nothing is duplicated
-//! here. The TX path (send_dao) consumes [`DaoTxScheduler::advance`].
+//! here. The owner runtime consumes [`DaoTxScheduler::advance`].
 
 use lichen_rpl::dao_timing::{
     dao_initial_delay_ms, dao_retry_delay_ms, dao_retry_exhausted, DAO_REFRESH_INTERVAL_SECONDS,
 };
 
-/// Refresh interval in ms (half the 30-min soft-state lifetime). Consumed
-/// by on_dao_sent; dead in non-test builds until b7z9.16.1(b) wires the TX
-/// path.
+/// Refresh interval in ms (half the 30-min soft-state lifetime).
 const DAO_REFRESH_INTERVAL_MS: u64 = DAO_REFRESH_INTERVAL_SECONDS * 1000;
 /// Wall-clock-independent refresh floor, aliasing the DAO refresh interval.
 const _DAO_REFRESH_FLOOR_MS: u64 = DAO_REFRESH_INTERVAL_MS;
@@ -27,11 +25,11 @@ pub(crate) enum DaoTxPhase {
     Idle,
     /// Initial DAO due at `deadline_ms` (join time + 0-2 s).
     Initial { deadline_ms: u64 },
-    /// Retry `attempt` (1-based) due at `deadline_ms`.
+    /// Retry `attempt` (zero-based) due at `deadline_ms`.
     Retry { attempt: u8, deadline_ms: u64 },
     /// Periodic refresh due at `deadline_ms`.
     Refresh { deadline_ms: u64 },
-    /// Retry ladder exhausted (R-09-019 ceiling); refresh continues.
+    /// Clock exhausted: no future transmission deadline is representable.
     Exhausted,
 }
 
@@ -42,7 +40,7 @@ pub(crate) enum DaoTxAdvance {
     Due,
     /// Not yet due; `remaining_ms` until the deadline.
     NotYet { remaining_ms: u64 },
-    /// Retry ladder exhausted — the TX path stops retrying.
+    /// Clock exhausted — the TX path stops retrying.
     Exhausted,
     /// Idle (not joined).
     Idle,
@@ -99,23 +97,16 @@ impl DaoTxScheduler {
 
     /// Record a successful DAO transmission: move to periodic refresh
     /// (half the soft-state lifetime, per R-09-019).
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "DAO TX consumer lands in b7z9.16.1(b)")
-    )]
     pub(crate) fn on_dao_sent(&mut self, now_ms: u64) {
-        self.phase = DaoTxPhase::Refresh {
-            deadline_ms: now_ms.saturating_add(DAO_REFRESH_INTERVAL_MS),
+        self.phase = match now_ms.checked_add(DAO_REFRESH_INTERVAL_MS) {
+            Some(deadline_ms) => DaoTxPhase::Refresh { deadline_ms },
+            None => DaoTxPhase::Exhausted,
         };
     }
 
     /// Record a failed/lost DAO transmission: advance the retry ladder
-    /// (4/8/16 s). Exhausted after the final rung (R-09-019 ceiling) —
-    /// refresh-mode emissions continue from the TX path.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "DAO TX consumer lands in b7z9.16.1(b)")
-    )]
+    /// (4/8/16 s). After the final rung, wait for the next periodic refresh
+    /// instead of retrying immediately or disabling refresh while joined.
     pub(crate) fn on_dao_failed(&mut self, now_ms: u64) {
         // 0-indexed against DAO_RETRY_DELAYS_MS: the first retry (after
         // the initial DAO) uses delays[0] = 4 s.
@@ -124,14 +115,17 @@ impl DaoTxScheduler {
             _ => 0,
         };
         if dao_retry_exhausted(attempt) {
-            self.phase = DaoTxPhase::Exhausted;
+            self.phase = match now_ms.checked_add(DAO_REFRESH_INTERVAL_MS) {
+                Some(deadline_ms) => DaoTxPhase::Refresh { deadline_ms },
+                None => DaoTxPhase::Exhausted,
+            };
             return;
         }
-        match dao_retry_delay_ms(attempt) {
-            Some(delay) => {
+        match dao_retry_delay_ms(attempt).and_then(|delay| now_ms.checked_add(delay)) {
+            Some(deadline_ms) => {
                 self.phase = DaoTxPhase::Retry {
                     attempt,
-                    deadline_ms: now_ms.saturating_add(delay),
+                    deadline_ms,
                 };
             }
             None => {
@@ -178,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn retry_ladder_4_8_16_then_exhausted() {
+    fn retry_ladder_4_8_16_then_periodic_refresh() {
         let mut sched = DaoTxScheduler::new();
         sched.schedule_initial(0, 0);
         sched.on_dao_failed(0);
@@ -212,7 +206,56 @@ mod tests {
         );
         assert_eq!(sched.advance(28_000), DaoTxAdvance::Due);
         sched.on_dao_failed(28_000);
-        assert_eq!(sched.phase(), &DaoTxPhase::Exhausted);
-        assert_eq!(sched.advance(28_001), DaoTxAdvance::Exhausted);
+        assert_eq!(
+            sched.phase(),
+            &DaoTxPhase::Refresh {
+                deadline_ms: 928_000
+            }
+        );
+        assert_eq!(
+            sched.advance(28_001),
+            DaoTxAdvance::NotYet {
+                remaining_ms: 899_999
+            }
+        );
+        assert_eq!(
+            sched.advance(927_999),
+            DaoTxAdvance::NotYet { remaining_ms: 1 }
+        );
+        assert_eq!(sched.advance(928_000), DaoTxAdvance::Due);
+        // A failed periodic attempt starts a new bounded burst at the 4s rung.
+        sched.on_dao_failed(928_000);
+        assert_eq!(
+            sched.phase(),
+            &DaoTxPhase::Retry {
+                attempt: 0,
+                deadline_ms: 932_000
+            }
+        );
+    }
+
+    #[test]
+    fn exhausted_burst_with_unrepresentable_refresh_deadline_stays_exhausted() {
+        let mut sched = DaoTxScheduler::new();
+        sched.schedule_initial(0, 0);
+        for now in [0, 4_000, 12_000, u64::MAX - 899_999] {
+            assert_eq!(sched.advance(now), DaoTxAdvance::Due);
+            sched.on_dao_failed(now);
+        }
+        assert_eq!(sched.advance(u64::MAX), DaoTxAdvance::Exhausted);
+    }
+
+    #[test]
+    fn unrepresentable_retry_deadline_exhausts_without_saturating() {
+        let mut sched = DaoTxScheduler::new();
+        sched.schedule_initial(0, 0);
+        sched.on_dao_failed(u64::MAX - 4_000);
+        assert_eq!(
+            sched.advance(u64::MAX - 1),
+            DaoTxAdvance::NotYet { remaining_ms: 1 }
+        );
+        assert_eq!(sched.advance(u64::MAX), DaoTxAdvance::Due);
+        sched.on_dao_failed(u64::MAX);
+        assert_eq!(sched.advance(u64::MAX), DaoTxAdvance::Exhausted);
     }
 }
