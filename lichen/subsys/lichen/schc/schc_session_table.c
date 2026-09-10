@@ -158,6 +158,11 @@ int lichen_schc_tombstone_put(struct lichen_schc_session_table *table,
 		return 0;
 	}
 
+	/* As in context allocation, a failed scan must not dereference NULL
+	 * even if the cached count and occupancy are inconsistent. */
+	if (slot == NULL) {
+		return -ENOBUFS;
+	}
 	slot->key = *key;
 	slot->outcome = outcome;
 	slot->high_water = high_water;
@@ -228,6 +233,10 @@ int lichen_schc_floor_put(struct lichen_schc_session_table *table,
 		slot = &table->floors[lowest];
 	}
 
+	/* A count below capacity must agree with the free-slot scan. */
+	if (slot == NULL) {
+		return -ENOBUFS;
+	}
 	slot->key = *key;
 	slot->high_water = high_water;
 	slot->occupied = true;
