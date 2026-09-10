@@ -73,7 +73,7 @@ native clients.
 |-------|--------|--------------|
 | **Simulator** | Complete | Radio propagation, collisions, multi-node topologies, chaos testing |
 | **Link Layer** | Complete | Frame format, Schnorr signatures, replay protection |
-| **SCHC** | Complete | IPv6+UDP+CoAP compression from 60+ bytes to ~10 bytes |
+| **SCHC** | Complete | IPv6+UDP+CoAP headers compress from 52 bytes to 23 bytes (link-local) / 37 bytes (Yggdrasil) |
 | **IPv6** | Complete | Addressing, packet encoding, ICMPv6 |
 | **Announce Routing** | Complete | Peer-to-peer gradient routing with signed announcements |
 | **RPL** | Complete | Border router tree routing |
