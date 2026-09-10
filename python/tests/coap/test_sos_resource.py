@@ -603,9 +603,18 @@ class TestSosNonConfirmableSilentDrop:
         request's response future never resolving within a short window,
         with the resource left inactive. A spurious response would arrive in
         microseconds over the in-memory fabric and fail the wait fast.
+
+        Positive controls bracket the drop: a GET before proves the
+        transport is up (otherwise a broken channel would produce the same
+        TimeoutError and false-pass), and a GET after proves the server is
+        still alive and the drop left the resource inactive.
         """
         client, server, sos = await _setup()
         try:
+            # Positive control: the server answers over this transport.
+            resp = await client.request(Message(code=GET, uri="coap://srv/sos")).response
+            assert resp.code == aiocoap.CONTENT
+
             body = cbor2.dumps({"from": _EUI.hex(), "t": _T0})
             req = Message(
                 code=POST,
@@ -618,6 +627,11 @@ class TestSosNonConfirmableSilentDrop:
             with pytest.raises(asyncio.TimeoutError):
                 await asyncio.wait_for(asyncio.shield(response_fut), timeout=1.0)
             assert sos._active is False
+
+            # Positive control: server survived the drop; state is inactive.
+            resp = await client.request(Message(code=GET, uri="coap://srv/sos")).response
+            assert resp.code == aiocoap.CONTENT
+            assert cbor2.loads(resp.payload)["active"] is False
         finally:
             await client.shutdown()
             await server.shutdown()
