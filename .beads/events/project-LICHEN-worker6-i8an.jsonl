@@ -1,3 +1,4 @@
 {"id":"01a089a3-0d6c-74be-88e5-c3bcf0f7e93c","issue_id":"project-LICHEN-worker6-i8an","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-10T04:45:59.532312263Z"}
 {"id":"01a089a3-0d71-73b9-9b71-7cec372f8f43","issue_id":"project-LICHEN-worker6-i8an","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: python","created_at":"2026-09-10T04:45:59.537245029Z"}
 {"id":"01a089a3-0d76-72e8-b13d-d5e524c2f176","issue_id":"project-LICHEN-worker6-i8an","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: coap","created_at":"2026-09-10T04:45:59.542192572Z"}
+{"id":"01a089c0-aeeb-7e54-9930-88de41e4693e","issue_id":"project-LICHEN-worker6-i8an","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Fixed: empty-string rollcall id rejected at intake; test_post_empty_id_rejected added.","created_at":"2026-09-10T05:18:21.419940361Z"}

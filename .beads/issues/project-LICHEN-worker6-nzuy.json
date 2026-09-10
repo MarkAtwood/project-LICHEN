@@ -1,0 +1,19 @@
+{
+  "id": "project-LICHEN-worker6-nzuy",
+  "title": "lichen-link: default-feature test build broken (ungated tests use alloc-gated items)",
+  "description": "rust/lichen-link/src/sos_origin.rs tests mod — hex_to_bytes (:244) + domain_matches_vector (:259, uses bare Vec) + 3 tracker_* tests + origin_addr_matches_upstream_pinned_vector reference alloc-gated names (Vec via cfg'd use alloc::vec::Vec, OriginSequenceTracker, SOS_ORIGIN_GATE_DEFAULT_CAPACITY) but are not cfg(feature=\"alloc\") gated. cargo test -p lichen-link with default features (no alloc) fails: E0425 'cannot find type Vec', 'cannot find value SOS_ORIGIN_GATE_DEFAULT_CAPACITY', 'cannot find type OriginSequenceTracker'. CI misses it (only all-features/schnorr legs). Fix: gate the alloc-dependent tests with cfg(feature=\"alloc\") and use std::vec::Vec in domain_matches_vector. Refiled — original bead lost in a store merge.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-2",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T05:39:20.073072863Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-09-10T05:45:15.519207918Z",
+  "started_at": "2026-09-10T05:45:15.519207918Z",
+  "lease_expires_at": "2026-09-10T05:50:15.519207918Z",
+  "heartbeat_at": "2026-09-10T05:45:15.519207918Z",
+  "labels": [
+    "rust"
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-kh95",
+  "title": "C gateway DIO advertises dio_int_min=4 (16ms) while runtime Trickle runs 4000ms; RFC 6550 6.7.6 wants log2(ms)",
+  "description": "Found by reviewer pass 1 on b7z9.192 (pre-existing, outside that diff). lichen/apps/gateway/src/rpl_root.c:161 computes dcfg.dio_int_min = CONFIG_LICHEN_RPL_TRICKLE_IMIN_MS / 1000; Kconfig default is 4000 (lichen/subsys/lichen/rpl/Kconfig:78-81, no app override), yielding dio_int_min=4. Per RFC 6550 6.7.6 the DODAG Configuration dio_int_min field is log2 of Imin in milliseconds, so the C gateway advertises a 16ms Trickle Imin on the wire while its own Trickle runs at 4000ms; Rust and Python advertise 12 (4096ms, matching lichen_rpl_dodag_config_init defaults). Fix: convert ms to log2 (or set the option field from a log2 constant) so the advertised value matches the runtime timer and the other stacks. Verify with the RPL vector/parity tests. Evidence gathered 2026-09-10 by worker-5 during b7z9.192 review.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T05:43:12.534298369Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-09-10T05:43:12.534298369Z",
+  "labels": [
+    "c",
+    "rpl"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-kh95",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.192",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T05:43:12.6674118Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

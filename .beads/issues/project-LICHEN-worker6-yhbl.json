@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-yhbl",
+  "title": "TxQueue.__init__ truncated: now() spliced mid-init leaves _entries/stats/_pkt_id uninitialized",
+  "description": "python/src/lichen/link/tx_queue.py:282-291: the now() method (return self._clock()) was spliced into the middle of TxQueue.__init__ by a merge union; the tail of the initializer (self._pkt_id_source, self._entries = [], self.stats = TxQueueStats(), self._avg_latency_ema, self._pkt_id = 0) is now unreachable dead code after the return. Every TxQueue instance therefore lacks _entries/stats/_pkt_id and the first expire_stale() call (invoked automatically before push()/pop()) raises AttributeError at tx_queue.py:331. Consequence: 12 pre-existing red tests on current main: tests/rpl/test_rpl_control_link_signatures.py (6) and tests/rpl/test_dao_prefix_authorization.py (6), all failing with AttributeError: 'TxQueue' object has no attribute '_entries'. Verified identical failures on a clean tree (git stash), so they are NOT caused by the b7z9.192 DIO change. Fix: move the five misplaced statements back into __init__ before the now() method; the union text left them inside now() after its return. Same systemic class as obgr (janitor merge union corruption), different file. Evidence gathered 2026-09-11 while working b7z9.192.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T05:29:21.287047783Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-09-10T05:35:41.053475974Z",
+  "closed_at": "2026-09-10T05:35:41.053475974Z",
+  "close_reason": "Already fixed on this branch: python/src/lichen/link/tx_queue.py __init__ (lines 257-283) is intact — _pkt_id_source, _entries, stats, _avg_latency_ema, _pkt_id all present in order; there is NO now() method spliced mid-init. The merge-union corruption the bead describes does not exist on HEAD (last tx_queue.py change 4207b17677 predates the bead's 2026-09-11 evidence). Verified: python/tests/rpl/test_rpl_control_link_signatures.py fully passes (the 6 link-signature failures the bead cites are gone). The 6 remaining failures in test_dao_prefix_authorization.py are a DIFFERENT class — AssertionError 'origin_not_pinned' vs expected delegation reasons (delegation_expired/delegate_mismatch/target_mismatch/unsupported_transit), a DAO prefix-authorization ordering issue, not the TxQueue AttributeError. That separate defect is NOT covered by this bead's description; filing it as a new bead.",
+  "labels": [
+    "python",
+    "link"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-yhbl",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.192",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T05:29:21.4093667Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

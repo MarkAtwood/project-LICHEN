@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.119.2",
+  "title": "python: /deaddrop SCHC rule(s) in lichen/schc/rules.py",
+  "description": "Python slice of b7z9.119. Implement the /deaddrop rule provision decided in b7z9.119.1 inside python/src/lichen/schc/rules.py (and RULES_V3 registry if new rule IDs are allocated). Land AFTER b7z9.119.1. Tests: unit tests in python/tests/schc/ asserting rule presence, field descriptor layout, and rule-set descriptor hash stability (update pinned hash if registry changes).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T05:43:59.14318105Z",
+  "created_by": "opencode-worker-8",
+  "updated_at": "2026-09-10T05:43:59.14318105Z",
+  "labels": [
+    "python",
+    "schc",
+    "apps",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.119.2",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.119",
+      "type": "parent-child",
+      "created_at": "2026-09-10T05:43:59.273575385Z",
+      "created_by": "opencode-worker-8",
+      "metadata": "{}"
+    }
+  ]
+}

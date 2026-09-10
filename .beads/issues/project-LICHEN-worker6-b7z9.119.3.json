@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.119.3",
+  "title": "rust: /deaddrop SCHC rule(s) in lichen-schc rules.rs",
+  "description": "Rust slice of b7z9.119. Mirror the b7z9.119.1 provision in rust/lichen-schc/src/rules.rs (+ registry + constants) with python parity. Land AFTER b7z9.119.1. Tests: rust unit tests asserting rule layout parity with python (same fields/IDs/residue sizes).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T05:44:00.32194676Z",
+  "created_by": "opencode-worker-8",
+  "updated_at": "2026-09-10T05:44:00.32194676Z",
+  "labels": [
+    "rust",
+    "schc",
+    "apps",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.119.3",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.119",
+      "type": "parent-child",
+      "created_at": "2026-09-10T05:44:00.454762598Z",
+      "created_by": "opencode-worker-8",
+      "metadata": "{}"
+    }
+  ]
+}
