@@ -1924,6 +1924,7 @@ impl GatewayCoordinator {
     pub fn authorize_egress(
         &mut self,
         inner_source: [u8; 16],
+        inner_destination: [u8; 16],
         destination_is_mesh: bool,
         route: &[[u8; 16]],
     ) -> Result<(), tunnel_auth::TunnelAuthError> {
@@ -1931,6 +1932,7 @@ impl GatewayCoordinator {
             tunnel_auth::DecapsulationRequest {
                 direction: tunnel_auth::TunnelDirection::MeshToExternal,
                 inner_source,
+                inner_destination,
                 source_is_mesh: true,
                 destination_is_mesh,
                 route,
