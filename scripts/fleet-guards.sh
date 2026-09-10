@@ -93,8 +93,12 @@ while :; do
     USED=$(total_used)
     NOW_S=$(date +%s)
     WASTE=$(python3 "$REPO/scripts/fleet_burn.py" "$STATE" "$USED" "${CLOSES:-0}" "$NOW_S" 2>/dev/null)
-    W_EVAL=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('evaluated', False))" 2>/dev/null || echo False)
-    if [ "$W_EVAL" = "True" ]; then
+    W_EVAL=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('evaluated', False))" 2>/dev/null || echo PARSE_FAIL)
+    if [ -z "$WASTE" ]; then
+        echo "$(date '+%F %T') WARN: waste alarm skipped — fleet_burn.py produced no output (helper missing at $REPO/scripts/fleet_burn.py, or interpreter crash)"
+    elif [ "$W_EVAL" = "PARSE_FAIL" ]; then
+        echo "$(date '+%F %T') WARN: waste alarm skipped — fleet_burn.py output not valid JSON"
+    elif [ "$W_EVAL" = "True" ]; then
         W_BURN=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['burn'])")
         W_CPC=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['cpc_str'])")
         W_OVER=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['over'])")
