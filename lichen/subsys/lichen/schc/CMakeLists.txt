@@ -15,7 +15,6 @@ zephyr_library_sources(
   schc_session.c
   schc_session_table.c
   schc_session_authority.c
-  schc_authority.c
   schc_session_rx.c
   schc_session_control.c
 )
