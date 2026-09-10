@@ -8,7 +8,12 @@
 set -u
 REPO="/home/mark/Developer/lichen-workspace/project-LICHEN"
 CYCLE_MIN="${1:-10}"
-case "$CYCLE_MIN" in ''|*[!0-9]*|0*) echo "fleet-guards: cycle_minutes must be a positive integer without leading zeros (got '$CYCLE_MIN')" >&2; exit 1;; esac
+case "$CYCLE_MIN" in ''|*[!0123456789]*|0*) echo "fleet-guards: cycle_minutes must be a positive integer without leading zeros (got '$CYCLE_MIN')" >&2; exit 1;; esac
+# The digit check is an explicit list, not a range: [0-9] is collation-
+# dependent under UTF-8 locales (with globasciiranges off it folds multibyte
+# digits, so Arabic-Indic/fullwidth/Devanagari digits pass the form filter
+# and die later in arithmetic). An explicit list matches by membership, not
+# collation order. (c5s6, 048n)
 # Magnitude cap: the pattern constrains form only; 64-bit wraparound turns a
 # huge digit string into a negative (sleep fails instantly -> hot loop on the
 # metered credits API) or an epoch-scale sleep (guards silently hang). Length
