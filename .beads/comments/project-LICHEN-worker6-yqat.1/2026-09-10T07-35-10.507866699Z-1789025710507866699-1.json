@@ -1,0 +1,7 @@
+{
+  "id": "1789025710507866699-1",
+  "issue_id": "project-LICHEN-worker6-yqat.1",
+  "author": "opencode-worker-8",
+  "text": "Released 2026-09-10 worker8: current checkout has no C SOS TX caller. sos_post() in lichen/subsys/lichen/coap/coap_server.c is receive-side CoAP only; lichen_link_tx() in lichen/subsys/lichen/link/lichen_link_tx.c accepts IPv6 and hardcodes SCHC dispatch. The branch also predates the main-branch SOS classification header change. Completing this leaf requires a separate raw L2 SOS transmit API/refactor plus integration tests; no source changes made.",
+  "created_at": "2026-09-10T07:35:10.507866699Z"
+}

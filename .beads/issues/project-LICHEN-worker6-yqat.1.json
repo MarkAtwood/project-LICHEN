@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-yqat.1",
+  "title": "Wire C SOS TX as dispatch 0x16",
+  "description": "Implement the C SOS sender path so the canonical SOS alert CBOR is emitted in an authenticated L2 payload with LICHEN_L2_PAYLOAD_SOS (0x16), not as SCHC/CoAP. Add or update the focused C host test/vector to assert the first wire byte and preserve the canonical CBOR bytes.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T07:32:51.326814795Z",
+  "created_by": "opencode-worker-8",
+  "updated_at": "2026-09-10T07:35:10.877092443Z",
+  "started_at": "2026-09-10T07:33:51.719231538Z",
+  "labels": [
+    "apps"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-yqat.1",
+      "depends_on_id": "project-LICHEN-worker6-yqat",
+      "type": "parent-child",
+      "created_at": "2026-09-10T07:32:51.511999354Z",
+      "created_by": "opencode-worker-8",
+      "metadata": "{}"
+    }
+  ]
+}

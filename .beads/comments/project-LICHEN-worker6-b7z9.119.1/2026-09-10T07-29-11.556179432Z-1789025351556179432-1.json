@@ -1,0 +1,7 @@
+{
+  "id": "1789025351556179432-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.119.1",
+  "author": "opencode-worker-8",
+  "text": "Verified already-landed implementation in commits 49c7a46288 through e7a9efcdc1: appendix A.4.1 and constants.toml document reuse of Rules 0/1/5/6, protected option carriage, and no new IDs. TOML parse/rule assertions and git diff --check pass. Three delegated Kimi reviews were attempted but all failed immediately due insufficient OpenRouter credits; local correctness, security, and edge-case review passes found no defects.",
+  "created_at": "2026-09-10T07:29:11.556179432Z"
+}
