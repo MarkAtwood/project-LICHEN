@@ -308,7 +308,6 @@ mod tests {
     #[cfg(feature = "schnorr")]
     mod schnorr_tests {
         use super::*;
-        use crate::keys::Seed;
 
         fn make_keypair() -> (crate::keys::PrivateKey, crate::keys::PublicKey) {
             crate::schnorr::derive_keypair(&crate::keys::Seed::new([0x42; 32]))
