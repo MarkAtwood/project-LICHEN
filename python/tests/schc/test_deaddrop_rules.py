@@ -21,10 +21,6 @@ from lichen.schc.rules import (
     rule_set_v3_descriptor_hash,
 )
 
-# The pinned descriptor hash from test/vectors/schc_compression.json (registry
-# category). The deaddrop provision MUST NOT change it (no new rule IDs).
-_PINNED_DESCRIPTOR_HASH = None  # resolved from the vector at test time
-
 
 def _pinned_hash() -> str:
     import json
