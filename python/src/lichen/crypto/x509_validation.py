@@ -6,11 +6,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from ipaddress import IPv6Address
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec, ed448, ed25519, padding, rsa
+
+from .identity import yggdrasil_address
 
 
 class CertificateValidationError(ValueError):
@@ -98,6 +101,41 @@ def _check_leaf_constraints(certificate: x509.Certificate) -> None:
         raise CertificateValidationError("leaf certificate must not be a CA")
     if not usage.digital_signature:
         raise CertificateValidationError("leaf certificate lacks digitalSignature")
+    validate_leaf_san_binding(certificate)
+
+
+def validate_leaf_san_binding(certificate: x509.Certificate) -> None:
+    """Validate the LICHEN native address binding in a leaf SAN."""
+    try:
+        extension = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+    except x509.ExtensionNotFound as exc:
+        raise CertificateValidationError("leaf certificate SAN is required") from exc
+
+    if extension.critical != (len(certificate.subject) == 0):
+        raise CertificateValidationError("leaf certificate SAN criticality is invalid")
+
+    for name in extension.value:
+        if isinstance(name, (x509.DNSName, x509.RFC822Name, x509.UniformResourceIdentifier)):
+            raise CertificateValidationError("leaf certificate SAN contains a forbidden name")
+
+    public_key = certificate.public_key()
+    if not isinstance(public_key, ed25519.Ed25519PublicKey):
+        raise CertificateValidationError("leaf certificate subject key must be Ed25519")
+    public_bytes = public_key.public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    expected = yggdrasil_address(public_bytes).packed
+    native_addresses = [
+        name.value.packed
+        for name in extension.value
+        if isinstance(name, x509.IPAddress)
+        and isinstance(name.value, IPv6Address)
+        and name.value.packed[0] == 0x02
+    ]
+    if len(native_addresses) != 1:
+        raise CertificateValidationError("leaf certificate SAN must contain one native address")
+    if native_addresses[0] != expected:
+        raise CertificateValidationError("leaf certificate SAN address does not match subject key")
 
 
 def _check_issuer_constraints(certificate: x509.Certificate) -> None:

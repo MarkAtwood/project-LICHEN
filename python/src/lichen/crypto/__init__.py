@@ -14,7 +14,6 @@
 - key_rotation_attestation: COSE_Sign1 key rotation attestations (spec 8.7.4)
 """
 
-from .schnorr48 import SCHNORR48_ED25519_ALG
 from .capability_announcements import (
     Capability,
     CapabilityAnnouncement,
@@ -74,6 +73,7 @@ from .root_dio_signature import (
     decode_root_dio_signature,
     verify_root_dio_signature,
 )
+from .schnorr48 import SCHNORR48_ED25519_ALG
 from .trust import (
     DerivationMismatchError,
     KeyMismatchError,
@@ -88,7 +88,11 @@ from .trust import (
     verify_pubkey_to_ygg_addr,
     verify_trust_vector,
 )
-from .x509_validation import CertificateValidationError, validate_certificate_chain
+from .x509_validation import (
+    CertificateValidationError,
+    validate_certificate_chain,
+    validate_leaf_san_binding,
+)
 
 __all__ = [
     "ADMIN_DELEGATABLE_SCOPE",
@@ -133,6 +137,7 @@ __all__ = [
     "TrustError",
     "TrustLevel",
     "TrustStore",
+    "validate_leaf_san_binding",
     "TrustStorePersistence",
     "UnknownPeerError",
     "check_delegation_scope",
