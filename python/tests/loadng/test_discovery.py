@@ -418,16 +418,16 @@ def test_fresher_seq_replaces_route_even_with_longer_hops() -> None:
     assert grad.seq_num == 101
 
 
-# Regression: RREQ hop_limit above the base flood size is handler-rejected
-# (project-LICHEN-worker6-0tk2). Wire values 5..15 are legal (appendix B2.5
-# expanding-ring search originates at 8 and 15; messages._validate_hop allows
-# 0..MAX_HOP_LIMIT), but the reverse-route cost derivation
-# INITIAL_HOP_LIMIT - hop_limit would go negative, so such RREQs are dropped
-# cleanly with no state change instead of crashing RouteEntry validation.
+# Cross-stack convergence (project-LICHEN-worker6-b7z9.194): RREQs from
+# every expanding-ring attempt (appendix B2.5 originates floods at hop
+# limits 4, 8, 15) are accepted by receivers. The reverse-route cost derives
+# as MAX_HOP_LIMIT - hop_limit (spec 10.3), matching the C implementation.
+# Only hop values outside the wire-legal 0..MAX_HOP_LIMIT range are
+# handler-rejected with no state change (project-LICHEN-worker6-0tk2).
 
 
-def test_rreq_at_initial_hop_limit_boundary_is_valid() -> None:
-    """hop_limit == INITIAL_HOP_LIMIT is the largest supported flood input."""
+def test_rreq_ring1_hop_limit_forwards_and_costs_at_max_minus_hop() -> None:
+    """Ring-1 flood (hop_limit == INITIAL_HOP_LIMIT) follows spec 10.3 cost."""
     r = _router(M)
     rreq = RREQ(originator=ORIG, destination=D, seq_num=1, hop_limit=INITIAL_HOP_LIMIT)
     result = r.process_rreq(rreq, from_neighbor=ORIG, now=0)
@@ -438,9 +438,9 @@ def test_rreq_at_initial_hop_limit_boundary_is_valid() -> None:
     # Wire round-trip at the boundary must serialize (spec B2.1 hop field).
     parsed = RREQ.from_bytes(result.forward.to_bytes())
     assert parsed.hop_limit == INITIAL_HOP_LIMIT - 1
-    # Reverse-route cost is zero hops at the boundary.
+    # Reverse-route cost is MAX_HOP_LIMIT - hop_limit.
     route = r.cache.lookup(ORIG, now=0)
-    assert route is not None and route.hop_count == 0
+    assert route is not None and route.hop_count == MAX_HOP_LIMIT - INITIAL_HOP_LIMIT
 
 
 def test_rreq_at_initial_hop_limit_boundary_replies_at_destination() -> None:
@@ -451,34 +451,58 @@ def test_rreq_at_initial_hop_limit_boundary_replies_at_destination() -> None:
     assert result.reply is not None
 
 
-def test_rreq_above_initial_hop_limit_dropped_at_intermediate() -> None:
+def test_rreq_ring2_hop_limit_processed_at_intermediate() -> None:
+    """Ring-2 flood (hop_limit=8 from B2.5) must not be dropped at receiver."""
     r = _router(M)
-    rreq = RREQ(originator=ORIG, destination=D, seq_num=1, hop_limit=INITIAL_HOP_LIMIT + 1)
+    rreq = RREQ(originator=ORIG, destination=D, seq_num=1, hop_limit=8)
     result = r.process_rreq(rreq, from_neighbor=ORIG, now=0)  # must not raise
-    assert result.dropped is True
+    assert result.dropped is False
     assert result.suppressed is False
-    assert result.forward is None
-    assert result.reply is None
-    assert r.cache.lookup(ORIG, now=0) is None  # no reverse-route install
+    assert result.forward is not None
+    assert result.forward.hop_limit == 7
+    # Reverse-route cost is MAX_HOP_LIMIT - hop_limit.
+    route = r.cache.lookup(ORIG, now=0)
+    assert route is not None and route.hop_count == MAX_HOP_LIMIT - 8
 
 
-def test_rreq_above_initial_hop_limit_dropped_at_destination() -> None:
+def test_rreq_ring2_hop_limit_replies_at_destination() -> None:
     dest = _router(D)
-    rreq = RREQ(originator=ORIG, destination=D, seq_num=1, hop_limit=INITIAL_HOP_LIMIT + 1)
+    rreq = RREQ(originator=ORIG, destination=D, seq_num=1, hop_limit=8)
     result = dest.process_rreq(rreq, from_neighbor=M, now=0)  # must not raise
-    assert result.dropped is True
-    assert result.reply is None
-    assert dest.cache.lookup(ORIG, now=0) is None
+    assert result.dropped is False
+    assert result.reply is not None
+    route = dest.cache.lookup(ORIG, now=0)
+    assert route is not None and route.hop_count == MAX_HOP_LIMIT - 8
 
 
-def test_rreq_max_wire_hop_limit_dropped_cleanly_and_repeatable() -> None:
-    """hop_limit=MAX_HOP_LIMIT is wire-legal but unsupported: clean rejection.
+def test_rreq_max_ring_hop_limit_processed_then_duplicate_suppressed() -> None:
+    """hop_limit=MAX_HOP_LIMIT (ring 3) is accepted: cost 0, forwarded on.
+
+    First receipt installs the reverse route and forwards; an identical
+    retransmission inside the suppression window is then dropped as a
+    duplicate (spec B2.6), not re-processed.
+    """
+    r = _router(M)
+    rreq = RREQ(originator=ORIG, destination=D, seq_num=1, hop_limit=MAX_HOP_LIMIT)
+    first = r.process_rreq(rreq, from_neighbor=ORIG, now=0)
+    assert first.dropped is False
+    assert first.suppressed is False
+    assert first.forward is not None and first.forward.hop_limit == MAX_HOP_LIMIT - 1
+    assert first.reply is None
+    route = r.cache.lookup(ORIG, now=0)
+    assert route is not None and route.hop_count == 0
+    second = r.process_rreq(rreq, from_neighbor=ORIG, now=1)
+    assert second.suppressed is True
+
+
+def test_rreq_out_of_range_hop_limit_dropped_cleanly_and_repeatable() -> None:
+    """hop_limit > MAX_HOP_LIMIT is not wire-legal (spec B2.1): clean reject.
 
     Rejection also leaves no suppression state, so an identical retransmission
     gets the same verdict rather than being swallowed as a "duplicate".
     """
     r = _router(M)
-    rreq = RREQ(originator=ORIG, destination=D, seq_num=1, hop_limit=MAX_HOP_LIMIT)
+    rreq = RREQ(originator=ORIG, destination=D, seq_num=1, hop_limit=MAX_HOP_LIMIT + 1)
     first = r.process_rreq(rreq, from_neighbor=ORIG, now=0)
     second = r.process_rreq(rreq, from_neighbor=ORIG, now=1)
     for result in (first, second):

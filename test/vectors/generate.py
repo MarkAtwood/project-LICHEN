@@ -3789,7 +3789,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node4,
-                    "hop_count": 1,
+                    "hop_count": 12,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -3835,7 +3835,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node4,
-                    "hop_count": 0,
+                    "hop_count": 11,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -3877,7 +3877,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node3,
-                    "hop_count": 1,
+                    "hop_count": 12,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -3927,7 +3927,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node4,
-                    "hop_count": 0,
+                    "hop_count": 11,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -3966,7 +3966,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node4,
-                    "hop_count": 0,
+                    "hop_count": 11,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -4000,7 +4000,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node4,
-                    "hop_count": 3,
+                    "hop_count": 14,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -4185,7 +4185,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node4,
-                    "hop_count": 0,
+                    "hop_count": 11,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -4477,7 +4477,7 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node4,
-                    "hop_count": 0,
+                    "hop_count": 11,
                 },
                 "gradient_added": False,
                 "seen_updated": True,
@@ -4537,7 +4537,7 @@ def loadng_discovery_vectors() -> list[dict]:
         {
             "name": "rreq_hop_count_calculation",
             "type": "rreq",
-            "description": "Actual hop count derived from INITIAL_HOP_LIMIT (4) minus current hop_limit. RREQ at hop_limit=2 means 2 hops traveled.",
+            "description": "Reverse-route cost derives as MAX_HOP_LIMIT (15) minus current hop_limit (spec 10.3). RREQ at hop_limit=2 has cost 13.",
             "initial_state": {
                 "node_address": node1,
                 "cache_entries": [],
@@ -4567,7 +4567,85 @@ def loadng_discovery_vectors() -> list[dict]:
                 "cache_entry": {
                     "destination": node2,
                     "next_hop": node4,
-                    "hop_count": 2,
+                    "hop_count": 13,
+                },
+                "gradient_added": False,
+                "seen_updated": True,
+            },
+        },
+        {
+            "name": "rreq_ring2_hop_limit_accepted",
+            "type": "rreq",
+            "description": "Ring-2 expanding-ring flood (hop_limit=8, appendix B2.5) is accepted, not rejected: reverse cost = MAX_HOP_LIMIT - hop_limit = 7, forward with hop_limit decremented (spec 10.3).",
+            "initial_state": {
+                "node_address": node1,
+                "cache_entries": [],
+                "gradient_entries": [],
+                "seen_entries": [],
+            },
+            "input": {
+                "rreq": {
+                    "originator": node2,
+                    "destination": node3,
+                    "seq_num": 100,
+                    "hop_limit": 8,
+                },
+                "from_neighbor": node4,
+                "now_ms": 1000,
+            },
+            "expected": {
+                "action": "forward",
+                "reply": None,
+                "forward": {
+                    "originator": node2,
+                    "destination": node3,
+                    "seq_num": 100,
+                    "hop_limit": 7,
+                },
+                "cache_added": True,
+                "cache_entry": {
+                    "destination": node2,
+                    "next_hop": node4,
+                    "hop_count": 7,
+                },
+                "gradient_added": False,
+                "seen_updated": True,
+            },
+        },
+        {
+            "name": "rreq_ring3_max_hop_limit_accepted",
+            "type": "rreq",
+            "description": "Ring-3 expanding-ring flood (hop_limit=15 = MAX_HOP_LIMIT, appendix B2.5) is accepted: reverse cost = 0, forwarded with hop_limit decremented (spec 10.3).",
+            "initial_state": {
+                "node_address": node1,
+                "cache_entries": [],
+                "gradient_entries": [],
+                "seen_entries": [],
+            },
+            "input": {
+                "rreq": {
+                    "originator": node2,
+                    "destination": node3,
+                    "seq_num": 100,
+                    "hop_limit": 15,
+                },
+                "from_neighbor": node4,
+                "now_ms": 1000,
+            },
+            "expected": {
+                "action": "forward",
+                "reply": None,
+                "forward": {
+                    "originator": node2,
+                    "destination": node3,
+                    "seq_num": 100,
+                    "hop_limit": 14,
+                },
+                "cache_added": True,
+                "cache_entry": {
+                    "destination": node2,
+                    "next_hop": node4,
+                    "hop_count": 0,
                 },
                 "gradient_added": False,
                 "seen_updated": True,

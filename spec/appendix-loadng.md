@@ -73,6 +73,11 @@ After the local-evidence gate passes, minimize flood scope for nearby destinatio
 
 Each attempt waits RREQ_WAIT_TIME before expanding.
 
+Receivers MUST accept RREQs from every attempt: ring-2 (Hop Limit 8) and
+ring-3 (15) floods are valid inputs, not errors. The reverse-route cost of a
+received RREQ derives as `MAX_HOP_LIMIT - Hop Limit` (see 10.3); it is
+monotonic in hops traversed within a ring but not comparable across rings.
+
 ## B2.6. RREQ Suppression
 
 Nodes track recently-seen RREQs to suppress duplicates:

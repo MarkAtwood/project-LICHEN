@@ -1497,6 +1497,13 @@ RREQ is flooded. Each node:
 3. If seen before (originator + seq) → drop
 4. Otherwise → record reverse gradient, decrement hop limit, rebroadcast
 
+Receivers MUST accept RREQs with any wire-legal Hop Limit (0..MAX_HOP_LIMIT),
+including floods from every expanding-ring attempt (B2.5 ring sizes 4, 8, 15).
+The reverse-gradient cost for a received RREQ derives as
+`MAX_HOP_LIMIT - Hop Limit`. This cost is monotonic in hops traversed within
+a ring but is not comparable across rings; exact traversed-hop reporting
+would require a wire-format change.
+
 Implementations MUST rate-limit RREQ processing to at most 10 per minute per
 source IID and 30 per minute globally. RREQs exceeding these limits MUST be
 dropped before processing.
