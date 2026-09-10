@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.113",
+  "title": "GCP-4 discovery runtime unwired: no multicast GET sender, no periodic announce/Observe server, LoRa GATEWAY-flag announce dead code",
+  "description": "spec/08-gateway-coordination.md GCP-4.1 (L66-68): gateways send multicast CoAP GET to ff02::1 for /.well-known/lichen-gw/info; periodic announcements + on-change notifications via CoAP Observe. GCP-4.2 (L71-73): gateway announce frames include GATEWAY flag. Evidence (sweep 2026-09-09, R-08-005/007/008): Rust encoder BackboneDiscoveryRequest (rust/lichen-gateway/src/discovery.rs:109-141, ff02::1 :37-42) and Observe client-encode (:98,:147) exist but NO runtime caller sends the multicast GET (lichend/gateway: none); no RFC 7641 server-side Observe registration/notification for /info (resources.rs handle_get_info :1963, only a doc comment); no periodic announcer in any stack. LoRa announce: GATEWAY_FLAG=0x80 lives in the announce payload type byte (rust discovery.rs:167,176; python gateway/discovery.py:80-81), NOT the link-layer frame (LLSec bits frame.rs:109-116; C beacon.h:54-61 have no GATEWAY bit); encode/decode have no TX/RX caller in either stack; C has no gateway-announce codec at all. Server resource contents conform (R-08-006 implemented+tested). Suggested placement: rust/lichen-gateway/src/discovery.rs + bin/lichend.rs (sender/announcer/observe server), lichen/subsys/lichen/gcp or coap (C announce codec), python/src/lichen/gateway/discovery.py (wiring). Acceptance: a gateway discovers peers via backbone multicast, receives periodic/on-change Observe notifications for /info, and gateways emit/consume LoRa GATEWAY-flag announces; all three stacks; vectors gateway_discovery.json/gateway_coordination.json drive tests.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T20:01:15.343857976Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T20:01:15.343857976Z",
+  "labels": [
+    "gateway",
+    "coap",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.113",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T20:01:15.465300197Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

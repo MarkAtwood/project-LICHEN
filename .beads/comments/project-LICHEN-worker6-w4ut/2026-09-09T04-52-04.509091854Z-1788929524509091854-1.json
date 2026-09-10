@@ -1,7 +1,0 @@
-{
-  "id": "1788929524509091854-1",
-  "issue_id": "project-LICHEN-worker6-w4ut",
-  "author": "Mark Atwood",
-  "text": "BLOCKED on beads-worker-5 merge: the X.509 cert profile (spec/appendix-x509-cert-profile.md + spec/06-security.md §x5chain additions, commit f579d84667) exists only on unmerged branch beads-worker-5; spec/06-security.md:1250 in this checkout is unrelated text. All viku.1 children (w4ut, qsbn, al5r, yao6, 1xqq) target that file. Worker-5 sync/rebase is [human]-labeled (x383). Releasing unclaimed — ready to take once f579d84667 lands on main.",
-  "created_at": "2026-09-09T04:52:04.509091854Z"
-}

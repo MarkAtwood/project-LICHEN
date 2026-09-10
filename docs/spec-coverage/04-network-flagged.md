@@ -1,146 +1,71 @@
-# Flagged set — spec/04-network.md (sweep 2026-08-31)
+## spec/04-network.md — flagged for Opus verification (sweep 2026-09-09)
 
-Requirements flagged for verification: low confidence, ambiguous/divergent
-classification, or section 06-security/OSCORE-semantics sensitive. Each entry:
-requirement, classification, evidence, and the specific question to answer.
-No rows in this section touch oscore/EDHOC internals (human-only bar).
+Flags: (a) low-confidence rows, (b) ambiguous/divergent classifications. No oscore/EDHOC semantics in this section (06-security is not swept here).
 
-## R-04-002 — Multiple border routers MUST be tolerated (§6.1)
+---
 
-- Classification: implemented+tested (confidence low).
-- Evidence: Rust multi_instance.rs:964-1017 (select_root, multi-DODAG
-  candidates, signature filter fail-closed) + vectors; per-BR DAO-learned
-  local routes gateway.rs:1582-1588; ygg_reachable gating lichend.rs:439-442.
-  Anycast/failover is delegated to the external yggdrasil daemon
-  (config.rs:197-203) — no failover logic in any LICHEN stack. Same wiring
-  caveat as R-08-006: multi_instance machinery is not wired into a running
-  gateway.
-- Question: Does "tolerated" require only that multiple BRs can coexist
-  without coordination (per-BR DAO routes + tested multi_instance library),
-  or an in-product multi-BR failover path? Is delegation to the yggdrasil
-  daemon acceptable evidence for the MUST? Is there any multi-BR e2e test,
-  or only single-BR cross-mesh (yggdrasil_cross_mesh_routing)?
+### F1. R-04-006 — Root election "lowest EUI-64" (divergent, low confidence)
 
-## R-04-007 — BR MUST NOT forward mesh multicasts to internet; drop both directions (§6.3.4)
+- **Requirement:** "Isolated mesh: nodes derive primary 02xx address independently... Root election (lowest EUI-64 deterministic election) establishes RPL DODAG."
+- **Classification:** divergent.
+- **Evidence:** All three stacks implement the 2a.5.2 multi-factor ordering — DODAG preference > stratum > RSSI+SNR score > IID-lowest as tiebreak only (rust/lichen-rpl/src/multi_instance.rs:976-1015; python link/slot_coordination.py:289; C tdma_root_select.c:94). Tests: rust multi_instance.rs:2452-2503, lichen/tests/{root_selection,tdma_root_select,multi_root}, python tests/link/test_slot_coordination.py:239-287.
+- **Question for Opus:** Is §6.1's "lowest EUI-64 deterministic election" a stale summary that should be amended to reference the 2a.5.2 ordering (making the implementation conformant), or is lowest-EUI64-only election the intended normative behavior that the stacks diverge from? Related: the paragraph's "as documented above" points at demotion text that no longer exists in the file — what should it reference?
 
-- Classification: divergent (confidence high). Gap bead
-  `project-LICHEN-worker6-b7z9.39` (P1).
-- Evidence: C router.c:576-589 drops backbone-ingress multicast unless
-  packet->multicast_peering (router.h:146), test routing_dispatch/main.c:277-284.
-  Python router.py:493-499 drops in both directions, TestBRMulticastFilter
-  (test_router.py:469-597, 8 tests). Rust gateway has no multicast check:
-  upstream_to_mesh (gateway.rs:1539-1558) checks only ULA 0xfd then
-  is_local_mesh — multicast dst falls through to transmit_ipv6_wire :1556
-  (internet→mesh forwarded); forward_mesh_to_upstream (lichend.rs:914-951)
-  TUN-writes non-local dst including multicast (mesh→internet forwarded);
-  RPL stack accepts multicast dst as deliverable (stack.rs:587-595, 795-806).
-- Questions: (1) Trace transmit_ipv6_wire → SCHC/link for a multicast
-  destination: can ff00::/8 dst actually be encoded onto a LoRa frame, or
-  does compression/tx fail downstream (which would make the internet→mesh
-  leak theoretical rather than actual)? (2) Confirm the C drop path: in
-  router.c the `crosses_boundary` branch returns `next` — verify
-  next.route.decision is default-initialized to DROP at that point (the
-  routing_dispatch test asserts it, but confirm the initializer).
+### F2. R-04-007 — Schnorr-signed DEMOTION_REQUEST demotion (not-implemented, low confidence)
 
-## R-04-009 — Root election lowest-EUI-64; >50% vote demotion w/ Schnorr DEMOTION_REQUEST; root no ULA advertisement (§6.1, no kw)
+- **Requirement:** ">50% vote demotion with Schnorr-signed DEMOTION_REQUEST" (retained mechanics, §6.1).
+- **Classification:** not-implemented (gap bead project-LICHEN-worker6-b7z9.132).
+- **Evidence:** `DEMOTION_REQUEST` has zero occurrences in rust/, lichen/, python/src/. Root signing infrastructure (root_sig.rs, rpl_root_sig.c, test/vectors/root_signature.json) exists and could host it; rust dodag.rs:826 has only a role-transition table test.
+- **Question for Opus:** Is the vote-based demotion protocol still normative for the 04-network layer (vs. owned by 09-rpl-profile / 2a.5.2), and if so, is P3 the right priority given root compromise is already partially mitigated by DODAGID==AddrForKey binding (root_signature.json)?
 
-- Classification: divergent (confidence high).
-- Evidence: Implemented root selection is multi-criteria with lowest-EUI-64
-  as final tiebreak (multi_instance.rs:964-981 Ord; select_root :993-1017)
-  per spec 2a.5.2 — 04:32 says "lowest EUI-64 deterministic election".
-  DEMOTION_REQUEST message and >50% vote counting absent in all stacks
-  (rg demotion|DEMOTION|demote: only local demote() primitives dodag.rs:373-380,
-  dodag.py:331-342; nothing in C; planned in docs/spec-chapter-breakdowns.md:379-385).
-  Root ULA advertisement: correctly absent (conformant); residual ULA
-  classification/accept code remains (Rs hybrid.rs:231-234, node.rs:196,526,
-  609-616,750-757; Py headers.py:259-264).
-- Questions: (1) Which spec governs election mechanics for coverage — 04:32's
-  bare lowest-EUI-64 or 2a.5.2's multi-criteria-with-tiebreak (05-routing sweep
-  should own the reconciliation)? (2) Should the DEMOTION_REQUEST gap be filed
-  under 05-routing rather than 04 (04 references "unchanged mechanics as
-  documented above")? (3) Are the residual ULA-accepting paths in
-  rust/lichen-node (Echo + DAO forwarding for fd00::/8) dead legacy or live
-  divergence from the single-primary model?
+### F3. R-04-018 — Hop-limited broadcast relay (divergent)
 
-## R-04-010 — Off-mesh 02xx forwards to BR Yggdrasil TUN; local stays on LoRa (§6.1, no kw)
+- **Requirement:** Relay MUST preserve original source, decrement HL, rebroadcast while HL>0, consume at 0.
+- **Classification:** C implemented+tested (router.c:627-655 + routing_dispatch test:245-283); Python divergent (ff02/ff03 classified EXTERNAL → unicast to parent, routing/router.py:499-509); Rust not-implemented (no generic IPv6 multicast relay).
+- **Question for Opus:** Python's EXTERNAL routing of mesh-local multicast may be intentional for gateway backhaul (multicast to a BR parent) — confirm whether spec 6.3.2 relay semantics are meant to apply to the Python Router class or whether a separate relay path (outside routing/router.py) exists that I missed. Filed as b7z9.130.
 
-- Classification: implemented+tested (confidence low).
-- Evidence: Rust gateway only: forward_mesh_to_upstream (lichend.rs:914-956),
-  is_local_mesh DAO-gated (gateway.rs:1582-1588), tests
-  yggdrasil_cross_mesh_routing :2371-2393 + dao_route_makes_ygg_address_local
-  :2403-2435; node default route toward BR (hybrid.rs:268-306). C: no
-  TUN/off-mesh forwarding code found in lichen/subsys. Python: simulator-only
-  routing (no OS TUN, by design).
-- Question: Is the C/Zephyr gateway expected ever to forward off-mesh traffic
-  (i.e., is C absence a real gap), or is the Rust gateway the sole BR
-  implementation making C absence non-divergent? Confirm Py sim intentionally
-  excludes BR forwarding.
+### F4. R-04-019/020/023 — §6.3.3 relay limiter (divergent; beads b7z9.129, cross b7z9.124)
 
-## R-04-011 — Multicast scopes + standard groups ff02::1/1a/2, ff03::1, ff03::fc (§6.3.1, no kw)
+- **Requirement:** Full relay-decision pseudocode: per-hop-bucket counters, full-/128 keying, SOS counter, hl 8..255 clamp, yellow-zone 50% drop, wired into relay.
+- **Classification:** divergent. Python broadcast_limit.py has correct budgets/2h-expiry/yellow-zone but: single shared window per sender (not per-bucket), no SOS counter, ValueError on hl outside [1,7] instead of clamp, keyed on IID string, referenced only by tests — never wired into a relay path. Rust/C: no limiter.
+- **Question for Opus:** (1) Should the Python single-window behavior be treated as an intentional simplification to be spec-amended, or must per-hop_bucket counters be implemented (my read: spec MUST wins, implement buckets)? (2) Is wiring the limiter into the C router.c multicast relay + Rust receive path the right placement?
 
-- Classification: divergent (confidence high).
-- Evidence: ff02::1 and ff02::1a defined and used in all stacks. ff02::2:
-  defined-unused in Rust (lichen-ipv6 lib.rs:195), absent in C, example-only
-  in Python. ff03::1: tests-only in Python, no production use in Rust or C.
-  ff03::fc ("All LICHEN nodes"): defined-unused everywhere (multicast.rs:15-17,
-  addr.py:27) with constant tests only.
-- Question: Do any documented features require ff02::2 / ff03::1 / ff03::fc
-  (e.g., app-layer mesh broadcast in spec 18)? If yes → implementation gap to
-  file under the owning section; if no → spec-table trim. Note ff03::1 being
-  tests-only in Python suggests a feature that was planned but never wired.
+### F5. R-04-021 — hl=0 consume-only, never budgeted (ambiguous, low confidence)
 
-## R-04-013 / R-04-014 / R-04-015 — Broadcast relay rate limiting: budgets 200/100/30/10 (SOS 3), yellow-zone 50% probabilistic drop, 2h idle expiry + ~2KB bound (§6.3.3, no kw)
+- **Requirement:** hl=0 packets are consume-only at the node; the relay decision returns before any bucket lookup.
+- **Classification:** ambiguous. Python limiter raises ValueError for hl<1 (so hl=0 never reaches a bucket) but there is no explicit consume gate; C router drops relays at hop_limit<=1 (router.c:664-668) and delivers multicast locally at hl<=1 (router.c:643) — drop vs consume-local differs.
+- **Question for Opus:** Does C's "relay drops at hop_limit<=1" satisfy "consume locally" (local delivery may still have happened for multicast), or is a distinct consume-then-no-relay behavior required at hl==0 specifically?
 
-- Classification: divergent (confidence high), grouped — one mechanism.
-- Evidence: The spec's exact mechanism exists ONLY in Python
-  (link/broadcast_limit.py:24-145): budgets match the spec table, yellow
-  zone classify_broadcast :50-71 with 50% resolution :117-118, 2h idle
-  expiry :30,105-107; conformance vectors test/vectors/broadcast_rate_limiting.json
-  + tests link/test_broadcast_limit_vectors.py (9 tests). BUT the limiter is
-  unwired: zero callers in python/src (rg BroadcastRateLimiter|admit outside
-  the module: empty). C and Rust: mechanism entirely absent. SOS relay budget
-  of 3 absent from the limiter in every stack (only the spec-18.3 SOS
-  originator limit exists: emergency.py:30-33). The ~2KB state bound is not
-  referenced anywhere.
-- Questions: (1) Is an unwired-but-conformance-tested module "implemented"
-  for coverage, or should the row read not-implemented? (2) Where is the
-  intended integration point — node relay path at hop-limit decrement, or L2
-  broadcast? (3) Does the SOS=3 relay budget belong in broadcast_budget()
-  (SOS as a parameter) or at the relay-policy layer? (4) Are C/Rust ports
-  planned, or is Python the reference implementation for this feature?
+### F6. R-04-025 — C gateway mesh→internet multicast egress (divergent; bead b7z9.131)
 
-## R-04-017 — ICMPv6 Destination Unreachable / Packet Too Big (§6.4, no kw)
+- **Requirement:** BRs MUST NOT forward mesh multicasts to the internet.
+- **Classification:** divergent (C only). lichen/apps/gateway/src/forwarding.c:155-226 egress gate checks tunnel auth + MTU only; router.c:627-640 handles backbone→mesh but mesh→internet multicast egress is unfiltered. Python (router.py:491-497 + br_multicast_filter.json) and Rust (gateway.rs:1770 + end_to_end.rs:567) conform.
+- **Question for Opus:** Confirm my reading that Zephyr's IP forwarder can emit a mesh-originated multicast to the backhaul iface through the NPF egress gate in forwarding.c:82-107 (i.e., the drop must be added there or in router.c:641-645). If the gateway app never installs a route for multicast onto the backhaul, the gap may be theoretical — verify against the Zephyr forwarding config.
 
-- Classification: implemented+tested (confidence low).
-- Evidence: Builders + parsers exist and are vector-tested in all three
-  stacks (C icmpv6.c:577-639 + tests main.c:441,468,510,673; Rs lichen-ipv6
-  lib.rs:608-763 + unit tests :1485-1536; Py icmpv6.py:387-413 +
-  test_icmpv6.py:194-211 + relay vectors). However NO stack emits these
-  errors from its forwarding datapath — constructors have zero production
-  callers.
-- Question: Does "Standard ICMPv6 (RFC 4443) for: Destination Unreachable,
-  Packet Too Big" require datapath emission (e.g., Dest Unreachable on
-  no-route drops), or do tested builders satisfy the section? Note PTB may be
-  structurally N/A: SCHC fragmentation presents 1280-byte MTU to ULPs, so
-  "packet too big" never arises above the adaptation layer — confirm or refute.
+### F7. R-04-028 — Forwarding-plane martian filter: encode-time vs explicit forwarding decision (medium confidence)
 
-## R-04-020 — Short-address assignment: derived / self-assigned random + DAD / root pool; collision → regenerate+retry (§12.3, no kw)
+- **Requirement:** "the forwarding decision, which every router MUST apply before relaying a packet whose destination is not this node... dropped at the forwarding decision and reported locally."
+- **Classification:** implemented via a transitive route: relays re-encode every forwarded packet, and the emission policy (full martian table incl. dst scope 2-14) rejects at encode in all three stacks (C schc_helpers.c:462-488; python headers.py:102-108,234-243; rust codec.rs:243-253, test :3148). Explicit forward-time checks are partial: C router.c:634-635 (multicast scope 0/15), python survey_source_route (routing.py:450, unspecified/multicast source only).
+- **Question for Opus:** Does encode-time enforcement at relay TX satisfy the "MUST apply before relaying" forwarding-decision requirement (observable behavior identical: no forward, no ICMP error), or does the spec demand a distinct pre-relay check (e.g., so a relay that never re-encodes, such as a pure L2 forwarder, is still conformant)? If the latter, C link-layer relay paths (lichen/tests/link_relay) bypass the IPv6 policy check entirely.
 
-- Classification: divergent (confidence high).
-- Evidence: Method 1 (crc32_ieee derived) + seed-mixing retry: implemented and
-  vector-tested in all stacks (R-04-019). Method 2 (pick random + verify via
-  DAD): no implementing function in any stack (Py docstring mention only,
-  short_addr.py:672-695). Method 3 (root pool, optional): Rust std Coordinator
-  (address_assignment.rs:837-1212 + short_addr_assignment.json) and Python
-  CoordinatorAddressTable (short_addr.py:428-519) implemented+tested; C has
-  client-side only (rpl_short_assignment.c), no root-side allocator. DAD
-  probe/conflict exchange: Python DadProbeSequence tested
-  (test_short_addr_dad.py); C dad.c state machine is self-contained with no
-  production callers (unwired); Rust has RFC4861 semantics + coordinator
-  fallback (lichen-ipv6 lib.rs:1136-1152, address_assignment.rs:1068-1090).
-- Questions: (1) Is method 2 required by any documented feature, or spec trim?
-  (2) Is C dad.c being unwired a gap to file (C has no root allocator either —
-  is C short-address assignment expected to work end-to-end?) or pending
-  integration already tracked elsewhere? (3) Given collision handling exists
-  via seed-mixing retry in all stacks, is "regenerate and retry" already
-  satisfied by method 1 alone, making method 2 redundant?
+### F8. R-04-016 — ff03::1 group absent (medium confidence)
+
+- **Requirement:** Standard multicast groups table lists ff03::1 (mesh-local all nodes) and ff03::fc (all LICHEN nodes).
+- **Classification:** implemented with gap: ff03::fc is the only mesh-local group with a constant anywhere (rust multicast.rs:15-17, python addr.py:27); ff03::1 appears in no implementation (only python test prose, tests/routing/test_router.py:537).
+- **Question for Opus:** Is ff03::1 vestigial in the spec (superseded by ff03::fc) and should the table be amended, or does some stack need to join/serve ff03::1?
+
+### F9. R-04-033 — C SubnetForKey absent (low confidence, conditional MUST)
+
+- **Requirement:** Routed /64s, when used, MUST equal upstream SubnetForKey (0300::/8).
+- **Classification:** implemented+tested in Rust (addr.rs:160, tests:195) and Python (identity.py:270, test:141,193); C has no SubnetForKey and no routed-/64 use.
+- **Question for Opus:** Confirm "when used" scopes this as conditional so C's absence is not a conformance failure today (spec 12.1 wording), or whether the C stack plans routed /64s (e.g., for BR subnet advertisement) that would make this a gap.
+
+### F10. R-04-036 — Addr Mode value 1 cross-reference (ambiguous, low confidence)
+
+- **Requirement:** Short-address mode selected by link-layer `Addr Mode` value 1 (02-physical-link.md:215).
+- **Classification:** ambiguous — owned by the 02-physical-link.md sweep; I did not re-verify the frame addr-mode encoding here.
+- **Question for Opus:** Confirm the 02 matrix already covers Addr Mode 1 ↔ 16-bit short address, so no duplicate requirement tracking is needed.
+
+### F11. (housekeeping, not a requirement) Stale QUARANTINED comment in C test
+
+- lichen/tests/pubkey_to_iid/main.c:44-49 still says the `.native` literals "encode the rejected SHA-512 LICHEN-native address profile... until the C derivation migrates (bead q6ko)", while lines 38-42 and 87 say the same literals are upstream AddrForKey outputs cross-checked against the upstream anchor — and identity_addr.c has already migrated. Comment drift only (memcmp at :197-199 validates against upstream-anchor values). Suggest deleting the stale block; no bead filed (comment-only).

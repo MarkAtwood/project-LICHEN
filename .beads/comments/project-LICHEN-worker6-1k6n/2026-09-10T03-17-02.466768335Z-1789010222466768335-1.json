@@ -1,0 +1,7 @@
+{
+  "id": "1789010222466768335-1",
+  "issue_id": "project-LICHEN-worker6-1k6n",
+  "author": "Mark Atwood",
+  "text": "Released without work: the regressed code (OriginSequenceTracker etc.) exists only on branch beads-worker-3 (commits e0382ff/0d13bfcc/7ab2eb96, 20:07-20:14 PDT), not on main or beads-worker-6. Worker3 is ACTIVE and is working through its own b7z9.121.4 review findings right now (6tw3/z3vn/ez7n are the sibling findings). File is mid-flight; worker3 is the natural owner. Re-queue once beads-worker-3 merges if still open.",
+  "created_at": "2026-09-10T03:17:02.466768335Z"
+}

@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.160",
+  "title": "[spec-gap][R-02AT-028] Multi-root tiebreak conflict: 02a-tdma stratum-\u003elowest-IID vs implemented preference-\u003estratum-\u003eRF-score-\u003eIID (spec 02a-tdma.md:74)",
+  "description": "spec/02a-tdma.md:74: If strata are equal, a node MUST prefer the beacon from the root with the lowest IID (treated as a 64-bit unsigned integer), and :76 claims this lowest-IID rule ensures all nodes converge on the same root without oscillation. Classification: divergent (spec-vs-spec conflict, needs human adjudication). All five selection implementations insert dodag preference and a 2xRSSI+SNR combined score between stratum and IID, following spec/02a-coordinated-capacity.md section 2a.5.2 (R-02a-029..039): C lichen/subsys/lichen/link/root_selection.c:29-52, lichen/subsys/lichen/link/tdma_root_select.c:56-92, lichen/subsys/lichen/rpl/multi_root.c:22-48; rust/lichen-rpl/src/multi_instance.rs:984-991 (Ord for RootCandidate); python/src/lichen/link/slot_coordination.py:196-199. Tests pin the 4-level order (lichen/tests/root_selection test_stratum_lower_wins + test_iid_tiebreak_lower_wins; rust multi_instance.rs root_candidate_ordering :2349; python tests/link/test_slot_coordination.py :189-286), so the two spec sections are mutually inconsistent and the 02a-tdma.md deterministic-convergence claim does not hold when RF scores differ at equal stratum. Suggested placement: adjudicate which order is normative; if 2a.5.2 wins, amend 02a-tdma.md:69-79 to reference it (note its drifing/once-per-superframe clauses are handled in bead b7z9 sibling for R-02AT-031/032); if the pure stratum-\u003eIID order wins, all five comparators and their tests change. From spec-coverage sweep 2026-09-09 (docs/spec-coverage/02a-tdma.md R-02AT-028).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T23:31:22.11135913Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T23:31:22.11135913Z",
+  "labels": [
+    "tdma",
+    "spec-gap",
+    "human"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.160",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T23:31:22.256236896Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

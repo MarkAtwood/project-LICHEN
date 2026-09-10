@@ -1,0 +1,7 @@
+{
+  "id": "1788970225236957525-1",
+  "issue_id": "project-LICHEN-worker6-dbbn",
+  "author": "Mark Atwood",
+  "text": "worker4 round 2026-09-09 ~16:07 UTC: claimed, then found main checkout HOT — merge-janitor.sh (PID 845634, up since 07:49) has an in-flight 'Merge branch beads-worker-5' in /home/mark/Developer/lichen-workspace/project-LICHEN with 4 unresolved rpl_stack files (MERGE_HEAD b76221e930, started 16:05 UTC, 2 min before my check). Janitor is alive and working the queue sequentially; concurrent index access would be exactly the store-corruption class rul5 describes. Evidence the janitor progresses: worker5's rpl_stack changes are under active kimi codereview (process 1126725, started 09:00 local). Released dbbn for the janitor; if it fails worker-6 again this cycle, the 8 conflict files I scoping-previewed are: python/tests/test_protocol_vector_security.py, rust/lichen-core/tests/ipv6_address_vectors.rs, gateway {gateway.rs, resources.rs, lichend.rs, end_to_end.rs, tunnel_auth_vectors.rs}, test/vectors/reference_schnorr48.py — all near-duplicate AddrForKey-oracle fixes; worker6's shape must win for gateway files because its AnnounceProcessor::with_trust_store signature change (adds dodag binding) auto-merges and forces call-site adaptation.",
+  "created_at": "2026-09-09T16:10:25.236957525Z"
+}

@@ -1,0 +1,7 @@
+{
+  "id": "1788956528512828910-1",
+  "issue_id": "project-LICHEN-worker6-r1ur",
+  "author": "Mark Atwood",
+  "text": "WORKER7 EVIDENCE (released, not started): r1ur is not landable green on this lineage. This checkout (55c268240a) does NOT contain 9fceaf5406 — production python identity.yggdrasil_address is still the native SHA-512 profile here. Consequence chain verified: (1) flipping authenticated_schc_dio.json root DODAGIDs to upstream reds python/tests/rpl/test_authenticated_schc_dio_vectors.py:134, which executes production verify_dodagid_binding -\u003e yggdrasil_address (native) against the corpus; (2) flipping production root-DODAGID binding instead reds tests/rpl/test_root_signature.py (25 green: root_signature.json native corpus via root_signature.py:270 vector helper) and would collide with 1p2r.4 (in_progress, root_signature.json regen) and wta9; (3) yggdrasil_address is consumed by dao_origin/dao_manager/trust/ipv6/link_layer/node — flipping it is the i72x Python migration, not a leaf. Sequencing: r1ur lands cleanly only after the Python production AddrForKey migration (i72x.6 / 9fceaf5406 lineage) reaches this branch; then corpus + line-361 flip is a small leaf as described. Baseline evidence: 104 tests across test_protocol_vector_security/test_authenticated_schc_dio_vectors/test_authenticated_dio_security/test_vector_generator_cli green pre-change; python venv at python/.venv.",
+  "created_at": "2026-09-09T12:22:08.51282891Z"
+}

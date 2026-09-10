@@ -16,6 +16,8 @@ int main(void)
 			expected = LICHEN_L2_PAYLOAD_SCHC;
 		} else if (dispatch == LICHEN_L2_DISPATCH_ROUTING) {
 			expected = LICHEN_L2_PAYLOAD_ROUTING;
+		} else if (dispatch == LICHEN_L2_DISPATCH_SOS) {
+			expected = LICHEN_L2_PAYLOAD_SOS;
 		}
 		assert(lichen_l2_payload_classify(payload, sizeof(payload)) == expected);
 		assert(lichen_l2_payload_classify(payload, 1U) == LICHEN_L2_PAYLOAD_UNKNOWN);

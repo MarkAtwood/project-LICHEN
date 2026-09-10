@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.91",
+  "title": "Rust/Python tombstone+floor overflow is fail-closed/expiry, not evict-oldest-by-terminal-time (spec 5.6)",
+  "description": "spec/03-adaptation.md 5.6 (R-03-047, sweep 2026-09-09): 'Tombstone and admission-floor tables MUST be bounded to at most 256 entries per direction. On overflow, implementations MUST evict the oldest tombstone by terminal-time.' C satisfies it: lichen/subsys/lichen/schc/schc_session_table.c:102-167 keeps 256 tombstones with oldest-terminal_time eviction (+ floors :185-235 with lowest-high_water eviction), unit-tested in lichen/tests/schc_session_table. Rust diverges: per-signer [Option\u003cTerminalTombstone\u003e; 2] per direction (rust/lichen-schc/src/fragment.rs:196-197) — bounded far below 256 but there is no 256-entry table and no evict-oldest-by-terminal-time; overflow fails closed via PolicyFull (fragment.rs:477-479) and state leaves via time expiry (expire_sessions_at fragment.rs:1220-1233). Python diverges: MAX_SENDER_SESSION_RECORDS=64 / MAX_PREPARED_SENDERS=64 / MAX_PENDING_ACK_RECEIPTS=16 (python/src/lichen/schc/fragment.py:46-48) fail closed at capacity (session_manager.py:509-510, test_session_registry_never_evicts_an_active_tuple test_fragment.py:1053); tombstones/floors are deleted by hold-down expiry only (session_manager.py:394-418; reassembly.py:503-524). Prior Opus verification (03-adaptation-verify.log F2) confirmed the gap and offered two dispositions: implement evict-oldest in Rs/Py, or amend the spec to accept bounded-fail-closed/expiry as conforming (note the bound clause itself is met — the evict clause governs overflow behavior, which the smaller bounds make rare but not impossible: a full 2-slot Rust table rejects instead of evicting). Suggested placement: rust/lichen-schc/src/fragment.rs tombstone storage; python/src/lichen/schc/fragment.py + session_manager.py registries. Found by spec-coverage sweep 03-adaptation; see docs/spec-coverage/03-adaptation.md R-03-047.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T18:30:57.679718226Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T18:30:57.679718226Z",
+  "labels": [
+    "rust",
+    "python",
+    "schc",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.91",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T18:30:57.834609711Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

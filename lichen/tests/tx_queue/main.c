@@ -11,6 +11,7 @@
 
 #include <lichen/tx_queue.h>
 #include <lichen/errno.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
@@ -33,8 +34,11 @@ static int tests_run;
 static int tests_passed;
 
 #define ASSERT_EQ(a, b, msg) do { \
-	if ((a) != (b)) { \
-		printf("  FAIL: %s (got %d, expected %d)\n", msg, (int)(a), (int)(b)); \
+	uintmax_t actual = (a); \
+	uintmax_t expected = (b); \
+	if (actual != expected) { \
+		printf("  FAIL: %s (got %d, expected %d)\n", msg, (int)actual, \
+		       (int)expected); \
 		return 0; \
 	} \
 } while (0)

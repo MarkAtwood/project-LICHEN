@@ -101,11 +101,18 @@ pub use sos::{
     SosAlert, SosAlertType, SosCborError, SosRateLimitConfig, SosRateLimitConfigError,
     SosRateLimitResult, SosRateLimitState,
 };
+#[cfg(all(feature = "schnorr", feature = "alloc"))]
+pub use sos_origin::verify_sos_origin_gated;
 #[cfg(feature = "schnorr")]
-pub use sos_origin::{compute_sos_transcript, sign_sos_origin, verify_sos_origin};
 pub use sos_origin::{
-    SosOriginSignature, SosOriginSignatureError, SOS_ORIGIN_DOMAIN, SOS_ORIGIN_SIGNATURE_LENGTH,
+    compute_sos_transcript, sign_sos_origin, sign_sos_origin_for_key, verify_sos_origin,
 };
+pub use sos_origin::{
+    origin_addr_from_pubkey, SosOriginSignature, SosOriginSignatureError, SOS_ORIGIN_DOMAIN,
+    SOS_ORIGIN_SIGNATURE_LENGTH,
+};
+#[cfg(feature = "alloc")]
+pub use sos_origin::{OriginSequenceTracker, SOS_ORIGIN_GATE_DEFAULT_CAPACITY};
 pub use tdma_clock::{
     beacon_delta_ms, correction_ms, drift_bound, drift_ppm, guard_sufficient, holdover_expired,
     in_guard, slot_map_tx_allowed, tx_allowed,

@@ -111,6 +111,9 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             &body[..len],
         )
         .ok_or(TxError::BufferTooSmall)?;
+        // Merge resolution: beads-worker-7's eprintln sizing probe (TRACE
+        // send_dio, DIO src/dst dump) is dropped — it was removed upstream
+        // (8941aeb22b) and debug prints are not kept in committed code.
         let l2_destination = ipv6_l2_destination(control_destination);
         // RPL DIO is control traffic (P1) and is carried uncompressed
         // (Rule 255): the authenticated-DIO admission gate accepts only
@@ -126,8 +129,22 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     pub async fn send_dis(&mut self, destination: [u8; 16]) -> Result<(), TxError> {
         let control_destination = if destination[0] == 0xff {
             destination
+        } else if destination[..8] == [0xfe, 0x80, 0, 0, 0, 0, 0, 0] {
+            destination
         } else {
-            link_local_from_iid(destination[8..].try_into().expect("complete IPv6 IID"))
+            // Unicast DIS to a routable address: the link-local control
+            // destination needs the peer's IID, which upstream AddrForKey does
+            // not embed in the address (i72x.2) — resolve it through the
+            // authenticated peer table, failing closed for unknown peers.
+            // Merge resolution: beads-worker-7's RPL_ALL_NODES fallback was a
+            // stopgap "until that mapping exists (i72x.4/i72x.6)"; the peer
+            // table mapping now exists, so the fallback is superseded.
+            let iid = self
+                .stack
+                .link()
+                .peer_iid_for_routable_addr(&destination)
+                .ok_or(TxError::NoRoute)?;
+            link_local_from_iid(iid)
         };
         let packet = rpl_ipv6_packet(
             self.local_control_addr,

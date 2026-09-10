@@ -1,7 +1,0 @@
-{
-  "id": "1788933930651246142-1",
-  "issue_id": "project-LICHEN-worker6-l1qw.37",
-  "author": "Mark Atwood",
-  "text": "STALE-PARENT AUDIT (worker4, 2026-09-09): 3 of 4 items already implemented in Python — (2) /sos/log =\u003e python/src/lichen/coap/resources/sos_log.py; (3) 30s beacon boost =\u003e python/src/lichen/coap/sos_periodic.py BEACON_BOOST_INTERVAL_S=30 (docstring cites this bead); (4) 4h auto-timeout =\u003e sos_periodic.py SOS_AUTO_TIMEOUT_S auto-cancel. Only item (1) POST coap://[ff02::1]/sos multicast endpoint (R-12-036, spec-coverage 'NI') is genuinely open, in BOTH Python (emergency.py render_post unicast-only) and C (coap_server.c unicast). Decomposing to a single live child for the multicast slice; releasing parent.",
-  "created_at": "2026-09-09T06:05:30.651246142Z"
-}

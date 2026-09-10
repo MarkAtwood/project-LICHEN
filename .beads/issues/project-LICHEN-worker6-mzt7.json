@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-mzt7",
+  "title": "schc_session_table: tombstone_put/floor_put can deref NULL slot when count and scan diverge",
+  "description": "lichen/subsys/lichen/schc/schc_session_table.c: both lichen_schc_tombstone_put and lichen_schc_floor_put derive the write slot from an occupancy scan that is deliberately independent of the count field (the code comments call this 'defense in depth'), but the fall-through writes slot-\u003ekey/outcome/occupied with no NULL guard when count\u003cMAX yet the scan finds no free slot (count/slot divergence) - gcc -Werror=null-dereference rejects it, so any Zephyr schc build fails. Fixed in beads-worker-7 by adding an explicit fail-closed 'if (slot == NULL) return -ENOBUFS;' after the slot-acquisition block in both functions (matches the surrounding -ENOBUFS convention); commit lands with the b7z9.93 round. Validate via the schc_session_table host test.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T03:06:26.618356716Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T03:06:26.618356716Z",
+  "labels": [
+    "schc",
+    "c"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-mzt7",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.93",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T03:06:26.729382157Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

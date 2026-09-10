@@ -34,6 +34,11 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         validate_origin(&stack, local_rpl_addr)
             .map_err(|()| RplStackProvisionError::InvalidOrigin)?;
         let control_addr = canonical_link_local(&stack);
+        // Root-seq resume FIRST: it is idempotent (open-or-provision), so a
+        // transient fault in the strict DaoTxState::provision below leaves
+        // provision_leaf retryable (an empty root-seq record is harmless).
+        let (root_seqs, root_seq_store) =
+            RootSeqCache::resume(&mut storage).map_err(RplStackProvisionError::RootSeq)?;
         let key = stack.local_public_key();
         let tx = DaoTxState::provision(
             &mut storage,
@@ -57,7 +62,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             local_control_addr: control_addr,
             bootstrap_peers: VecDeque::new(),
             dao_admissions: None,
-            root_seqs: RootSeqCache::default(),
+            root_seqs,
+            root_seq_store,
             dao_tx_sched: DaoTxScheduler::new(),
             wall_clock_unix: None,
             routing_now_ms: 0,
@@ -71,7 +77,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         local_rpl_addr: [u8; 16],
         dodag_id: [u8; 16],
         announces: AnnounceProcessor,
-        storage: S,
+        mut storage: S,
     ) -> Result<Self, RplStackOpenError<S::Error>> {
         let stack = stack.into();
         validate_origin(&stack, local_rpl_addr).map_err(|()| RplStackOpenError::InvalidOrigin)?;
@@ -85,6 +91,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             dodag_id,
         )
         .map_err(RplStackOpenError::Dao)?;
+        let (root_seqs, root_seq_store) =
+            RootSeqCache::resume(&mut storage).map_err(RplStackOpenError::RootSeq)?;
         let rpl = RplNode {
             node: Node::new(stack.node_id()),
             router: Router::new(local_rpl_addr, dodag_id),
@@ -99,7 +107,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             local_control_addr: control_addr,
             bootstrap_peers: VecDeque::new(),
             dao_admissions: None,
-            root_seqs: RootSeqCache::default(),
+            root_seqs,
+            root_seq_store,
             dao_tx_sched: DaoTxScheduler::new(),
             wall_clock_unix: None,
             routing_now_ms: 0,
@@ -127,6 +136,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             lichen_core::constants::RPL_INSTANCE_ID,
             dodag_id,
         )?;
+        let (root_seqs, root_seq_store) =
+            RootSeqCache::resume(&mut storage).map_err(RplStackProvisionError::RootSeq)?;
         Ok(Self {
             rpl: RplNode {
                 node: Node::new(stack.node_id()),
@@ -140,7 +151,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             local_control_addr: control_addr,
             bootstrap_peers: VecDeque::new(),
             dao_admissions: Some(admissions),
-            root_seqs: RootSeqCache::default(),
+            root_seqs,
+            root_seq_store,
             dao_tx_sched: DaoTxScheduler::new(),
             wall_clock_unix: None,
             routing_now_ms: 0,
@@ -154,7 +166,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         root_addr: [u8; 16],
         dodag_id: [u8; 16],
         announces: AnnounceProcessor,
-        storage: S,
+        mut storage: S,
     ) -> Result<Self, RplStackOpenError<S::Error>> {
         let stack = stack.into();
         validate_origin(&stack, root_addr).map_err(|()| RplStackOpenError::InvalidOrigin)?;
@@ -179,6 +191,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         {
             return Err(RplStackOpenError::AdmissionInconsistent);
         }
+        let (root_seqs, root_seq_store) =
+            RootSeqCache::resume(&mut storage).map_err(RplStackOpenError::RootSeq)?;
         Ok(Self {
             rpl: RplNode {
                 node: Node::new(stack.node_id()),
@@ -192,7 +206,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             local_control_addr: control_addr,
             bootstrap_peers: VecDeque::new(),
             dao_admissions: Some(admissions),
-            root_seqs: RootSeqCache::default(),
+            root_seqs,
+            root_seq_store,
             dao_tx_sched: DaoTxScheduler::new(),
             wall_clock_unix: None,
             routing_now_ms: 0,

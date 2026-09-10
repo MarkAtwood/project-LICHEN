@@ -6,6 +6,7 @@ import logging
 import math
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -51,6 +52,7 @@ PARENT_SWITCH_THRESHOLD = 192
 ROOT_RANK = MIN_HOP_RANK_INCREASE
 DEFAULT_MAX_PARENT_AGE = 300.0  # seconds; 0 disables age-based eviction
 MAX_PARENTS = 16  # matches MAX_PARENT_CANDIDATES in rust/lichen-rpl dodag.rs
+ROOT_CHANGE_HISTORY_MAX = 8  # bound on undrained root-change transitions
 
 
 def _require_finite_non_negative_etx(link_etx: float) -> None:
@@ -289,6 +291,15 @@ class DodagState:
     )
     _lock: threading.RLock = field(
         default_factory=threading.RLock, init=False, repr=False, compare=False
+    )
+    _last_joined_dodag_id: IPv6Address | None = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    _pending_root_changes: deque[tuple[IPv6Address | None, IPv6Address]] = field(
+        default_factory=lambda: deque(maxlen=ROOT_CHANGE_HISTORY_MAX),
+        init=False,
+        repr=False,
+        compare=False,
     )
 
     def __post_init__(self) -> None:
@@ -720,6 +731,30 @@ class DodagState:
             self._lowest_rank = min(self._lowest_rank, self.rank)
             self.gateway_centric = best.gateway_centric
             self.grounded = best.grounded
+            if self.dodag_id != self._last_joined_dodag_id:
+                # spec 8.12 root re-election: membership moved to a different
+                # DODAGID. Record the transition so the node can re-announce
+                # capabilities to the new root; previous is None on first join.
+                self._pending_root_changes.append(
+                    (self._last_joined_dodag_id, self.dodag_id)
+                )
+                self._last_joined_dodag_id = self.dodag_id
+
+    def take_root_changes(self) -> list[tuple[IPv6Address | None, IPv6Address]]:
+        """Drain recorded DODAGID membership transitions.
+
+        Each entry is ``(previous_dodag_id, new_dodag_id)``; ``previous`` is
+        ``None`` on first join. A transition is recorded when this node
+        becomes JOINED under a DODAGID different from the last one it joined,
+        which is how root re-election surfaces here (spec 8.12: capability
+        announcements to the old root are invalid and MUST be re-announced to
+        the new root). Re-joining the same DODAGID, version bumps within one
+        DODAGID, and parent switches never produce entries.
+        """
+        with self._lock:
+            changes = list(self._pending_root_changes)
+            self._pending_root_changes.clear()
+            return changes
 
     def remove_parent(self, neighbor_id: IPv6Address | str) -> None:
         """Drop a neighbour (e.g. on link failure) and re-select.

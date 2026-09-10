@@ -1,0 +1,7 @@
+{
+  "id": "1788965929735901404-1",
+  "issue_id": "project-LICHEN-worker6-z4f6",
+  "author": "Mark Atwood",
+  "text": "Worker4 addendum (2026-09-09): the pre-existing reds extend beyond lichen-node --lib. With --no-fail-fast on current main (3e42daffaf, verified in a clean worktree of main), also failing: lichen-node/tests/dao_origin_vectors.rs — fixed_dao_origin_vectors_match_rpl_node_handler (assert IidMismatch == Applied / == Persistence at :175/:284, i.e. DAO origin admission rejects with IidMismatch where the vector expects Applied) and unavailable_replay_storage_leaves_dao_state_unchanged; lichen-node/tests/secure_rpl_public.rs — downstream_secure_rpl_request (panics at :154). Pass on main: gradient_table_vectors 8/8, sfn_wrap_vectors ok, downstream_can_construct_secure_rpl_owner ok. Root-cause note for the IidMismatch group: the vectors pin announces and then feed signed DAOs whose origin address is a 0200::/8 AddrForKey; the node DAO-origin admission path (node.rs handle_dao / dao_origin admission) reports IidMismatch — check whether the admission compares origin[..8]==prefix or origin iid correlation (the addr[8..]-as-IID pattern tracked under ywec) instead of origin == ygg_addr_from_pubkey(pubkey).",
+  "created_at": "2026-09-09T14:58:49.735901404Z"
+}

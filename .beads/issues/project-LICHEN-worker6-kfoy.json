@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-kfoy",
+  "title": "[info] Burn reached 2000 USD (milestone, ceiling removed)",
+  "description": "Total OpenRouter usage crossed the former watch line. Per Mark: budget raised to an undisclosed ceiling; function-per-dollar is the only metric. Marker on record.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T14:49:46.942484394Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T14:49:46.942484394Z"
+}

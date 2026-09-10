@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-1p2r.6",
+  "title": "Add missing test/vectors/density_adaptive.json corpus (schema test red on main)",
+  "description": "tests/test_vectors.py::test_vector_file_schema[density_adaptive.json] fails on current main AND on old main (pre-existing): the schema-manifest list at test_vectors.py:216 includes density_adaptive.json but the file does not exist. Either author the corpus (if the density-adaptive vector family is specced — spec 02a 2a.9.2 adaptive duty cycle) or remove it from the manifest with a note. Pre-existing on main, not caused by any worker merge.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T11:28:54.301439351Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T12:51:51.931364338Z",
+  "started_at": "2026-09-09T12:22:34.175091811Z",
+  "closed_at": "2026-09-09T12:51:51.931364338Z",
+  "close_reason": "Fixed: removed the dead 'density_adaptive.json' entry from the test_vector_file_schema parametrize list (python/tests/test_vectors.py) with an explanatory comment. Root cause: the file never existed on any branch (git log --all empty) and the schema's density_adaptive_vector family (announce tier/interval/gradient fields) has no spec section and no implementation anywhere in py/rust/c — the bead's spec-02a-2a.9.2 guess points at a different family already covered by ccp13.json (10 boundary vectors, consumed by test_ccp13_adaptive_vectors.py + rust ccp13_vectors). Authoring a corpus would fabricate values with no oracle, so removal-with-note is the honest fix per the bead's own alternatives. Verification: baseline test_vectors.py = exactly this 1 red + 815 passed; after fix 815 passed 0 failed; ruff clean; mypy 236 errors pre-existing (identical on stashed baseline, unrelated lines). Codereview 3x: pass 1 correctness delegated to kimi-k3 PASS (verified no other references, no dir/listing coupling); pass 2 security delegated PASS (no weakened coverage, no remaining consumers); pass 3 edge-cases delegation failed twice (garbled session output, then 240s timeout) so self-completed per fallback rule — checks: (a) no list length/order dependencies, (b) future silent-skip risk documented in the comment, (c) comment accuracy verified by grep across spec/+src; edge finding filed as new bead (manifest covers only 21 of ~180 corpora). schema.json left untouched: its density_adaptive_vector definition is dead but schema.json is a shared cross-branch merge surface; noted here instead of editing. python venv: python/.venv.",
+  "labels": [
+    "python",
+    "vectors",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-1p2r.6",
+      "depends_on_id": "project-LICHEN-worker6-1p2r",
+      "type": "parent-child",
+      "created_at": "2026-09-09T11:28:54.43972385Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

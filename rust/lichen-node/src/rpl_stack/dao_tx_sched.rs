@@ -16,8 +16,8 @@ use lichen_rpl::dao_timing::{
 /// Refresh interval in ms (half the 30-min soft-state lifetime). Consumed
 /// by on_dao_sent; dead in non-test builds until b7z9.16.1(b) wires the TX
 /// path.
-const DAO_REFRESH_INTERVAL_MS: u64 = DAO_REFRESH_INTERVAL_SECONDS * 1000 / 2;
-/// Fixed hourly-window length for the wall-clock-independent refresh floor.
+const DAO_REFRESH_INTERVAL_MS: u64 = DAO_REFRESH_INTERVAL_SECONDS * 1000;
+/// Wall-clock-independent refresh floor, aliasing the DAO refresh interval.
 const _DAO_REFRESH_FLOOR_MS: u64 = DAO_REFRESH_INTERVAL_MS;
 
 /// DAO TX scheduler phase.
@@ -169,12 +169,12 @@ mod tests {
         assert_eq!(sched.advance(1_000), DaoTxAdvance::Due);
         sched.on_dao_sent(1_100);
         assert!(matches!(sched.phase(), DaoTxPhase::Refresh { .. }));
-        // 900 s / 2 = 450 s = 450_000 ms
+        // refresh interval is the 900 s half-life itself (not halved again)
         assert_eq!(
-            sched.advance(1_100 + 449_999),
+            sched.advance(1_100 + 899_999),
             DaoTxAdvance::NotYet { remaining_ms: 1 }
         );
-        assert_eq!(sched.advance(1_100 + 450_000), DaoTxAdvance::Due);
+        assert_eq!(sched.advance(1_100 + 900_000), DaoTxAdvance::Due);
     }
 
     #[test]

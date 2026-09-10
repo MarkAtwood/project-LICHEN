@@ -28,14 +28,17 @@ ROOT = ReferenceIdentity.from_seed(bytes(range(32)))
 OTHER_ROOT = ReferenceIdentity.from_seed(bytes(range(1, 33)))
 EGRESS = ReferenceIdentity.from_seed(bytes(range(32, 64)))
 OTHER_EGRESS = ReferenceIdentity.from_seed(bytes(range(64, 96)))
-HOP = bytes.fromhex("0102030405060708")
-ROUTE = (HOP, EGRESS.iid)
+TRANSIT = ReferenceIdentity.from_seed(bytes(range(96, 128)))
+# Spec 8.11 (post-AddrForKey): the hash input is the FULL 16-byte primary
+# 02xx hop address in SRH visitation order, not an 8-byte IID slice - a
+# primary 02xx address embeds no IID under AddrForKey (§8.5/§8.7).
+ROUTE = (TRANSIT.ygg_addr, EGRESS.ygg_addr)
 TARGET = IPv6Network("0200:1234:5600::/40")
 
 
 def _route_hash(route: tuple[bytes, ...]) -> bytes:
-    if not 1 <= len(route) <= 8 or any(len(hop) != 8 for hop in route):
-        raise ValueError("route must contain 1-8 eight-byte IIDs")
+    if not 1 <= len(route) <= 8 or any(len(hop) != 16 for hop in route):
+        raise ValueError("route must contain 1-8 sixteen-byte hop addresses")
     return hashlib.sha256(b"".join(route)).digest()[:16]
 
 
@@ -191,7 +194,7 @@ def document() -> dict[str, object]:
             "wrong_egress",
             "Valid signature bound to another egress.",
             egress=OTHER_EGRESS,
-            route=(HOP, OTHER_EGRESS.iid),
+            route=(TRANSIT.ygg_addr, OTHER_EGRESS.ygg_addr),
         ),
         _message(
             "other_root", "Valid authorization issued after root rotation.", signer=OTHER_ROOT
@@ -456,7 +459,7 @@ def document() -> dict[str, object]:
             "valid",
             first,
             "2001:db8::1",
-            route=(bytes.fromhex("1112131415161718"), EGRESS.iid),
+            route=(bytes.fromhex("11121314151617181112131415161718"), EGRESS.ygg_addr),
             allowed=False,
             denial="no-authorization",
         ),
@@ -533,7 +536,7 @@ def document() -> dict[str, object]:
             "valid",
             first,
             "2001:db8::1",
-            route=(HOP, HOP),
+            route=(TRANSIT.ygg_addr, TRANSIT.ygg_addr),
             allowed=False,
             denial="invalid-route",
         ),
@@ -565,6 +568,7 @@ def document() -> dict[str, object]:
             _identity("other_root", OTHER_ROOT),
             _identity("egress", EGRESS),
             _identity("other_egress", OTHER_EGRESS),
+            _identity("transit", TRANSIT),
         ],
         "authorizations": messages,
         "post_cases": post_cases,

@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.94",
+  "title": "OSCORE context bound + LRU eviction missing in all stacks (decision oscore-context-bound; spec 8.8 R-06-204/205)",
+  "description": "Decision spec/decisions.jsonl oscore-context-bound (2026-09-03): 'All stacks must add LRU eviction' — MUST bound contexts, RECOMMENDED 64, minimum 8 for constrained nodes. Spec §8.8 amended this sweep to match. Code status (R-06-204/205): C lichen/subsys/lichen/oscore — Kconfig LICHEN_OSCORE_MAX_CONTEXTS default 8 range 2-32 (no enforced min-8 floor; range permits 2), NO eviction (oscore_ctx.c:377-390 returns OSCORE_ERR_NO_MEMORY when full; persist layer -ENOSPC oscore_persist.c:427-430); Python lichen/coap/secure/channel.py:144 _MAX_ACTIVE_PEER_CONTEXTS=2048 with LRU (_evict_peer_contexts_if_needed :418-449) — bound not 64; Rust lichen-node/src/secure.rs — contexts HashMap unbounded, no eviction. Constants 64 (recommended) and enforced floor 8 exist nowhere. Fix: add LRU-by-last-message-timestamp eviction to C and Rust; align bounds (64 recommended, min-8 floor enforced); add tests incl. eviction-under-flood and floor enforcement. Suggested placement: lichen/subsys/lichen/oscore/oscore_ctx.c + Kconfig, python/src/lichen/coap/secure/channel.py, rust/lichen-node/src/secure.rs.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T19:05:02.231122967Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T19:05:02.231122967Z",
+  "labels": [
+    "oscore",
+    "spec-gap",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.94",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T19:05:02.362494489Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

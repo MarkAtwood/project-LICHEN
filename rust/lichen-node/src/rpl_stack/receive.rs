@@ -55,7 +55,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     ) -> Result<Option<RplBorderIngressOutcome>, RplReceiveError> {
         self.routing_now_ms = self.routing_now_ms.max(now_ms);
         let now_ms = self.routing_now_ms;
-        if !wire_is_for_local(wire, self.stack.node_id().0)
+        if !wire_is_for_local(wire, self.stack.node_id().0, self.local_rpl_addr)
             .map_err(|error| RplReceiveError::Receive(RxError::Link(error)))?
         {
             return Ok(None);
@@ -182,7 +182,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     ) -> Result<Option<RplReceiveOutcome>, RplReceiveError> {
         self.routing_now_ms = self.routing_now_ms.max(now_ms);
         let now_ms = self.routing_now_ms;
-        if !wire_is_for_local(wire, self.stack.node_id().0)
+        if !wire_is_for_local(wire, self.stack.node_id().0, self.local_rpl_addr)
             .map_err(|error| RplReceiveError::Receive(RxError::Link(error)))?
         {
             return Ok(None);
@@ -255,8 +255,14 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                     match survey_routing_headers(&received.ipv6) {
                         Err(error) => return Err(RplReceiveError::Receive(error)),
                         Ok(RoutingHeaderSurvey::SourceRouted(_)) => {
+                            // The anti-loop check needs the sender's routable
+                            // form, derived from the link-authenticated key
+                            // (its address low half is not the IID, i72x.2).
+                            let sender_routable = lichen_core::addr::ygg_addr_from_pubkey(
+                                frame.sender().pubkey.as_bytes(),
+                            );
                             return self
-                                .process_source_route(received, frame.sender().iid)
+                                .process_source_route(received, frame.sender().iid, sender_routable)
                                 .await;
                         }
                         Ok(RoutingHeaderSurvey::Absent) => {}
@@ -334,10 +340,17 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         }
     }
 
+    // Merge resolution (HEAD over beads-worker-5): both sides implement the
+    // same post-AddrForKey semantics — the sender's routable /128 is loop
+    // poison and the next hop resolves through the authenticated peer table.
+    // The precomputed-address form is kept because the already-merged
+    // mod.rs/transmit.rs use the same inline peer-table pattern, and
+    // util.rs's exact-match anti-loop check takes a `[u8; 16]`, not a key.
     async fn process_source_route(
         &mut self,
         mut received: ReceivedIpv6,
         sender_iid: [u8; 8],
+        sender_routable: [u8; 16],
     ) -> Result<Option<RplReceiveOutcome>, RplReceiveError> {
         let local_link_addr = self.stack.local_addr().0;
         let current_destination: [u8; 16] = received.ipv6[24..40].try_into().unwrap();
@@ -358,7 +371,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         }
 
         let next_destination =
-            advance_rpl_source_route(&mut received.ipv6, current_destination, sender_iid)
+            advance_rpl_source_route(&mut received.ipv6, current_destination, sender_iid, sender_routable)
                 .map_err(RplReceiveError::Receive)?;
         let Some(next_destination) = next_destination else {
             // SRH fully consumed and stripped: the former next-header chain
@@ -380,7 +393,18 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             return Err(RplReceiveError::Receive(RxError::HopLimitExceeded));
         }
         received.ipv6[7] -= 1;
-        let next_hop = ipv6_eui64(next_destination);
+        // The SRH next hop is a routable /128; its L2 EUI-64 is not derivable
+        // from the address (i72x.2) — resolve through the authenticated peer
+        // table, failing closed (drop) for unknown peers.
+        let Some(peer_iid) = self
+            .stack
+            .link()
+            .peer_iid_for_routable_addr(&next_destination)
+        else {
+            return Ok(Some(RplReceiveOutcome::RplRejected));
+        };
+        let mut next_hop = peer_iid;
+        next_hop[0] ^= 0x02;
         // Forwarded traffic uses Normal priority (P3)
         self.stack
             .send_ipv6_to(&received.ipv6, &next_hop, Priority::Normal)
@@ -562,10 +586,22 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 let RplRole::Root(rx) = &mut self.role else {
                     return Ok(RplReceiveOutcome::Dao(DaoHandlingOutcome::RouteRejected));
                 };
-                let origin_iid: [u8; 8] = source[8..].try_into().unwrap();
+                // Merge resolution (HEAD over beads-worker-2 + beads-worker-7):
+                // the DAO source is the origin's routable 02xx /128 (spec
+                // 05-routing §8.6), which under upstream AddrForKey embeds no
+                // IID (i72x.2), so the pinned key resolves by full-address
+                // match — never by slicing the low 64 bits. All three parents
+                // implement this same lookup: HEAD's and worker-2's duplicate
+                // announce-table methods (`pinned_pubkey_for_routable`,
+                // `pinned_pubkey_for_addr`) and worker-7's inline
+                // `pinned_pubkeys_snapshot` + `ygg_addr_from_pubkey` scan. The
+                // shared `_routable` method is kept because the already-merged
+                // node.rs DAO-admission path uses it; worker-7's inline scan
+                // is the identical comparison, consolidated into the one
+                // shared implementation of the trust-base correlation.
                 let admitted = self
                     .announces
-                    .pinned_pubkey_for(&origin_iid)
+                    .pinned_pubkey_for_routable(&source)
                     .is_some_and(|key| {
                         self.dao_admissions
                             .as_ref()
@@ -725,6 +761,20 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         }
 
         // Replay: root_seq must strictly exceed the cached high-water mark.
+        // Merge resolution (HEAD + beads-worker-2): a tracked key's
+        // replay/regression is forgery and hard-Rejects (worker-2
+        // cached()-pre-check); a NEW key that no longer fits in the table
+        // degrades to the L679 baseline (worker-2 rationale: mapping capacity
+        // to Reject would let an on-link adversary hard-Reject a genuine new
+        // root's first signed DIO — punishing the signed option itself). The
+        // mark is persisted BEFORE the in-memory cache is admitted (HEAD,
+        // worker6-eebl): an unpersisted mark must never verify, because the
+        // reboot boundary would reopen the replay window. A storage fault is
+        // a local failure, not a forgery: degrade to baseline and leave the
+        // in-memory cache untouched so a healthy redelivery can verify. For
+        // a tracked key the pre-check above rejects any non-increasing
+        // root_seq, so accept() cannot fail; for an untracked key its only
+        // failure is capacity, which degrades per the rationale above.
         let cached = self
             .root_seqs
             .cached(decoded.payload.dodag_id, decoded.payload.instance);
@@ -733,8 +783,9 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 return DioRootSigOutcome::Reject;
             }
         }
+        let mut proposed = self.root_seqs.clone();
         use lichen_rpl::root_seq_cache::RootSeqReject;
-        match self.root_seqs.accept(
+        match proposed.accept(
             decoded.payload.dodag_id,
             decoded.payload.instance,
             decoded.payload.root_seq,
@@ -756,6 +807,11 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 return DioRootSigOutcome::Baseline;
             }
         }
+        let Ok(current) = proposed.persist(&mut self.storage, self.root_seq_store) else {
+            return DioRootSigOutcome::Baseline;
+        };
+        self.root_seqs = proposed;
+        self.root_seq_store = current;
 
         DioRootSigOutcome::Verified
     }

@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-fl6y",
+  "title": "sos_origin: verify_sos_origin_gated does not bind origin_addr to AddrForKey(pubkey)",
+  "description": "3x codereview on b7z9.121.4 (correctness finding 2): rust/lichen-link/src/sos_origin.rs:218-229 — the module doc (:13-18) states origin IPv6 MUST equal upstream AddrForKey and the gate keys on origin_addr, but nothing checks origin_addr == origin_addr_from_pubkey(pubkey). A valid signer can rotate/spoof origin addresses; each fresh address is a new gate entry where any first sequence is accepted, voiding the replay gate. Python parity (same parameter shape), so a contract gap not a parity break; no in-tree callers yet. Fix: derive-and-check inside the gated path (mirror sign_sos_origin_for_key) or document the caller obligation on the fn.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T03:05:03.736358589Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T03:05:03.736358589Z",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-fl6y",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.121.4",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T03:05:03.868684671Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

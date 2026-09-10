@@ -136,11 +136,14 @@ def hash_32(data: bytes | str) -> int:
 
 
 def _pubkey_to_iid(pubkey: bytes) -> bytes:
-    """Derive IID from Ed25519 public key.
+    """Derive the IID (Interface Identifier) from an Ed25519 public key for
+    the link-local (``fe80::/10``) address.
 
-    LICHEN native profile inspired by Yggdrasil 0200::/8 range; NOT
-    wire-compatible with upstream AddrForKey (which bit-packs without hashing).
-    See test/vectors/yggdrasil_address.json for divergence documentation.
+    ``SHA-512(pubkey)[0:8]`` with the U/L bit cleared per RFC 4291 §2.5.1.
+    This is the LICHEN IID profile (03-addressing.md); it is used ONLY for
+    the link-local address and is independent of the routable primary
+    address, which is upstream Yggdrasil ``AddrForKey`` (see
+    ``yggdrasil_address``). The IID is NOT embedded in the routable address.
     """
     if len(pubkey) != 32:
         raise ValueError(f"pubkey must be 32 bytes, got {len(pubkey)}")
@@ -206,63 +209,58 @@ def iid_to_human_address(iid: bytes) -> str:
 def yggdrasil_address(pubkey: bytes) -> IPv6Address:
     """Derive the routable 0200::/8 address from an Ed25519 public key.
 
-    This is the upstream Yggdrasil ``AddrForKey`` algorithm, byte-for-byte,
-    per the settled ``upstream-yggdrasil-addressing`` decision
-    (``spec/decisions.jsonl``; yggdrasil-go commit ``422836ee``
-    ``src/address/address.go``). The former SHA-512-based LICHEN native
-    profile is REJECTED and MUST NOT be used.
+    Upstream Yggdrasil ``AddrForKey`` byte-for-byte, per the settled
+    ``upstream-yggdrasil-addressing`` decision (spec/decisions.jsonl;
+    yggdrasil-go@422836ee src/address/address.go). The SHA-512-based LICHEN
+    native profile is REJECTED and MUST NOT be used. Mirrors Rust
+    ``ygg_addr_from_pubkey`` (i72x.2).
 
     Algorithm (no hashing):
 
       1. Bit-invert the 32-byte public key.
-      2. ``addr[0] = 0x02`` (the ``0200::/8`` prefix; last bit 0 = node address).
+      2. ``addr[0] = 0x02`` (the 0200::/8 prefix, last bit 0 = node address).
       3. ``addr[1]`` = count of leading 1 bits in the inverted key, mod 256
-         (matches Go's ``byte`` overflow semantics).
+         (matches Go ``byte`` overflow semantics).
       4. Skip the leading 1 bits and the first 0 bit (the separator).
       5. Pack the remaining inverted-key bits MSB-first into whole bytes,
          discarding any trailing partial byte; copy into ``addr[2:16]``,
          truncating at 14 bytes, leaving unwritten tail bytes zero.
 
-    Degenerate case (all-zero public key → inverted all-ones): no separator 0
-    bit is ever seen, so no payload bits are appended and the leading-1 count
-    wraps 256 → 0, matching upstream exactly.
+    Degenerate case (all-zero public key, i.e. inverted key of all 1 bits):
+    no separator 0 bit is ever seen, so no payload bits are appended and
+    ``ones`` wraps to 0 — matching upstream exactly.
 
-    The IID (``_pubkey_to_iid``, a SHA-512 digest) is NOT embedded in this
-    address; the routable address binds to the key by self-derivation. The
-    pinned byte-equality oracle is the ``upstream_addr_for_key`` vector in
-    ``test/vectors/yggdrasil_address.json`` (anchored to upstream
-    ``address_test.go``); it is cross-checked against the independent Rust
+    The SHA-512 IID (``_pubkey_to_iid``) is NOT embedded in this address; the
+    address binds to the key by self-derivation. The pinned byte-equality
+    oracle is the ``upstream_addr_for_key`` vector in
+    test/vectors/yggdrasil_address.json (anchored to upstream
+    address_test.go), cross-checked against the independent Rust
     implementation (``ygg_addr_from_pubkey``, i72x.2).
     """
     if len(pubkey) != 32:
         raise ValueError(f"pubkey must be 32 bytes, got {len(pubkey)}")
-
-    buf = bytearray(b ^ 0xFF for b in pubkey)
-
+    inv = bytes(b ^ 0xFF for b in pubkey)
     addr = bytearray(16)
     addr[0] = 0x02
-
-    temp = bytearray()  # whole bytes collected from the bit stream
+    temp = bytearray()
     done = False
-    ones = 0  # wraps mod 256 like Go's `byte`
+    ones = 0
     cur = 0
     nbits = 0
-
-    for idx in range(8 * len(buf)):
-        bit = (buf[idx // 8] >> (7 - (idx % 8))) & 0x01
-        if not done and bit != 0:
-            ones = (ones + 1) & 0xFF
-            continue
+    for idx in range(8 * len(inv)):
+        bit = (inv[idx // 8] >> (7 - (idx % 8))) & 0x01
         if not done:
-            # first leading 0 bit: separator, skipped
-            done = True
+            if bit:
+                ones = (ones + 1) & 0xFF
+                continue
+            done = True  # first leading 0 bit: separator, skipped
             continue
-        cur = ((cur << 1) | bit) & 0xFF
+        cur = (cur << 1) | bit
         nbits += 1
         if nbits == 8:
             nbits = 0
             temp.append(cur)
-
+            cur = 0  # Go relies on byte overflow; explicit reset is equivalent
     addr[1] = ones
     n = min(len(temp), 14)
     addr[2 : 2 + n] = temp[:n]
@@ -270,14 +268,14 @@ def yggdrasil_address(pubkey: bytes) -> IPv6Address:
 
 
 def subnet_for_key(pubkey: bytes) -> bytes:
-    """Derive the 8-byte routable 0300::/8 subnet prefix from an Ed25519 pubkey.
+    """Derive the 8-byte routable 0300::/8 subnet prefix from an Ed25519 key.
 
-    Upstream Yggdrasil ``SubnetForKey`` (same source as :func:`yggdrasil_address`):
-    take ``AddrForKey``, keep the first 8 bytes, and set the low bit of the
-    first byte (``byte[0] |= 0x01``) to mark a prefix rather than a node
-    address. Returns the 8-byte subnet prefix.
+    Upstream Yggdrasil ``SubnetForKey`` byte-for-byte (yggdrasil-go@422836ee
+    src/address/address.go): the AddrForKey bytes truncated to 8 with the
+    last prefix bit set (``byte0 |= 0x01``), selecting 0300::/8 and marking
+    a prefix rather than a node address. Mirrors Rust
+    ``ygg_subnet_from_pubkey`` (i72x.2).
     """
-    addr = yggdrasil_address(pubkey).packed
-    snet = bytearray(addr[:8])
-    snet[0] |= 0x01
-    return bytes(snet)
+    subnet = bytearray(yggdrasil_address(pubkey).packed[:8])
+    subnet[0] |= 0x01
+    return bytes(subnet)

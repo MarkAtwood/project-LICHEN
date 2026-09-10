@@ -1,150 +1,123 @@
-# Flagged set — spec/08-gateway-coordination.md (sweep 2026-08-31)
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- SPDX-FileCopyrightText: The contributors to the LICHEN project -->
 
-Requirements flagged for verification: low confidence, ambiguous/divergent
-classification, or OSCORE-semantics sensitive. Each entry: requirement,
-classification, evidence, and the specific question to answer.
+# spec/08-gateway-coordination.md — flagged set for Opus verification (sweep 2026-09-09)
 
-## R-08-001 — MUST support both federation modes (GCP-1, GCP-10)
+Every requirement classified divergent, ambiguous, or low-confidence, plus
+oscore-adjacent semantics. Each entry: requirement, classification, evidence,
+and the specific question Opus should answer.
 
-- Classification: divergent (confidence low). Gap bead `project-LICHEN-worker6-l1qw.15`.
-- Evidence: C `LICHEN_GW_FEDERATION_CLOSED|OPEN|DUAL` + `LICHEN_GW_PSK` Kconfigs
-  (lichen/apps/gateway/Kconfig:237-263) referenced by no C code; C open-mode
-  primitives untested (gcp/gcp_trust.c:114-163, own domain-prefix transcript).
-  Rust: both engines implemented+tested (trust.rs:1288-1381,
-  tests/gcp_psk_oscore_vectors.rs) but `lichend.rs:512` refuses config
-  mode=open; dual-mode simultaneous (GCP-3.2) unimplemented everywhere.
-- Question: Does library-level support with daemon-level refusal satisfy
-  "MUST support both federation modes", or is the Rust open-mode config
-  refusal itself the divergence to fix? Is dual-mode simultaneous
-  participation required by the MUSTs, or only by the keyword-less GCP-3.2
-  sentence?
+---
 
-## R-08-003 — Open Federation (signatures) MUST be supported (GCP-3.2)
+## F-1. R-08-001 / R-08-062 — both federation modes MUST be supported
+- **Classification:** divergent (gap bead: l1qw.15)
+- **Evidence:** Rust `GatewayFederationMode{Disabled,Psk,Open}` single-select (rust/lichen-gateway/src/config.rs:119-127); daemon hard-errors on Open (bin/lichend.rs:573-575); C has PSK Kconfig labels ("closed/dual federation", lichen/apps/gateway/Kconfig LICHEN_GW_PSK) with no derivation call found; python has no PSK derivation.
+- **Question for Opus:** Does the C gateway app satisfy "closed federation" purely by provisioning a raw-PSK OSCORE context elsewhere (making R-08-002 partially conformant in C), or is C closed-mode genuinely unwired as classified? Check whether any C code path turns LICHEN_GW_PSK into an OSCORE context.
 
-- Classification: implemented+tested (confidence low).
-- Evidence: Rust TrustStore TOFU + Schnorr48 verify tested against
-  `gcp3_trust_models.json` (trust.rs:605-630, 919-960, tests :1829-2000);
-  reachable only via runtime API (`Gateway::admit_gateway`), not config. C
-  gcp_trust.c untested. Python trust oracle tested (rotation subset only).
-- Question: Is "supported" satisfied by tested library code that no daemon
-  path activates via configuration? Confirm the Rust runtime API path
-  (admit_gateway → install_gcp_context) is a complete open-mode federation
-  join.
+## F-2. R-08-005 — multicast discovery GET never sent
+- **Classification:** divergent. Encoder + server exist; no runtime sender.
+- **Evidence:** rust discovery.rs:109-141 (ff02::1 :37-42); rust resources.rs:1963; C coap_slot_coord.c:1785-1802; no caller of the encoder in lichend/gateway.
+- **Question for Opus:** Is the missing sender a deliberate deferral (backbone transport decision pending — cf. ljgs for slot-claim transport), or a gap? Confirm no hidden caller in python gateway runtime.
 
-## R-08-004 — Backbone discovery multicast GET + Observe (GCP-4.1, no kw)
+## F-3. R-08-008 — GATEWAY flag is announce-payload, not link-layer
+- **Classification:** divergent.
+- **Evidence:** flag = type-byte bit 0x80 in the 10-byte LoRa gateway announce (rust discovery.rs:167,176; py discovery.py:80-81); link-layer LLSec flag bits have no GATEWAY bit (rust lichen-link frame.rs:109-116; C beacon.h:54-61); C lacks the announce codec; no runtime TX/RX caller.
+- **Question for Opus:** Should spec GCP-4.2 be amended to say "gateway announce payload type-byte flag" (align-spec-to-reality precedent), or should implementations move the flag into the link layer? The current text ("include GATEWAY flag in link layer") does not match any implementation.
 
-- Classification: divergent (confidence high).
-- Evidence: Rust encoders + /info payload tested (discovery.rs:37-159,
-  resources.rs:546-721, unit tests :366-431) but nothing ever sends the
-  multicast GET or publishes Observe announcements; C has nothing; Python
-  codec only; `gateway_discovery.json` orphaned.
-- Question: Confirm no stack is expected to be the integration point, and
-  whether the orphaned `gateway_discovery.json` vectors should drive a
-  wire-level interop test before the behavior is wired.
+## F-4. R-08-012 — 3-superframe hold-off: unwired in Rust/Python, absent in C
+- **Classification:** divergent (Rust+Python unit-tested only; C missing).
+- **Evidence:** rust multi_instance.rs:840,1139-1175; py slot_coordination.py:50,467-483; b7z9.25 tracks the unwired state; C repo-wide grep zero; new bead b7z9.115 covers the C hole.
+- **Question for Opus:** Confirm C hold-off absence is a real gap (not subsumed by C desync FSM DRIFTING/REJOINING states at tdma.c) and that unwired-but-tested Py/Rust FSMs count as divergent rather than implemented for this MUST.
 
-## R-08-005 — GATEWAY flag in link-layer announce frames (GCP-4.2, no kw)
+## F-5. R-08-015/016/017 — GCP-5.3 backbone route lifecycle
+- **Classification:** divergent / divergent / not-implemented.
+- **Evidence:** DaoBackboneBridge tested library, zero production callers (rust multi_instance.rs:569-779; C :338-430; py :346-611); admission = transport-identity only; no withdrawal on lifetime expiry. Bead b7z9.114.
+- **Question for Opus:** Is the intended production wiring the gateway runtime (lichend) or a dedicated backbone-sync task? Also: does "same signature and admission gates" (L130) require per-destination Schnorr verification of node DAOs at import time, or is origin-identity binding (origin == OSCORE-authenticated peer) sufficient? This changes the gap's size materially.
 
-- Classification: divergent (confidence high).
-- Evidence: C implements `LICHEN_GATEWAY_FLAG 0x80` on the routing-announce
-  type byte (routing/announce.h:41, announce.c:568-626) — the link LLSec
-  flag byte has no GATEWAY bit (link frame.c:13-19). Rust/Python implement a
-  standalone `LoraGatewayAnnounce` format (discovery.rs:167-310,
-  discovery.py:321-414) that no real frame path uses.
-- Question: Does "include GATEWAY flag in link layer" mean the LLSec frame
-  flag byte, the routing announce type byte (C's choice), or a dedicated
-  gateway-announce frame (Rs/Py choice)? The three stacks disagree; interop
-  on LoRa fallback discovery is impossible until this is pinned.
+## F-6. R-08-018/019 — gateway desync (DIO suppression + version increment)
+- **Classification:** not-implemented (both MUSTs).
+- **Evidence:** no wall-clock gate on gateway DIO origination (only comment lichen link/tdma.c:162); `increment_dodag_version` production-callers = 0 in all stacks; ccp16 `excessive_clock_drift_desync` UNENFORCED (py test_ccp_sync_vector_consumers.py:372). Bead b7z9.115.
+- **Question for Opus:** Is "wall clock invalid" for a gateway defined by the 2a.6 wall_clock gate (R-02a-084), and should the version increment happen only after re-sync, or at desync entry? Spec text is ambiguous on timing ("returning from desync").
 
-## R-08-007 — Superframe sync via backbone CoAP (GCP-6.1, no kw)
+## F-7. R-08-022 — backbone control claims into mesh (GCP-5.5)
+- **Classification:** divergent.
+- **Evidence:** RX admission exists (root DIO sig: rust receive.rs:522→657-747; C rpl/dodag.c:784+; py root_dio_signature.py) but root-side TX signing unimplemented (b7z9.88 / R-06-310).
+- **Question for Opus:** Does GCP-5.5's "MUST NOT forward backbone control claims without GCP-3 trust checks" add obligations beyond R-06-305/310 (root DIO signature), or is it fully discharged once b7z9.88 lands? If the former, name the additional checks.
 
-- Classification: divergent (confidence high).
-- Evidence: GPS-epoch math and lowest-IID time-master election implemented
-  and tested in all stacks (Py test_gcp6_vectors.py:56-77; C
-  coap_slot_coord.c:196-202; Rs multi_instance.rs:405). "Others sync via
-  backbone CoAP" has no implementation anywhere; `GatewayInfo.superframe_epoch`
-  is advertised but never consumed for sync.
-- Question: Confirm backbone time-sync is a real gap vs. covered elsewhere
-  (spec 02a CCP time sync?) before filing work.
+## F-8. R-08-023/024 — time-master election divergence
+- **Classification:** divergent.
+- **Evidence:** C elector lowest-IID-only (coap_slot_coord.c:191); python dual electors (rpl/multi_instance.py:205-222 vs gateway/discovery.py:437-457); python 2s default (link/channel.py:20) vs 60s; backbone-CoAP sync absent. Bead b7z9.116.
+- **Question for Opus:** Which python elector is canonical, and should spec pin the exact election order (GPS-preferred, then lowest IID) as a conformance vector for all three stacks?
 
-## R-08-012 — Verify signature; invalid/missing MUST be silently discarded (GCP-6.3/6.5)
+## F-9. R-08-031 — "silently discarded": C sends no response, Rust sends empty 2.04
+- **Classification:** implemented+tested with interop-shape divergence.
+- **Evidence:** C slots_post returns 0 with no CoAP response (coap_slot_coord.c:1639-1645) + 1-in-32 rate-limited WARN (:348-359); rust discards with an indistinguishable empty 2.04 (resources.rs:2051-2099), no WARN anywhere in resources.rs; python returns (False, reason) to caller.
+- **Question for Opus:** Does "silently discarded ... sends no CoAP response" (L320-321) mandate C's behavior (no response at all) and make Rust's empty-2.04 non-conformant, or is an empty success response acceptable "indistinguishability"? Also: should Rust add the rate-limited WARN?
 
-- Classification: divergent (confidence low). Gap bead `project-LICHEN-worker6-l1qw.16`.
-- Evidence: C conforms (return 0, no response, rate-limited WARN,
-  coap_slot_coord.c:1488-1508). Rust `handle_post_slots` returns 4.01
-  Unauthorized on bad signature (resources.rs:1938-1964); the runtime
-  dispatch path (gateway.rs:1343-1380) does consume unauthenticable packets
-  silently at the OSCORE layer. Python has no endpoint at all.
-- Question: Does the Rust OSCORE-layer silent consumption satisfy "silently
-  discarded" for OSCORE-authenticated peers, given spec validation order
-  (step 1 OSCORE, then COSE signature)? Should `handle_post_slots`'s 4.01 be
-  converted to silence, or is 4.01 acceptable for unauthenticated *senders*
-  with silence required only for authenticated peers with bad COSE?
+## F-10. R-08-034 — 32-entry cap without Block2 (Rust); nothing in C
+- **Classification:** divergent.
+- **Evidence:** rust truncates at 32 (resources.rs:77,1977,2259,2320; tests :3470/:3504/:3528), Block2 unwired (in-code ref l1qw.18.3); C no cap/no Block2 (l1qw.18); python no server (b7z9.118).
+- **Question for Opus:** Is truncation-instead-of-Block2 preferable to over-long responses during the interim (documented in-code), and does spec text need an interim-compliance note, or is truncation a violation of "Larger result sets require Block2 pagination"?
 
-## R-08-015 — All coordination CoAP messages use OSCORE (GCP-6.4, no kw; OSCORE semantics)
+## F-11. R-08-033 — GCP-6.4 resource set conformance across stacks
+- **Classification:** divergent (C missing /nodes; python missing everything but /handoff).
+- **Evidence:** see matrix row; beads l1qw.18 (C), b7z9.118 (python).
+- **Question for Opus:** Is the python gateway intended to be a full GCP participant, or is python a reference/oracle stack where resource absence is accepted? This determines whether b7z9.118 is a gap or a scope decision.
 
-- Classification: divergent (confidence high). Flagged under OSCORE-semantics criterion.
-- Evidence: C GET handlers (`/info`, `/channels`) answer plaintext even for
-  OSCORE-protected peers (existing bead `project-LICHEN-worker6-pttk`);
-  POST path correctly gated (coap_slot_coord.c:1459-1474). Rust enforces at
-  dispatch (gateway.rs:1337-1425). Python gates only /handoff.
-- Question: Confirm the fix shape for C GETs (reject plaintext with 4.01 vs.
-  OSCORE-protect the responses) — this touches the shared
-  `coap_oscore_unprotect_resource_request()` response path.
+## F-12. R-08-039/042 — claim-timing gates (C 300s, python stale-tolerance)
+- **Classification:** divergent.
+- **Evidence:** C 300s no tolerance (coap_slot_coord.c:435-456; test comment main.c:604-607 says deliberately dropped); python STALE_CLAIM ≤5s acceptance (slot_claim.py:67-71,712-715; pinned divergence test_slot_claim_cose_vectors.py:105-121); rust conforms at 305s. Bead b7z9.117.
+- **Question for Opus:** Which side is the intended canonical: strict `expiry > now` (rust) or tolerance on both bounds? Note the C +5s omission causes a legit-claim reject (interop), while python's causes a stale-accept (security-adjacent).
 
-## R-08-019 — Validation/response codes 4.03 / 2.04 / 4.09 + 305 s bound (GCP-6.5)
+## F-13. R-08-041 — python kid↔payload binding skipped at decode
+- **Classification:** implemented+tested (Rust/C) with python parity gap.
+- **Evidence:** py binds gateway_iid to pubkey-derived IID at verify (slot_claim.py:676-680) instead of kid at decode (test skip test_slot_claim_cose_vectors.py:131-136); vector kid_payload_iid_mismatch has no unconditional python consumer.
+- **Question for Opus:** Is verify-stage binding (pubkey→IID==payload IID) equivalent to spec step 6 (kid==payload IID) given step 5 already verified the signature against the pubkey? If equivalent, spec/vectors could note it; if not, python must add the decode-side check.
 
-- Classification: divergent (confidence high). Gap bead `project-LICHEN-worker6-l1qw.19`.
-- Evidence: C lacks the spec's +5 s clock tolerance (cap exactly 300 s,
-  :438-442; test asserts inclusive 300). Rust: conflict = 2.05+CBOR instead
-  of 4.09-with-winning-claim (resources.rs:2008-2029); no 4.03 mapping; no
-  expiry validation at all. Vectors `gcp6_slot_coordination.json` /
-  `gateway_coordination.json` pin stale 2.01/4.29.
-- Question: Is the C behavior (strict 300 s, inclusive) a spec erratum
-  candidate (drop the +5 s tolerance), or should C add the tolerance? Which
-  response-code set is canonical for the Rust rewrite — and do the stale
-  vectors get regenerated or dual-pinned?
+## F-14. R-08-044 — response-code mapping divergences
+- **Classification:** divergent.
+- **Evidence:** C: 4.03/4.09+winner-envelope/2.04 (coap_slot_coord.c:1639-1693) — codes not host-test-covered (resource handlers compiled out of host build, coap_slot_coord.c:103); rust: 4.09 echoes own recorded envelope (resources.rs:2163-2166) vs spec "winning gateway's claim", invalid-slot/malformed → silent empty 2.04 not 4.03 (in-code ref l1qw.20.1).
+- **Question for Opus:** When the local gateway loses a conflict, whose claim is "the winning gateway's claim" in the 4.09 payload — and is Rust's own-envelope echo conformant? Confirm l1qw.20.1 covers the invalid-slot→4.03 mapping.
 
-## R-08-030 — Handoff flow step 4: B confirms handoff to node via CoAP (GCP-7, no kw)
+## F-15. R-08-046/047 — claim_seq persistence: sender dead code (Rust), absent (C); python receiver in-memory
+- **Classification:** divergent (both MUSTs partially unmet).
+- **Evidence:** rust ClaimSeqStore durable but dead in binary (lichend.rs:110-112, pending claim-broadcast consumer); C sender absent (sign_claim uncalled); py receiver SlotClaimReplayCache in-memory (slot_claim.py:520-522). Beads l1qw.20, gskf (receiver persistence since landed — status check), 0k8i.
+- **Question for Opus:** Does the dead Rust sender mean GCP-6.5 slot claims are currently receive-only in production (no gateway ever issues claims)? If so, is that an accepted stage (blocked on ljgs transport decision) or a gap needing a sender epic?
 
-- Classification: divergent (confidence high).
-- Evidence: Steps 1-3 and 5 implemented+tested in Rust (handoff.rs:949-1092,
-  end_to_end.rs:1075,1121) and Python (test_handoff.py:325-378); C flow
-  untested (coap_handoff.c:996-1063). No stack sends the node-facing
-  confirmation (step 4).
-- Question: Is step 4 delivered via the existing LCI/CoAP node surface, and
-  does its absence break node-side mobility, or is it covered by RPL
-  parent-change signaling in practice?
+## F-16. R-08-048 — 64-entry LRU high-water cache not implemented
+- **Classification:** not-implemented.
+- **Evidence:** rust StateFull no eviction (slot.rs:912-916); C CONFIG_LICHEN_SLOT_CLAIM_SEQ_CACHE_MAX=64 unused (coap_slot_coord.h:39-43), real table 8 fail-closed; python MAX_GATEWAYS=256 (slot_claim.py:532). Eviction policy bead 0k8i.
+- **Question for Opus:** Should the spec's LRU-by-last-claim-timestamp be amended to the implemented fail-closed posture (align-spec-to-reality), or must stacks implement LRU eviction? Note fail-closed + LICHEN_CLAIM_REJECT_PERSIST is a liveness kill of GCP-6 when full.
 
-## R-08-031 / R-08-032 — Handoff request/confirm validation pipelines (GCP-7.1, no kw)
+## F-17. R-08-049 — rate-limiter keying divergence
+- **Classification:** implemented+tested, minor divergence.
+- **Evidence:** rust keys on OSCORE peer IID (resources.rs:2073-2085); C/python key on claim gateway_iid (coap_slot_coord.c:1615-1629; slot_claim.py:660-665).
+- **Question for Opus:** Is either keying conformant with "per peer IID" (L366), or must all stacks key on the authenticated sender (OSCORE peer), which survives gateway_iid spoofing inside a valid signature context?
 
-- Classification: divergent (confidence high). Existing bead `project-LICHEN-worker6-3o0p.5`.
-- Evidence: Rust implements a different (CBOR, non-COSE) handoff protocol
-  with its own vector (`node_handoff.json`, 17 tests). C implements
-  OSCORE-only handoff with a subset of validations (4.00 not 4.03,
-  coap_handoff.c:878-933, 1056-1058). Python has the spec-conformant COSE
-  envelope classes (handoff.py:760-1229) with zero tests and no consumer of
-  `gcp_handoff_cose_sign1.json`.
-- Question: Which handoff protocol is canonical going forward — the spec's
-  COSE_Sign1 pair (GCP-7.1) or the Rust `node_handoff.json` protocol? Three
-  stacks, three answers today; cross-impl parity is the project's core rule.
+## F-18. R-08-050 — handoff "confirm to node via CoAP" unimplemented
+- **Classification:** implemented+tested (core), node-confirm sub-step absent.
+- **Evidence:** doc comment only (rust handoff.rs:9); no code notifies the node after accept_handoff in any stack.
+- **Question for Opus:** Is node confirmation expected as a CoAP response to the node's pending request, an unsolicited POST, or implicitly via the node's next successful interaction? Spec step 4 (L376) needs a mechanism name before this can be implemented.
 
-## R-08-035 — Backwards compatibility / legacy-peer detection (GCP-8, no kw)
+## F-19. R-08-051…R-08-057 — GCP-7.1 handoff COSE_Sign1 not wired anywhere
+- **Classification:** divergent (format), divergent (payload keys), divergent (bitmap field), divergent (bitmap enforcement), divergent (validation), not-implemented (replay-window seeding), divergent (replay protection), low confidence on R-08-057.
+- **Evidence:** all wired handoff paths are legacy plain-CBOR inside OSCORE (rust handoff.rs:119+; C coap_handoff.c:556-958; py resources/handoff.py:92); python COSE classes dead code (handoff.py:907,1042); no expiry check, no per-node seq cache, no 4.03, no bitmap enforcement in wired paths; replay engines never seeded by handoff (floor-style +1 advance: handoff.rs:1046, C :404, py :671). Vector/impl mismatch: gcp_handoff_cose_sign1.json confirm vectors carry 6 keys (no bitmap key 7) while the python COSE class requires key 7. Tracked by epic 3o0p (+.2/.3/.5).
+- **Question for Opus:** (a) Should the legacy plain-CBOR handoff format be treated as the interim wire format pending 3o0p (making R-08-051..057 "planned-divergent"), or are the wired paths non-conformant today? (b) Should gcp_handoff_cose_sign1.json be regenerated to include bitmap key 7 (per spec L452-464) or the spec relaxed? (c) Confirm python `create_handoff_confirm` TypeError (missing replay_bitmap arg, handoff.py:1219-1226 vs field :848) and zero-test COSE classes are covered by 3o0p.5.
 
-- Classification: divergent (confidence high).
-- Evidence: Single-gateway no-coordination is satisfied by construction (C
-  Kconfig default n; Rust Disabled default, context-gated dispatch). "New
-  gateways detect absence and run independently" has no detection code
-  anywhere.
-- Question: Confirm whether absence-detection is a real requirement to
-  implement (heartbeat/probe on the backbone) or satisfied by the context-
-  gated dispatch design (no peer contexts ⇒ coordination traffic never
-  originates).
+## F-20. R-08-055 — handoff invalid → 4.03 not honored
+- **Classification:** divergent.
+- **Evidence:** stacks return 4.00 (decode failure: coap_handoff.c:1030-1032, rust :2293) or 2.04-with-error-payload (rust :2296-2305; py test_handoff_resource.py:131 asserts CHANGED on NODE_NOT_FOUND); 4.03 absent from all handoff handlers.
+- **Question for Opus:** Spec step 11 (L513) mandates 4.03 for invalid handoff requests; the 2.04-with-error-payload design is intentional (py test asserts it). Should the spec be amended to the 2.04+status design (align-spec-to-reality) or handlers changed to 4.03? Note vv1b separately tracks the error-path response-protection bug.
 
-## R-08-036 — Protocol OPTIONAL but RECOMMENDED for 2+ gateways (GCP-1)
+## F-21. Spec text bug — handoff protected-header examples encode the decoy
+- **Classification:** spec defect (not an implementation gap).
+- **Evidence:** spec L396/L435 `h'a10139ffff'` encodes {1: -65536} while the text says alg −65537; correct bytes `a1013a00010000` per vectors/generator/python encoder; slot-claim section (L233) declares -65536 the decoy that MUST be rejected.
+- **Question for Opus:** none needed for the fix itself (beads 5brg + uqke already track it) — but flag that 5brg and uqke are duplicate filings of the same defect and should be deduplicated (bd lint candidate).
 
-- Classification: ambiguous (deployment-level applicability statement).
-- Evidence: No implementation mapping is possible or expected; recorded for
-  completeness because it carries RFC 2119 keywords.
-- Question: Confirm that deployment-level OPTIONAL/RECOMMENDED statements
-  are out of scope for implementation coverage rows (or define the mapping
-  you want future sweeps to use).
+## F-22. Cross-stack vector-consumer gaps (minor)
+- **Evidence:** gcp_psk_oscore.json semantic consumers: rust only (gcp_psk_oscore_vectors.rs; py only lists schema policy test_vectors.py:5588; C none). gcp_iid_comparison.json: python only. C gcp_trust.c mirrors the oracle format but has no vector consumer (comment :164).
+- **Question for Opus:** Should cross-stack consumption of these two corpora be required before R-08-002/R-08-011 can be marked fully pinned, or is single-stack consumption + unit tests sufficient?
+
+## F-23. R-08-050 C two-phase-commit divergence (found during sweep, related)
+- **Evidence:** C lichen_handoff_process_request releases the node immediately (coap_handoff.c:369-371) while rust/py stage-then-commit (resources.rs:2263-2315, handoff.py:583-596); C has no tests for coap_handoff.c at all.
+- **Question for Opus:** Confirm C's immediate release is an orphaning hazard requiring the same transactional fix as rust (bead worker6-mybk's rust fix, commit e72604e715), and whether that belongs under epic 3o0p or a separate C-handoff bead.

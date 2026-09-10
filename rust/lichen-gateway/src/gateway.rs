@@ -1045,18 +1045,15 @@ impl Gateway {
     ) -> Result<Self, GatewayOpenError> {
         let root_addr = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
         let root_iid = lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes());
-        if coordinator.info.iid != root_addr {
+        if coordinator.info.iid != root_addr || coordinator.own_identity_iid() != root_iid {
             return Err(GatewayOpenError::RplProvision);
         }
         let dodag_id = root_addr;
         let (radio, radio_peer) = LoopbackRadio::pair();
         let stack = SecureStack::from_radio(radio, identity, safe_epoch, 0)
             .map_err(|_| GatewayOpenError::InvalidEpoch)?;
-        let announces = AnnounceProcessor::with_trust_store(
-            GradientTable::new(64),
-            dodag_id[..8].try_into().unwrap(),
-            backing.announce_trust,
-        );
+        let announces =
+            AnnounceProcessor::with_trust_store(GradientTable::new(64), backing.announce_trust);
         let mut rpl_stack = if backing.provision {
             RplStack::provision_root(stack, root_addr, dodag_id, announces, backing.storage)
                 .map_err(|_| GatewayOpenError::RplProvision)?
@@ -1418,13 +1415,14 @@ impl Gateway {
         if self.coordinator.tunnel_auth_root().is_none() {
             return true;
         }
-        // Route evidence is this gateway's own IID — it is the egress — not
-        // the DODAG root IID, which may differ after a root rebind.
-        let egress_iid: [u8; 8] = self.coordinator.info.iid[8..]
-            .try_into()
-            .expect("coordinator iid is 16 bytes");
+        // Route evidence is this gateway's own primary address — it is the
+        // egress — not the DODAG root IID, which may differ after a root
+        // rebind. Spec 8.11 (post-AddrForKey): the route hash input is the
+        // full 16-byte hop addresses; a primary 02xx address embeds no IID,
+        // so the old own-IID route evidence cannot match any migrated grant.
+        let egress_addr: [u8; 16] = self.coordinator.info.iid;
         let inner_source: [u8; 16] = received.ipv6[8..24].try_into().expect("len checked");
-        let route = [egress_iid];
+        let route = [egress_addr];
         match self
             .coordinator
             .authorize_egress(inner_source, false, &route)
@@ -1999,6 +1997,109 @@ mod tests {
     fn test_gateway() -> Gateway {
         let identity = Identity::from_seed(Seed::new([0x01; 32]));
         Gateway::new_ephemeral(identity, 128).unwrap()
+    }
+
+    #[test]
+    fn gateway_rejects_coordinator_with_mismatched_identity_iid() {
+        let identity = Identity::from_seed(Seed::new([0x42; 32]));
+        let address = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
+        let mut wrong_iid = identity.iid;
+        wrong_iid[0] ^= 0x80;
+        let coordinator = GatewayCoordinator::new_ephemeral(address, wrong_iid, 60, 64).unwrap();
+        let result = Gateway::new(
+            identity,
+            128,
+            TrustStore::new_ephemeral(8).unwrap(),
+            coordinator,
+        );
+        assert!(matches!(result, Err(GatewayOpenError::RplProvision)));
+    }
+
+    /// 7ecb(a): the local GCP identity must be the SHA-512 IID plane (same as
+    /// the peer's), not the routable /128's low half. Pre-fix the LocalPeer
+    /// guard compared the SHA-512 peer IID against the routable low half, so
+    /// provisioning the gateway's own key slipped through (failed open).
+    #[test]
+    fn provision_closed_federation_rejects_self_peering() {
+        let identity = Identity::from_seed(Seed::new([0x42; 32]));
+        let own_pubkey = *identity.pubkey.as_bytes();
+        let mut gateway = Gateway::new_ephemeral(identity, 128).unwrap();
+        let federation = PskFederation::new(&[0x01; 16], None, None).unwrap();
+        let result = gateway.provision_closed_federation(&federation, &[own_pubkey]);
+        assert!(
+            matches!(result, Err(GatewayFederationError::LocalPeer)),
+            "self-peering must be rejected, got {result:?}"
+        );
+    }
+
+    /// Build a durable (persistent-trust) gateway in a private temp dir, which
+    /// `provision_closed_federation` requires.
+    fn persistent_test_gateway(seed: [u8; 32], tag: &str) -> Gateway {
+        let suffix = PERSISTENT_TEST_PATH.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "lichen-gateway-gcp-mirror-{tag}-{}-{suffix}",
+            std::process::id()
+        ));
+        let floor_root = path.with_extension("floors");
+        private_test_dir(&path);
+        private_test_dir(&floor_root);
+        let identity = Identity::from_seed(Seed::new(seed));
+        let root = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
+        let sealing_seed = [0x5a; 32];
+        // Merge resolution: HEAD added the own_iid parameter to
+        // provision_persistent (tunnel-auth root binding); the branch's
+        // helper passed the pre-merge five-argument form.
+        let coordinator = GatewayCoordinator::provision_persistent(
+            root,
+            identity.iid,
+            60,
+            64,
+            &path.join("gateway-slot-replay.bin"),
+            &floor_root.join("gateway-slot-replay.generation"),
+            &sealing_seed,
+        )
+        .unwrap();
+        Gateway::new_persistent(
+            identity,
+            128,
+            TrustStore::new_ephemeral(8).unwrap(),
+            coordinator,
+            GatewayPersistence::new(
+                FileStorage::new(&path).unwrap(),
+                true,
+                path.clone(),
+                floor_root.clone(),
+                sealing_seed,
+            ),
+        )
+        .unwrap()
+    }
+
+    /// 7ecb(a): two gateways in one federation must be able to install a GCP
+    /// context for each other. `install_gcp_context` validates sender_id ==
+    /// local IID and recipient_id == peer IID, so mutual installation only
+    /// succeeds when both endpoints resolve to the same IID plane on both
+    /// gateways (self == SHA-512 IID, peer == SHA-512 IID).
+    #[test]
+    fn gcp_contexts_install_mutually_between_gateways() {
+        let alice_pubkey = *Identity::from_seed(Seed::new([0x0a; 32]))
+            .pubkey
+            .as_bytes();
+        let bob_pubkey = *Identity::from_seed(Seed::new([0x0b; 32]))
+            .pubkey
+            .as_bytes();
+        let mut alice = persistent_test_gateway([0x0a; 32], "alice");
+        let mut bob = persistent_test_gateway([0x0b; 32], "bob");
+        let federation = PskFederation::new(&[0x02; 16], None, None).unwrap();
+
+        alice
+            .provision_closed_federation(&federation, &[bob_pubkey])
+            .unwrap();
+        bob.provision_closed_federation(&federation, &[alice_pubkey])
+            .unwrap();
+
+        assert_eq!(alice.gcp_context_count(), 1);
+        assert_eq!(bob.gcp_context_count(), 1);
     }
 
     fn l2_from_wire(wire: &[u8]) -> &[u8] {

@@ -1,0 +1,7 @@
+{
+  "id": "1788974091331533950-1",
+  "issue_id": "project-LICHEN-worker6-xrue",
+  "author": "Mark Atwood",
+  "text": "worker2 session 2026-09-09: hit this exact failure mode twice in one bead. (1) cargo test -p lichen-gateway --test tunnel_auth_vectors gave phantom E0599 'no method local_iid on RplStack' + E0061 'with_trust_store takes 3 args' against CURRENT source (lichen-node built fine standalone with identical features); (2) 2 wired_egress_* tests failed against stale lichen-node artifacts. Both fixed by 'cargo clean -p lichen-node -p lichen-gateway' then full green (13/13 tunnel_auth_vectors, 269 lib). Also observed 'Blocking waiting for file lock on build directory' = another worker actively building into the same /home/mark/Cache/cargo-target. Additional hazard: the beads janitor committed 2 of my temporary debug eprintln lines into chore(beads) sync commit 5d5004847f mid-session (rebase/commit race with uncommitted working-tree edits); I reverted in 24978edacb. Recommend per-worker CARGO_TARGET_DIR (e.g. /home/mark/Cache/cargo-target-\u003cworkerN\u003e) in rust/AGENTS.md guidance.",
+  "created_at": "2026-09-09T17:14:51.33153395Z"
+}

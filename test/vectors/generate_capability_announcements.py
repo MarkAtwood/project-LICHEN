@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -49,6 +50,51 @@ CAP_BIT_PREFIX_DELEGATION = 0x02
 FORMAT_VERSION = 1
 OUTPUT = VECTORS_DIR / "capability_announcements.json"
 SEED = bytes.fromhex("0123456789abcdef" * 4)
+
+
+def _upstream_addr_for_key(pubkey: bytes) -> bytes:
+    """Upstream yggdrasil-go AddrForKey (bit-invert, count leading 1s, bit-pack).
+
+    The announcer_iid is the low 8 bytes of the routable address, matching
+    Rust lichen-core ygg_addr_from_pubkey. Anchored below against the pinned
+    upstream vector in yggdrasil_address.json so this reimplementation cannot
+    silently diverge from the external oracle.
+    """
+    if len(pubkey) != 32:
+        raise ValueError(f"pubkey must be 32 bytes, got {len(pubkey)}")
+    buf = bytes(b ^ 0xFF for b in pubkey)
+    # Count leading 1 bits, wrapping at 256 (Go byte overflow semantics).
+    ones = 0
+    first_zero = 256
+    for idx in range(256):
+        if (buf[idx // 8] >> (7 - idx % 8)) & 1:
+            ones = (ones + 1) & 0xFF
+        else:
+            first_zero = idx
+            break
+    # Whole bytes only; a trailing partial byte is discarded (upstream).
+    packed = bytearray(14)
+    start = first_zero + 1
+    whole_bits = max(0, 256 - start) & ~7
+    for out_bit in range(min(whole_bits, 112)):
+        src = start + out_bit
+        if (buf[src // 8] >> (7 - src % 8)) & 1:
+            packed[out_bit // 8] |= 1 << (7 - out_bit % 8)
+    return bytes((0x02, ones)) + bytes(packed)
+
+
+def _upstream_anchor_check() -> None:
+    """Pin _upstream_addr_for_key to the upstream conformance vector."""
+    doc = json.loads((VECTORS_DIR / "yggdrasil_address.json").read_text())
+    anchor = next(v for v in doc["vectors"] if v["name"] == "upstream_addr_for_key")
+    derived = _upstream_addr_for_key(bytes.fromhex(anchor["public_key"]))
+    if derived.hex() != anchor["address"]:
+        raise SystemExit(
+            f"upstream AddrForKey anchor mismatch: {derived.hex()} != {anchor['address']}"
+        )
+
+
+_upstream_anchor_check()
 
 
 def _build_protected_header() -> bytes:
@@ -121,12 +167,16 @@ def _vector(
 ) -> dict[str, object]:
     """Generate a single capability announcement vector."""
     identity = ReferenceIdentity.from_seed(seed)
+    # announcer_iid/kid = low 8 bytes of upstream AddrForKey(pubkey), matching
+    # Rust lichen-core ygg_addr_from_pubkey (kd0p; the reference identity's
+    # SHA-512 IID is the rejected native profile).
+    announcer_iid = _upstream_addr_for_key(identity.pubkey)[8:]
 
     # Build COSE components
     protected = _build_protected_header()
-    unprotected = _build_unprotected_header(identity.iid)
+    unprotected = _build_unprotected_header(announcer_iid)
     payload = _build_payload(
-        capabilities, prefix, prefix_len, expiry, seq, identity.iid
+        capabilities, prefix, prefix_len, expiry, seq, announcer_iid
     )
 
     # Compute signature per RFC 9052
@@ -144,7 +194,7 @@ def _vector(
         # Identity inputs
         "signing_seed": seed.hex(),
         "public_key": identity.pubkey.hex(),
-        "announcer_iid": identity.iid.hex(),
+        "announcer_iid": announcer_iid.hex(),
         # Payload fields
         "capabilities": capabilities,
         "capabilities_bits": {
@@ -162,7 +212,7 @@ def _vector(
             "alg_name": "Schnorr48-Ed25519",
         },
         "unprotected_header_decoded": {
-            "kid": identity.iid.hex(),
+            "kid": announcer_iid.hex(),
         },
         "payload_cbor": payload.hex(),
         "payload_decoded": {
@@ -171,7 +221,7 @@ def _vector(
             "3_prefix_len": prefix_len,
             "4_expiry": expiry,
             "5_seq": seq,
-            "6_announcer_iid": identity.iid.hex(),
+            "6_announcer_iid": announcer_iid.hex(),
         },
         # Signature computation
         "sig_structure": sig_structure.hex(),
@@ -213,10 +263,12 @@ def _different_signer_vector() -> dict[str, object]:
     identity = ReferenceIdentity.from_seed(SEED)
     different_seed = bytes.fromhex("fedcba9876543210" * 4)
     different_identity = ReferenceIdentity.from_seed(different_seed)
+    kid_iid = _upstream_addr_for_key(identity.pubkey)[8:]
+    payload_iid = _upstream_addr_for_key(different_identity.pubkey)[8:]
 
     # Build with different_identity's IID in payload but sign with identity
     protected = _build_protected_header()
-    unprotected = _build_unprotected_header(identity.iid)
+    unprotected = _build_unprotected_header(kid_iid)
     # Payload claims to be from different_identity
     payload = _build_payload(
         CAP_BIT_EGRESS,
@@ -224,7 +276,7 @@ def _different_signer_vector() -> dict[str, object]:
         0,
         1735689600,
         1,
-        different_identity.iid,  # Mismatched!
+        payload_iid,  # Mismatched!
     )
 
     sig_structure = _build_sig_structure(protected, payload)
@@ -238,8 +290,8 @@ def _different_signer_vector() -> dict[str, object]:
         "coverage": "capability_announcement_validation",
         "signing_seed": SEED.hex(),
         "public_key": identity.pubkey.hex(),
-        "kid_iid": identity.iid.hex(),
-        "payload_iid": different_identity.iid.hex(),
+        "kid_iid": kid_iid.hex(),
+        "payload_iid": payload_iid.hex(),
         "protected_header": protected.hex(),
         "payload_cbor": payload.hex(),
         "sig_structure": sig_structure.hex(),
@@ -275,6 +327,11 @@ def document() -> dict[str, object]:
                 "python3 test/vectors/generate_capability_announcements.py"
             ),
             "cross_check": "independent PyNaCl-backed reference_schnorr48.py",
+            "announcer_iid": (
+                "low 8 bytes of upstream yggdrasil-go AddrForKey(pubkey); "
+                "generator reimplementation anchored at runtime to the pinned "
+                "upstream_addr_for_key vector in yggdrasil_address.json"
+            ),
         },
         "constants": {
             "algorithm": {

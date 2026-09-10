@@ -600,6 +600,17 @@ impl<R: Radio> SecureStack<R> {
         self.stack.local_public_key()
     }
 
+    /// Get the local link-layer IID (SHA-512 of the local public key).
+    ///
+    /// This is the same identity plane `iid_from_pubkey_bytes` produces for
+    /// peers, so it is the correct value whenever a node's own IID must be
+    /// compared against a peer-derived IID (e.g. GCP OSCORE sender/recipient
+    /// IDs). It is NOT the low half of the routable /128 (AddrForKey), whose
+    /// low 8 bytes are bit-packed key material.
+    pub fn local_iid(&self) -> [u8; 8] {
+        lichen_core::addr::iid_from_pubkey_bytes(self.local_public_key().as_bytes())
+    }
+
     /// Send an OSCORE-protected GET after atomically reserving its sender sequence.
     pub async fn send_secure_get<S: ContextStateStore>(
         &mut self,
@@ -1136,7 +1147,16 @@ impl<R: Radio> SecureStack<R> {
     ) -> Result<SecureResponse, SecureError> {
         let source = received.destination();
         let destination = received.source();
-        let mut l2_destination: [u8; 8] = destination.0[8..].try_into().unwrap();
+        // The response's IPv6 source is the peer's routable 02xx address,
+        // which post-AddrForKey embeds no IID. The L2 destination for the
+        // confirmable-ACK retransmit is the peer's link-authenticated IID
+        // (validated against the correlation in decrypt_response_to), not
+        // the low 64 bits of the 02xx source.
+        // Merge resolution (HEAD vs beads-worker-2): HEAD's link-local branch
+        // is subsumed — a correlation-validated sender's link-local IID equals
+        // its link-authenticated sender_iid, so the unconditional form covers
+        // both cases without trusting the unvalidated address field (i72x.2).
+        let mut l2_destination: [u8; 8] = received.sender_iid;
         l2_destination[0] ^= 0x02;
         self.decrypt_response_to(
             Some(SecureRoute {
@@ -1284,7 +1304,14 @@ impl<R: Radio> SecureStack<R> {
     ) -> Result<SecureObserveResponse, SecureError> {
         let source = received.destination();
         let destination = received.source();
-        let mut l2_destination: [u8; 8] = destination.0[8..].try_into().unwrap();
+        // As in decrypt_response: the response's 02xx source embeds no IID
+        // post-AddrForKey, so the L2 destination is derived from the peer's
+        // link-authenticated sender_iid, not the low 64 bits of the source.
+        // Merge resolution (HEAD vs beads-worker-2): same subsumption — the
+        // validated sender's link-local IID equals sender_iid, so HEAD's
+        // link-local branch loses no honest case and only trusted an
+        // unvalidated address field (i72x.2).
+        let mut l2_destination: [u8; 8] = received.sender_iid;
         l2_destination[0] ^= 0x02;
         self.decrypt_observe_response_to(
             Some(SecureRoute {
@@ -1930,7 +1957,11 @@ pub(crate) fn secure_datagram_from_received(
             oscore_option = Some(option.value);
         }
     }
-    let sender_iid: [u8; 8] = header.src.0[8..].try_into().unwrap();
+    // The sender IID is the link-authenticated identity from the signed
+    // frame. Slicing it out of the source address only ever worked because
+    // the rejected native profile embedded the IID in the routable address;
+    // upstream AddrForKey does not (i72x.2).
+    let sender_iid: [u8; 8] = frame.sender_iid;
     if empty_ack {
         return Ok(Some(ReceivedSecureDatagram {
             coap: coap.to_vec(),

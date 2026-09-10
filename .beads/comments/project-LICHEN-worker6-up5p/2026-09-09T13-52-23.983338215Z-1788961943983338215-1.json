@@ -1,0 +1,7 @@
+{
+  "id": "1788961943983338215-1",
+  "issue_id": "project-LICHEN-worker6-up5p",
+  "author": "Mark Atwood",
+  "text": "More evidence (worker7, kd0p round, 2026-09-09): python/tests/coap/test_edhoc_transport.py::TestEdhocContextDerivation::test_derived_contexts_have_matching_keys FAILED during a full-suite pytest run (12715 passed, 1 failed) while a cargo build ran concurrently on the same host; passes solo immediately after (4/4). Confirms the 'under load' flakiness pattern for edhoc_transport.",
+  "created_at": "2026-09-09T13:52:23.983338215Z"
+}

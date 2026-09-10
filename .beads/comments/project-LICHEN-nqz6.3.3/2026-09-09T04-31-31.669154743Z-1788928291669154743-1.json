@@ -1,7 +1,0 @@
-{
-  "id": "1788928291669154743-1",
-  "issue_id": "project-LICHEN-nqz6.3.3",
-  "author": "Mark Atwood",
-  "text": "Edge-case review finding for your audit scope (spec/06-security.md:765, exposed by the 1k3i reconciliation of §8.5/§8.7): §8.11 route hash input is 'the 8-byte IID from the transit node's address', computed by root and egress from the Source-Route Header. Under upstream AddrForKey the routable /128 is bit-packed inverted key material and the SHA-512 IID is NOT recoverable from the address (the old IID==low-64-bits invariant is gone), so root and egress cannot compute matching route_hash values — tunnel authorization fails closed on every packet. Redefine the route-hash input in terms of SRH-visible bytes (e.g., the lower 8 bytes of each hop's 02xx address, or the full 16-byte addresses) when auditing §8.11.",
-  "created_at": "2026-09-09T04:31:31.669154743Z"
-}

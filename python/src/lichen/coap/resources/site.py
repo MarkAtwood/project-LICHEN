@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any, Protocol
 
 import aiocoap
@@ -55,6 +56,7 @@ from lichen.coap.resources.senml import (
     SenMLSensorsResource,
 )
 from lichen.coap.transport import EndpointPolicy
+from lichen.crypto.trust_anchors import TrustAnchorStore
 from lichen.gateway.tunnel_auth import TunnelAuthorizationTable
 from lichen.link.tx_queue import Priority
 
@@ -167,6 +169,8 @@ def build_site(
     radio_config_allow_writes: bool = False,
     congestion_provider: CongestionProvider | None = None,
     tunnel_authorizations: TunnelAuthorizationTable | None = None,
+    trust_anchor_store: TrustAnchorStore | None = None,
+    trust_anchor_authorize: Callable[[str], bool] | None = None,
 ) -> resource.Site:
     """Build an aiocoap Site exposing the LICHEN node resources.
 
@@ -265,6 +269,13 @@ def build_site(
         from lichen.coap.resources.tunnel_auth import TUNNEL_AUTH_PATH, TunnelAuthResource
 
         site.add_resource(list(TUNNEL_AUTH_PATH), TunnelAuthResource(tunnel_authorizations))
+    if trust_anchor_store is not None:
+        from lichen.coap.resources.trust_anchors import TrustAnchorsResource
+
+        site.add_resource(
+            [".well-known", "trust-anchors"],
+            TrustAnchorsResource(trust_anchor_store, trust_anchor_authorize),
+        )
 
     if deaddrop_resource is not None:
         site.add_resource(["deaddrop"], deaddrop_resource)

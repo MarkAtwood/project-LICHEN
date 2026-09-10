@@ -92,15 +92,16 @@ _ROOT_DIO_ERROR_MAP = {
 }
 
 
-@pytest.mark.xfail(
-    reason=(
-        "root_dio_signature.json embeds REJECTED SHA-512 native-profile DODAGIDs; "
-        "the Python derivation now derives upstream AddrForKey (i72x, 7pt2), so the "
-        "stale corpus mismatches until i72x.6 regenerates it with upstream DODAGIDs. "
-        "strict=False: xpass signals the corpus has been regenerated."
-    ),
-    strict=False,
-)
+# The root_dio_signature.json corpus was regenerated with upstream
+# AddrForKey DODAGIDs by i72x.6.a (reference_schnorr48.upstream_addr_for_key,
+# validated against the pinned upstream anchor and live yggdrasil-go); the
+# former xfail marker on this class ("xpass signals the corpus has been
+# regenerated") was retired when that landed. Merge resolution: HEAD's
+# _corpus_dodagid_is_native_profile staleness probe and its conditional
+# xfails (added for the not-yet-regenerated corpus) were dropped, because
+# every dodag_id in the corpus now equals upstream AddrForKey(public_key) --
+# verified against an independent AddrForKey reimplementation -- so the probe
+# would be dead code guarding a migration window that is closed.
 class TestRootDioSignatureVectorFile:
     @pytest.mark.parametrize("name,vector", _root_dio_cases())
     def test_decoded_payload_fields_match_vector(self, name: str, vector: dict) -> None:

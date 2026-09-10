@@ -1,7 +1,0 @@
-{
-  "id": "1788937161714700621-1",
-  "issue_id": "project-LICHEN-worker6-2z8e",
-  "author": "Mark Atwood",
-  "text": "Concrete breakage evidence from worker2 (2026-09-09, while landing project-LICHEN-worker6-nugy): tests/coap_msg_sent, tests/coap_msg_ack and tests/coap_waypoints define test-local coap_oscore_authorize_mutating_result stubs with the OLD 13-arg signature (plain_buf, plain_buf_len, payload_out, payload_len_out, ctx_out, piv_out, piv_len_out, is_protected) - since the authorize-gate caller migration (335a965083) moved the real declaration to the 6-arg (resource, request, addr, addr_len, expected_method, struct coap_oscore_unprotect_result*) form, these three suites fail to build with 'conflicting types for coap_oscore_authorize_mutating_result' (coap_msg_ack/src/main.c:86, coap_msg_sent/src/main.c:80, and waypoints equivalent). Verified at HEAD without the nugy diff (git stash -\u003e rebuild -\u003e same error), so pre-existing. The 6-arg form also removes the local-result-copy dance the old stubs replicate (result now lives in the caller's frame), so the stub bodies simplify to a pass-through of coap_oscore_unprotect_resource_request. Adopting the shared helper (this bead) fixes all three; until then those suites are unbuildable on Zephyr v4.1.0 native_sim/native/64.",
-  "created_at": "2026-09-09T06:59:21.714700621Z"
-}

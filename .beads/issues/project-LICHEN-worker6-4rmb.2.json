@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-4rmb.2",
+  "title": "Deliver candid investment assessment",
+  "description": "Synthesize evidence into a blunt but calibrated assessment of LICHEN as an engineering research effort and as a product; recommend bounded validation gates before further scale spending.",
+  "acceptance_criteria": "User receives an explicit verdict, strongest reasons for and against, limitations of available cost and field data, and falsifiable next-spend criteria.",
+  "notes": "Synthesis: Core IPv6/SCHC/CoAP low-rate mesh premise is technically credible; real bench and secure software integration are valuable. Current evidence supports a prototype, not validated dense/mobile/commercial deployment. Main risk is breadth and integration/review churn ahead of a repeatable production-configured vertical slice. Idealized city simulation assumes hop success and omits duty gating; phone chat uses timer-generated delivery state; CCP receiver-aware wire contract is gated, not deployed. Account-wide usage rose 1658.26 USD over about 24h, without project attribution, so exact waste cannot be quantified. A concrete waste-alarm baseline defect is tracked separately as lh2z; budget policy and fleet state left unchanged. Standards claims overreach custom Schnorr/link/EDHOC profile; current Meshtastic official docs distinguish authenticated modern DMs from unauthenticated channel traffic. Gateway service design at 15/75 USD per gateway-month needs demand/support-cost validation, not just infrastructure estimates. Recommendation: freeze breadth/volume purchase, fixed spend/time budget, existing hardware forced multi-hop secure real-client slice then 10-20-node day-long trial with declared load, delivery/latency/energy/recovery metrics and equivalent competitor baseline; require outside users and willingness to pay before commercial scale. No code, tests, hardware or fleet operations performed.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T19:24:25.327042755Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T19:38:26.630430685Z",
+  "started_at": "2026-09-09T19:37:19.267711761Z",
+  "closed_at": "2026-09-09T19:38:26.630430685Z",
+  "close_reason": "Evidence synthesis complete: explicit technical/product/spending verdict, measured-versus-planned distinctions, financial attribution limits, and falsifiable next-spend gates prepared for final response.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-4rmb.2",
+      "depends_on_id": "project-LICHEN-worker6-4rmb",
+      "type": "parent-child",
+      "created_at": "2026-09-09T19:24:25.429790992Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

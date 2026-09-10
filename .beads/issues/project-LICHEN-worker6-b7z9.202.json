@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.202",
+  "title": "[spec-gap][R-GATT-003] SenML canonical-unit conversion (K.5) absent: no mmHg-to-Pa, F-to-Cel, lbs-to-kg, mg/dL-to-kg/L, mph-to-m/s converters in any stack",
+  "description": "Requirement (K.5 MUST): Gateways MUST convert to SenML canonical units before transmission, per the 10-row conversion table (mmHg x133.322 -\u003e Pa; (F-32)x5/9 -\u003e Cel; mg/dL x1e-5 -\u003e kg/L; lbs x0.453592 -\u003e kg; feet x0.3048 -\u003e m; mph x0.44704 -\u003e m/s; rpm/bpm -\u003e /min; centidegrees /100 -\u003e deg; 1/1024 deg /1024 -\u003e deg). Classification: not-implemented. Evidence: rg '133\\.322|0\\.453592|0\\.3048|0\\.44704|mmHg|centidegree' across rust/, lichen/, python/src/, firmware/, c/ finds only unrelated compact_cot course_centidegrees (CoT PLI, no GATT relation); python/src/lichen/senml/ and rust/lichen-senml/src/ have no conversion module (units pass through as opaque strings, ipso.py:219 wire.rs Record.unit); C lichen/subsys/lichen/senml/ likewise; no BLE GATT gateway exists to host the conversion (umbrella bead for the relay feature filed separately). Suggested placement: a small unit-conversion module in lichen-senml (Rust) / lichen.senml (Python) / lichen/subsys/lichen/senml (C) with a GATT-unit-\u003eSenML-unit table mirroring K.5, plus test vectors in test/vectors/ (hand-derived, offline).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T01:25:46.011367017Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T01:25:46.011367017Z",
+  "labels": [
+    "lichen-senml",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.202",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-10T01:25:46.146930522Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

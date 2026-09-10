@@ -26,6 +26,11 @@ if TYPE_CHECKING:
     pass
 
 
+def _announcer_iid_from_pubkey(pubkey: bytes) -> bytes:
+    """Return the link-local/kid IID, independent of the routable address."""
+    return _pubkey_to_iid(pubkey)
+
+
 class Capability(IntFlag):
     """Capability bits per spec section 8.12."""
 

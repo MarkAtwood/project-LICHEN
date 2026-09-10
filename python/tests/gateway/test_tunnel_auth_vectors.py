@@ -72,7 +72,7 @@ def _state(
     identity_items = _by_name(document["identities"])
     identities = {name: _identity(item) for name, item in identity_items.items()}
     table = TunnelAuthorizationTable(
-        egress_iid=identities["egress"].iid,
+        egress_pubkey=identities["egress"].pubkey,
         root_iid=identities[active_root].iid,
         root_pubkey=identities[active_root].pubkey,
     )

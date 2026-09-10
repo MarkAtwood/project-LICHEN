@@ -1,7 +1,0 @@
-{
-  "id": "1788935122777498029-1",
-  "issue_id": "project-LICHEN-worker6-yjg6",
-  "author": "Mark Atwood",
-  "text": "i72x decomposition note: this existing bead IS the Python slice of project-LICHEN-worker6-i72x (no twin created). Two updates since you were written: (1) q6ko.1/q6ko.2 (commits 7b5196b8b9+ef92c85fe7 on beads-worker-2, UNMERGED at time of writing) already quarantined the native vectors to test/vectors/legacy/ and rewrote python/tests/crypto/test_yggdrasil_address_vectors.py - so the 'regenerate test/vectors/yggdrasil_address.json' step here is obsolete; do not touch that corpus. (2) worker-2's branch also touched python/src/lichen/crypto/identity.py (docstring) and python/tests/test_vectors.py - wait for that branch to merge to main before starting, then flip the pinned migration-gap assertions to byte-equality per q6ko.2's close note. Algorithm source of truth: yggdrasil-go@422836ee src/address/address.go AddrForKey (invert; addr[1]=leading-1 count; skip first 0; pack whole bytes, discard trailing partial byte; no hashing). _pubkey_to_iid stays SHA-512 (link-local IID unchanged per settled decision).",
-  "created_at": "2026-09-09T06:25:22.777498029Z"
-}

@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.121.4",
+  "title": "Rust SOS: add per-origin monotonic seq gate + AddrForKey origin addr on RX/TX",
+  "description": "Rust slice of b7z9.121 (spec 18.4.1). Rust lichen-node SOS RX path has NO per-origin monotonic Origin Sequence gate (C gate exists but unwired, Python has one) - add last-seen-per-origin tracking in the SOS RX handler and reject non-advancing sequences. Also synthesize origin IPv6 via AddrForKey(pubkey) (lichen-core addr.rs) on both TX (sign) and RX (verify), not any 0200::IID synthesis. Rust is the only stack with a real pinned transcript digest (sos_origin.rs:160-173) - extend that oracle to cover the AddrForKey origin address and the seq gate. Cross-stack wire compat: coordinate with C/Python address slices.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T02:30:25.118708128Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T03:03:58.869848205Z",
+  "labels": [
+    "rust",
+    "apps",
+    "spec-gap",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.121.4",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.121",
+      "type": "parent-child",
+      "created_at": "2026-09-10T02:30:25.263772974Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

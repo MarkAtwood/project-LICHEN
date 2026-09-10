@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.190",
+  "title": "DIS storm protection absent: no 1-per-10s rate limit; C windowing interval caller-set, Rust/Python have none (draft 6.4, R-RPL-021)",
+  "description": "Spec: draft-lichen-rpl-lora-00 6.4 — 'Rate limit DIS transmission (max 1 per 10 seconds); Ignore rapid DIS from same source'. Appendix-rpl sweep R-RPL-021, not-implemented (the specific contract), confidence high.\nEvidence: the 10 s constant appears in no stack. C has generic receiver-side windows (lichen/subsys/lichen/rpl/rpl_dis.c:107-142 — multicast/unicast not_before, COALESCED/RATE_LIMITED outcomes per include/lichen/rpl_dis.h:26-34) but the interval is caller-configured response_interval_ms and no production caller sets 10 000 (test uses 4000 ms, lichen/tests/rpl_dis/main.c:42). Rust handle_authenticated_dis (lichen-rpl/src/dis.rs) has no rate limiting (tests pass 10_000 only as a timestamp); node TX path rpl_stack/transmit.rs:135-157 unthrottled. Python rpl/dis.py:60-108 none.\nSuggested placement: define the rate-limit constant (10 s) in constants.toml [rpl] + all three stacks; C: default response_interval_ms to 10000; Rust/Python: add receiver-side coalescing mirroring the C outcomes.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T01:07:03.342811779Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T01:07:03.342811779Z",
+  "labels": [
+    "rpl",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.190",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-10T01:07:03.487254092Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

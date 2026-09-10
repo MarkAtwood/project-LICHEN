@@ -1,0 +1,502 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+"""Node capability re-announcement on RPL root change (spec 8.12, bead 99sg.2).
+
+After DIO processing records a DODAGID membership transition, the node POSTs
+a COSE_Sign1 capability announcement to the new root's
+/.well-known/capability-announce over the SCHC/UDP/CoAP mesh transport.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from ipaddress import IPv6Address
+
+import pytest
+from aiocoap import POST, Message
+
+from lichen.crypto.capability_announcements import (
+    Capability,
+    decode_cose_sign1_announcement,
+    verify_capability_announcement,
+)
+from lichen.crypto.identity import Identity, PeerIdentity
+from lichen.ipv6.icmpv6 import Icmpv6Message
+from lichen.ipv6.packet import IPv6Header, IPv6Packet, NextHeader
+from lichen.ipv6.udp import UdpDatagram
+from lichen.l2_payload import wrap_schc_payload
+from lichen.link.frames import RxFrame
+from lichen.node import (
+    CAPABILITY_ANNOUNCE_MAX_ATTEMPTS,
+    MAX_CAPABILITY_BITMASK,
+    Node,
+    NodeConfig,
+)
+from lichen.rpl.dodag import INFINITE_RANK
+from lichen.rpl.messages import DIO, RPL_ICMPV6_TYPE, RplCode
+from lichen.schc.fragment import TILE_SIZE, Fragment
+from lichen.schc.headers import compress_packet
+from lichen.schc.reassembly import ReceiverResult
+
+IDENTITY = Identity.from_seed(bytes(range(32)))
+PEER = Identity.from_seed(bytes(range(32, 64)))
+DODAG_A = "0200::1"
+DODAG_B = "0200::99"
+P1 = IPv6Address("fe80::1")
+
+
+class _CaptureRadio:
+    """Minimal radio: never receives, accepts every transmit."""
+
+    async def receive(self, timeout_ms: int) -> None:
+        return None
+
+    async def transmit(self, payload: bytes) -> bool:
+        return True
+
+
+def _node(*, capabilities: int = 1) -> Node:
+    return Node(
+        identity=IDENTITY,
+        radio=_CaptureRadio(),
+        config=NodeConfig(
+            rpl_instance_id=0,
+            rpl_dodag_id=IPv6Address(DODAG_A),
+            rpl_dodag_version=1,
+            rpl_dio_expected_role="root",
+            node_capabilities=capabilities,
+        ),
+    )
+
+
+def _dio(dodag_id: str, rank: int = 256, version: int = 1) -> DIO:
+    return DIO(rpl_instance_id=0, version=version, rank=rank, dtsn=0, dodag_id=dodag_id)
+
+
+def _verified_rx(payload: bytes, peer: PeerIdentity) -> RxFrame:
+    """Hand-issue a test RxFrame (mirrors test_node._verified_rx)."""
+    value = object.__new__(RxFrame)
+    object.__setattr__(value, "sender", peer)
+    object.__setattr__(value, "rssi_dbm", -90)
+    object.__setattr__(value, "snr_db", 4)
+    object.__setattr__(value, "_authenticated_payload", payload)
+    object.__setattr__(value, "_authenticated_sender_pubkey", peer.pubkey)
+    return value
+
+
+def _dio_schc_payload(dodag_id: str) -> bytes:
+    dio = _dio(dodag_id, rank=512)
+    source = IPv6Address(IPv6Address("fe80::").packed[:8] + PEER.iid)
+    destination = IPv6Address("ff02::1a")
+    icmp = Icmpv6Message(RPL_ICMPV6_TYPE, int(RplCode.DIO), dio.to_bytes()).to_bytes(
+        source, destination
+    )
+    raw = (
+        IPv6Header(
+            src_addr=source,
+            dst_addr=destination,
+            next_header=NextHeader.ICMPV6,
+            payload_length=len(icmp),
+            hop_limit=255,
+        ).to_bytes()
+        + icmp
+    )
+    return wrap_schc_payload(compress_packet(raw))
+
+
+def _capture_send(node: Node, monkeypatch: pytest.MonkeyPatch) -> list[bytes]:
+    sent: list[bytes] = []
+
+    async def fake_send(ipv6_bytes: bytes) -> bool:
+        sent.append(ipv6_bytes)
+        return True
+
+    monkeypatch.setattr(node, "send", fake_send)
+    return sent
+
+
+def _decode_post(datagram: bytes, expected_dst: IPv6Address) -> Message:
+    packet = IPv6Packet.from_bytes(datagram, strict=True)
+    assert packet.header.dst_addr == expected_dst
+    udp = UdpDatagram.from_bytes(packet.payload)
+    assert udp.dst_port == 5683
+    message = Message.decode(udp.payload)
+    assert message.code == POST
+    assert tuple(message.opt.uri_path) == (".well-known", "capability-announce")
+    return message
+
+
+def _assert_valid_announcement(message: Message, *, capabilities: int, seq: int, now: int) -> None:
+    announcement = decode_cose_sign1_announcement(message.payload)
+    # COSE structural checks (alg -65537, kid == announcer_iid) run in decode.
+    assert announcement.payload.announcer_iid == IDENTITY.iid
+    assert announcement.payload.capabilities == capabilities
+    assert announcement.payload.seq == seq
+    valid, error = verify_capability_announcement(announcement, IDENTITY.pubkey, current_time=now)
+    assert valid, error
+
+
+@pytest.mark.asyncio
+async def test_root_change_posts_valid_cose_announcement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    node = _node()
+    sent = _capture_send(node, monkeypatch)
+    now = 1_800_000_000
+    monkeypatch.setattr("time.time", lambda: now)
+
+    assert node.dodag is not None
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    assert len(sent) == 1
+    message = _decode_post(sent[0], IPv6Address(DODAG_A))
+    _assert_valid_announcement(message, capabilities=1, seq=1, now=now)
+
+    # Root re-election: poison evicts the parent, then a foreign DODAGID joins.
+    node.dodag.process_dio(_dio(DODAG_A, rank=INFINITE_RANK), P1, link_etx=1.0)
+    node.dodag.process_dio(_dio(DODAG_B), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    assert len(sent) == 2
+    message = _decode_post(sent[1], IPv6Address(DODAG_B))
+    # The in-memory seq keeps climbing: a fresh root accepts any seq, and a
+    # still-cached older root never sees a rollback.
+    _assert_valid_announcement(message, capabilities=1, seq=2, now=now)
+
+
+@pytest.mark.asyncio
+async def test_no_root_change_sends_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    node = _node()
+    sent = _capture_send(node, monkeypatch)
+    await node._reannounce_capabilities_to_new_root()
+    assert sent == []
+
+
+@pytest.mark.asyncio
+async def test_zero_capabilities_drains_but_stays_silent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    node = _node(capabilities=0)
+    sent = _capture_send(node, monkeypatch)
+    assert node.dodag is not None
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    assert sent == []
+    assert node.dodag.take_root_changes() == []  # drained, not leaked
+
+
+@pytest.mark.asyncio
+async def test_dio_ingress_wiring_triggers_reannounce(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """_process_received drains root changes after an admitted DIO."""
+    node = _node()
+    sent = _capture_send(node, monkeypatch)
+    assert node.dodag is not None
+
+    def admit_via_real_dodag(
+        _link: object, _rx: RxFrame, *, expected_role: str, link_etx: float = 1.0
+    ) -> None:
+        # Test seam: the link-layer authenticated-DIO receipt is covered by
+        # tests/rpl/test_authenticated_dio_security.py; here the real
+        # DodagState admission produces the JOINED transition.
+        assert expected_role == "root"
+        node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=link_etx)
+
+    monkeypatch.setattr(node.dodag, "process_authenticated_dio", admit_via_real_dodag)
+    peer = PeerIdentity.from_pubkey(PEER.pubkey)
+    await node._process_received(_verified_rx(_dio_schc_payload(DODAG_A), peer))
+
+    assert len(sent) == 1
+    message = _decode_post(sent[0], IPv6Address(DODAG_A))
+    assert message.code == POST
+
+
+@pytest.mark.asyncio
+async def test_fragmented_dio_ingress_wiring_triggers_reannounce(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """bead lcf4: the fragment-reassembly DIO path also drains root changes.
+
+    Mirrors the unfragmented wiring test but enters through the
+    accept_authenticated_schc_fragment_dio -> process_authenticated_dio_evidence
+    branch (node.py fragment path).
+    """
+    node = _node()
+    sent = _capture_send(node, monkeypatch)
+    assert node.dodag is not None
+    peer = PeerIdentity.from_pubkey(PEER.pubkey)
+    evidence = object()
+
+    monkeypatch.setattr(node.link, "accept_authenticated_schc_sender_control", lambda _rx: None)
+    monkeypatch.setattr(
+        node.link,
+        "accept_authenticated_schc_fragment_dio",
+        lambda *_args, **_kwargs: (
+            ReceiverResult(reassembled=b"compressed-dio"),
+            bytes.fromhex("6000000000003b40") + bytes(32),
+            evidence,
+        ),
+    )
+
+    def admit_via_real_dodag(
+        _link: object, authenticated: object, *, expected_role: str, link_etx: float = 1.0
+    ) -> None:
+        assert authenticated is evidence
+        assert expected_role == "root"
+        node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=link_etx)
+
+    monkeypatch.setattr(node.dodag, "process_authenticated_dio_evidence", admit_via_real_dodag)
+
+    fragment = Fragment(0x78, 0, 62, bytes(TILE_SIZE)).to_bytes()
+    await node._process_received(_verified_rx(fragment, peer))
+
+    assert len(sent) == 1
+    message = _decode_post(sent[0], IPv6Address(DODAG_A))
+    assert message.code == POST
+
+
+def test_node_capabilities_bitmask_validation() -> None:
+    for valid in range(MAX_CAPABILITY_BITMASK + 1):
+        _node(capabilities=valid)  # must not raise
+    for invalid in (-1, MAX_CAPABILITY_BITMASK + 1, 0x80, True, 1.5, "1"):
+        with pytest.raises((ValueError, TypeError)):
+            _node(capabilities=invalid)  # type: ignore[arg-type]
+
+
+def test_capability_enum_matches_config_mask() -> None:
+    assert int(Capability.EGRESS | Capability.PREFIX_DELEGATION) == MAX_CAPABILITY_BITMASK
+
+
+@pytest.mark.asyncio
+async def test_root_flap_announces_only_to_current_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """bead v89j: a multi-transition drain announces once, to the newest root.
+
+    Flapping A -> B -> A before the drain leaves two ledger entries; only the
+    final membership (A) is the current root and may receive the announcement.
+    """
+    node = _node()
+    sent = _capture_send(node, monkeypatch)
+    assert node.dodag is not None
+    # Poison -> foreign B -> poison -> back to A: two transitions queued.
+    node.dodag.process_dio(_dio(DODAG_A, rank=INFINITE_RANK), P1, link_etx=1.0)
+    node.dodag.process_dio(_dio(DODAG_B), P1, link_etx=1.0)
+    node.dodag.process_dio(_dio(DODAG_B, rank=INFINITE_RANK), P1, link_etx=1.0)
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    assert len(sent) == 1
+    message = _decode_post(sent[0], IPv6Address(DODAG_A))
+    assert message.code == POST
+
+
+def test_node_capabilities_accepts_capability_intflag() -> None:
+    """bead rawl: the config knob accepts the canonical Capability IntFlag."""
+    node = _node(capabilities=int(Capability.EGRESS | Capability.PREFIX_DELEGATION))
+    assert node.config.node_capabilities == 0b11
+    # IntFlag instances themselves must pass validation unchanged.
+    node2 = Node(
+        identity=IDENTITY,
+        radio=_CaptureRadio(),
+        config=NodeConfig(
+            rpl_instance_id=0,
+            rpl_dodag_id=IPv6Address(DODAG_A),
+            rpl_dodag_version=1,
+            rpl_dio_expected_role="root",
+            node_capabilities=Capability.EGRESS,
+        ),
+    )
+    assert node2.config.node_capabilities == Capability.EGRESS
+
+
+@pytest.mark.asyncio
+async def test_send_exception_is_contained_and_logged(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """bead 5e79: a send failure must not escape the receive loop."""
+    node = _node()
+    assert node.dodag is not None
+
+    async def exploding_send(_ipv6_bytes: bytes) -> bool:
+        raise RuntimeError("link layer exploded")
+
+    monkeypatch.setattr(node, "send", exploding_send)
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    with caplog.at_level("ERROR", logger="lichen.node"):
+        await node._reannounce_capabilities_to_new_root()  # must not raise
+    assert "capability re-announce to new root" in caplog.text
+    assert node.dodag.take_root_changes() == []  # still drained
+    # The failed send scheduled a retry on the real delay; cancel it so the
+    # pending task does not outlive the test's event loop.
+    await node._cleanup_started(adapter=False, scheduler=False)
+
+
+def _instant_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make retry delays instant while preserving a real await point."""
+    real_sleep = asyncio.sleep
+
+    async def fake_sleep(_delay: float) -> None:
+        await real_sleep(0)
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+
+async def _drain_retries(node: Node) -> None:
+    tasks = tuple(node._capability_retry_tasks)
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_failed_send_retries_and_recovers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """bead 2kem: a lost first datagram is re-sent by the bounded retry."""
+    node = _node()
+    _instant_sleep(monkeypatch)
+    now = 1_800_000_000
+    monkeypatch.setattr("time.time", lambda: now)
+    assert node.dodag is not None
+    calls = 0
+    sent: list[bytes] = []
+
+    async def flaky_send(ipv6_bytes: bytes) -> bool:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return False  # first datagram lost (routed to drop / jammed)
+        sent.append(ipv6_bytes)
+        return True
+
+    monkeypatch.setattr(node, "send", flaky_send)
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    assert calls == 1  # only the initial attempt so far
+    await _drain_retries(node)
+    assert calls == 2  # one retry delivered
+    assert len(sent) == 1
+    message = _decode_post(sent[0], IPv6Address(DODAG_A))
+    # Each attempt consumes a seq increment; the delivered retry carries seq 2.
+    _assert_valid_announcement(message, capabilities=1, seq=2, now=now)
+
+
+@pytest.mark.asyncio
+async def test_retry_abandons_after_max_attempts(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """bead 2kem: retries are bounded; a persistent failure is abandoned."""
+    node = _node()
+    _instant_sleep(monkeypatch)
+    assert node.dodag is not None
+    calls = 0
+
+    async def always_drop(_ipv6_bytes: bytes) -> bool:
+        nonlocal calls
+        calls += 1
+        return False
+
+    monkeypatch.setattr(node, "send", always_drop)
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    with caplog.at_level("WARNING", logger="lichen.node"):
+        await node._reannounce_capabilities_to_new_root()
+        await _drain_retries(node)
+    # Independent oracle for the bound (test-integrity rule): the exported
+    # constant documents the contract, but the suite must fail if it drifts.
+    assert CAPABILITY_ANNOUNCE_MAX_ATTEMPTS == 3
+    assert calls == 3
+    assert "abandoned" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_cleanup_cancels_pending_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """bead 2kem: stop() cleanup cancels a pending retry (real 5s delay)."""
+    node = _node()
+    assert node.dodag is not None
+
+    async def always_drop(_ipv6_bytes: bytes) -> bool:
+        return False
+
+    monkeypatch.setattr(node, "send", always_drop)
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    assert len(node._capability_retry_tasks) == 1  # sleeping on the real delay
+    await node._cleanup_started(adapter=False, scheduler=False)
+    await asyncio.sleep(0)  # let done callbacks run
+    assert all(t.done() for t in tuple(node._capability_retry_tasks))
+
+
+@pytest.mark.asyncio
+async def test_retry_aborts_when_target_root_goes_stale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """bead 2kem: a retry must not announce to a root the node has left."""
+    node = _node()
+    _instant_sleep(monkeypatch)
+    assert node.dodag is not None
+    calls = 0
+
+    async def always_drop(_ipv6_bytes: bytes) -> bool:
+        nonlocal calls
+        calls += 1
+        return False
+
+    monkeypatch.setattr(node, "send", always_drop)
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    assert calls == 1 and len(node._capability_retry_tasks) == 1
+    # Membership moves to B while the retry sleeps: target A is now stale.
+    node.dodag.process_dio(_dio(DODAG_A, rank=INFINITE_RANK), P1, link_etx=1.0)
+    node.dodag.process_dio(_dio(DODAG_B), P1, link_etx=1.0)
+    await _drain_retries(node)
+    assert calls == 1  # the retry aborted instead of re-sending to A
+
+
+@pytest.mark.asyncio
+async def test_new_retry_supersedes_pending_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """bead 2kem: at most one pending retry; a newer failure replaces it."""
+    node = _node()
+    _instant_sleep(monkeypatch)
+    assert node.dodag is not None
+    calls = 0
+
+    async def always_drop(_ipv6_bytes: bytes) -> bool:
+        nonlocal calls
+        calls += 1
+        return False
+
+    monkeypatch.setattr(node, "send", always_drop)
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    assert calls == 1 and len(node._capability_retry_tasks) == 1
+    # Second failure (root now B): the pending A retry is superseded.
+    node.dodag.process_dio(_dio(DODAG_A, rank=INFINITE_RANK), P1, link_etx=1.0)
+    node.dodag.process_dio(_dio(DODAG_B), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    assert calls == 2
+    assert len(node._capability_retry_tasks) == 1  # only the B retry
+    await _drain_retries(node)
+    # B's retry exhausts its remaining 2 attempts; A's never fires.
+    assert calls == 4
+
+
+@pytest.mark.asyncio
+async def test_retry_delays_are_jittered(monkeypatch: pytest.MonkeyPatch) -> None:
+    """bead 2kem: retries sleep uniform(delay/2, delay), not a fixed delay."""
+    node = _node()
+    assert node.dodag is not None
+    sleeps: list[float] = []
+    real_sleep = asyncio.sleep
+
+    async def recording_sleep(delay: float) -> None:
+        sleeps.append(delay)
+        await real_sleep(0)
+
+    monkeypatch.setattr(asyncio, "sleep", recording_sleep)
+    monkeypatch.setattr("lichen.node.random.uniform", lambda lo, hi: (lo + hi) / 2)
+
+    async def always_drop(_ipv6_bytes: bytes) -> bool:
+        return False
+
+    monkeypatch.setattr(node, "send", always_drop)
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    await _drain_retries(node)
+    assert sleeps == [3.75, 3.75]  # midpoint of [2.5, 5.0] for both retries

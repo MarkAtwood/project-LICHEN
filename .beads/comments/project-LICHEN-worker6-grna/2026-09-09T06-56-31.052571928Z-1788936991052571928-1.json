@@ -1,7 +1,0 @@
-{
-  "id": "1788936991052571928-1",
-  "issue_id": "project-LICHEN-worker6-grna",
-  "author": "Mark Atwood",
-  "text": "Evidence for Mark's subject-binding decision (beads-worker-6, 2026-09-09, current main): (1) spec/06-security.md §8.13 payload ALREADY has subject binding — CBOR key 1 'subject-iid' (line ~1043) and Verification step 5 'Verify subject-iid matches presenting node' (line ~1094). So the spec's CA-credential form decided subject binding already. (2) BUT §8.13.1 local-facts claim table (lines ~1139-1149) has NO subject claim, and python/src/lichen/gateway/local_facts.py implements local facts with a DIFFERENT payload shape: LocalFactClaims is a map of claim-name→value (lichen:relay etc.), NOT the §8.13 numbered map {1: subject-iid, 2: claim-type, ...} — and verify_local_fact(fact, gateway_pubkey) has no subject parameter, so a local fact is a bearer credential today. (3) The sibling delegation-token path binds DELEGATE (DELEGATOR_IID_MISMATCH / DELEGATE_MISMATCH hygiene at local_facts.py:355-360 for issuer binding). So the open decision is really: (a) add a subject claim to the §8.13.1 local-fact table + a subject param to verify_local_fact (align with §8.13 step 5), and (b) reconcile the local-fact payload shape with the §8.13 numbered payload map (or document them as distinct formats). Not claiming — this is Mark's call per the bead text.",
-  "created_at": "2026-09-09T06:56:31.052571928Z"
-}

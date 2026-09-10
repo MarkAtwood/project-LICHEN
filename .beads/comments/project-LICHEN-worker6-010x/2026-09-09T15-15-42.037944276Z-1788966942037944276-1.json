@@ -1,0 +1,7 @@
+{
+  "id": "1788966942037944276-1",
+  "issue_id": "project-LICHEN-worker6-010x",
+  "author": "Mark Atwood",
+  "text": "worker4: released unstarted — the parent production commit 8d6a00e161 (7ecb slice, GatewayCoordinator identity_iid) is NOT an ancestor of main/beads-worker-4; it lives only on unmerged beads-worker-6. The 26 test call sites cannot be wired until that commit merges. Work on beads-worker-6 or after its merge.",
+  "created_at": "2026-09-09T15:15:42.037944276Z"
+}

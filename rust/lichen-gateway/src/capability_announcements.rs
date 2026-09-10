@@ -239,7 +239,13 @@ impl CapabilityAnnouncement {
 ///
 /// The IID is the canonical SHA-512 derivation (i72x.2): upstream AddrForKey
 /// does not embed the IID, so it must not be sliced out of the routable
-/// address.
+/// address. Merge resolution: beads-worker-7's "low half of upstream
+/// AddrForKey" variant was rejected — spec/06-security.md §8.5 mandates the
+/// SHA-512 IID ("MUST be SHA-512"), §8.12 defines announcer_iid as that
+/// 8-byte IID, and the withdrawn "lower 64 bits == IID" binding
+/// (04-network.md §6.2; spec/decisions.jsonl upstream-yggdrasil-addressing)
+/// forbids slicing an IID out of AddrForKey bytes. The vector corpus
+/// announcer_iid is the SHA-512 IID (verified: project-LICHEN-worker6-kd0p).
 fn pubkey_to_iid(pubkey: &[u8; 32]) -> [u8; 8] {
     lichen_core::addr::iid_from_pubkey_bytes(pubkey)
 }

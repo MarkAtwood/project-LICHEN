@@ -224,7 +224,7 @@ def _validate_connection_id(value: object, name: str) -> bytes:
     if isinstance(value, int):
         if not -24 <= value <= 23:
             raise ValueError(f"{name} compact integer is outside -24..23")
-        return bytes([value if value >= 0 else value + 256])
+        return bytes([value if value >= 0 else 0x1F - value])
     if not isinstance(value, bytes):
         raise ValueError(f"{name} must be a byte string or compact integer")
     if len(value) > 7:

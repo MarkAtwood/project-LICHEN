@@ -5,13 +5,18 @@
 Per spec/decisions.jsonl ``upstream-yggdrasil-addressing``, a node's routable
 address MUST equal upstream Yggdrasil ``AddrForKey(Ed25519PublicKey)`` and a
 routed /64 subnet MUST equal upstream ``SubnetForKey`` in ``0300::/8``. The
-implementation under test IS the upstream algorithm; the single upstream
-yggdrasil-go anchor (``upstream_addr_for_key``) is the pinned external oracle,
-kept verbatim, and MUST match byte-for-byte.
+implementation under test IS the upstream algorithm; the corpus carries
+``upstream_addr_for_key`` derivation vectors plus the single upstream
+yggdrasil-go anchor (``upstream_addr_for_key``, kept verbatim), and all MUST
+match byte-for-byte.
 
 The former ``lichen_native_sha512`` profile is REJECTED; its vectors are
 quarantined in ``test/vectors/legacy/yggdrasil_address_native_sha512.json``
-and are NOT consumed here (the upstream AddrForKey migration has landed).
+and are NOT consumed here. (Merge note: the other side of this merge said the
+native fixtures still live in the corpus pending bead i72x.6; that is stale —
+the i72x.6 regeneration slice landed in commit 48c64007d1 on the incoming
+branch and neither parent's corpus contains native-profile vectors, so the
+quarantine wording is the factually correct one.)
 """
 
 from __future__ import annotations
@@ -35,6 +40,47 @@ GO_ANCHOR_ADDRESS = "0200848a604fbb7e438465db8db66895"
 GO_ANCHOR_IPV6 = "200:848a:604f:bb7e:4384:65db:8db6:6895"
 GO_ANCHOR_SUBNET = "0300848a604fbb7e"
 
+# Byte-exact upstream AddrForKey/SubnetForKey expectations, generated once by
+# running the upstream yggdrasil-go src/address package (@422836ee, the
+# independent oracle) over fixed keys and hardcoded here. NEVER derived from
+# the implementation under test. Degenerate cases are deliberate: the
+# all-zero key's inverted form is all 1 bits, so the leading-1 count wraps
+# to 0 (Go byte overflow) and no payload bits follow; the all-ones key's
+# inverted form begins with a 0 separator bit, leaving an all-zero payload.
+UPSTREAM_VECTORS = [
+    ("go_anchor", GO_ANCHOR_PUBKEY, GO_ANCHOR_ADDRESS, GO_ANCHOR_SUBNET),
+    (
+        "sha256_empty_as_key",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "0200389e777ace07c7d6ca08166ecd20",
+        "0300389e777ace07",
+    ),
+    (
+        "all_zero_key",
+        "00" * 32,
+        "02000000000000000000000000000000",
+        "0300000000000000",
+    ),
+    (
+        "all_ones_key",
+        "ff" * 32,
+        "02000000000000000000000000000000",
+        "0300000000000000",
+    ),
+    (
+        "rfc8032_test1_key",
+        "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        "0200514acffcfa9dea90556802586d37",
+        "0300514acffcfa9d",
+    ),
+    (
+        "lead_nine_ones_key",
+        "007f" + "ff" * 30,
+        "02090000000000000000000000000000",
+        "0309000000000000",
+    ),
+]
+
 
 def _document() -> dict:
     document = json.loads(VECTORS.read_text())
@@ -48,6 +94,14 @@ def _anchor() -> dict:
     return anchors[0]
 
 
+def _upstream_cases() -> list[tuple[str, dict]]:
+    return [
+        (v["name"], v)
+        for v in _document()["vectors"]
+        if v.get("profile") == "upstream_addr_for_key"
+    ]
+
+
 def _error_cases() -> list[tuple[str, dict]]:
     return [
         (v["name"], v) for v in _document()["vectors"] if v.get("expect_error") == "pubkey_length"
@@ -55,9 +109,15 @@ def _error_cases() -> list[tuple[str, dict]]:
 
 
 def test_corpus_shape() -> None:
-    """Live corpus holds the anchor + error cases; no rejected native vectors."""
+    """Live corpus: upstream derivation vectors + anchor + error cases only.
+
+    Guards both against regression to the original single-vector corpus and
+    against rejected native-profile vectors re-entering the live corpus.
+    """
     vectors = _document()["vectors"]
+    assert len(_upstream_cases()) >= 10
     assert len(_error_cases()) >= 2
+    assert len(vectors) == len(_upstream_cases()) + len(_error_cases()) + 1
     assert all(v.get("profile") != "lichen_native_sha512" for v in vectors), (
         "live corpus must not hold rejected native-profile vectors"
     )
@@ -71,48 +131,56 @@ def test_upstream_anchor_is_verbatim_go_reference() -> None:
     assert anchor["ipv6"] == GO_ANCHOR_IPV6
 
 
-def test_upstream_addr_for_key_byte_equality() -> None:
-    """yggdrasil_address MUST equal upstream AddrForKey byte-for-byte."""
+def test_upstream_anchor_byte_exact_through_production() -> None:
+    """Post-migration, production IS upstream AddrForKey: byte equality."""
     anchor = _anchor()
-    derived = yggdrasil_address(bytes.fromhex(anchor["public_key"]))
-    assert derived.packed.hex() == anchor["address"], (
-        "yggdrasil_address must equal upstream AddrForKey byte-for-byte"
-    )
+    public_key = bytes.fromhex(anchor["public_key"])
+    derived = yggdrasil_address(public_key)
+    assert derived.packed.hex() == anchor["address"]
     assert str(derived) == anchor["ipv6"]
-    assert derived.packed[0] == 0x02
+    assert subnet_for_key(public_key).hex() == GO_ANCHOR_SUBNET
 
 
-def test_upstream_subnet_for_key_byte_equality() -> None:
-    """subnet_for_key MUST equal upstream SubnetForKey byte-for-byte."""
-    anchor = _anchor()
-    pubkey = bytes.fromhex(anchor["public_key"])
-    subnet = subnet_for_key(pubkey)
-    assert subnet.hex() == GO_ANCHOR_SUBNET, (
-        "subnet_for_key must equal upstream SubnetForKey byte-for-byte"
-    )
-    # Subnet lives in 0300::/8 (prefix low bit set) and shares the
-    # leading-1 count byte with the address.
-    assert subnet[0] & 0x01 == 0x01
-    assert subnet[1] == yggdrasil_address(pubkey).packed[1]
+@pytest.mark.parametrize("name,vector", _upstream_cases())
+def test_upstream_vectors_byte_exact(name: str, vector: dict) -> None:
+    """Corpus derivation vectors pass byte-exact through production."""
+    public_key = bytes.fromhex(vector["public_key"])
+    derived = yggdrasil_address(public_key)
+    iid = _pubkey_to_iid(public_key)
+
+    assert derived.packed.hex() == vector["address"], name
+    assert str(derived) == vector["ipv6"], name
+    assert derived.packed[0] == 0x02, name
+
+    # The iid field is the link-local IID only; it is NOT the address tail.
+    assert iid.hex() == vector["iid"], name
+    assert iid[0] & 0x02 == 0, f"{name}: U/L bit must be clear in IID"
+    assert derived.packed[8:] != iid, f"{name}: rejected IID-embedding invariant"
 
 
-def test_degenerate_all_zero_key_matches_upstream_semantics() -> None:
-    """All-zero key -> inverted all-ones -> no separator -> empty payload.
+@pytest.mark.parametrize(
+    ("name", "public_key", "address", "subnet"),
+    UPSTREAM_VECTORS,
+    ids=[v[0] for v in UPSTREAM_VECTORS],
+)
+def test_upstream_addr_for_key_byte_exact(
+    name: str, public_key: str, address: str, subnet: str
+) -> None:
+    """Upstream-oracle vectors pass byte-exact through production."""
+    key_bytes = bytes.fromhex(public_key)
+    derived = yggdrasil_address(key_bytes)
+    assert derived.packed.hex() == address, name
+    assert derived.packed[0] == 0x02, name
+    assert subnet_for_key(key_bytes).hex() == subnet, name
+    assert subnet_for_key(key_bytes)[0] & 0x03 == 0x03, name
 
-    The leading-1 count wraps 256 -> 0 (Go byte overflow) and no payload bits
-    are appended, yielding 0200:: (0x02 followed by fifteen zero bytes).
-    """
-    derived = yggdrasil_address(bytes(32))
-    assert derived.packed == b"\x02" + bytes(15)
 
-
-def test_routable_address_does_not_embed_iid() -> None:
-    """The routable address carries no SHA-512 IID in its lower 64 bits."""
-    anchor = _anchor()
-    pubkey = bytes.fromhex(anchor["public_key"])
-    derived = yggdrasil_address(pubkey)
-    iid = _pubkey_to_iid(pubkey)
-    assert derived.packed[8:] != iid, "routable address must not embed the IID"
+def test_iid_is_link_local_only_not_embedded_in_primary() -> None:
+    """The SHA-512 IID survives unchanged but is NOT the address tail."""
+    public_key = bytes.fromhex(GO_ANCHOR_PUBKEY)
+    iid = _pubkey_to_iid(public_key)
+    assert len(iid) == 8 and iid[0] & 0x02 == 0
+    assert yggdrasil_address(public_key).packed[8:] != iid
 
 
 @pytest.mark.parametrize("name,vector", _error_cases())
@@ -121,3 +189,5 @@ def test_error_cases_rejected(name: str, vector: dict) -> None:
         yggdrasil_address(bytes.fromhex(vector["public_key"]))
     with pytest.raises(ValueError, match="pubkey must be 32 bytes"):
         _pubkey_to_iid(bytes.fromhex(vector["public_key"]))
+    with pytest.raises(ValueError, match="pubkey must be 32 bytes"):
+        subnet_for_key(bytes.fromhex(vector["public_key"]))

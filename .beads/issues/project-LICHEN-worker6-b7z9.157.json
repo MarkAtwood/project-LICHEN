@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.157",
+  "title": "[spec-gap][R-02AT-016] Drift correction never applied before slot calculation in any stack (spec 02a-tdma.md:55)",
+  "description": "Spec 02a-tdma.md:55: Nodes MUST apply [drift correction] before slot calculation. Classification: not-implemented. The correction math exists and is vector-pinned but has no production caller and no slot/TX-window computation consumes it. C: lichen_drift_ppm_compute/lichen_drift_correction_ms (lichen/subsys/lichen/link/drift_bound.c:140-161) test-only (lichen/tests/drift_bound vs ccp7_holdover.json); slot/TX-window math tdma.c:303-338 uses raw times. Rust: correction_ms (rust/lichen-link/src/tdma_clock.rs:25-27) no production caller (tests tdma_clock.rs:112-137, tests/tdma_clock_vectors.rs:105-106); tx_allowed tdma_clock.rs:69-80 applies none. Python: ccp7.correction_ms (python/src/lichen/timing/ccp7.py:28) no production caller; sim TDMAScheduler.is_tx_allowed (python/src/lichen/sim/tdma.py:94-117) does not correct; sim apply_drift (sim/tdma.py:119-124) feeds status display only (sim/api.py:1050). Suggested placement: apply beacon-arrival drift correction to the node time base (C time_sync.c/tdma.c, rust lichen-link tdma_clock consumers, py sim node clock) before slot-position computation and tx_allowed; add a vector consumer proving corrected vs uncorrected slot selection across the drift vectors (ccp_tdma.json drift_compensation, ccp_load_balancing.json drift_compensation_two_beacons). From spec-coverage sweep 2026-09-09 (docs/spec-coverage/02a-tdma.md R-02AT-016).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T23:30:38.22767358Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T23:30:38.22767358Z",
+  "labels": [
+    "tdma",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.157",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T23:30:38.342404818Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

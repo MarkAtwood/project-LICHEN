@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-fgmi",
+  "title": "sos_origin: gated-verify doc omits eviction-loses-replay-state consequence",
+  "description": "3x codereview on z3vn doc fix (security finding): rust/lichen-link/src/sos_origin.rs:214-219 — the reworded verify_sos_origin_gated doc accurately describes eviction but omits its security consequence: eviction discards the evicted origin's replay state, so once origin X is evicted, a captured validly-signed frame with a sequence LOWER than X's last pre-eviction accepted seq will be accepted again (no forgery needed; attacker/churn flooding \u003ecapacity distinct valid origins suffices). Anti-replay is guaranteed only while an origin remains tracked. Fix: add one clause stating this explicitly.",
+  "status": "in_progress",
+  "priority": 3,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T03:11:27.63869083Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T03:14:34.947250662Z",
+  "started_at": "2026-09-10T03:14:34.947250662Z",
+  "lease_expires_at": "2026-09-10T03:19:34.947250662Z",
+  "heartbeat_at": "2026-09-10T03:14:34.947250662Z",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-fgmi",
+      "depends_on_id": "project-LICHEN-worker6-z3vn",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T03:11:27.770509076Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

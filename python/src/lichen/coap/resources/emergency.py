@@ -22,6 +22,7 @@ from lichen.coap.sos_origin import (
 )
 from lichen.crypto.identity import _pubkey_to_iid
 from lichen.crypto.trust import TrustError
+from lichen.ipv6.addr import upstream_addr_for_key
 
 MAX_ROLLCALLS = 256
 MAX_ROLLCALL_TIMEOUT_S = 7 * 86400
@@ -35,6 +36,16 @@ SOS_BURST_MAX = 2  # Max messages per cooldown period ("Burst allowance: 2")
 # Fields carrying the origin-signature envelope; excluded from the signed
 # core alert dict (spec 18.4.1 signs only the alert payload).
 _SOS_ENVELOPE_FIELDS = frozenset({"pubkey", "sig"})
+
+
+def _origin_addr_for_key(pubkey: bytes) -> bytes:
+    """Origin transcript address: upstream AddrForKey (16 octets).
+
+    Spec 18.4.1 signs over "the originator's 16-octet primary 02xx address
+    preserved end to end", which per the settled upstream-yggdrasil-addressing
+    decision is AddrForKey(Ed25519PublicKey) -- not derivable from the IID.
+    """
+    return upstream_addr_for_key(pubkey).packed
 
 # Valid check-in status values per spec 18.6.1
 CHECKIN_STATUS_VALUES = frozenset({"ok", "help", "delayed"})
@@ -51,10 +62,10 @@ class SosResource(resource.ObservableResource):
     **POST** activates with ``{"type":"sos", "node":..., "ts":...}`` plus the
     origin-signature envelope ``{"pubkey": <32B>, "sig": <56B>}`` (or legacy
     {"from","t"} core fields).  Per spec 18.4.1 the origin signature is
-    REQUIRED: the pubkey must derive to the claimed node IID, the Schnorr48
-    signature must verify over the canonical CBOR of the core alert dict,
-    and the origin sequence must strictly advance; anything else is dropped
-    with 4.01.
+    REQUIRED: the pubkey must derive to the claimed node IID and the
+    Schnorr48 signature must verify over the canonical CBOR of the core alert
+    dict; messages with a missing, malformed, or invalid origin signature are
+    silently dropped (no response, RFC 7967 no_response).
     **DELETE** cancels.  **GET** and **Observe** expose the current state to all
     subscribers so neighbouring nodes can relay/escalate the alert.
 
@@ -229,26 +240,28 @@ class SosResource(resource.ObservableResource):
             or timestamp < 0
         ):
             return Message(code=aiocoap.BAD_REQUEST)
-        # Spec 18.4.1: SOS MUST carry a valid origin signature; unsigned or
-        # invalid messages are dropped. The envelope carries the signer's
-        # pubkey (32 B) and the wire origin signature (8 B seq + 48 B sig).
+        # Spec 18.4.1: SOS MUST carry a valid origin signature; messages with
+        # a missing, malformed, or invalid origin signature are SILENTLY
+        # DROPPED (no response, not an error code). The envelope carries the
+        # signer's pubkey (32 B) and the wire origin signature (8 B seq +
+        # 48 B sig).
         pubkey = body.get("pubkey")
         sig_blob = body.get("sig")
         if not isinstance(pubkey, bytes) or len(pubkey) != 32 or not isinstance(sig_blob, bytes):
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return Message(no_response=26)
         try:
             origin_sig = SosOriginSignature.from_bytes(sig_blob)
         except ValueError:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return Message(no_response=26)
         iid = bytes.fromhex(from_hex.lower())
         if _pubkey_to_iid(pubkey) != iid:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return Message(no_response=26)
         core_alert = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
-        origin_addr = b"\x02\x00" + b"\x00" * 6 + iid
+        origin_addr = _origin_addr_for_key(pubkey)
         if not verify_sos_origin(
             pubkey, origin_addr, canonicalize_sos_payload(core_alert), origin_sig
         ):
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return Message(no_response=26)
         if self._trust_store is not None:
             try:
                 self._trust_store.verify_or_pin(pubkey, iid)
@@ -294,7 +307,7 @@ class SosResource(resource.ObservableResource):
         if _pubkey_to_iid(pubkey) != active_iid:
             return Message(code=aiocoap.UNAUTHORIZED)
         core_cancel = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
-        origin_addr = b"\x02\x00" + b"\x00" * 6 + active_iid
+        origin_addr = _origin_addr_for_key(pubkey)
         if not verify_sos_origin(
             pubkey, origin_addr, canonicalize_sos_payload(core_cancel), origin_sig
         ):
@@ -341,7 +354,7 @@ class SosResource(resource.ObservableResource):
             return Message(code=aiocoap.UNAUTHORIZED)
         # SECURITY: Verify signature over canonical cancel payload
         core_cancel = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
-        origin_addr = b"\x02\x00" + b"\x00" * 6 + active_iid
+        origin_addr = _origin_addr_for_key(pubkey)
         if not verify_sos_origin(
             pubkey, origin_addr, canonicalize_sos_payload(core_cancel), origin_sig
         ):

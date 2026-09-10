@@ -19,9 +19,9 @@ if str(VECTORS_DIR) not in sys.path:
 from reference_schnorr48 import (  # noqa: E402
     LINK_SIGNATURE_DOMAIN,
     ReferenceIdentity,
-    addr_for_key,
     sign,
     signature_transcript,
+    upstream_addr_for_key,
     verify,
 )
 
@@ -46,9 +46,13 @@ def _eui64_for_key(public_key: bytes) -> bytes:
     return bytes(eui64)
 
 
-def _addr_for_key(public_key: bytes) -> bytes:
-    digest = hashlib.sha512(public_key).digest()
-    return b"\x02" + digest[:7] + _iid_for_key(public_key)
+# Upstream AddrForKey comes from reference_schnorr48.upstream_addr_for_key,
+# which is validated against the pinned yggdrasil-go anchor vectors; a
+# duplicate local copy (verified byte-identical) would only drift, so the
+# local reimplementation the merged branch carried is intentionally dropped.
+# Migration complete (spec/decisions.jsonl upstream-yggdrasil-addressing):
+# root_signature.json, authenticated_schc_dio.json, and root_authorization.json
+# are all regenerated to upstream addressing and share that one oracle.
 
 
 def _ones_complement_sum(data: bytes) -> int:
@@ -359,7 +363,7 @@ def test_authenticated_schc_dio_construction_has_independent_security_checks() -
             vector["name"]
         )
         if vector["trusted_role"] == "root":
-            root_binding = dio[8:24] == _addr_for_key(public_key)
+            root_binding = dio[8:24] == upstream_addr_for_key(public_key)
             assert root_binding is (vector["expected"]["admitted"] is True), vector["name"]
 
 
@@ -435,17 +439,13 @@ def test_timing_dio_envelope_has_independent_integrity_checks() -> None:
         assert source_matches_signer is (case["name"] != "signed-wrong-signer"), case["name"]
 
 
-def test_root_signature_vectors_use_legacy_sha512_addr_for_key_and_independent_signatures() -> None:
-    """root_signature.json still pins the rejected SHA-512 native profile (i72x.6
-    regen is tracked separately). This loop intentionally checks that legacy
-    corpus against the local native derivation; do NOT migrate it to the
-    upstream addr_for_key oracle used for root_authorization.json below."""
+def test_root_vectors_use_upstream_addr_for_key_and_independent_signatures() -> None:
     for vector in _load("root_signature.json")["vectors"]:
         public_hex = vector.get("pubkey")
         if public_hex is None or len(public_hex) != 64:
             continue
         public_key = bytes.fromhex(public_hex)
-        binding = bytes.fromhex(vector["dodagid"]) == _addr_for_key(public_key)
+        binding = bytes.fromhex(vector["dodagid"]) == upstream_addr_for_key(public_key)
         assert binding is vector.get("binding_valid", vector.get("error") != "DODAGID_MISMATCH")
         if "signature" in vector and "message" in vector:
             valid_signature = verify(
@@ -462,7 +462,7 @@ def test_root_authorization_vectors_use_upstream_addr_for_key_and_independent_si
         if len(public_key) != 32:
             assert vector["expected_valid"] is False
             continue
-        binding = bytes.fromhex(vector["dodagid_hex"]) == addr_for_key(public_key)
+        binding = bytes.fromhex(vector["dodagid_hex"]) == upstream_addr_for_key(public_key)
         signature = verify(
             public_key,
             bytes.fromhex(vector["message_hex"]),
@@ -472,10 +472,13 @@ def test_root_authorization_vectors_use_upstream_addr_for_key_and_independent_si
 
 
 def test_rpl_messages_root_dodagid_matches_reference_identity() -> None:
-    expected = ReferenceIdentity.from_seed(bytes(32)).ygg_addr
+    # DIO DODAGID is a root routable address: upstream AddrForKey, not the
+    # rejected SHA-512 native profile (spec/decisions.jsonl
+    # upstream-yggdrasil-addressing). Independent oracle, not the impl.
+    expected_upstream = upstream_addr_for_key(ReferenceIdentity.from_seed(bytes(32)).pubkey)
     for vector in _load("rpl_messages.json")["vectors"]:
         if vector["type"] == "dio":
-            assert IPv6Address(vector["fields"]["dodag_id"]).packed == expected
+            assert IPv6Address(vector["fields"]["dodag_id"]).packed == expected_upstream
 
 
 def _rule7_valid(source: IPv6Address, destination: IPv6Address) -> bool:

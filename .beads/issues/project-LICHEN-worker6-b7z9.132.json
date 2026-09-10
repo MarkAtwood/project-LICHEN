@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.132",
+  "title": "[spec-gap][R-04-007] Root demotion: Schnorr-signed DEMOTION_REQUEST with \u003e50% vote absent in all stacks; election text diverges from 2a.5.2 (spec 04 6.1)",
+  "description": "Spec spec/04-network.md 6.1 'Root Election, Failure, Demotion' (MUST-level retained mechanics): lowest EUI-64 deterministic election, DIO monitoring, \u003e50% vote demotion with Schnorr-signed DEMOTION_REQUEST; root no longer advertises a ULA prefix.\n\nEvidence:\n- DEMOTION_REQUEST: zero occurrences in rust/, lichen/, python/src/ (rg DEMOTION_REQUEST|DEMOTION — only group-membership role demotion, unrelated). No Schnorr-signed demotion message type, no \u003e50% vote counter in any stack.\n- Root election: spec 04 text says 'lowest EUI-64 deterministic election', but all three stacks implement the 2a.5.2 multi-factor ordering (DODAG preference \u003e stratum \u003e RSSI+SNR score \u003e IID lowest as tiebreak only): rust/lichen-rpl/src/multi_instance.rs:976-1015, python/src/lichen/link/slot_coordination.py:289, C lichen/subsys/lichen/link/tdma_root_select.c:94 + root_selection.c; tests rust multi_instance.rs:2452-2503, lichen/tests/{root_selection,tdma_root_select,multi_root}, python tests/link/test_slot_coordination.py:239-287.\n- Partial coverage that does exist: root role transition table test rust/lichen-rpl/src/dodag.rs:826 (allows root demotion at role level); root DIO signing infrastructure exists (root_sig.rs, rpl_root_sig.c, root_signature.json) so a signed DEMOTION_REQUEST could reuse it.\n\nNote: the trimmed 04-network text says mechanics 'remain as documented above' but the referenced detailed demotion text is not present in the current file; the requirement itself may need a spec cross-reference fix (the mechanics now live in 2a.5.2 / 09-rpl-profile). Filed as spec-gap because the demotion protocol message has no implementation anywhere.\n\nSuggested placement: message type + vote accounting in rust/lichen-rpl (DODAG state), C lichen/subsys/lichen/rpl, python lichen.rpl; Schnorr48 signing per spec/drafts/draft-lichen-schnorr-00.md. Also amend spec 04 6.1 to point at the actual election/demotion section instead of 'as documented above'.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T20:48:45.048638373Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T20:48:45.048638373Z",
+  "labels": [
+    "network",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.132",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T20:48:45.179688724Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "1789006272758844913-1",
+  "issue_id": "project-LICHEN-worker6-nnmc",
+  "author": "Mark Atwood",
+  "text": "Addendum: the same run also fails node::tests::grouped_delegated_prefix_dao_is_forwarded_by_parent_and_processed_by_root (sibling variant of leaf_dao_is_forwarded..., same assert at node.rs:1157 area). Full red set for the DAO-forwarding filter on this checkout: leaf_dao_is_forwarded_by_parent_and_processed_by_root, grouped_delegated_prefix_dao_is_forwarded_by_parent_and_processed_by_root, and rpl_stack::tests::three_rpl_stacks_send_leaf_dao_via_preferred_parent (the one named in this bead's description). All verified pre-existing (fail with b7z9.184's dao_tx_sched.rs change stashed).",
+  "created_at": "2026-09-10T02:11:12.758844913Z"
+}

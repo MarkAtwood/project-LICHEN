@@ -2,13 +2,17 @@
   "id": "project-LICHEN-worker6-5dek",
   "title": "wire::array silently truncates lengths \u003e65535 producing corrupt CBOR",
   "description": "rust/lichen-client/src/checkin.rs:239-249 and deaddrop.rs:438-448: final branch emits 0x99 with len as u16 - silently truncated for len\u003e65535 instead of erroring (text writers truncate above u32::MAX, unreachable). Latent only today but violates deterministic-writer contract and reachable via \u003e64k-entry RollcallStatus re-encode. wire::map has a debug_assert; array has none. Fix: add u32 branch + debug_assert! or return Error::Encode for lengths beyond supported range; unit test the error path.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
+  "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-28T06:53:17.448978Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T06:53:17.448978Z",
+  "updated_at": "2026-09-09T13:15:16.299175532Z",
+  "started_at": "2026-09-09T13:04:38.214053899Z",
+  "closed_at": "2026-09-09T13:15:16.299175532Z",
+  "close_reason": "Fixed in all three wire::array writers: checkin.rs, deaddrop.rs, and rangetest.rs (third site found by reviewer). Each now bounds the u16 branch at 65535, adds the 0x9A u32-be branch for 65536..=u32::MAX (mirroring sibling text/bytes writers), and carries debug_assert!(len \u003c= u32::MAX as usize) at the top. Added inline wire_array_tests::array_covers_all_argument_widths with hardcoded RFC 8949 canonical bytes as independent oracle for widths 0/23/24/255/256/65535/65536/70000. Reviewer pass 1 correctness PASS (hand-verified all 8 vectors per file), pass 2 security PASS (no overflow/allocation risk, casts branch-guarded), pass 3 edge-cases PASS after fixing its single finding (rangetest.rs sibling divergence). cargo test -p lichen-client 133+all vector suites green, clippy -D warnings clean, fmt clean. Committed 0bbef057f9.",
   "labels": [
     "gateway"
   ]

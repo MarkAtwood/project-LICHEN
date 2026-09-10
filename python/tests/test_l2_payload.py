@@ -28,6 +28,7 @@ def test_l2_payload_vector_oracle(vector):
     expected_kind = {
         "schc": L2PayloadKind.SCHC,
         "routing": L2PayloadKind.ROUTING,
+        "sos": L2PayloadKind.SOS,
         "unknown": L2PayloadKind.UNKNOWN,
     }[vector["kind"]]
     assert classify_l2_payload(wrapped) is expected_kind
@@ -39,6 +40,7 @@ def test_dispatch_namespace_is_exhaustive_and_single_octet_is_malformed(dispatch
     expected = {
         0x14: L2PayloadKind.SCHC,
         0x15: L2PayloadKind.ROUTING,
+        0x16: L2PayloadKind.SOS,
     }.get(dispatch, L2PayloadKind.UNKNOWN)
 
     assert classify_l2_payload(bytes([dispatch, 0x00])) is expected

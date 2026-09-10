@@ -140,14 +140,34 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         now_ms: u64,
     ) -> Result<(), SecureError> {
         let route = self.route_for(dst.0, now_ms, false).or_else(|| {
-            let peer_matches_destination = dst.0[8..] == peer_iid[..];
+            // The destination is the peer's routable 02xx address, which
+            // post-AddrForKey embeds no IID. Match it against the full
+            // AddrForKey of the peer's pinned key, not by slicing the low
+            // 64 bits. The next hop is the peer's link-local control
+            // address, recovered from the authoritative peer IID.
+            // Merge note: HEAD's `dst.0[8..] == peer_iid` disjunct is
+            // dropped — link-local destinations are already routed by
+            // `route_for`'s fe80:: branch under the same auth and
+            // direct-neighbor gates, and slicing an IID out of a routable
+            // address violates the upstream-yggdrasil-addressing decision
+            // (see `util::l2_destination`'s fail-closed policy).
+            let peer_matches_destination = self
+                .stack
+                .link_ref()
+                .pinned_pubkey_for(peer_iid)
+                .is_some_and(|pubkey| {
+                    lichen_link::ygg_addr_from_pubkey(pubkey.as_bytes()) == dst.0
+                });
             let authenticated = !matches!(
                 self.stack.link_ref().peer_auth_state(peer_iid),
                 lichen_link::link_layer::PeerAuthState::Unknown
             );
             (peer_matches_destination && authenticated && self.direct_neighbors.contains(peer_iid))
                 .then(|| super::RoutePlan {
-                    next_hop: super::util::ipv6_eui64(dst.0),
+                    // Bit-identical to HEAD's manual U/L-bit toggle
+                    // (`iid ^ 0x02`), via the canonical helpers used
+                    // elsewhere in this module (e.g. receive.rs).
+                    next_hop: super::util::ipv6_eui64(super::util::link_local_from_iid(*peer_iid)),
                     source_route: Vec::new(),
                 })
         });

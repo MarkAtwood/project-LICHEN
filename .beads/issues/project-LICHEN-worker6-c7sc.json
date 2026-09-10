@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-c7sc",
+  "title": "capability-announce seq not persistent: post-reboot rejoin can be REPLAY_DETECTED-locked by root floor",
+  "description": "Security review of 99sg.2 (pass 2, finding 4): node.py comment claims every re-announce recipient is a NEW root with no cached seq floor, but after a node process restart DodagState resets and the first rejoin records (None, root) — the recipient can be the SAME root whose CapabilityTable._seq_floors survives purge_expired (capability_announce.py:90-100,150-157). The node restarts seq at 1 and is rejected (REPLAY_DETECTED -\u003e 4.03) until seq climbs past the old floor, one per root-change event: potential indefinite lockout. Related: l1qw.20 covers persistent claim_seq machinery for GCP slot claims; this is the spec-8.12 capability-announce analogue.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T17:42:59.339435223Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T17:42:59.339435223Z",
+  "labels": [
+    "python",
+    "coap",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-c7sc",
+      "depends_on_id": "project-LICHEN-worker6-99sg.2",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T17:42:59.472338332Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

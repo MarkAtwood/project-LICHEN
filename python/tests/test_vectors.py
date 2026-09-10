@@ -213,7 +213,11 @@ def test_tofu_edge_vectors_and_c_fixture_are_fresh() -> None:
         "rule_versioning.json",
         "schc_adaptation.json",
         "schc_tile_sizing.json",
-        "density_adaptive.json",
+        # density_adaptive.json intentionally absent (project-LICHEN-worker6-1p2r.6):
+        # the schema's density_adaptive_vector family (announce tier/interval fields)
+        # has no spec section and no implementation; no corpus can be honestly
+        # authored for it. Re-add here together with a specced generator if the
+        # family is ever specified.
         "dtn_sflag_hbh.json",
     ],
 )
@@ -1645,6 +1649,7 @@ def test_l2_payload_vector(name: str, vector: dict) -> None:
     expected = {
         "schc": L2PayloadKind.SCHC,
         "routing": L2PayloadKind.ROUTING,
+        "sos": L2PayloadKind.SOS,
         "unknown": L2PayloadKind.UNKNOWN,
     }[vector["kind"]]
     assert classify_l2_payload(wrapped) is expected, f"classify drift: {name}"
@@ -2436,11 +2441,14 @@ def test_yggdrasil_derivation_vector(name: str, vector: dict) -> None:
         assert first != victim_iid, f"{name}: attacker pubkey must not derive victim IID"
         return
 
-    if vector.get("test_type") == "binding_invariant":
+    if vector.get("test_type") == "binding_invariant_rejected":
+        # Post-AddrForKey migration (i72x.6): the old invariant
+        # ygg_addr[8:16] == IID is REJECTED; the corpus pins that it does
+        # NOT hold so nobody reinstates it by accident.
         pubkey = bytes.fromhex(vector["pubkey"])
         addr = yggdrasil_address(pubkey)
         iid = _pubkey_to_iid(pubkey)
-        assert bytes(addr.packed[8:16]) == iid, f"{name}: ygg lower-64 != IID"
+        assert bytes(addr.packed[8:16]) != iid, f"{name}: rejected invariant must not hold"
         return
 
     pubkey = bytes.fromhex(vector["pubkey"])

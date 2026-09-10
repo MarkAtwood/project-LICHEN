@@ -1,0 +1,7 @@
+{
+  "id": "1789009005890753436-1",
+  "issue_id": "project-LICHEN-worker6-a7p2",
+  "author": "Mark Atwood",
+  "text": "Security pass (kimi-k3) adds: the string case cannot express numeric range at all — '99999999999999999999999' (all digits) wraps bash arithmetic to negative and sleep exits 1 immediately -\u003e hot loop; '08'/'09' abort the whole script at the arithmetic line in non-interactive bash (supervisor restart -\u003e crash-loop, one full API/bd cycle per death). Fix recommendation sharpened: decimal-normalize + range-check numerically before the loop (CYCLE_MIN=$((10#$CYCLE_MIN)) then reject \u003c1 or above a sane cap); the case pattern alone cannot express this.",
+  "created_at": "2026-09-10T02:56:45.890753436Z"
+}

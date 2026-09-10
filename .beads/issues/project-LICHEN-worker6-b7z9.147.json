@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.147",
+  "title": "[spec-gap][R-05-019-022] DODAG Version Authorization 3-way divergence; C reassigns option type 0x16 to RF-Metrics (spec 05-routing 8.4.1)",
+  "description": "Spec 8.4.1: every root DIO MUST carry exactly one DODAG Version Authorization Option type 0x16, Data Length 81 (Version 1 + Root Pubkey 32 + Schnorr48 48) over transcript LICHEN-RPL-DODAG-VERSION-v1 || RPLInstanceID || DODAGID || Version; non-root routers MUST propagate latest verified option unchanged; receivers MUST derive DODAGID from Root Pubkey via canonical 0200::/8 and verify independent of the DIO link signer; missing/duplicate/malformed/mismatched/invalid MUST reject without state change. Classification: divergent 3-way. Rust: full profile implemented+tested (rust/lichen-rpl/src/message.rs:80-89, rust/lichen-node/src/routing/router.rs:35-65,548-566,987-1009; test/vectors/dodag_version_authorization.json + upstream byte-equality oracle rust/lichen-node/tests/dodag_version_authorization_upstream.json). C: no 0x16 version-auth option; implements authorization as COSE_Sign1 Root DIO Signature (lichen/subsys/lichen/rpl/root_dio_sig.c + root_dio_replay.c, spec 06 8.10.1) AND defines LICHEN_RPL_OPT_RF_METRICS 0x16 (lichen/subsys/lichen/rpl/include/lichen/rpl_messages.h:78) - same option type value assigned to a different option = wire-type collision hazard. Python: no mechanism at all; adopts any lollipop-newer version unauthorized (python/src/lichen/rpl/dodag.py:428,628-637). Suggested placement: adjudicate canonical mechanism (8.4.1 option vs 06 8.10.1 COSE root sig), renumber C RF-Metrics off 0x16, port the Rust profile to C and Python. Similar 3-way pattern tracked in b7z9.121 (SOS origin signature).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T22:53:36.378818224Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T22:53:36.378818224Z",
+  "labels": [
+    "routing",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.147",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T22:53:36.503244522Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

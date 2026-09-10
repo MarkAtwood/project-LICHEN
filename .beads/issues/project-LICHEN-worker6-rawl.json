@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-rawl",
+  "title": "node_capabilities validation rejects Capability IntFlag values",
+  "description": "Robustness review of 99sg.2 (pass 3, finding 2): node.py Node.__post_init__ validates node_capabilities with type(v) is not int, which rejects Capability IntFlag values — node_capabilities=Capability.EGRESS raises ValueError even though Capability (python/src/lichen/crypto/capability_announcements.py:29) is the package's canonical expression of these bits and create_capability_announcement accepts Capability | int. Rejecting bool is correct and intentional; isinstance(v, int) and not isinstance(v, bool) preserves that while accepting IntFlag.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T17:43:09.140791437Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T18:11:00.139097476Z",
+  "started_at": "2026-09-09T17:56:43.383035709Z",
+  "closed_at": "2026-09-09T18:11:00.139097476Z",
+  "close_reason": "FIXED on beads-worker-4: node_capabilities validation now uses isinstance-int-and-not-bool instead of type-is-int, so the canonical Capability IntFlag is accepted (bool still rejected, range 0..MAX_CAPABILITY_BITMASK unchanged). Test test_node_capabilities_accepts_capability_intflag pins IntFlag acceptance + normalization. 10/10 tests pass; ruff/mypy clean. 3x codereview (kimi): correctness PASS, security PASS, robustness PASS.",
+  "labels": [
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-rawl",
+      "depends_on_id": "project-LICHEN-worker6-99sg.2",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T17:43:09.31696944Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

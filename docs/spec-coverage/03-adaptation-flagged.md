@@ -1,158 +1,35 @@
-## spec/03-adaptation.md — flagged for Opus verification (sweep 2026-09-01)
+## spec/03-adaptation.md — flagged set (sweep 2026-09-09)
 
-Criteria: low confidence, ambiguous/divergent classification, or section 06 /
-oscore-EDHOC semantics. 11 entries.
+Every row with low confidence, ambiguous/divergent classification, plus
+section-specific decision-interpretation questions. Cross-reference: this
+section had a prior extraction whose matrix file is lost; its Opus
+verification log survives at `03-adaptation-verify.log`. Known old→new
+mappings: R-03-079(old)→R-03-065, R-03-063→R-03-047, R-03-062→R-03-046's
+0xffffff clause, R-03-069→R-03-054, R-03-065/088→R-03-076, R-03-006→R-03-009,
+R-03-064→R-03-048, R-03-013→R-03-016, R-03-045→R-03-049, R-03-083→R-03-070,
+R-03-005/074/081→R-03-059/065 (C coverage). Prior verdicts F1–F11 remain
+consistent with this sweep except F3 (Rust counter exhaustion:
+implemented+tested, confirmed again) and F4 (escalation carried forward
+below as F2'→item 2).
 
----
+| # | Req | Classification | Evidence | Question for Opus |
+|---|-----|----------------|----------|-------------------|
+| F1 | R-03-012, R-03-020 (Rules 1/6 address prefix) | implemented+tested, low confidence | All three stacks + spec currently use 0200::/8 first-byte 0x02, MSB(8)/LSB(120): Rs GLOBAL_PREFIX_TV rules.rs:107 + codec.rs:782/1176; Py _GLOBAL_PREFIX_TV rules.py:327 + headers.py:551/596; C schc_compress.c:96-100 + schc_decompress.c:32-37; spec 03-adaptation.md:97-99,135-146. Open bead `project-LICHEN-worker6-0t11` (P1) carries an UPDATE note claiming decision `worker6-vdon` requires Rules 1/6 to accept 0200::/7 (02xx and 03xx). The settled decision text (decisions.jsonl `upstream-yggdrasil-addressing`; AGENTS.md) says node /128s are in 0200::/8, routed /64s in 0300::/8, and "do not mechanically replace every /8 with /7" | Do Rules 1/6 (which carry node /128 CoAP/OSCORE traffic) normatively match 0200::/8 (current behavior, consistent with node-/128s-in-0200::/8) or must they also admit 0300::/8 sources/dests per 0t11's update note? Reconcile 0t11 with the settled decision text — do NOT re-adjudicate the decision itself. If /8 is correct, 0t11 should be rescoped; if /7 acceptance is required, spec+3 stacks change |
+| F2 | R-03-024 (Rule 7 non-match vs structural drop), touched by R-03-023 | implemented+tested, low confidence on the address-policy-failure bucket | Spec 5.5: structural/checksum failure → drop; well-formed packet failing only a Rule 7 matching requirement → another rule or 255. Address-policy rejection currently returns a hard error in all three stacks (Rs validate_address_policy at codec.rs:1067 raises before fallthrough; Py headers.py:626; C schc_compress.c:400 → SCHC_ERR_INVALID_ARGUMENT), so a policy-invalid packet is un-sendable rather than degraded to Rule 255 — open bead `pgsl` asks for degradation. Counter-argument: Rule 255's TX emission policy (R-03-064) rejects the same endpoint shapes, so degradation would produce a packet the sender still must not originate — drop-with-diagnostic may be the only conformant outcome | Which bucket does Rule 7 address-policy failure belong in: "matching requirement" (→ 255 fallback, pgsl's reading) or effectively-unoriginateable (→ drop)? If drop is correct, pgsl should be closed with that rationale; if fallback is correct, note that 255's emission policy then rejects the same packets and pgsl needs rescoping to the genuinely-slicable subset (if any exists) |
+| F3 | R-03-039 (reassembly context key; local-key-generation binding) | implemented+tested, low confidence | Spec: tuple (local_identity, remote_signer_identity, remote_key_generation, rule_id); implementations supporting live local-key replacement MUST additionally bind opaque local_key_generation. Rs binds local signer + remote key/durable generation + (std) a ReceivingLinkIdentity instance token retired on reinstall (fragment.rs:237,374-384,4367) — an instance/retirement token, not a numeric generation. Py binds remote signer+generation; local-side binding evidence thin. C session_table keys (local, remote, generation, rule_id) but is unwired | Does the ReceivingLinkIdentity retirement token satisfy "bind its opaque current local_key_generation" (it is opaque and rotation-retired)? Is Python's local-side binding sufficient for live local-key replacement, or does Python not support live replacement (making the conditional clause vacuous)? |
+| F4 | R-03-045 sub-clause: "a one-tile packet fits the unfragmented profile and MUST be sent without fragmentation" | ambiguous sub-point of an implemented+tested row | Receiver side (All-1 never opens a session) is implemented+tested in Rs/Py. Sender side: no stack was shown to explicitly refuse to open a fragmentation session for a ≤1-tile packet; currently moot in Rs because TX fragmentation is never invoked at all (b7z9.5: oversized datagrams error instead of fragmenting), and Py/C sender paths weren't audited for this specific refusal | Is there (or should there be) a sender-side guard that a one-tile SCHC Packet is sent unfragmented (single-frame path) rather than via a 0x78/0x79 session? Where does it belong — link layer single-frame limit or fragmenter entry check? Recommend resolving together with b7z9.5 fragmentation wiring |
+| F5 | R-03-062 (NH 41/51/50 terminate the Rule 255 header walk as payload) | implemented+untested | Rs catch-all `_ => break` codec.rs:351-353; Py packet.py:249-254 (surfaces as upper layer); C chain-walk default. No test in any stack fires encapsulated-IPv6 (41), AH (51), or ESP (50) at a Rule 255 payload | Confirm the three implementations agree that these Next Header values end the walk (vs malformed), and add one shared malformed/passthrough vector pinning the termination — cheap, interop-relevant |
+| F6 | R-03-076 (version number MUST increment on any rule change) | implemented+untested (process-level) | RULE_SET_VERSION=3 in all stacks; rule_set_v3_descriptor_hash fingerprint (rules.rs:518, consumed via rule_versioning.json registry vector) detects registry drift but cannot verify the version was bumped | Is a CI check warranted (fail if descriptor hash changes without RULE_SET_VERSION increment), or is release-process discipline sufficient? Prior verify F5 recommended the CI check |
+| F7 | R-03-065 / bead hygiene | divergent (C); bead iard appears stale | C RX structural address checks confirmed present (schc_helpers.c:513-525, wired as validate_payload schc.c:525) — divergence from FINAL rule255-rx-decode; new bead G1 filed. Separately: open bead `project-LICHEN-worker6-iard` claims Python decode_rule255 rejects unspecified/multicast sources, but current Python is byte-preserving (headers.py:284 structure-only; test_rule255_decode_is_byte_preserving_despite_emission_policy test_headers.py:306) and the decision's verify grep passes | Confirm iard is resolved by current code and close it (housekeeping — not actioned by this sweep, which does not close others' beads). Opus should also sanity-check G1's remediation shape (strip schc_helpers.c:513-525 + reconcile the contradictory comments at schc.c:522-525) against the decision text |
+| F8 | C production wiring depth (affects R-03-040/042/044/045/046/048, R-03-057) | not-implemented (C production) | C SCHC fragmentation engine + session authority are complete and unit-tested (subsys/schc + schc_session*, schc_session_table, schc_authority + tests) but have no production caller; 24-bit counter, 60 s hold-down, floor consultation absent; DIO admission gate likewise test-only (b7z9.88 documents the sibling signature-wiring gap); dangling CMake source schc_session_authority.c (CMakeLists.txt:18, new bead G4) breaks subsystem builds; dead constants SCHC_MAX_ACK_REQUESTS/SCHC_RETRANSMISSION_TIMEOUT_S/SCHC_INACTIVITY_TIMEOUT_S/SCHC_RCS_BYTES (lichen/schc.h:106-109); stale standalone test tests/schc_failure_tracker/main.c uses a superseded 3-arg tracker API and cannot compile | Opus sanity-check that the C gaps are fully attributable to the open l1qw.3.7.6 epic + b7z9.88 (no additional untracked MUST gap), and whether the stale standalone test / dead constants should be folded into G4's cleanup or tracked separately |
+| F9 | R-03-034 (ACK REQ bit-identical classification) — C evidence level | implemented+tested (Rs/Py); C engine-level | Rs/Py classify at a shared authenticated ingress before decode (fragment.rs:1764-1780/3030-3040; fragment.py:80-106 + session_manager.py:665-684). C has separate sender/receiver contexts plus ACK canonical re-encode check (schc.c:538-543) — the bit-identical-ambiguity property lives at the (unwired) shared ingress | When l1qw.3.7.6 wires the C session authority, confirm the shared-ingress classification requirement is carried over (it is a MUST); consider adding it to l1qw.3.7.6.5's acceptance criteria |
+| F10 | Repo state (not a requirement) | caveat | rust/lichen-node/src/rpl_stack/ contains unresolved merge conflicts (UU: error.rs, provisioning.rs, receive.rs, tests.rs; mod.rs declares root_seq_store twice; conflict markers receive.rs:754-803). The crate will not build until resolved. Evidence cited from rpl_stack in this sweep (R-03-056/057) is from conflict-free regions | Flag to Mark: the rpl_stack merge needs human resolution; re-run affected Rust evidence after the merge lands |
 
-### F1 — R-03-079: Rule 255 RX decode is byte-preserving (structure + checksums only)
-- **Classification:** divergent (Rust + C); Python conformant.
-- **Evidence:** Decision `rule255-rx-decode` (decisions.jsonl, 2026-08-31, FINAL):
-  "decode accepts any well-framed packet with valid checksum regardless of
-  endpoint addresses. Address validation is TX-only." Python
-  `validate_full_ipv6` (headers.py:152-180) + `decode_rule255` (233-244) match.
-  Rust `validate_full_ipv6_structure` (rust/lichen-schc/src/codec.rs:285-297,
-  reached from `decode_rule255` codec.rs:1562) rejects unspecified/multicast
-  source + unspecified destination on RX; its own docstring (codec.rs:265-270)
-  claims byte-preserving. C `validate_ipv6_transport_lengths`
-  (lichen/subsys/lichen/schc/schc_helpers.c) does the same via the
-  `validate_payload` hook (schc.c:525). Stale vectors:
-  `rule255_rx_structural_reject` in test/vectors/schc_adaptation.json + both
-  consumers (rust adaptation_vectors.rs:1109, python test_vectors.py:4874 — the
-  Python consumer contradicts its own byte-preserving library; suite currently
-  dormant, jsonschema missing from python/.venv). Spec 5.7 paragraph restored to
-  byte-preserving wording this sweep. Bead b7z9.66 (discovered-from l9jj).
-- **Question for Opus:** Confirm the spec edit correctly captures the decision's
-  intent (fully byte-preserving RX, emission policy TX-only), and that the right
-  remediation is to strip the RX structural address checks from Rust and C and
-  rewrite the three vectors — not the other direction (re-adding RX checks to
-  Python, which would contradict the recorded decision and the
-  `validate_datagram_source_policy` TX-gate design).
-
-### F2 — R-03-063: tombstone/admission-floor tables <=256 per direction + evict-oldest on overflow
-- **Classification:** ambiguous.
-- **Evidence:** Rust bounds tombstones to 2 per direction per signer entry
-  (fragment.rs:196-197) with time-based expiry (1220-1247); Python bounds are 64
-  sender records / 128 rejection tombstones / 16 pending-ACK receipts
-  (fragment.py:46-48) removed by hold-down expiry. Both satisfy "at most 256";
-  neither implements an overflow -> evict-oldest-by-terminal-time policy (they
-  fail closed or expire by time instead).
-- **Question for Opus:** Is the evict-oldest clause conditioned on the 256-entry
-  bound (making it vacuous for implementations bounded far below 256), or does it
-  prescribe the overflow policy for whatever table an implementation actually
-  has (making fail-closed a divergence that needs a bead + spec wording fix)?
-
-### F3 — R-03-062: counter 0xffffff cannot be reused or wrapped under the same key
-- **Classification:** implemented+tested (Python); low confidence (Rust).
-- **Evidence:** Python: MAX_LINK_REPLAY_COUNTER=0xFF_FFFF (fragment.py:43),
-  explicit fail-closed (session_manager.py:513-514), test 1039. Rust: contract
-  documented at rust/lichen-link/src/seqnum.rs:121-124 ("Epoch 255 / seqnum
-  65535 is 0xFFFFFF, the last valid tuple before link-key rotation. Epoch MUST
-  NOT wrap 255 -> 0") + logical_counter test (seqnum.rs:176), but no explicit
-  exhaust guard was found in lichen-schc or the link epoch allocation path;
-  node only requires boot epoch >= 128 (stack.rs:236-245).
-- **Question for Opus:** Verify the Rust epoch allocation actually refuses to
-  increment past epoch 255 (or otherwise guarantees 0xFFFFFF is never reissued
-  under the same key); if not, that is a MUST gap needing a bead.
-
-### F4 — R-03-069: non-root serializer MUST require the authenticated root-originated DODAG version as input and preserve it byte-for-byte
-- **Classification:** implemented+tested, low confidence on architectural
-  equivalence.
-- **Evidence:** Rust production builder emits the local current() option
-  (router.rs:882 -> message.rs:217-218), which equals the DODAG version only
-  because admission permits v3 exclusively; the root-signed proof travels in the
-  separate 0x16 DODAG Version Authorization option (router.rs:843-857,
-  message.rs:255-259). Python appends (0x13, RULE_SET_VERSION) when the caller
-  supplies none (messages.py:338-339). No vector exercises root-version !=
-  local-version.
-- **Question for Opus:** Does admission-gating (root version can only ever be 3)
-  satisfy "MUST require the authenticated root-originated version as input and
-  preserve byte-for-byte", or should the non-root DIO builder take the
-  authenticated version as an explicit input so a future v4 root is propagated
-  byte-for-byte rather than silently re-stamped as 3?
-
-### F5 — R-03-065 / R-03-088: "Version number MUST increment on any rule change"
-- **Classification:** implemented+untested (process-level).
-- **Evidence:** RULE_SET_VERSION=3 constants with history comments in all three
-  implementations (rules.rs:19-26, rules.py:185-189, rpl_messages.h:85); the
-  only pin is the descriptor-hash fingerprint vector
-  rule_set_v3_registry_fingerprint (rule_versioning.json), which detects
-  registry drift but cannot enforce a version bump.
-- **Question for Opus:** Is a vector fingerprint + release-process convention an
-  acceptable realization of this MUST, or should a CI check assert
-  fingerprint-change implies RULE_SET_VERSION bump?
-
-### F6 — R-03-006: Python rules 64/65/66 MUST be rejected as unknown packet Rule IDs
-- **Classification:** implemented+tested (indirect only).
-- **Evidence:** Registry exclusion asserted (test_codec.py:349-353 asserts 64/65/66
-  not in RULES; rust rules.rs:566 asserts 64..=66 absent from V3 registry);
-  unknown-ID rejection paths exist (context.py:129-131, headers.py:944-967,
-  codec.rs:2396). No test in any implementation feeds 64/65/66 literally as the
-  first byte of a SCHC packet.
-- **Question for Opus:** Should a dedicated negative vector (Rule ID 64/65/66 on
-  the wire) be added to schc_adaptation.json, or is registry-exclusion +
-  generic unknown-ID coverage sufficient?
-
-### F7 — R-03-064: fragmentation is hop-by-hop; routers reassemble and decompress before IPv6 forwarding
-- **Classification:** divergent.
-- **Evidence:** Python node.py:902-1059 reassembles then routes/forwards (no
-  dedicated multi-hop test). Rust decompress-before-forward is wired
-  (node.rs:497-501, routing/router.rs:379, gateway.rs:1248-1281) but the RX
-  reassembly seam is explicitly unwired (stack.rs:225-229) — tracked as bead
-  project-LICHEN-worker6-b7z9.5.2 (+ .5.2.2).
-- **Question for Opus:** Confirm b7z9.5.2 fully covers the spec sentence (i.e.,
-  once wired, Rust satisfies "routers reassemble ... before forwarding"), and
-  whether a cross-implementation multi-hop fragment-forwarding vector/test
-  should be mandated.
-
-### F8 — R-03-013: Rule 4 does not match ULA/Yggdrasil/routable source addresses
-- **Classification:** implemented+tested, low confidence.
-- **Evidence:** Authoritative whole-packet codec enforces link-local-both in both
-  languages (rust codec.rs:2339; python headers.py:694). Two soft spots: (a)
-  Rust generic `RplDaoProfile::matches` (headers.rs:893) uses `is_routable` and
-  would match routable sources — non-authoritative (SchcContext selection only)
-  but a latent foot-gun; (b) no dedicated ULA (fd00::/8) or Yggdrasil
-  (0200::/8)-source DAO non-match vector exists in either language; Python's
-  `_is_ula`/`_is_routable` helpers (headers.py:254-259) are uncalled and
-  untested.
-- **Question for Opus:** Should the Rust RplDaoProfile be tightened to
-  link-local-only for hygiene, and should a ULA-source DAO -> Rule 255 vector be
-  added?
-
-### F9 — R-03-045: 5.6 encoded-size clause contradicts 5.7 raw-packet ceiling
-- **Classification:** divergent (spec-internal); all three implementations
-  follow 5.7.
-- **Evidence:** 5.6: "a compressible raw IPv6 packet may be larger when its
-  final encoded SCHC Packet remains at most 22,554 bytes". 5.7: raw bound in
-  both directions, "MUST NOT substitute the encoded size for the raw size".
-  Implementations enforcing 5.7: python headers.py:889-900 +
-  test_headers_rules.py:96-120; rust codec.rs:2253-2260 + test 2799; C
-  schc_compress.c gates + schc_rule2_compress main.c:147-152. Bead b7z9.68.
-- **Question for Opus:** Confirm the fix direction: delete/rewrite the 5.6
-  clause to the raw-bound reading (rather than weakening 5.7).
-
-### F10 — R-03-083: Rule 255 gives no fragmentation compatibility on version mismatch
-- **Classification:** divergent (open bead).
-- **Evidence:** Spec: >1 frame + version mismatch => packet cannot be sent.
-  Vectors fragmentation-requires-match + rust
-  rule_versioning_vectors.rs:111 cover the admission side; python
-  test_fragment.py:2157 covers the reassembly-limit side. Known open bug:
-  `compress_schc_for_peer` allow_fragmentation ignored on version-mismatch Rule
-  255 — bead project-LICHEN-worker6-z4m8.
-- **Question for Opus:** Confirm z4m8 is the complete residual for this
-  requirement across all three implementations (C path not separately audited).
-
-### F11 — R-03-005/R-03-074/R-03-081: C (Zephyr) coverage depth on Rule 255 structure validation
-- **Classification:** implemented+untested (C half of the structural/RH3
-  validation).
-- **Evidence:** C implements the chain walk, RH3-only policy, fragment-header
-  reject, exact UDP length + checksum with SRH upper-destination
-  (validate_ipv6_header_chain / validate_ipv6_transport_lengths in
-  lichen/subsys/lichen/schc/schc_helpers.c). C test suites (schc, schc_parity,
-  schc_generic) exercise round-trips and ceilings; whether the malformed RH3 /
-  dual-defect vectors from schc_compression.json reach the C validators via
-  gen_vectors.py was not confirmed.
-- **Question for Opus:** Verify whether schc_parity's generated vector set
-  includes the malformed/rh3 categories; if not, recommend wiring
-  rule255_rx_* malformed vectors into a C test so the C structural validators
-  are vector-covered like Rust/Python.
+Non-flagged notes (recorded for completeness, no Opus action): Python
+fragmentation bounds are stricter than the spec's "≤4 per signer, ≤64
+global" (4 global / 2 per-signer, reassembly.py:39-40) — conformant under
+"at most"; Rust skips `port_boundary`/`compressed_size` adaptation-vector
+categories (inline equivalents exist); no direct wire vector for Rule IDs
+64/65/66 (path-equivalent rejection coverage); no explicit ff02::1a-
+destination DIO compression vector; bead `h65m` already tracks the SCHC
+draft's missing tombstone/late-fragment semantics (draft-side, not spec).

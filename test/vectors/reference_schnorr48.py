@@ -80,6 +80,9 @@ def addr_for_key(public_key: bytes) -> bytes:
     return bytes((0x02, ones & 0xFF)) + bytes(packed)
 
 
+upstream_addr_for_key = addr_for_key
+
+
 @dataclass(frozen=True, slots=True)
 class ReferenceIdentity:
     """Spec-derived deterministic identity used only by vector tooling."""
@@ -168,5 +171,6 @@ __all__ = [
     "addr_for_key",
     "sign",
     "signature_transcript",
+    "upstream_addr_for_key",
     "verify",
 ]

@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.171",
+  "title": "[divergent][R-19-035b] Two duplicate spec-19 §10 LED table implementations: lichen/hmi vs lichen/ux",
+  "description": "spec/19-device-ux.md §10 declares the LED table closed ('No other patterns exist. New patterns require amending this table, not inventing at the driver'). The repo has TWO independent implementations of that same normative table: (1) lichen/subsys/lichen/hmi/hmi_led.c — LICHEN_HMI_LED_* enum, Kconfig LICHEN_HMI_LED, no GPIO backend, no consumer outside its test (lichen/tests/hmi_led); (2) lichen/subsys/lichen/ux/ux_led_core.c — LICHEN_UX_LED_* enum, Kconfig LICHEN_UX_LED, Zephyr GPIO backend, wired to the button hold path (lichen/tests/ux_led). Both cite spec 19 §10, both pin the exact same six patterns. Any future §10 amendment must land in both or they silently drift — exactly what the closed-table rule forbids. Recommendation: consolidate on the ux engine (it has the backend and the button integration); mark LICHEN_HMI_LED deprecated or delete it and migrate lichen/tests/hmi_led's table-restatement assertions into lichen/tests/ux_led. Note: table values verified identical (2000/200, 4000/200, 500/250, 250/125, 1000/500 ms) as of this sweep — consolidation is a drift-prevention task, not a bug fix.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T00:08:01.771102668Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T00:08:01.771102668Z",
+  "labels": [
+    "ux",
+    "spec-gap",
+    "c",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.171",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-10T00:08:01.901920514Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

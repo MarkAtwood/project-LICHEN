@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.183",
+  "title": "C gateway root emits MOP=0 DIOs; C RX (and Rust/Python profile) require MOP=1 non-storing (draft-lichen-rpl-lora-00 4.1 / R-RPL-007)",
+  "description": "Spec: draft-lichen-rpl-lora-00 4.1 — profile uses Non-Storing Mode exclusively (MOP=1). Appendix-rpl sweep R-RPL-007 (docs/spec-coverage/appendix-rpl.md), classification divergent, confidence high.\nEvidence (verified this sweep): lichen/apps/gateway/src/rpl_root.c:175 sets dio.mode_of_operation = 0; the C receiver gate lichen/subsys/lichen/rpl/dodag.c:408 rejects any DIO with mode_of_operation != 1, so a C leaf silently ignores a C root's DIO (self-interop break). Rust enforces MOP=1 both directions (rust/lichen-node/src/routing/router.rs:514 RX reject, :1039 TX), Python dodag.py:383/514 + authenticated_dio.py:380. Storing mode is not selectable in any stack (Kconfig has no mode choice).\nSuggested placement: set mode_of_operation = 1 in lichen/apps/gateway/src/rpl_root.c and add a TX-side regression test (root DIO bytes must have MOP=1); cross-check the adjacent open bead project-LICHEN-worker6-hi1z (DIO parser accepts reserved G/MOP/Prf bits).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T01:06:14.001511416Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T02:30:36.934847823Z",
+  "labels": [
+    "rpl",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.183",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-10T01:06:14.132553294Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

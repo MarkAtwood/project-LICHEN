@@ -39,6 +39,7 @@ done
 # Controllers (worker rounds are headless loops, one window per worker)
 ensure_window sync "exec ./scripts/sync-beads-loop.sh 15"
 ensure_window janitor "exec ./scripts/merge-janitor.sh"
+ensure_window guards "exec ./scripts/fleet-guards.sh 10"
 for n in 1 2 3 4 5 6 7 8; do
     ensure_window "hw$n" "exec ./scripts/fleet-headless.sh $n"
 done

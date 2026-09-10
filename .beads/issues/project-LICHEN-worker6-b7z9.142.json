@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.142",
+  "title": "[spec-gap][R-BB-004] Python runtime ACK/NACK TX-queue deadline 5000ms diverges from spec 10s and shared vectors",
+  "description": "spec/appendix-bufferbloat.md:77 ACK/NACK deadline = 10 s. Oracle: test/vectors/tx_queue_expiry.json constants DEADLINE_ACK_MS=10000 + bufferbloat_congestion.json deadline_expiry ack_deadline_ms=10000. C conforms (TX_DEADLINE_ACK_MS=10000, lichen/subsys/lichen/link/include/lichen/tx_queue.h:73); Rust conforms (DEADLINE_ACK_MS=10_000, rust/lichen-core/src/tx_queue.rs:253). DIVERGENT: Python runtime python/src/lichen/link/tx_queue.py:39 DEADLINE_ACK_MS = 5000 ('alias for ROUTING'); runtime node (node.py:72) imports from lichen.link.tx_queue. Confusing second module python/src/lichen/timing/tx_queue.py:28 has the correct 10000 and is what vector tests drive (python/tests/timing/test_tx_queue_vectors.py), while tests/timing exercises a module the runtime never imports. Suggested placement: set link/tx_queue.py DEADLINE_ACK_MS=10000 (keep Priority.ACK is Priority.ROUTING), then reconcile or delete the duplicate lichen/timing/tx_queue.py so only one Python TX queue exists; rust/lichen-core tests/bufferbloat_vectors.rs:54 and python timing vector tests already pin 10000 so no test changes needed.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T22:10:25.247801045Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T02:54:16.194116819Z",
+  "closed_at": "2026-09-10T02:54:16.194116819Z",
+  "close_reason": "FIXED on beads-worker-4 (janitor syncs 1a096c85c3/5cf2ec2ad8/ab659a997e + review-fix commit f3b66673ec). (1) Runtime divergence: link/tx_queue.py DEADLINE_ACK_MS 5000-\u003e10000 (spec B.2, matches C tx_queue.h:73, Rust tx_queue.rs:253, vectors tx_queue_expiry.json). (2) Behavior wiring (round-1 review found the constant alone was inert): new TxQueue.now() + LinkLayer.ack_deadline_ms() (queue-clock + 10000, matching C/Rust explicit-deadline pattern), wired at all 5 Priority.ACK send sites in node.py (914/1030/1436/1461/1489; 2 conditional on hoisted _is_fragment_control). (3) Module reconciliation: timing/tx_queue.py now imports all deadline/capacity constants from the runtime module (drift structurally impossible; DEADLINE_NORMAL_MS/TX_QUEUE_SIZE aliases kept); full deletion+vector-test port filed as follow-up P3. Tests: constant pinned vs spec literal, TxQueue.now() FakeClock test, ack_deadline_ms spec/drift tests, sentinel deadline wiring assertion, DEADLINE_ROUTING_MS+1 boundary re-pin, 12 send doubles updated to the 5-arg signature. 1914+ passed (node/link/timing/bufferbloat); ruff clean; mypy errors all pre-existing (verified vs baseline). 3x codereview x2 rounds (kimi): round 1 found constructor-split now() (my own mid-session break), flaky real-clock test, displaced docstring - all fixed; round 2: correctness PASS, security PASS, robustness PASS. Converged.",
+  "labels": [
+    "link",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.142",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T22:10:25.363897731Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

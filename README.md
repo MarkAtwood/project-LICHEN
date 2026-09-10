@@ -49,7 +49,7 @@ LICHEN assembles these existing standards into a working LoRa mesh. No novel pro
 - **Real mesh routing** — Three-tier architecture (RPL + Announce + LOADng), not naive flooding
 - **Real security** — Every packet signed; optional end-to-end encryption
 - **Real interop** — Yggdrasil backhauls and application gateways use standard CoAP APIs
-- **Bandwidth efficient** — SCHC compresses baseline IPv6+UDP headers to 18-33 bytes
+- **Bandwidth efficient** — SCHC compresses baseline IPv6+UDP+CoAP headers to 23 bytes (link-local) or 37 bytes (Yggdrasil)
 
 ## What It's For
 
@@ -144,8 +144,8 @@ All methods populate a unified gradient table. No flooding for unicast traffic.
 ### Compression
 
 SCHC (RFC 8724) compresses headers. A typical CoAP request:
-- Uncompressed: 60+ bytes (IPv6 + UDP + CoAP)
-- Compressed: about 41 bytes for native-address traffic in the baseline
+- Uncompressed: 52 bytes of headers (IPv6 + UDP + CoAP)
+- Compressed: 23 bytes (link-local, Rule 0) or 37 bytes (Yggdrasil, Rule 1) in the baseline
 
 ### Security
 

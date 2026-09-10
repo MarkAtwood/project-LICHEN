@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.126",
+  "title": "[spec-gap][R-12-040] Position privacy policy not enforced at CoAP layer: check_read called without request context, code discarded, no 4.01 oscore_required body",
+  "description": "spec/12-apps.md:478-497 (18.2.4): unauthenticated queries to non-public nodes MUST receive 4.01 Unauthorized with CBOR body {error:'oscore_required', mode}; group mode requires group OSCORE, private requires pairwise OSCORE + whitelist. Evidence: policy layer correct + vector-pinned (position_privacy.py:80-112, position_privacy_auth.json) but resource wiring divergent: senml.py:109-116 calls check_read() with no args (oscore/context/requester always None — authenticated group/private members are rejected too) and discards the returned code (always bare 4.03, empty payload; spec requires 4.01 + error body). Only call site in repo; no middleware covers /sensors/location or /pos (python/src/lichen/coap/access.py:74-96). C has its own privacy gate (test_cache_auth_privacy_and_replay). Also: OFF mode missing from position_privacy_auth.json vectors; /config/privacy response shape lacks group_id (privacy_config.py:34-40). Placement: senml.py wiring + error body + vector extension.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T20:32:33.048484792Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T20:32:33.048484792Z",
+  "labels": [
+    "apps",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.126",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T20:32:33.178393489Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

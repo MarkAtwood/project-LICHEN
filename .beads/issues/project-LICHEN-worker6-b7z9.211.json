@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.211",
+  "title": "[spec-gap][R-APXM-006] MQTT-SN to MQTT broker gateway bridge at border router absent in all stacks",
+  "description": "Requirement (spec/appendix-misc.md Appendix E traffic flow 3): 'Leaf 3 -\u003e MQTT Broker: MQTT-SN PUBLISH (via gateway at border router)'. Normative owner: spec 07 10.4 / 08-nodes 11.1. Classification: NOT-IMPLEMENTED, high confidence. Evidence: MQTT-SN codec (python/src/lichen/mqttsn/messages.py incl. gateway-role ADVERTISE/SEARCHGW/GWINFO types), port 10883 dispatch and SCHC Rule 7 exist in all three stacks (rust/lichen-core/src/constants.rs:38, rust/lichen-node/src/port_dispatch.rs:234, lichen/subsys/lichen/schc/schc_compress.c:382, test/vectors/mqtt_sn.json), but no code in any stack connects to an MQTT broker: rg broker|1883|paho clean across rust/, lichen/, python/src/. Cross-refs: R-07-042 (divergent), R-08N-004 (not-implemented, called the largest gap) - both sweeps deferred beading to the owning sweep and no bead existed; 12-apps has no MQTT rows. Suggested placement: rust/lichen-gateway (lichend, BR binary) MQTT 3.1.1/5.0 broker client bridging MQTT-SN PUBLISH/SUBSCRIBE; Python gateway parity behind the existing codec. Alternative: amend spec 07 10.4 / appendix E to mark the broker bridge optional.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T01:52:04.434424791Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T01:52:04.434424791Z",
+  "labels": [
+    "spec-gap",
+    "gateway",
+    "mqttsn"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.211",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-10T01:52:04.566130069Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

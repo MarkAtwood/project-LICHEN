@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.196",
+  "title": "[spec-gap][R-LOADNG-018/019] C LOADng module unintegrated: router.c loadng accessor never bound to loadng.c; seen-table and discovery untested",
+  "description": "Classification: not-implemented at integration level. The C LOADng module itself is implemented (codecs, cache, rate limit tested), but the discovery/suppression engine is never invoked in production.\n\nEvidence: router.c initiates discovery only through the lichen_loadng_accessor.discover callback (lichen/subsys/lichen/routing/router.c:158-160,244-245,689-702) and NO production code supplies an accessor binding lichen_loadng_discovery_start/lichen_loadng_process_rreq/lichen_loadng_process_rrep — only the routing_dispatch test stubs it (lichen/tests/routing_dispatch/src/main.c:64-71). No caller of lichen_loadng_* outside lichen/subsys/lichen/routing/. lichen/tests/loadng/main.c covers codecs, cache freshness, constants, and the admission rate limit (test_rreq_rate_limit_per_source/global/window_expiry), but has no tests for seen_check_and_mark (B2.6 10 s suppression), discovery_start/advance/receive_rrep (B2.5), or cache_refresh.\n\nSuggested placement: production adapter wiring loadng.c into router.c + ICMPv6 type-158 dispatch (e.g. app/router glue), then unit tests for seen suppression and discovery ring advance.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T01:16:41.517291136Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T01:16:41.517291136Z",
+  "labels": [
+    "c",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.196",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-10T01:16:41.646051762Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

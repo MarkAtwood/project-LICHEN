@@ -36,7 +36,9 @@ TX_QUEUE_CAPACITY = 4
 # Default deadlines in milliseconds (spec/appendix-bufferbloat.md)
 DEADLINE_SOS_MS = 2000  # P0: Emergency - transmit ASAP
 DEADLINE_ROUTING_MS = 5000  # P1: Routing control (DIO/DAO)
-DEADLINE_ACK_MS = 5000  # P1: Link-layer ACKs (alias for ROUTING)
+DEADLINE_ACK_MS = 10000  # P1: Link-layer ACK/NACKs (spec B.2: 10 s; Priority.ACK
+# aliases ROUTING for queue ordering, but the spec ACK deadline is its own
+# constant — callers pass it as an explicit deadline_ms)
 DEADLINE_URGENT_MS = 30000  # P2: Time-sensitive app traffic
 DEADLINE_APP_MS = 60000  # P3: Normal application data
 DEADLINE_BULK_MS = 120000  # P4: Bulk/firmware - can wait
@@ -96,9 +98,7 @@ class TxReservation:
     """
 
     _future: Future[bool] | None = field(default=None, repr=False)
-    _future_loop: asyncio.AbstractEventLoop | None = field(
-        default=None, repr=False
-    )
+    _future_loop: asyncio.AbstractEventLoop | None = field(default=None, repr=False)
     _result: bool | None = field(default=None, repr=False)
 
     async def wait(self) -> bool:
@@ -142,28 +142,29 @@ class TxReservation:
             # Same value or conflict - idempotent, first wins
             return
         self._result = success
+        loop = self._future_loop
         if self._future is not None and not self._future.done():
             # Merge resolution: keep HEAD's stored-_future_loop form (the field
             # is captured in wait() above); it provides the same off-loop
             # marshaling as beads-worker-7's future.get_loop() form (bead
             # rbiz) while staying consistent with the rest of this class.
             on_owning_loop = False
-            if self._future_loop is not None:
+            if loop is not None:
                 try:
-                    on_owning_loop = (
-                        asyncio.get_running_loop() is self._future_loop
-                    )
+                    # loop is self._future_loop (aliased above); both merge
+                    # sides were semantically identical — keep the local form.
+                    on_owning_loop = asyncio.get_running_loop() is loop
                 except RuntimeError:
                     on_owning_loop = False  # no running loop here: foreign
             if on_owning_loop:
                 self._future.set_result(success)
-            else:
+            elif loop is not None:
                 # Foreign thread (or loop-less thread): marshal the future
                 # mutation onto its owning loop — asyncio.Future.set_result
-                # is not thread-safe.
-                self._future_loop.call_soon_threadsafe(
-                    self._future.set_result, success
-                )
+                # is not thread-safe. wait() captures _future_loop together
+                # with _future, so loop is None only when no waiter exists;
+                # the recorded _result is applied by wait()'s catch-up.
+                loop.call_soon_threadsafe(self._future.set_result, success)
 
     def done(self) -> bool:
         """Return True if result has been set."""
@@ -282,13 +283,17 @@ class TxQueue:
         self._avg_latency_ema: float = 0.0
         self._pkt_id: int = 0
 
+    def now(self) -> int:
+        """Current queue time in monotonic ms (for explicit deadline callers)."""
+        return self._clock()
+
     def set_pkt_id_source(self, source: Callable[[], int]) -> None:
         """Share the node-wide pkt_id counter with this queue.
 
         Called once by the owning LinkLayer so locally-originated TX and
         RX frames draw from one monotonic per-node id space (spec gy32).
         """
-        source = require_sync_callable(source, "pkt_id source")
+        require_sync_callable(source, "pkt_id source")
         self._pkt_id_source = source
 
     def _next_pkt_id(self) -> int:
@@ -599,22 +604,23 @@ class TxQueue:
             raise TypeError("success must be bool")
 
         if success:
-            # Remove entry from queue (may have shifted position)
-            try:
-                self._entries.remove(entry)
-            except ValueError:
-                # Entry was already removed (expired/preempted) - reservation
-                # already signaled by whoever removed it, but we set_result
-                # anyway (idempotent, first-wins semantic)
-                pass
-            else:
+            # Remove the exact reserved object by identity, not value
+            # equality: a byte-identical twin inserted ahead of it while in
+            # flight must not be removed instead (the reserved twin would
+            # stay queued and stay reservation-eligible). Mirrors the
+            # identity semantics of fail()/cancel_reservation().
+            index = next(
+                (i for i, queued in enumerate(self._entries) if queued is entry),
+                None,
+            )
+            if index is not None:
+                del self._entries[index]
                 # Entry removed - update stats
                 latency = self._clock() - entry.enqueue_time_ms
                 if latency > self.stats.max_latency_ms:
                     self.stats.max_latency_ms = latency
                 self._avg_latency_ema = (
-                    self._EMA_ALPHA * latency
-                    + (1 - self._EMA_ALPHA) * self._avg_latency_ema
+                    self._EMA_ALPHA * latency + (1 - self._EMA_ALPHA) * self._avg_latency_ema
                 )
                 self.stats.avg_latency_ms = int(self._avg_latency_ema)
                 self.stats.packets_transmitted += 1
@@ -627,15 +633,18 @@ class TxQueue:
                     len(self._entries),
                     self._capacity,
                 )
+            else:
+                # Entry was already removed (expired/preempted) - reservation
+                # already signaled by whoever removed it, but we set_result
+                # anyway (idempotent, first-wins semantic)
+                pass
             # Always signal reservation (idempotent if already signaled)
             if entry.reservation is not None:
                 entry.reservation.set_result(True)
         else:
             # re-queued with original deadline_ms - prevents lifetime extension
             if entry not in self._entries:
-                logger.warning(
-                    "complete(success=False) but entry not in queue"
-                )
+                logger.warning("complete(success=False) but entry not in queue")
             else:
                 logger.debug(
                     "TX re-queued after failure, preserved deadline=%d",

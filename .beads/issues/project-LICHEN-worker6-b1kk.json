@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b1kk",
+  "title": "Consolidate Python TX queues: delete timing/tx_queue.py, port vector tests to runtime queue",
+  "description": "Follow-up from b7z9.142 (constant fix + single-sourcing landed there). lichen/timing/tx_queue.py remains a second full TX-queue implementation (sync, 257 lines) alongside the asyncio runtime queue (lichen/link/tx_queue.py, 698 lines) — b7z9.142 single-sourced the deadline/capacity constants so they cannot drift, but the bead's full goal is ONE Python TX queue. Work: port python/tests/timing/test_tx_queue_vectors.py to drive lichen.link.tx_queue (APIs differ: sync TxQueueEntry/callback reservations vs asyncio TxReservation Futures, TxQueueStats naming, constructor signatures), delete lichen/timing/tx_queue.py, and update the vector-test module docstrings. Sized as its own bead: the vector corpus (tx_queue_implementation/bounded/expiry/priority + no_silent_drops TxQueue vectors) must all drive the runtime asyncio queue.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T02:12:00.786898618Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T02:12:00.786898618Z",
+  "labels": [
+    "python",
+    "link"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b1kk",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.142",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T02:12:00.914198008Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

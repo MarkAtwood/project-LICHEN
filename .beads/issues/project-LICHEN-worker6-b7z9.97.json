@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.97",
+  "title": "Capability-announce production wiring remainder: Rust path prefix, C handler unwired, node-side announcers rust/C absent (spec 8.12 R-06-324/328/329)",
+  "description": "Capability announcements (spec/06-security.md §8.12) crypto + table are implemented, but production wiring is incomplete: (1) Rust dispatches POST capability-announce under /.well-known/lichen-gw/capability-announce (rust/lichen-gateway/src/resources.rs:1845-1890, dispatch :2346-2348, prefix gateway.rs:1416) instead of the spec path /.well-known/capability-announce that C and Python mount; (2) C resource exists (lichen/subsys/lichen/gateway/coap_server.c:636-705) but no production app wires s_handlers.capability_announce — production C apps answer 4.04; (3) node-side announcer exists only in Python (_reannounce_capabilities_to_new_root, python/src/lichen/node.py:1182-1224, invoked after every processed DIO :1012/:1029) — R-06-329 'nodes MUST re-announce capabilities to the new root' is unimplemented in Rust/C; join-time announce absent everywhere (R-06-328). Also confirm Python resource site mount (site.py:264-267) exposes the capability table in production gateway configs. Suggested placement: rust/lichen-gateway/src/resources.rs (path), lichen/apps/gateway/src/main.c (handler wiring), rust/lichen-node + C node app (re-announce hook).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T19:05:19.250003007Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T19:05:19.250003007Z",
+  "labels": [
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.97",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T19:05:19.379438907Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

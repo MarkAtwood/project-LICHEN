@@ -2,13 +2,16 @@
   "id": "project-LICHEN-2im4",
   "title": "[CODEREVIEW-PASS1] coap_status.c:256 uint16_t map_count causes implicit cast in cbor_put_map_header call at 271",
   "description": "coap_status.c:271 - cbor_put_map_header expects uint8_t but map_count is now uint16_t. Potential truncation if \u003e255. Add explicit cast and bounds check per CCP-17. Tag: codereview",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "Mark Atwood",
   "created_at": "2026-07-22T16:06:45.195799987Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-08-28T03:42:13.153089Z",
+  "updated_at": "2026-09-09T13:03:47.684270579Z",
   "started_at": "2026-07-22T16:08:40.8614376Z",
+  "closed_at": "2026-09-09T13:03:47.684270579Z",
+  "close_reason": "Verified already resolved in current tree; no code change needed. cbor_put_map_header/cbor_put_array_header now take size_t (coap_status.c:106,133) with guarded 0xb8/0xb9 two-byte forms for counts 24-65535, so the historical uint16_t-\u003euint8_t truncation mechanism no longer exists. All call sites audited: status map_count is uint8_t (max 8 fields), routes map_count is uint16_t but bounded to {1,2} by construction with a defensive \u003e255 reject (coap_status.c:764), all other counts are literals \u003c=16 pinned by BUILD_ASSERTs (coap_status.c:34-51). Verified by building and running lichen/tests/coap_status_get native_sim on heft: 8/8 PASS. Codereview: pass 1 (correctness) delegated to Kimi K3 reviewer - PASS with full call-site audit; passes 2 (security) and 3 (edge-cases) self-performed after opencode run timed out twice (rc=124) per protocol fallback - no defects found (handler input validation, bounds-checked writers, saturating deadlines, consistent overflow state all confirmed).",
   "labels": [
     "codereview",
     "coap"

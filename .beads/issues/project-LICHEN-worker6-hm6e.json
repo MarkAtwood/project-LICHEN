@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-hm6e",
+  "title": "hybrid.rs HybridRouter is a production-unwired parallel router using pre-AddrForKey link-local gradient destinations",
+  "description": "Found during ywec.2 (worker8, 2026-09-09). rust/lichen-node/src/hybrid.rs defines HybridRouter, a self-contained router with its own gradient_table, that is NEVER instantiated in production (grep: no HybridRouter::new outside hybrid.rs/tests; the production announce path is rpl_stack/receive.rs -\u003e AnnounceProcessor). Its process_announce (hybrid.rs:487) builds gradient destinations as link-local fe80::||iid — the pre-AddrForKey form — while the production AnnounceProcessor (announce.rs:222) writes routable ygg_addr_from_pubkey /128s. Each table is internally consistent today BECAUSE they are separate and HybridRouter is unwired. RISK: if HybridRouter is ever wired into the production path, its link-local gradient destinations will silently mismatch routable lookups (gradient.rs lookup matches full 16 bytes; there is no lookup_by_iid). Also its learn_from_data/on_rrep_received take caller-provided dst/src of unspecified form. OPTIONS: (a) migrate HybridRouter::process_announce to ygg_addr_from_pubkey for consistency with the production form; (b) mark HybridRouter as test/sim-only and exclude from production builds; (c) delete if fully superseded by the AnnounceProcessor/rpl_stack path. Decide intent for HybridRouter before any production wiring.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T17:58:38.756871618Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T17:58:38.756871618Z",
+  "labels": [
+    "rust",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-hm6e",
+      "depends_on_id": "project-LICHEN-worker6-ywec.2",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T17:58:38.87630869Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

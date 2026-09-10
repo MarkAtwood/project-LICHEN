@@ -95,6 +95,7 @@ from lichen.coap.sos_relay import SosRelay, get_sos_id_from_payload
 from lichen.constants import PORT_MQTT_SN, SCHC_FRAGMENT_M, SCHC_FRAGMENT_N
 from lichen.crypto.identity import _pubkey_to_iid
 from lichen.crypto.schnorr48 import derive_keypair
+from lichen.ipv6.addr import upstream_addr_for_key
 from lichen.schc.fragment import MAX_PACKET_SIZE, MAX_SCHC_PACKET, TILE_SIZE, WINDOW_SIZE
 from lichen.schc.rules import MO, UDP_PORT_RULE
 from lichen.slip.codec import StreamDecoder
@@ -120,7 +121,7 @@ def _make_signed_sos_body(
     privkey, pubkey = derive_keypair(seed)
     iid = _pubkey_to_iid(pubkey)
     node_hex = iid.hex()
-    origin_address = IPv6Address(b"\x02\x00" + b"\x00" * 6 + iid)
+    origin_address = upstream_addr_for_key(pubkey)
     payload = {"type": sos_type, "node": node_hex, "ts": ts}
     origin_sig = sign_sos_origin(privkey, pubkey, origin_address, origin_seq, payload)
     return {

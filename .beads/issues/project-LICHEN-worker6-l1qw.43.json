@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.43",
+  "title": "[spec-gap][R-11-026/027/030] /diag family: C /diag shape diverges; /diag/raw/* only unmounted Python classes (spec 17.5.4)",
+  "description": "Spec 17.5.4: GET /diag summary {available, raw{rx, rx_events, tx, max_frame_len=255}}; GET/PUT /diag/raw/rx arming (ttl_s, remaining_s, max_ttl_s=300, include_payload); observable /diag/raw/rx/events (frame, rssi_dbm, snr_db, uptime_ms, freq_hz, crc_ok); raw RX must not divert frames from IPv6 stack. Classification: divergent + not-wired. Evidence: C GET /diag returns event array {ts,sub,code,detail} not the summary map (lichen/subsys/lichen/diag/lichen_diag.c:92-140); Python implements exact shapes (python/src/lichen/coap/resources/raw_rx.py:25-159, raw_diag.py:30-91 MAX_TTL_S=300) but build_site() never mounts them (site.py has no diag registration); no live producer calls RawRxEventsResource.publish; no raw-RX frame tap in C/Rust. Vectors exist (test/vectors/raw_diag_ttl.json, lci_raw_diag.json) and tests pass (test_raw_rx_resource.py). Suggested placement: mount raw-diag family in python build_site; reshape C /diag or split /diag/events from summary; add firmware raw-RX tap with copy-not-divert semantics; wire events producer. Related: project-LICHEN-worker6-b7z9.40 covers server-side enforcement MUSTs.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T21:10:07.008356985Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T21:10:07.008356985Z",
+  "labels": [
+    "lci",
+    "spec-gap",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.43",
+      "depends_on_id": "project-LICHEN-worker6-l1qw",
+      "type": "parent-child",
+      "created_at": "2026-09-09T21:10:07.135627311Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

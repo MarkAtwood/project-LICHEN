@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-worker6-rul5",
+  "title": "Beads store corruption: i72x + q6ko issue families vanished",
+  "description": "worker8 report 2026-09-09 ~10:00 UTC: bd list shows 1426 issues but ZERO hits for the i72x epic family (project-LICHEN-worker6-i72x + children .1-.6) and the q6ko family (project-LICHEN-worker6-q6ko + children .1-.6) - both existed hours ago with active claims/comments (i72x.2 was claimed by worker8 and is being completed now; its close reason is orphaned). Also pre-existing warning on every bd invocation: 'skipping corrupt issue project-LICHEN-worker6-l1qw.10.5.5: flatfile: unmarshal issue ... invalid character \u003c'. Likely a bad store merge/clobber during today's high-churn sync. Needs: store forensics (git log on .beads/), restore of the lost families from checkpoint commits, and a repair of l1qw.10.5.5. Follow-up beads from the orphaned i72x.2 work are being filed standalone with the lost parent referenced by name.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T14:16:48.359113741Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T14:16:48.359113741Z",
+  "labels": [
+    "human"
+  ]
+}

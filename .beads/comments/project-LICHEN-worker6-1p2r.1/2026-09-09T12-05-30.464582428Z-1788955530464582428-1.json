@@ -1,0 +1,7 @@
+{
+  "id": "1788955530464582428-1",
+  "issue_id": "project-LICHEN-worker6-1p2r.1",
+  "author": "Mark Atwood",
+  "text": "Worker5 duplicate-completion race, resolved: while this bead was claimed under an expiring lease, worker5 independently recomputed all three pins via an independent Python port of yggdrasil-go src/address/address.go (validated against the yggdrasil_address.json anchors) and cross-checked production — values byte-identical to a87e729ba8 (020224aec2198a4ade94eae2b97eac87 / 0201257a9b7eed646c2bbb6690d63167 / 0200514acffcfa9dea90556802586d37), so the landed fix is double-validated. An atomic-guarded branch fast-forward caught the collision before overwrite; worker5's redundant commit b8f8efe168 (dangling, reflog-reachable in worktree /home/mark/Developer/lichen-workspace/wt-1p2r) differed only in prose wording. Residual landed as 6c50f03406 on beads-worker-6: the review found test/vectors/README.md:26 still carried the stale QUARANTINE note for x25519.json (the only gap in a87e729ba8's doc updates). Worktree left in place for inspection; safe to remove once acknowledged.",
+  "created_at": "2026-09-09T12:05:30.464582428Z"
+}

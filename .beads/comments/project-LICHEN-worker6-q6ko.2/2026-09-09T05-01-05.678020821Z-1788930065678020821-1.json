@@ -1,7 +1,0 @@
-{
-  "id": "1788930065678020821-1",
-  "issue_id": "project-LICHEN-worker6-q6ko.2",
-  "author": "Mark Atwood",
-  "text": "From q6ko.1 delegated reviews: stale old-path references to fix while rewriting the live corpus — test/vectors/yggdrasil_address.json internal fields at lines 8 (divergence_note 'sibling files'), 28, 29, 38, 47, 57, 67, 77 (cross_check/note); python/tests/crypto/test_yggdrasil_address_vectors.py:17-19 module docstring.",
-  "created_at": "2026-09-09T05:01:05.678020821Z"
-}

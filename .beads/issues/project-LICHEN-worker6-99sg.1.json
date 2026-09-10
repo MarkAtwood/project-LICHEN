@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-99sg.1",
+  "title": "99sg.a: Python DodagState root-change detection (DODAGID transition recording + take_root_changes drain)",
+  "description": "Python slice of 99sg (spec 8.12 root re-election MUST, spec/06-security.md:1047). DodagState gains _last_joined_dodag_id tracking + bounded _pending_root_changes deque (ROOT_CHANGE_HISTORY_MAX=8, drop-oldest) recorded in select_parent's JOINED transition when dodag_id differs from the last joined DODAGID, and take_root_changes() drain returning (previous_dodag_id, new_dodag_id) tuples (previous None on first join). Deliberately a deferred-drain queue, not an under-lock callback: select_parent runs under the DODAG RLock and callbacks doing network I/O there risk deadlock. Re-joining the same DODAGID, version bumps within one DODAGID, and parent switches never record. 6 new tests in python/tests/rpl/test_dodag.py (first join, DODAGID switch, same-dodag rejoin, version bump/parent switch, root role silent, bounded history); tests/rpl 814 passed with 9 pre-existing failures unchanged from baseline. LANDED: dodag.py+test_dodag.py on beads-worker-4 (this round).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T16:55:18.09949682Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T16:56:43.119306218Z",
+  "closed_at": "2026-09-09T16:56:43.119306218Z",
+  "close_reason": "LANDED on beads-worker-4: python/src/lichen/rpl/dodag.py (deque import, ROOT_CHANGE_HISTORY_MAX=8, _last_joined_dodag_id + _pending_root_changes init=False fields, recording in select_parent JOINED transition, take_root_changes drain) + 6 tests in python/tests/rpl/test_dodag.py. Semantics: record (previous_joined_dodag_id, new_dodag_id) only when JOINED under a different DODAGID than last joined; same-dodag rejoin/version bumps/parent switches silent; root role silent; deferred-drain queue instead of under-lock callback (deadlock safety). Verification: tests/rpl 814 passed, 9 pre-existing failures identical to stashed baseline (DAO origin/prefix vector tests, unrelated); ruff clean. 3x codereview: correctness PASS (kimi), security PASS (kimi), edge-cases SELF-PERFORMED PASS — reviewer process timed out at 590s mid-pass (had already read files + run the suite green), so I completed that pass per protocol: verified all JOINED assignments route through select_parent, no unbounded growth (maxlen deque), None-safe comparisons, drain atomic under RLock. Design nuance for consumers (99sg.b/c): same-DODAGID root restart is indistinguishable from version bump; consider announce-on-fresh-join.",
+  "labels": [
+    "python",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-99sg.1",
+      "depends_on_id": "project-LICHEN-worker6-99sg",
+      "type": "parent-child",
+      "created_at": "2026-09-09T16:55:18.207460779Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
