@@ -41,6 +41,9 @@ SCHC_RULE_UNCOMPRESSED: int = 255  # No compression; full headers follow
 # Authenticated L2 inner-payload dispatch bytes
 L2_DISPATCH_SCHC: int = 0x14
 L2_DISPATCH_ROUTING: int = 0x15
+# SOS emergency alert (spec 02-physical-link.md §4.1, 12-apps.md §18.4.3):
+# carries the §18.4.2 CBOR alert map, NOT SCHC-compressed. Relays classify
+# SOS for the separate 3/hour SOS budget solely by this byte.
 L2_DISPATCH_SOS: int = 0x16
 
 # RPL configuration (spec/drafts/draft-lichen-rpl-lora-00.md, RFC 6550)

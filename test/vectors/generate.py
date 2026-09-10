@@ -580,24 +580,31 @@ def l2_payload_vectors() -> list[dict]:
             "body": "",
             "wrapped": bytes([L2_DISPATCH_ROUTING]).hex(),
         },
+        # Merge resolution: SOS body kept as the §18.4.2 CBOR alert-map fragment
+        # "a26274731a" (beads-worker-3 side) because the merged Rust/C/Python
+        # l2_payload implementations and sos_signature.json all use that CBOR
+        # fragment; HEAD's "01" body was the placeholder inherited from the
+        # former reserved_0x16 vector. HEAD's RPL DODAG Version option
+        # namespace-disambiguation note is preserved in the description.
         {
-            "name": "sos_0x16",
+            "name": "sos_alert_dispatch",
             "description": (
-                "Dispatch 0x16 is the SOS emergency alert (spec/02-physical-link.md "
-                "4.1); the body is the 12-apps.md 18.4.2 CBOR alert map. Distinct "
-                "from the unrelated RPL DODAG Version option type 0x16 (different "
-                "namespace)."
+                "Authenticated L2 SOS dispatch (0x16) wrapping a §18.4.2 CBOR "
+                "alert map fragment. SOS is NOT SCHC-compressed; relays classify "
+                "solely by this byte (spec 02-physical-link.md §4.1, "
+                "12-apps.md §18.4.3). Distinct from the unrelated RPL DODAG "
+                "Version option type 0x16 (different namespace)."
             ),
             "dispatch": L2_DISPATCH_SOS,
             "kind": "sos",
-            "body": "01",
-            "wrapped": "1601",
+            "body": "a26274731a",
+            "wrapped": (bytes([L2_DISPATCH_SOS]) + bytes.fromhex("a26274731a")).hex(),
         },
         {
             "name": "malformed_sos_dispatch_only",
             "description": (
-                "A defined SOS dispatch without its required body byte is malformed "
-                "and must fail closed."
+                "A defined SOS dispatch without its required CBOR body byte "
+                "is malformed and must fail closed."
             ),
             "dispatch": L2_DISPATCH_SOS,
             "kind": "unknown",

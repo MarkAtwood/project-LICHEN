@@ -16,6 +16,16 @@ Classification histogram: implemented+tested 44 · implemented+untested 4 ·
 divergent 31 · not-implemented 8 · ambiguous 0. Flagged for Opus: see
 `02-physical-link-flagged.md`.
 
+<!-- Merge resolution (2026-09-09, vs branch beads-worker-3): kept this
+     2026-09-09 sweep (87 requirements, R-02-001…R-02-087) and dropped the
+     conflicting 2026-09-01 sweep (80 requirements, prior numbering, beads
+     b7z9.69–b7z9.78). The two tables cannot interleave (different ID
+     schemes), and the older side is the prior matrix the header above
+     already declares superseded: its verdicts were migrated row-by-row
+     (see "Prior-log reconciliation" in 02-physical-link-flagged.md) and
+     its gap beads are closed/fixed or re-filed under the IDs cited below
+     (b7z9.103–b7z9.112) or listed as pre-existing in the header. -->
+
 | Req | Spec text (trimmed) | Status | Evidence | Confidence |
 |-----|---------------------|--------|----------|------------|
 | R-02-001 | §3.1: LoRa CSS as implemented by SX126x and SX127x | divergent (SX127x) | SX126x end-to-end: rust/lichen-embassy/src/esp32s3.rs:13,53-63 + stm32wl.rs:14,54-64 (lora-phy Sx1262), C LR1110 (lichen/drivers/lora/lr1110/). SX127x only: airtime model rust/lichen-core/src/airtime.rs:4, Kconfig choice lichen/subsys/lichen/hal/Kconfig:120-122 delegating to Zephyr semtech,sx127x driver, Renode model lichen/boards/renode/peripherals/SX127x.cs. No LICHEN SX127x driver in lichen/drivers/lora/. Tests: airtime.rs:203, lichen/tests/airtime/src/main.c:59 (model only). **bead b7z9.112** | high |

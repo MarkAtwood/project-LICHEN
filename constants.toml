@@ -40,8 +40,12 @@ uncompressed     = 255  # No compression; full headers follow
 [l2.payload_dispatch]
 # Authenticated link inner-payload namespace. SCHC rule IDs begin after
 # dispatch=0x14; routing/control message types begin after dispatch=0x15.
+# dispatch=0x16 (SOS emergency alert, spec 02-physical-link.md §4.1) carries
+# the §18.4.2 CBOR alert map, NOT SCHC-compressed; relays classify SOS for
+# the separate 3/hour SOS budget solely by this byte.
 schc    = 0x14
 routing = 0x15
+sos     = 0x16
 
 [rpl]
 # RPL configuration (spec/drafts/draft-lichen-rpl-lora-00.md, RFC 6550)

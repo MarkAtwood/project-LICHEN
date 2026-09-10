@@ -31,6 +31,9 @@ extern "C" {
 
 #define LICHEN_L2_DISPATCH_SCHC 0x14U
 #define LICHEN_L2_DISPATCH_ROUTING 0x15U
+/* SOS emergency alert (spec 02-physical-link.md §4.1, 12-apps.md §18.4.3):
+ * carries the §18.4.2 CBOR alert map, NOT SCHC-compressed. Relays classify
+ * SOS for the separate 3/hour SOS budget solely by this byte. */
 #define LICHEN_L2_DISPATCH_SOS 0x16U
 #define LICHEN_L2_ROUTING_TYPE_ANNOUNCE 0x01U
 

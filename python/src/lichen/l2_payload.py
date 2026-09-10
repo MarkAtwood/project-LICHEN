@@ -17,7 +17,8 @@ class L2PayloadKind(Enum):
     The first byte of an authenticated L2 payload indicates its type:
     - SCHC: SCHC-compressed IPv6 packet
     - ROUTING: Routing protocol message (Announce, RPL, LOADng)
-    - SOS: SOS emergency alert (12-apps.md §18.4.2 CBOR payload)
+    - SOS: SOS emergency alert (dispatch 0x16, spec 02-physical-link.md §4.1;
+      12-apps.md §18.4.2 CBOR payload)
     - UNKNOWN: Unrecognized dispatch byte
     """
 
@@ -53,3 +54,12 @@ def wrap_schc_payload(schc_payload: bytes) -> bytes:
 
 def wrap_routing_payload(routing_payload: bytes) -> bytes:
     return bytes([L2_DISPATCH_ROUTING]) + routing_payload
+
+
+def wrap_sos_payload(sos_cbor: bytes) -> bytes:
+    """Prefix a §18.4.2 CBOR SOS alert map with the L2 SOS dispatch byte.
+
+    The body is NOT SCHC-compressed (SOS is small and latency-critical,
+    spec 02-physical-link.md §4.1).
+    """
+    return bytes([L2_DISPATCH_SOS]) + sos_cbor

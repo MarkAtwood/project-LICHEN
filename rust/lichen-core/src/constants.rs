@@ -51,6 +51,9 @@ pub const RULE_UNCOMPRESSED: u8 = 255;
 // Authenticated L2 inner-payload dispatch bytes.
 pub const L2_DISPATCH_SCHC: u8 = 0x14;
 pub const L2_DISPATCH_ROUTING: u8 = 0x15;
+/// SOS emergency alert dispatch (spec 02-physical-link.md §4.1, 12-apps.md
+/// §18.4.3): carries the §18.4.2 CBOR alert map, NOT SCHC-compressed. Relays
+/// classify SOS for the separate 3/hour SOS budget solely by this byte.
 pub const L2_DISPATCH_SOS: u8 = 0x16;
 
 // RPL constants (RFC 6550)
