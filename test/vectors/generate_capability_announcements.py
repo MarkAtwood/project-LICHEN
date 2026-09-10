@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
 import sys
 from pathlib import Path
 
@@ -50,51 +49,6 @@ CAP_BIT_PREFIX_DELEGATION = 0x02
 FORMAT_VERSION = 1
 OUTPUT = VECTORS_DIR / "capability_announcements.json"
 SEED = bytes.fromhex("0123456789abcdef" * 4)
-
-
-def _upstream_addr_for_key(pubkey: bytes) -> bytes:
-    """Upstream yggdrasil-go AddrForKey (bit-invert, count leading 1s, bit-pack).
-
-    The announcer_iid is the low 8 bytes of the routable address, matching
-    Rust lichen-core ygg_addr_from_pubkey. Anchored below against the pinned
-    upstream vector in yggdrasil_address.json so this reimplementation cannot
-    silently diverge from the external oracle.
-    """
-    if len(pubkey) != 32:
-        raise ValueError(f"pubkey must be 32 bytes, got {len(pubkey)}")
-    buf = bytes(b ^ 0xFF for b in pubkey)
-    # Count leading 1 bits, wrapping at 256 (Go byte overflow semantics).
-    ones = 0
-    first_zero = 256
-    for idx in range(256):
-        if (buf[idx // 8] >> (7 - idx % 8)) & 1:
-            ones = (ones + 1) & 0xFF
-        else:
-            first_zero = idx
-            break
-    # Whole bytes only; a trailing partial byte is discarded (upstream).
-    packed = bytearray(14)
-    start = first_zero + 1
-    whole_bits = max(0, 256 - start) & ~7
-    for out_bit in range(min(whole_bits, 112)):
-        src = start + out_bit
-        if (buf[src // 8] >> (7 - src % 8)) & 1:
-            packed[out_bit // 8] |= 1 << (7 - out_bit % 8)
-    return bytes((0x02, ones)) + bytes(packed)
-
-
-def _upstream_anchor_check() -> None:
-    """Pin _upstream_addr_for_key to the upstream conformance vector."""
-    doc = json.loads((VECTORS_DIR / "yggdrasil_address.json").read_text())
-    anchor = next(v for v in doc["vectors"] if v["name"] == "upstream_addr_for_key")
-    derived = _upstream_addr_for_key(bytes.fromhex(anchor["public_key"]))
-    if derived.hex() != anchor["address"]:
-        raise SystemExit(
-            f"upstream AddrForKey anchor mismatch: {derived.hex()} != {anchor['address']}"
-        )
-
-
-_upstream_anchor_check()
 
 
 def _build_protected_header() -> bytes:
@@ -167,10 +121,13 @@ def _vector(
 ) -> dict[str, object]:
     """Generate a single capability announcement vector."""
     identity = ReferenceIdentity.from_seed(seed)
-    # announcer_iid/kid = low 8 bytes of upstream AddrForKey(pubkey), matching
-    # Rust lichen-core ygg_addr_from_pubkey (kd0p; the reference identity's
-    # SHA-512 IID is the rejected native profile).
-    announcer_iid = _upstream_addr_for_key(identity.pubkey)[8:]
+    # announcer_iid/kid = the canonical link-local IID: SHA-512(pubkey)[0:8]
+    # with the U/L bit cleared (spec 06-security.md 8.5 "MUST be SHA-512",
+    # 8.12). The upstream-yggdrasil-addressing decision (spec/decisions.jsonl)
+    # settles that the routable 02xx address embeds NO IID, so slicing 8 bytes
+    # out of AddrForKey here has no identity meaning; the reversed derivation
+    # (0ed14478...) was a merge-corruption regression (b8i2).
+    announcer_iid = identity.iid
 
     # Build COSE components
     protected = _build_protected_header()
@@ -263,8 +220,8 @@ def _different_signer_vector() -> dict[str, object]:
     identity = ReferenceIdentity.from_seed(SEED)
     different_seed = bytes.fromhex("fedcba9876543210" * 4)
     different_identity = ReferenceIdentity.from_seed(different_seed)
-    kid_iid = _upstream_addr_for_key(identity.pubkey)[8:]
-    payload_iid = _upstream_addr_for_key(different_identity.pubkey)[8:]
+    kid_iid = identity.iid
+    payload_iid = different_identity.iid
 
     # Build with different_identity's IID in payload but sign with identity
     protected = _build_protected_header()
@@ -328,9 +285,10 @@ def document() -> dict[str, object]:
             ),
             "cross_check": "independent PyNaCl-backed reference_schnorr48.py",
             "announcer_iid": (
-                "low 8 bytes of upstream yggdrasil-go AddrForKey(pubkey); "
-                "generator reimplementation anchored at runtime to the pinned "
-                "upstream_addr_for_key vector in yggdrasil_address.json"
+                "canonical link-local IID: SHA-512(pubkey)[0:8] with U/L "
+                "cleared (spec 06-security.md 8.5/8.12); the routable "
+                "upstream AddrForKey embeds no IID (spec/decisions.jsonl "
+                "upstream-yggdrasil-addressing)"
             ),
         },
         "constants": {

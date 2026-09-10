@@ -260,7 +260,10 @@ class TestCreateAndVerify:
         )
 
         assert announcement.payload.capabilities == 1
-        # announcer_iid = low 8 bytes of upstream AddrForKey(pubkey) (kd0p)
+        # announcer_iid = canonical link-local IID: SHA-512(pubkey)[0:8] with
+        # U/L cleared (spec 06-security.md 8.5/8.12); the routable upstream
+        # AddrForKey embeds no IID (spec/decisions.jsonl
+        # upstream-yggdrasil-addressing).
         assert announcement.payload.announcer_iid == _announcer_iid_from_pubkey(
             identity.pubkey
         )
