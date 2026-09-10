@@ -213,7 +213,9 @@ def test_tofu_edge_vectors_and_c_fixture_are_fresh() -> None:
         "rule_versioning.json",
         "schc_adaptation.json",
         "schc_tile_sizing.json",
-        "density_adaptive.json",
+        # density_adaptive.json intentionally absent (project-LICHEN-worker6-1p2r.6):
+        # the schema's density_adaptive_vector family (announce tier/interval fields)
+        # is planned work, and no consumer exists yet.
         "dtn_sflag_hbh.json",
     ],
 )
