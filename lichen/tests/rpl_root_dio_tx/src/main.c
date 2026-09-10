@@ -230,6 +230,66 @@ static int test_dio_advertises_required_options(void)
 	return 1;
 }
 
+static int test_dio_int_min_matches_runtime_trickle(void)
+{
+	/* R-RPL: the DODAG config dio_int_min is log2 of the Trickle Imin in
+	 * milliseconds (RFC 6550 6.7.6). The runtime Trickle runs
+	 * CONFIG_LICHEN_RPL_TRICKLE_IMIN_MS, and a receiver derives
+	 * imin = 1 << dio_int_min. The advertised value MUST therefore equal
+	 * floor(log2(Imin_ms)); advertising Imin_ms/1000 (e.g. 4 for 4000 ms)
+	 * tells receivers a 16 ms Imin while the root runs 4000 ms. Walk the
+	 * TLV chain and read the wire value as the independent oracle. */
+	const uint8_t *opt =
+		captured + IPV6_HDR_LEN + ICMPV6_HDR_LEN + LICHEN_RPL_DIO_BASE_LEN;
+	const uint8_t *end = captured + captured_len;
+	bool found = false;
+	uint8_t advertised = 0;
+
+	while (opt < end) {
+		uint8_t otype = opt[0];
+
+		if (otype == 0) { /* PAD1: no length byte */
+			opt++;
+			continue;
+		}
+		CHECK(end - opt >= 2, "TLV header in bounds");
+		uint8_t olen = opt[1];
+
+		CHECK((size_t)(end - opt - 2) >= olen, "TLV value in bounds");
+		if (otype == LICHEN_RPL_OPT_DODAG_CONFIG) {
+			/* config data: [flags, doublings, dio_int_min, ...] */
+			CHECK(olen >= 3, "config option holds dio_int_min");
+			advertised = opt[4];
+			found = true;
+		}
+		opt += 2 + olen;
+	}
+	CHECK(found, "DODAG config option present");
+
+	/* Independent oracle: floor(log2(CONFIG_LICHEN_RPL_TRICKLE_IMIN_MS)). */
+	uint8_t expected = 0;
+	uint32_t ms = CONFIG_LICHEN_RPL_TRICKLE_IMIN_MS;
+	while (ms > 1U) {
+		ms >>= 1;
+		expected++;
+	}
+	if (expected < 1U) {
+		expected = 1U;
+	} else if (expected > 30U) {
+		expected = 30U;
+	}
+	CHECK(advertised == expected,
+	      "advertised dio_int_min is log2(Imin_ms), matching runtime");
+	/* The derived interval 1<<dio_int_min must be the same order as the
+	 * configured Imin (within one doubling, since floor(log2) rounds
+	 * down). */
+	CHECK((1UL << advertised) <= CONFIG_LICHEN_RPL_TRICKLE_IMIN_MS,
+	      "derived Imin does not exceed configured Imin");
+	CHECK((1UL << (advertised + 1)) > CONFIG_LICHEN_RPL_TRICKLE_IMIN_MS,
+	      "derived Imin is the tightest power-of-two lower bound");
+	return 1;
+}
+
 static int test_send_dio_without_iface_fails_clean(void)
 {
 	struct lichen_rpl_root no_iface;
@@ -251,6 +311,7 @@ int main(void)
 	RUN_TEST(test_dio_mop_is_non_storing_on_wire);
 	RUN_TEST(test_dio_parses_back_with_mop1);
 	RUN_TEST(test_dio_advertises_required_options);
+	RUN_TEST(test_dio_int_min_matches_runtime_trickle);
 	RUN_TEST(test_send_dio_without_iface_fails_clean);
 	printf("rpl_root_dio_tx: %d/%d passed\n", tests_passed, tests_run);
 	return (tests_passed == tests_run) ? 0 : 1;

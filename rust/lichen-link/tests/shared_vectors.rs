@@ -819,6 +819,7 @@ fn test_l2_payload_vectors() {
         let expected_dispatch = match vector.kind.as_str() {
             "schc" => Some(0x14),
             "routing" => Some(0x15),
+            "sos" => Some(0x16),
             "unknown" => None, // Unknown is intentionally unmatched
             _ => {
                 failures.push(format!(

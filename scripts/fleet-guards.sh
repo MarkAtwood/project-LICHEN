@@ -124,7 +124,18 @@ while :; do
     mkdir -p "$STATE"
     WASTE=$(python3 "$REPO/scripts/fleet_burn.py" "$STATE" "$USED" "${CLOSES:-0}" "$NOW_S" 2>"$W_ERR")
     W_EVAL=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('evaluated', False))" 2>/dev/null || echo PARSE_FAIL)
+    W_REASON=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('reason', ''))" 2>/dev/null)
     W_HINT=$(tail -n 1 "$W_ERR" 2>/dev/null)
+    # invalid-observation = the provider credits call failed (total_used
+    # prints 0 on error). A permanent outage (rotated key, endpoint change)
+    # otherwise stays silent forever: no WARN, and the $2000 burn marker
+    # below — same dead USED — dies with it. Latch once per outage episode;
+    # cleared on the first valid observation below. (7djg)
+    if [ "$W_REASON" = "invalid-observation" ] && [ ! -f "$REPO/.fleet-provider-obs" ]; then
+        date '+%F %T' > "$REPO/.fleet-provider-obs"
+        bd create --title="[ALARM] Provider credits observations failing: waste alarm and burn marker blind" --description="total_used() is returning 0 (OpenRouter credits API unreachable, rotated key, or endpoint change). fleet_burn.py reports invalid-observation without touching the baseline; the waste alarm and the \$2000 burn marker evaluate nothing while this lasts. Check scripts/fleet-guards.sh total_used against ~/.config/opencode key and https://openrouter.ai/api/v1/credits. Alarm re-arms after the first valid observation." -t bug -p 1 --json >/dev/null 2>&1
+        echo "$(date '+%F %T') ALARM: provider observations invalid — waste alarm and burn marker blind"
+    fi
     if [ -z "$WASTE" ]; then
         waste_helper_alarm
         echo "$(date '+%F %T') WARN: waste alarm skipped — fleet_burn.py produced no output (helper missing at $REPO/scripts/fleet_burn.py, or interpreter crash)${W_HINT:+ — last stderr: $W_HINT} [full stderr: $W_ERR]"
@@ -133,6 +144,7 @@ while :; do
         echo "$(date '+%F %T') WARN: waste alarm skipped — fleet_burn.py output not valid JSON${W_HINT:+ — last stderr: $W_HINT} [full stderr: $W_ERR]"
     else
         rm -f "$REPO/.fleet-waste-helper"
+        if [ "$W_REASON" != "invalid-observation" ]; then rm -f "$REPO/.fleet-provider-obs"; fi
         if [ "$W_EVAL" = "True" ]; then
             W_BURN=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['burn'])")
             W_CPC=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['cpc_str'])")
