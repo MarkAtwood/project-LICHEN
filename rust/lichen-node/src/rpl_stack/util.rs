@@ -263,8 +263,8 @@ pub enum RoutingHeaderSurvey {
 fn forwarding_address_policy_valid(source: &[u8; 16], destination: &[u8; 16]) -> bool {
     let invalid_source = source.iter().all(|&byte| byte == 0);
     let source_is_loopback = source[..15].iter().all(|&byte| byte == 0) && source[15] == 1;
-    let source_is_ipv4_mapped = source[..10].iter().all(|&byte| byte == 0)
-        && source[10..12] == [0xff, 0xff];
+    let source_is_ipv4_mapped =
+        source[..10].iter().all(|&byte| byte == 0) && source[10..12] == [0xff, 0xff];
     if invalid_source || source_is_loopback || source_is_ipv4_mapped || source[0] == 0xff {
         return false;
     }
@@ -272,8 +272,8 @@ fn forwarding_address_policy_valid(source: &[u8; 16], destination: &[u8; 16]) ->
     let destination_is_unspecified = destination.iter().all(|&byte| byte == 0);
     let destination_is_loopback =
         destination[..15].iter().all(|&byte| byte == 0) && destination[15] == 1;
-    let destination_is_ipv4_mapped = destination[..10].iter().all(|&byte| byte == 0)
-        && destination[10..12] == [0xff, 0xff];
+    let destination_is_ipv4_mapped =
+        destination[..10].iter().all(|&byte| byte == 0) && destination[10..12] == [0xff, 0xff];
     let destination_multicast_scope_invalid =
         destination[0] == 0xff && !(2..=14).contains(&(destination[1] & 0x0f));
     !destination_is_unspecified
@@ -535,11 +535,21 @@ mod tests {
         let cases = [
             ("unicast", source, destination, true),
             ("unspecified source", [0; 16], destination, false),
-            ("loopback source", [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], destination, false),
+            (
+                "loopback source",
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                destination,
+                false,
+            ),
             ("multicast source", multicast(2), destination, false),
             ("mapped source", mapped, destination, false),
             ("unspecified destination", source, [0; 16], false),
-            ("loopback destination", source, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], false),
+            (
+                "loopback destination",
+                source,
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                false,
+            ),
             ("mapped destination", source, mapped, false),
             ("multicast scope 1", source, multicast(1), false),
             ("multicast scope 2", source, multicast(2), true),

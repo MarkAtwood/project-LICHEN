@@ -2757,8 +2757,7 @@ mod tests {
         let duplicate = SanType::IpAddress(IpAddr::V6(Ipv6Addr::from(hex!(
             "0200514acffcfa9dea90556802586d37"
         ))));
-        let (leaf, intermediate, root) =
-            pkix_chain_with_sans(false, vec![native, duplicate]);
+        let (leaf, intermediate, root) = pkix_chain_with_sans(false, vec![native, duplicate]);
         let result = validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]);
         assert!(matches!(result, Err(TrustError::InvalidCertificate(_))));
     }
@@ -2767,8 +2766,10 @@ mod tests {
     fn pkix_rejects_forbidden_san_name() {
         use rcgen::SanType;
 
-        let (leaf, intermediate, root) =
-            pkix_chain_with_sans(false, vec![SanType::DnsName("gateway.example".try_into().unwrap())]);
+        let (leaf, intermediate, root) = pkix_chain_with_sans(
+            false,
+            vec![SanType::DnsName("gateway.example".try_into().unwrap())],
+        );
         let result = validate_pkix_chain(&[&leaf, &intermediate, &root], &[&root]);
         assert!(matches!(result, Err(TrustError::InvalidCertificate(_))));
     }
