@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.149.3",
+  "title": "Apply martian forwarding filter in C",
+  "description": "At the C forwarding decision, reject policy-invalid IPv6 source/destination addresses before route emission, while preserving byte-preserving RX decode. Cover loopback and IPv4-mapped transit addresses and multicast scopes 2-14 per spec 7.3. Add focused host tests with an independent expected policy table.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T11:09:42.176631261Z",
+  "created_by": "opencode-worker-8",
+  "updated_at": "2026-09-10T11:09:42.176631261Z",
+  "labels": [
+    "c",
+    "networking",
+    "routing",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.149.3",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.149",
+      "type": "parent-child",
+      "created_at": "2026-09-10T11:09:42.391597971Z",
+      "created_by": "opencode-worker-8",
+      "metadata": "{}"
+    }
+  ]
+}

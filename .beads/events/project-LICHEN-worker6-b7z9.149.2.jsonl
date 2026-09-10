@@ -1,0 +1,5 @@
+{"id":"01a08b02-571c-7f0a-ad4b-97514b4c6e7c","issue_id":"project-LICHEN-worker6-b7z9.149.2","event_type":"created","actor":"opencode-worker-8","old_value":"","new_value":"","created_at":"2026-09-10T11:09:41.532987026Z"}
+{"id":"01a08b02-5721-7c53-8772-a9edd56ec5e6","issue_id":"project-LICHEN-worker6-b7z9.149.2","event_type":"label_added","actor":"opencode-worker-8","comment":"Added label: rust","created_at":"2026-09-10T11:09:41.537809464Z"}
+{"id":"01a08b02-5726-7a79-adf7-53c9f08b0f0d","issue_id":"project-LICHEN-worker6-b7z9.149.2","event_type":"label_added","actor":"opencode-worker-8","comment":"Added label: networking","created_at":"2026-09-10T11:09:41.542687928Z"}
+{"id":"01a08b02-572b-7624-b771-4e154294451d","issue_id":"project-LICHEN-worker6-b7z9.149.2","event_type":"label_added","actor":"opencode-worker-8","comment":"Added label: routing","created_at":"2026-09-10T11:09:41.547403954Z"}
+{"id":"01a08b02-5730-7217-a09c-5478aa8f5833","issue_id":"project-LICHEN-worker6-b7z9.149.2","event_type":"label_added","actor":"opencode-worker-8","comment":"Added label: spec-gap","created_at":"2026-09-10T11:09:41.552138586Z"}
