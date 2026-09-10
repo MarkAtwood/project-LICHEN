@@ -350,7 +350,7 @@ class SosResource(resource.ObservableResource):
         # SECURITY: Require signed payload for authentication; unsigned or
         # invalid envelopes are silently dropped (spec 18.4.1)
         if not request.payload:
-            return Message(no_response=26)
+            return _silent_drop()
         try:
             body = _decode_single_cbor(request.payload)
         except (ValueError, OverflowError, cbor2.CBORDecodeError):
@@ -361,27 +361,36 @@ class SosResource(resource.ObservableResource):
         pubkey = body.get("pubkey")
         sig_blob = body.get("sig")
         if not isinstance(pubkey, bytes) or len(pubkey) != 32 or not isinstance(sig_blob, bytes):
-            return Message(no_response=26)
+            return _silent_drop()
         try:
             origin_sig = SosOriginSignature.from_bytes(sig_blob)
         except ValueError:
-            return Message(no_response=26)
+            return _silent_drop()
         # SECURITY: Verify requester is the originator of the active alert
         active_iid = bytes.fromhex(self._from.lower())
         if _pubkey_to_iid(pubkey) != active_iid:
-            return Message(no_response=26)
+            return _silent_drop()
         # SECURITY: Verify signature over canonical cancel payload
         core_cancel = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
+        # Merge resolution: both parents implement spec-18.4.1 silent drop for
+        # every auth failure; keep the _silent_drop() helper (this file's
+        # single documented form, used by render_post/_cancel_from_body and
+        # the replay gate below) over HEAD's raw Message(no_response=26),
+        # which re-hardcodes the _SILENT_DROP_NO_RESPONSE magic number. For
+        # the address keep _origin_addr_for_key (upstream AddrForKey per the
+        # settled upstream-yggdrasil-addressing decision, matching
+        # render_post/_cancel_from_body) over the other parent's inline
+        # yggdrasil_address(...).packed; both derive the identical address.
         origin_addr = _origin_addr_for_key(pubkey)
         if not verify_sos_origin(
             pubkey, origin_addr, canonicalize_sos_payload(core_cancel), origin_sig
         ):
-            return Message(no_response=26)
+            return _silent_drop()
         # SECURITY: Replay gate for cancel requests
         source_key = self._from.lower()
         last_seq = self._sequences.last_seen(source_key)
         if last_seq is not None and origin_sig.origin_sequence <= last_seq:
-            return Message(code=aiocoap.UNAUTHORIZED)
+            return _silent_drop()
         self._sequences.accept(source_key, origin_sig.origin_sequence)
         self.cancel()
         return Message(code=aiocoap.DELETED)

@@ -105,6 +105,8 @@ def _find_multicast_interface() -> str | None:
 
 def _origin_addr(pub: bytes) -> IPv6Address:
     """Origin transcript address: upstream AddrForKey (upstream-yggdrasil-addressing)."""
+    # Resolved for HEAD: upstream_addr_for_key (lichen.ipv6.addr) is the canonical
+    # settled-decision path; yggdrasil_address is the older alias of the same algorithm.
     return upstream_addr_for_key(pub)
 
 
@@ -121,6 +123,24 @@ def _signed_body(
     core.update(overrides)
     sig = sign_sos_origin(priv, pub, _origin_addr(pub), seq, core)
     return cbor2.dumps({**core, "pubkey": pub, "sig": sig.to_bytes()})
+
+
+async def _expect_silent_drop(
+    client: aiocoap.Context, payload: bytes, timeout_s: float = 3.0
+) -> None:
+    """Assert a /sos POST is silently dropped: no CoAP response is sent.
+
+    Spec 18.4.1 + sos_signature.json (error_response: false): a missing,
+    malformed, or invalid origin signature MUST be silently dropped — no
+    error response is sent, so the request times out from the client's view.
+    """
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(
+            client.request(
+                Message(code=POST, uri="coap://srv/sos", payload=payload, content_format=60)
+            ).response,
+            timeout=timeout_s,
+        )
 
 
 async def _setup() -> tuple[aiocoap.Context, aiocoap.Context, SosResource]:
@@ -387,14 +407,9 @@ class TestSosPutDelete:
             assert sos._active is True
             other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
             forged = _signed_body(seq=2, priv=other_priv, pub=other_pub, type="cancel")
-            # Invalid cancel envelope: SILENTLY dropped (spec 18.4.1).
-            with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(
-                    client.request(
-                        Message(code=POST, uri="coap://srv/sos", payload=forged, content_format=60)
-                    ).response,
-                    timeout=1.0,
-                )
+            # Forged cancel carries a non-originator signature: invalid cancel
+            # envelope, SILENTLY dropped (spec 18.4.1).
+            await _expect_silent_drop(client, forged)
             assert sos._active is True
         finally:
             await client.shutdown()
@@ -544,13 +559,7 @@ class TestSosSignatureEnforcement:
             body = cbor2.dumps({"from": _EUI.hex(), "t": _T0})
             # Spec 18.4.1: missing origin signature is SILENTLY dropped (no
             # error response, no activation).
-            with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(
-                    client.request(
-                        Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
-                    ).response,
-                    timeout=1.0,
-                )
+            await _expect_silent_drop(client, body)
             assert sos._active is False
         finally:
             await client.shutdown()
@@ -563,18 +572,7 @@ class TestSosSignatureEnforcement:
             # Flip a bit late in the payload (inside the 48-byte sig).
             body[-1] ^= 0x01
             # Spec 18.4.1: invalid origin signature is SILENTLY dropped.
-            with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(
-                    client.request(
-                        Message(
-                            code=POST,
-                            uri="coap://srv/sos",
-                            payload=bytes(body),
-                            content_format=60,
-                        )
-                    ).response,
-                    timeout=1.0,
-                )
+            await _expect_silent_drop(client, bytes(body))
             assert sos._active is False
         finally:
             await client.shutdown()
@@ -587,13 +585,7 @@ class TestSosSignatureEnforcement:
             body = _signed_body(priv=other_priv, pub=other_pub)
             # Other key does not derive to the claimed IID: binding gate fires
             # and the message is SILENTLY dropped.
-            with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(
-                    client.request(
-                        Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
-                    ).response,
-                    timeout=1.0,
-                )
+            await _expect_silent_drop(client, body)
             assert sos._active is False
         finally:
             await client.shutdown()
@@ -606,11 +598,7 @@ class TestSosSignatureEnforcement:
                 code=POST, uri="coap://srv/sos", payload=_signed_body(seq=7), content_format=60
             )
             assert (await client.request(first).response).code == aiocoap.CHANGED
-            replay = Message(
-                code=POST, uri="coap://srv/sos", payload=_signed_body(seq=7), content_format=60
-            )
-            resp = await client.request(replay).response
-            assert resp.code.is_successful() is False
+            await _expect_silent_drop(client, _signed_body(seq=7))
         finally:
             await client.shutdown()
             await server.shutdown()
@@ -622,11 +610,7 @@ class TestSosSignatureEnforcement:
                 code=POST, uri="coap://srv/sos", payload=_signed_body(seq=9), content_format=60
             )
             assert (await client.request(first).response).code == aiocoap.CHANGED
-            stale = Message(
-                code=POST, uri="coap://srv/sos", payload=_signed_body(seq=8), content_format=60
-            )
-            resp = await client.request(stale).response
-            assert resp.code.is_successful() is False
+            await _expect_silent_drop(client, _signed_body(seq=8))
         finally:
             await client.shutdown()
             await server.shutdown()
