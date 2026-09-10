@@ -17,6 +17,15 @@ rpl_stack evidence below cites conflict-free regions. Rust's
 adaptation-vector runner skips `port_boundary`/`compressed_size` categories
 (adaptation_vectors.rs:1511-1518); equivalent Rust coverage exists inline.
 
+<!-- Merge resolution (beads-worker-3 into main): the incoming branch still
+     carried the superseded 2026-09-01 matrix (89 rows, old requirement IDs,
+     including the b7z9.92 C-evidence repoint in old rows R-03-042/056). That
+     generation is dropped here: the 2026-09-09 sweep above supersedes it
+     wholesale, the Histogram/Gap-beads trailer below references only the new
+     IDs, and the old-to-new ID mapping is preserved in
+     `03-adaptation-flagged.md` (e.g. old R-03-056 hold-down row -> R-03-044,
+     which already documents the dead SCHC_INACTIVITY_TIMEOUT_S macro). -->
+
 | Req | Spec text (trimmed) | Status | Evidence | Confidence |
 |-----|---------------------|--------|----------|------------|
 | R-03-001 | §5.1: Zephyr integration requires custom L2 driver/network interface; cannot use CONFIG_NET_L2_IEEE802154 | implemented+untested | rg CONFIG_NET_L2_IEEE802154 over lichen/ = 0 matches; custom L2 at lichen/subsys/lichen/l2/ (lichen_l2_*.c behind LICHEN_LORA_L2/LICHEN_L2 Kconfig). L2 exercised by lichen/tests/ping_l2 etc., but no test asserts the 802.15.4 absence (architectural) | high |
