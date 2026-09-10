@@ -48,7 +48,7 @@ struct lichen_deaddrop_provider {
 	 * @brief Retrieve dead drop messages for a node
 	 * @param[out] buf Output buffer for CBOR SenML payload
 	 * @param[in] buf_len Buffer size
-	 * @param[in] node Recipient node identifier (or NULL for all)
+	 * @param[in] node NUL-terminated recipient node identifier (or NULL for all)
 	 * @return Number of bytes written, or negative errno on failure
 	 */
 	int (*retrieve)(uint8_t *buf, size_t buf_len, const char *node);

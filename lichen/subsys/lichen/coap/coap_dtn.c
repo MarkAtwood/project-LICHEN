@@ -309,13 +309,18 @@ static int deaddrop_get(struct coap_resource *resource,
 		return lichen_coap_respond(resource, request, addr, addr_len,
 				    COAP_RESPONSE_CODE_NOT_FOUND, 0, NULL, 0);
 	}
+	char node_buf[32];
 	const char *node = NULL;
 	struct coap_option qopts[4];
 	int qcnt = coap_find_options(request, COAP_OPTION_URI_QUERY, qopts, 4);
 	for (int i = 0; i < qcnt; i++) {
 		if (qopts[i].len > 5 &&
 		    memcmp(qopts[i].value, "node=", 5) == 0) {
-			node = (const char *)qopts[i].value + 5;
+			size_t node_len = MIN((size_t)qopts[i].len - 5,
+					      sizeof(node_buf) - 1);
+			memcpy(node_buf, qopts[i].value + 5, node_len);
+			node_buf[node_len] = '\0';
+			node = node_buf;
 			break;
 		}
 	}
