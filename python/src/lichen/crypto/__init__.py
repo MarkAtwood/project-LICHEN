@@ -88,6 +88,7 @@ from .trust import (
     verify_pubkey_to_ygg_addr,
     verify_trust_vector,
 )
+from .x509_validation import CertificateValidationError, validate_certificate_chain
 
 __all__ = [
     "ADMIN_DELEGATABLE_SCOPE",
@@ -96,6 +97,7 @@ __all__ = [
     "Capability",
     "CapabilityAnnouncement",
     "CapabilityPayload",
+    "CertificateValidationError",
     "ChannelNotEstablishedError",
     "DecryptionFailedError",
     "DelegationScope",
@@ -151,4 +153,5 @@ __all__ = [
     "verify_pubkey_to_ygg_addr",
     "verify_root_dio_signature",
     "verify_trust_vector",
+    "validate_certificate_chain",
 ]
