@@ -124,11 +124,43 @@ def test_negative_usage_baseline_is_corrupt(tmp_path: Path) -> None:
     assert _read(tmp_path) == {"usage": 100, "ts": T0}
 
 
+def test_fractional_negative_usage_is_rejected_not_truncated(tmp_path: Path) -> None:
+    # Raw -0.5 used to int()-truncate to 0 and pass as valid (v0gm).
+    (tmp_path / SNAP).write_text(json.dumps({"usage": -0.5, "ts": T0 - 90000}))
+    r = fleet_burn.update(str(tmp_path), used=100, closes=50, now=T0)
+    assert r == {"evaluated": False, "reason": "baseline-established"}
+    assert _read(tmp_path) == {"usage": 100, "ts": T0}
+
+
 def test_negative_ts_baseline_is_corrupt(tmp_path: Path) -> None:
     (tmp_path / SNAP).write_text(json.dumps({"usage": 100, "ts": -1}))
     r = fleet_burn.update(str(tmp_path), used=100, closes=50, now=T0)
     assert r == {"evaluated": False, "reason": "baseline-established"}
     assert _read(tmp_path) == {"usage": 100, "ts": T0}
+
+
+def test_baseline_shape_rejections_reestablish_baseline(tmp_path: Path) -> None:
+    # Bools, numeric strings, and fractional floats are corrupt shapes;
+    # each must re-establish rather than coerce.
+    for raw in (
+        '{"usage": true, "ts": %d}' % (T0 - 90000),
+        '{"usage": "100", "ts": %d}' % (T0 - 90000),
+        '{"usage": 100.5, "ts": %d}' % (T0 - 90000),
+    ):
+        (tmp_path / SNAP).write_text(raw)
+        r = fleet_burn.update(str(tmp_path), used=100, closes=50, now=T0)
+        assert r == {"evaluated": False, "reason": "baseline-established"}, raw
+        assert _read(tmp_path) == {"usage": 100, "ts": T0}
+
+
+def test_integral_float_baseline_is_tolerated(tmp_path: Path) -> None:
+    # Legacy fleet-driver.sh snapshots wrote float usage/ts.
+    (tmp_path / SNAP).write_text(json.dumps({"usage": 100.0, "ts": float(T0 - 90000)}))
+    # Mid-window observation (age 600s < 24h): must not evaluate and must
+    # leave the tolerated baseline untouched.
+    r = fleet_burn.update(str(tmp_path), used=110, closes=50, now=T0 - 90000 + 600)
+    assert r["evaluated"] is False
+    assert _read(tmp_path) == {"usage": 100.0, "ts": T0 - 90000}
 
 
 def test_future_baseline_ts_reestablishes_instead_of_suppressing(tmp_path: Path) -> None:

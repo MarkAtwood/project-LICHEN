@@ -8,6 +8,7 @@
 set -u
 REPO="/home/mark/Developer/lichen-workspace/project-LICHEN"
 CYCLE_MIN="${1:-10}"
+case "$CYCLE_MIN" in ''|*[!0-9]*|0) echo "fleet-guards: cycle_minutes must be a positive integer (got '$CYCLE_MIN')" >&2; exit 1;; esac
 export BEADS_DIR="$REPO/.beads"
 cd "$REPO" || exit 1
 STATE="/tmp/fleet-driver-state"
@@ -25,6 +26,18 @@ for i in json.load(sys.stdin):
         if (now - c).total_seconds() <= 86400: n += 1
     except Exception: pass
 print(n)" 2>/dev/null || echo 0
+}
+
+# Escalate a failing waste-alarm helper to the queue, once per failure
+# episode (flag cleared on the first clean parse below). Log-only WARNs
+# would repeat every cycle with no durable record — the same silent-death
+# class the guards exist to prevent (lh2z).
+waste_helper_alarm() {
+    if [ ! -f "$REPO/.fleet-waste-helper" ]; then
+        date '+%F %T' > "$REPO/.fleet-waste-helper"
+        bd create --title="[ALARM] Waste alarm helper failing: fleet_burn.py empty/unparseable output" --description="The waste alarm and the burn marker are blind: scripts/fleet_burn.py produced empty or non-JSON output from the guards loop. Check the helper exists at \$REPO/scripts/fleet_burn.py and inspect the interpreter traceback captured in \$STATE/fleet_burn.err (guards log has the last stderr line per cycle). Alarm re-arms automatically after the first clean helper run." -t bug -p 1 --json >/dev/null 2>&1
+        echo "$(date '+%F %T') ALARM: waste alarm helper failing — bd issue filed"
+    fi
 }
 
 total_used() {
@@ -92,19 +105,30 @@ while :; do
     # never evaluated — lh2z.) Logic lives in fleet_burn.py for testability.
     USED=$(total_used)
     NOW_S=$(date +%s)
-    WASTE=$(python3 "$REPO/scripts/fleet_burn.py" "$STATE" "$USED" "${CLOSES:-0}" "$NOW_S" 2>/dev/null)
-    W_EVAL=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('evaluated', False))" 2>/dev/null || echo False)
-    if [ "$W_EVAL" = "True" ]; then
-        W_BURN=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['burn'])")
-        W_CPC=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['cpc_str'])")
-        W_OVER=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['over'])")
-        echo "   cost-per-close (24h): \$$W_CPC (burn \$$W_BURN / $CLOSES)"
-        if [ "$W_OVER" = "True" ] && [ ! -f "$REPO/.fleet-waste" ]; then
-            date '+%F %T' > "$REPO/.fleet-waste"
-            bd create --title="[ALARM] Waste: cost-per-close \$$W_CPC exceeds \$3" --description="24h-window burn \$$W_BURN / $CLOSES closures = \$$W_CPC/close (baseline ~\$1.20). Spend buying less than half its normal function. Check: stalls? failed merge sessions? store conflicts degrading bd? self-modification issues?" -t bug -p 1 --json >/dev/null 2>&1
-            echo "   ALARM: waste signature — \$$W_CPC/close"
-        elif [ "$W_OVER" = "False" ]; then
-            rm -f "$REPO/.fleet-waste"
+    W_ERR="$STATE/fleet_burn.err"
+    WASTE=$(python3 "$REPO/scripts/fleet_burn.py" "$STATE" "$USED" "${CLOSES:-0}" "$NOW_S" 2>"$W_ERR")
+    W_EVAL=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('evaluated', False))" 2>/dev/null || echo PARSE_FAIL)
+    W_HINT=$(tail -n 1 "$W_ERR" 2>/dev/null)
+    if [ -z "$WASTE" ]; then
+        waste_helper_alarm
+        echo "$(date '+%F %T') WARN: waste alarm skipped — fleet_burn.py produced no output (helper missing at $REPO/scripts/fleet_burn.py, or interpreter crash)${W_HINT:+ — last stderr: $W_HINT} [full stderr: $W_ERR]"
+    elif [ "$W_EVAL" = "PARSE_FAIL" ]; then
+        waste_helper_alarm
+        echo "$(date '+%F %T') WARN: waste alarm skipped — fleet_burn.py output not valid JSON${W_HINT:+ — last stderr: $W_HINT} [full stderr: $W_ERR]"
+    else
+        rm -f "$REPO/.fleet-waste-helper"
+        if [ "$W_EVAL" = "True" ]; then
+            W_BURN=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['burn'])")
+            W_CPC=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['cpc_str'])")
+            W_OVER=$(echo "$WASTE" | python3 -c "import json,sys; print(json.load(sys.stdin)['over'])")
+            echo "   cost-per-close (24h): \$$W_CPC (burn \$$W_BURN / $CLOSES)"
+            if [ "$W_OVER" = "True" ] && [ ! -f "$REPO/.fleet-waste" ]; then
+                date '+%F %T' > "$REPO/.fleet-waste"
+                bd create --title="[ALARM] Waste: cost-per-close \$$W_CPC exceeds \$3" --description="24h-window burn \$$W_BURN / $CLOSES closures = \$$W_CPC/close (baseline ~\$1.20). Spend buying less than half its normal function. Check: stalls? failed merge sessions? store conflicts degrading bd? self-modification issues?" -t bug -p 1 --json >/dev/null 2>&1
+                echo "   ALARM: waste signature — \$$W_CPC/close"
+            elif [ "$W_OVER" = "False" ]; then
+                rm -f "$REPO/.fleet-waste"
+            fi
         fi
     fi
 
