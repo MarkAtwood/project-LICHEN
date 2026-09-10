@@ -27,7 +27,7 @@
       "recipient": "msg-node",
       "ciphertext": "4502000102030405",
       "ttl": 86400,
-      "encoded": "4402000183deaddropc0",
+      "encoded": "4102000501b86465616464726f70",
       "senml_payload": "81a2616e67636f6e74656e7462767365616c657274",
       "expected": {
         "response_code": 69,
@@ -84,7 +84,7 @@
       "ciphertext": "4ed339a5a379b0b8bc731fffb0",
       "oscore_option": "091400",
       "ttl": 7200,
-      "encoded": "4402000183deaddropc0",
+      "encoded": "4102000501b86465616464726f70",
       "senml_payload": "a16674656d70666532332e35",
       "expected": {
         "response_code": 69,
@@ -100,7 +100,7 @@
       "ciphertext": "4ed339a5a379b0b8bc731fffb0",
       "oscore_option": "091400",
       "ttl": 7200,
-      "encoded": "4402000183deaddropc0",
+      "encoded": "4102000501b86465616464726f70",
       "expected": {
         "response_code": 129,
         "num_pending": 0
@@ -114,7 +114,7 @@
       "ciphertext": "",
       "oscore_option": "091400",
       "ttl": 7200,
-      "encoded": "4402000183deaddropc0",
+      "encoded": "4102000501b86465616464726f70",
       "expected": {
         "response_code": 128,
         "num_pending": 0
@@ -126,7 +126,7 @@
       "description": "GET /deaddrop?node=eui-0102030405060708 after TTL has expired returns empty list. Oracle: stateless; TTL expiration is deterministic given unix_time.",
       "recipient": "eui-0102030405060708",
       "ttl": 0,
-      "encoded": "44010001deaddrop",
+      "encoded": "4101000301b86465616464726f70",
       "senml_payload": "",
       "expected": {
         "response_code": 69,
@@ -141,7 +141,7 @@
       "ciphertext": "0102030405060708",
       "ttl": 86400,
       "payload_size": 2048,
-      "encoded": "4402000183deaddropc0",
+      "encoded": "4102000501b86465616464726f70",
       "expected": {
         "response_code": 141,
         "error_type": "request_entity_too_large"
@@ -155,7 +155,7 @@
       "ciphertext": "0102030405060708",
       "ttl": 86400,
       "storage_state": "full",
-      "encoded": "4402000183deaddropc0",
+      "encoded": "4102000501b86465616464726f70",
       "expected": {
         "response_code": 163,
         "cbor_payload": {
@@ -172,7 +172,7 @@
       "ciphertext": "0102030405060708",
       "ttl": 1209600,
       "oscore_option": "091400",
-      "encoded": "4402000183deaddropc0",
+      "encoded": "4102000501b86465616464726f70",
       "senml_payload": "81a26174781a9a14006e747466",
       "expected": {
         "response_code": 69,
@@ -188,7 +188,7 @@
       "ciphertext": "f0910ed7295e6ad4",
       "oscore_option": "091400",
       "ttl": 86400,
-      "encoded": "4402000183deaddropc0",
+      "encoded": "4102000501b86465616464726f70",
       "senml_payload_decoded": [
         {"bn": "urn:dev:mac:0011223344556677:", "bt": 1721654321},
         {"n": "type", "vs": "message"},
@@ -213,7 +213,7 @@
       "oscore_option": "19100001",
       "group_context_id": "alpha-group",
       "ttl": 43200,
-      "encoded": "4402000183deaddropc0",
+      "encoded": "4102000501b86465616464726f70",
       "senml_payload": "81a2006d67726f75702d6d73670365746573742d313233",
       "expected": {
         "response_code": 69,
@@ -226,7 +226,7 @@
       "description": "GET /deaddrop/7f3a9c returns single drop's SenML payload with Max-Age set to remaining TTL. Per spec 18.9 example: 'Location-Path: /deaddrop/7f3a9c'. Oracle: Path parsing is stateless string match.",
       "recipient": "eui-0102030405060708",
       "drop_id": "7f3a9c",
-      "encoded": "4401000186deaddrop7f3a9c",
+      "encoded": "4101000101b86465616464726f704969643d376633613963",
       "expected": {
         "response_code": 69,
         "content_format": 112,
@@ -239,7 +239,7 @@
       "description": "GET /deaddrop/ffffff for non-existent drop ID returns 4.04 Not Found. Oracle: 404 per RFC 7252 section 5.9.1.4.",
       "recipient": "any",
       "drop_id": "ffffff",
-      "encoded": "4401000186deaddropffffff",
+      "encoded": "4101000101b86465616464726f704969643d666666666666",
       "expected": {
         "response_code": 132
       }
@@ -263,7 +263,7 @@
       "description": "GET /deaddrop with Observe:0 receives notification when new drop arrives. Per spec 18.9: CoAP Observe (RFC 7641) support. Oracle: Observe semantics per RFC 7641 section 3.2.",
       "recipient": "observer-node",
       "observe_option": 0,
-      "encoded": "4401000160deaddrop",
+      "encoded": "41010006016058deaddrop",
       "expected": {
         "response_code": 69,
         "has_observe_option": true,
