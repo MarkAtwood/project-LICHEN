@@ -14,6 +14,7 @@ add_executable(rpl_srh_test
 target_include_directories(rpl_srh_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../include
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/hal/include
 )
 target_compile_definitions(rpl_srh_test PRIVATE LICHEN_RPL_TEST=1)
 target_compile_options(rpl_srh_test PRIVATE -Wno-nullability-completeness)
