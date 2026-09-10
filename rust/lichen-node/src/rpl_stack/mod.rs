@@ -238,14 +238,6 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         &self.storage
     }
 
-    /// Get the local link-layer IID (SHA-512 of the local public key).
-    ///
-    /// Same identity plane as peer IIDs derived via `iid_from_pubkey_bytes`;
-    /// use this wherever the node's own IID is compared against peer IIDs.
-    pub fn local_iid(&self) -> [u8; 8] {
-        self.stack.local_iid()
-    }
-
     pub(crate) fn route_for(
         &mut self,
         destination: [u8; 16],
@@ -280,23 +272,16 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 if source_route.last() != Some(&destination) {
                     return None;
                 }
-                // The first hop is a routable /128; its L2 EUI-64 is not
-                // derivable from the address (i72x.2) — resolve through the
-                // authenticated peer table, failing closed (no route).
-                let first = *source_route.first()?;
-                let mut next_hop = self.stack.link().peer_iid_for_routable_addr(&first)?;
-                next_hop[0] ^= 0x02;
-                return Some(RoutePlan {
-                    next_hop,
-                    source_route,
                 // The first hop is this node's direct neighbor, but post-AddrForKey
                 // it is a routable 02xx address with no embedded IID, so the L2
                 // destination resolves through the authenticated peer table.
-                return source_route.first().copied().and_then(|first| {
-                    Some(RoutePlan {
-                        next_hop: util::l2_destination(first, self.stack.link_ref())?,
-                        source_route,
-                    })
+                return util::l2_destination(
+                    *source_route.first()?,
+                    self.stack.link_ref(),
+                )
+                .map(|next_hop| RoutePlan {
+                    next_hop,
+                    source_route,
                 });
             }
         }
