@@ -5,7 +5,11 @@ use super::router::{dao_parents_for_source, sign_dao};
 use super::*;
 use core::net::Ipv6Addr;
 use lichen_core::constants::RPL_INSTANCE_ID;
-use lichen_link::{identity::Identity, keys::Seed, link_layer::LinkLayer};
+use lichen_link::{
+    identity::{Identity, PeerIdentity},
+    keys::Seed,
+    link_layer::LinkLayer,
+};
 use lichen_rpl::dodag::{DodagState, MIN_HOP_RANK_INCREASE};
 use lichen_rpl::message::{
     Dao, Dio, DodagConfig, OptionIter, TransitInfo, DODAG_CONFIG_DATA_LEN,
@@ -911,7 +915,10 @@ fn direct_child_gate_fires_on_routable_upstream_addresses() {
     assert!(root.lookup_route(Ipv6Addr::from(target)).is_none());
     // Correct sender (origin == source) is accepted.
     assert!(root.process_dao_at_ms(&dao, target, target, 0));
-    assert_eq!(root.lookup_route(Ipv6Addr::from(target)), Some([Ipv6Addr::from(target)].as_slice()));
+    assert_eq!(
+        root.lookup_route(Ipv6Addr::from(target)),
+        Some([Ipv6Addr::from(target)].as_slice())
+    );
 }
 
 #[test]
@@ -1934,10 +1941,20 @@ fn signed_dao(
     (origin, wire)
 }
 
+fn link_with_root(identity: &Identity, root: &Identity) -> LinkLayer {
+    let mut link = LinkLayer::new(identity.clone());
+    link.add_peer(PeerIdentity::from_pubkey(root.pubkey));
+    link
+}
+
 #[test]
 fn tx_sequence_is_persisted_before_bytes_and_write_failure_returns_no_bytes() {
     let identity = Identity::from_seed(Seed::new([1; 32]));
-    let root = [0x44; 16];
+    // The DODAG parent must be an authenticated peer's primary 02xx address
+    // (i72x.2 Transit resolution); a synthetic non-ygg root can no longer
+    // stand in. The persistence oracle below is unchanged.
+    let root_identity = Identity::from_seed(Seed::new([0x44; 32]));
+    let root = lichen_core::addr::ygg_addr_from_pubkey(root_identity.pubkey.as_bytes());
     let mut router = Router::new(origin_for(&identity), root);
     let dio = Dio {
         rpl_instance_id: RPL_INSTANCE_ID,
@@ -1968,7 +1985,7 @@ fn tx_sequence_is_persisted_before_bytes_and_write_failure_returns_no_bytes() {
             origin_for(&identity),
             &mut wrong_tx,
             &mut wrong_storage,
-            &LinkLayer::new(identity.clone()),
+            &link_with_root(&identity, &root_identity),
         ),
         Err(DaoTxError::KeyMismatch)
     );
@@ -1990,7 +2007,7 @@ fn tx_sequence_is_persisted_before_bytes_and_write_failure_returns_no_bytes() {
             origin_for(&identity),
             &mut tx,
             &mut storage,
-            &LinkLayer::new(identity.clone())
+            &link_with_root(&identity, &root_identity)
         ),
         Err(DaoTxError::Persistence(_))
     ));
@@ -1999,7 +2016,7 @@ fn tx_sequence_is_persisted_before_bytes_and_write_failure_returns_no_bytes() {
             origin_for(&identity),
             &mut tx,
             &mut storage,
-            &LinkLayer::new(identity.clone()),
+            &link_with_root(&identity, &root_identity),
         )
         .unwrap();
     assert_eq!(
@@ -2028,7 +2045,7 @@ fn tx_sequence_is_persisted_before_bytes_and_write_failure_returns_no_bytes() {
             origin_for(&identity),
             &mut tx,
             &mut storage,
-            &LinkLayer::new(identity.clone()),
+            &link_with_root(&identity, &root_identity),
         ),
         Err(DaoTxError::Persistence(_))
     ));
@@ -2049,7 +2066,7 @@ fn tx_sequence_is_persisted_before_bytes_and_write_failure_returns_no_bytes() {
             origin_for(&identity),
             &mut tx,
             &mut storage,
-            &LinkLayer::new(identity),
+            &link_with_root(&identity, &root_identity),
         )
         .unwrap();
     assert_eq!(

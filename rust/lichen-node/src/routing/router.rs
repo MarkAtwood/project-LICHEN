@@ -695,13 +695,12 @@ impl Router {
         // routable senders match by exact address; a link-local sender still
         // binds the packet source to the L2-authenticated sender IID.
         if parents.iter().any(|parent| parent == &self.dodag_id) {
-            let source_bound_to_sender = if authenticated_sender[..8]
-                == [0xfe, 0x80, 0, 0, 0, 0, 0, 0]
-            {
-                same_interface(&authenticated_sender, &packet_source)
-            } else {
-                authenticated_sender == packet_source
-            };
+            let source_bound_to_sender =
+                if authenticated_sender[..8] == [0xfe, 0x80, 0, 0, 0, 0, 0, 0] {
+                    same_interface(&authenticated_sender, &packet_source)
+                } else {
+                    authenticated_sender == packet_source
+                };
             if !source_bound_to_sender {
                 return false;
             }
@@ -884,10 +883,29 @@ impl Router {
         ) {
             return Err(DaoTxError::KeyMismatch);
         }
+        // Parent authentication precedes any sequence reservation or
+        // persistence write: a failed build must leave all counters and
+        // storage untouched.
+        let parent_addr: [u8; 16] = if parent[0] == 0xfe && parent[1] & 0xc0 == 0x80 {
+            // The DAO Transit Parent Address carries the parent's primary
+            // 02xx routing identity (spec 05 §8.7): AddrForKey does not
+            // embed the link-local IID (i72x.2), so the fe80:: DODAG parent
+            // must be resolved to its routable address through the pinned
+            // peer table, failing closed when the parent is not an
+            // authenticated peer.
+            let parent_pubkey = link
+                .pinned_pubkey_for(&parent[8..].try_into().expect("16-byte address"))
+                .ok_or(DaoTxError::NotJoined)?;
+            lichen_link::ygg_addr_from_pubkey(parent_pubkey.as_bytes())
+        } else if link.peer_iid_for_routable_addr(&parent).is_some() {
+            parent
+        } else {
+            return Err(DaoTxError::NotJoined);
+        };
         let sequence = tx_state.reserve_next(storage)?;
         let unsigned = self
             .dao_manager
-            .build_dao_with_lifetime(parent.into(), self.dodag_config.def_lifetime);
+            .build_dao_with_lifetime(parent_addr.into(), self.dodag_config.def_lifetime);
         let wire = sign_dao(&unsigned, origin_ipv6, self.dodag_id, sequence, link)
             .ok_or(DaoTxError::Encoding)?;
         tx_state.finalize_signed(storage, sequence, &wire)?;

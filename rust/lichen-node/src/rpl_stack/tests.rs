@@ -325,14 +325,8 @@ fn runtime_root() -> (
     let state = Arc::new(Mutex::new(RuntimeRadioState::default()));
     let stack = Stack::new_default_epoch(RuntimeRadio(Arc::clone(&state)), identity);
     (
-        RplStack::provision_root(
-            stack,
-            root_addr,
-            root_addr,
-            announces(),
-            MemStorage::new(),
-        )
-        .unwrap(),
+        RplStack::provision_root(stack, root_addr, root_addr, announces(), MemStorage::new())
+            .unwrap(),
         state,
     )
 }
@@ -518,19 +512,35 @@ fn rfc6554_route_crosses_two_relays_and_restores_packet() {
     // the already-merged receive.rs resolves util.rs to the `[u8; 16]`
     // `sender_routable` parameter, not worker-5's `&PublicKey` form.
     assert_eq!(
-        advance_rpl_source_route(&mut routed, relay_one, source[8..].try_into().unwrap(), source).unwrap(),
+        advance_rpl_source_route(
+            &mut routed,
+            relay_one,
+            source[8..].try_into().unwrap(),
+            source
+        )
+        .unwrap(),
         Some(relay_two)
     );
     assert_eq!(routed[43], 1);
     assert_eq!(
-        advance_rpl_source_route(&mut routed, relay_two, relay_one[8..].try_into().unwrap(), relay_one,)
-            .unwrap(),
+        advance_rpl_source_route(
+            &mut routed,
+            relay_two,
+            relay_one[8..].try_into().unwrap(),
+            relay_one,
+        )
+        .unwrap(),
         Some(destination)
     );
     assert_eq!(routed[43], 0);
     assert_eq!(
-        advance_rpl_source_route(&mut routed, destination, relay_two[8..].try_into().unwrap(), relay_two,)
-            .unwrap(),
+        advance_rpl_source_route(
+            &mut routed,
+            destination,
+            relay_two[8..].try_into().unwrap(),
+            relay_two,
+        )
+        .unwrap(),
         None
     );
     assert_eq!(routed, plain);
@@ -1496,14 +1506,8 @@ async fn leaf_send_allocates_each_update_and_restart_advances_sequence() {
     let mut root_sender = Stack::new(root_radio, root_identity.clone(), 129, 0);
     root_sender.add_peer(PeerIdentity::from_pubkey(leaf_identity.pubkey));
     let leaf_stack = Stack::new(leaf_radio, leaf_identity.clone(), 129, 0);
-    let mut leaf = RplStack::open_leaf(
-        leaf_stack,
-        leaf_addr,
-        root_addr,
-        announces(),
-        persisted,
-    )
-    .unwrap();
+    let mut leaf =
+        RplStack::open_leaf(leaf_stack, leaf_addr, root_addr, announces(), persisted).unwrap();
     assert!(matches!(
         leaf.send_dao().await,
         Err(DaoSendError::Dao(DaoTxError::NotJoined))
@@ -1588,7 +1592,11 @@ async fn relay_forwards_original_source_and_signed_body() {
     let leaf_announce = signed_announce(&leaf_identity, 1);
     let mut payload = vec![L2_DISPATCH_ROUTING];
     payload.extend_from_slice(&leaf_announce);
-    let leaf_link = LinkLayer::new(leaf_identity.clone());
+    let mut leaf_link = LinkLayer::new(leaf_identity.clone());
+    // The DAO builder resolves the DODAG parent's 02xx Transit address
+    // through the authenticated peer table (i72x.2); the parent must be
+    // pinned exactly as production guarantees.
+    leaf_link.add_peer(PeerIdentity::from_pubkey(relay_identity.pubkey));
     let mut wire = [0u8; MAX_FRAME_SIZE];
     let len = leaf_link
         .build_frame(128, 0u16.into(), &[], &payload, &mut wire)
@@ -1986,7 +1994,11 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         root_addr,
     )
     .unwrap();
-    let leaf_link = LinkLayer::new(leaf_identity.clone());
+    let mut leaf_link = LinkLayer::new(leaf_identity.clone());
+    // The DAO builder resolves the DODAG parent's 02xx Transit address
+    // through the authenticated peer table (i72x.2); pin the root exactly
+    // as production guarantees.
+    leaf_link.add_peer(PeerIdentity::from_pubkey(root_identity.pubkey));
     let mut leaf_router = Router::new(leaf_addr, root_addr);
     let dio = Dio {
         rpl_instance_id: lichen_core::constants::RPL_INSTANCE_ID,
@@ -2125,7 +2137,11 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         root_addr,
     )
     .unwrap();
-    let unknown_link = LinkLayer::new(unknown_identity.clone());
+    let mut unknown_link = LinkLayer::new(unknown_identity.clone());
+    // The DAO builder resolves the DODAG parent's 02xx Transit address
+    // through the authenticated peer table (i72x.2); pin the parent exactly
+    // as production guarantees.
+    unknown_link.add_peer(PeerIdentity::from_pubkey(leaf_identity.pubkey));
     let mut unknown_router = Router::new(unknown_addr, root_addr);
     assert!(unknown_router.process_dio(&dio, &dio_body[..dio_len], leaf_addr, 0, 0));
     let unknown_dao = unknown_router
@@ -2224,14 +2240,8 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     let (leaf_radio, root_radio) = LoopbackRadio::pair();
     let mut leaf = Stack::new(leaf_radio, leaf_identity.clone(), 129, 0);
     let root_stack = Stack::new(root_radio, root_identity, 129, 0);
-    let mut reopened = RplStack::open_root(
-        root_stack,
-        root_addr,
-        root_addr,
-        announces(),
-        persisted,
-    )
-    .unwrap();
+    let mut reopened =
+        RplStack::open_root(root_stack, root_addr, root_addr, announces(), persisted).unwrap();
     send_announce(&mut leaf, &leaf_identity, 1).await;
     assert!(matches!(
         reopened.receive(1, 0).await.unwrap(),
@@ -3559,4 +3569,3 @@ async fn root_dio_signature_roundtrip_produces_and_advances() {
         "second signed DIO must be admitted after seq advance: {outcome:?}"
     );
 }
-

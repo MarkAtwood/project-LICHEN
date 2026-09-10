@@ -1093,6 +1093,7 @@ mod tests {
     fn leaf_dao_is_forwarded_by_parent_and_processed_by_root() {
         use crate::{announce::AnnounceProcessor, gradient::GradientTable};
         use lichen_hal::storage::mem::MemStorage;
+        use lichen_link::identity::PeerIdentity;
         use lichen_link::{identity::Identity, keys::Seed, link_layer::LinkLayer};
         use lichen_rpl::routing::DaoAdmissionState;
 
@@ -1174,12 +1175,17 @@ mod tests {
             root_addr,
         )
         .unwrap();
+        let mut parent_link = LinkLayer::new(parent_identity.clone());
+        // The DAO builder resolves the DODAG parent's 02xx Transit address
+        // through the authenticated peer table (i72x.2); pin the root exactly
+        // as production guarantees.
+        parent_link.add_peer(PeerIdentity::from_pubkey(root_identity.pubkey));
         let parent_dao = parent
             .build_signed_dao(
                 parent_addr,
                 &mut parent_tx,
                 &mut parent_storage,
-                &LinkLayer::new(parent_identity.clone()),
+                &parent_link,
             )
             .unwrap();
         let parent_packet = l2_dao_packet(parent_addr, root_addr, &parent_dao);
@@ -1211,13 +1217,13 @@ mod tests {
             root_addr,
         )
         .unwrap();
+        let mut leaf_link = LinkLayer::new(leaf_identity.clone());
+        // The DAO builder resolves the DODAG parent's 02xx Transit address
+        // through the authenticated peer table (i72x.2); pin the parent
+        // exactly as production guarantees.
+        leaf_link.add_peer(PeerIdentity::from_pubkey(parent_identity.pubkey));
         let leaf_dao = leaf
-            .build_signed_dao(
-                leaf_addr,
-                &mut leaf_tx,
-                &mut leaf_storage,
-                &LinkLayer::new(leaf_identity.clone()),
-            )
+            .build_signed_dao(leaf_addr, &mut leaf_tx, &mut leaf_storage, &leaf_link)
             .unwrap();
         let leaf_packet = l2_dao_packet(leaf_addr, root_addr, &leaf_dao);
         // Link-local DAO sources are bound to the sender IID at this raw
@@ -1337,6 +1343,7 @@ mod tests {
         };
         use crate::{announce::AnnounceProcessor, gradient::GradientTable};
         use lichen_hal::storage::mem::MemStorage;
+        use lichen_link::identity::PeerIdentity;
         use lichen_link::{identity::Identity, keys::Seed, link_layer::LinkLayer};
         use lichen_rpl::routing::DaoAdmissionState;
 
@@ -1435,12 +1442,17 @@ mod tests {
             root_addr,
         )
         .unwrap();
+        let mut parent_link = LinkLayer::new(parent_identity.clone());
+        // The DAO builder resolves the DODAG parent's 02xx Transit address
+        // through the authenticated peer table (i72x.2); pin the root exactly
+        // as production guarantees.
+        parent_link.add_peer(PeerIdentity::from_pubkey(root_identity.pubkey));
         let parent_dao = parent
             .build_signed_dao(
                 parent_addr,
                 &mut parent_tx,
                 &mut parent_storage,
-                &LinkLayer::new(parent_identity.clone()),
+                &parent_link,
             )
             .unwrap();
         let parent_packet = l2_dao_packet(parent_addr, root_addr, &parent_dao);
