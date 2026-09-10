@@ -20,14 +20,7 @@ Slot duration MUST be at least `ceil(maximum permitted PHY-payload airtime in mi
 
 For the canonical SF10/125 kHz, CR 4/5 profile with an eight-symbol preamble, explicit header, PHY CRC, and the 255-byte maximum payload, airtime is 2,295.808 ms. With the mandatory 50 ms guard, the minimum slot is 2,346 ms. The data window starts at the slot boundary and the single guard occupies the final 50 ms; a node MUST NOT transmit during the guard.
 
-Beacon content (normative wire format, SCHC-compressed on CH0):
-- Type (1B): 0xBE (beacon)
-- SFN (u32): superframe number for slot computation and wrap detection
-- Timestamp (u32): reference time for drift compensation and stratum
-- Stratum (u8): time source quality (0=GNSS, 1=mesh, per 09-packets-timing)
-- N_slots (u8): default 8-32
-- Slot bitmap or assigned list (variable)
-- Next beacon delta (u16 ms)
+Beacon content (normative wire format in 02a-coordinated-capacity.md §2a.2): fixed-format uncompressed 24-byte header on CH0 — epoch (u32), num_slots (u8, nonzero, default 8), SFN (u32, for slot computation and wrap detection), timestamp (u32, reference time for drift compensation), flags (u8), rx_chains (u8), setup_window (u16 ms), occupied_time (u16 ms), guard (u8 ms), channel_mask (u32) — followed by CBOR options carrying the slot_map (a sorted assigned-slot list, not a bitmap) and a trailing 48-byte Schnorr48 signature. The beacon is NOT SCHC-compressed: it is not an IPv6/UDP packet, so SCHC would save no bytes (decision `rule-0x08-tdma-beacon`, spec/decisions.jsonl). The beacon carries no type byte, no stratum field, and no next-beacon-delta field: time-source quality (stratum per 09-packets-timing) rides the DIO Time option 0x15, and next-beacon timing derives from the superframe schedule rather than a wire field.
 
 Beacon uses distinct sync word (0x34 per spec) or LLSec flag. Old nodes MUST ignore (backwards compatible).
 

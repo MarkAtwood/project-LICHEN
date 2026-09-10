@@ -1159,9 +1159,12 @@ A credential carrying `x5chain` is valid only if ALL of the following hold:
 2. The IID derived from the leaf public key (03-addressing.md) equals the
    COSE `kid` (issuer-iid). A credential whose `kid` names a different key
    than the verified one MUST be rejected.
-3. The leaf certificate's SAN native `/128` has an IID equal to that same
-   `kid`, per the verifier address-binding check
-   (appendix-x509-cert-profile.md §8, step 4).
+3. The leaf certificate's SAN native `/128` equals the upstream
+   `AddrForKey` of the leaf public key, byte-for-byte, per the verifier
+   address-binding check (appendix-x509-cert-profile.md §8, step 4).
+   The routable address does not embed the SHA-512 IID (§8.7): a SAN
+   entry that carries the `kid` in its lower 64 bits instead of the
+   `AddrForKey` form MUST be rejected.
 4. The payload `subject-iid` equals that same `kid`: a chain-attested
    credential is self-referential, so the leaf key, the COSE signer, the
    SAN, and the subject are all one identity. A credential asserting facts
