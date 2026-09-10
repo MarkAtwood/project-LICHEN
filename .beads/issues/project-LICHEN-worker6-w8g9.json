@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-w8g9",
+  "title": "[spec-gap] X.509 appendix normative text still specifies rejected SHA-512 native profile",
+  "description": "Found by security review of bedw.19 vectors (kimi-k3 pass 2). spec/appendix-x509-cert-profile.md normative text is pre-migration: section 4 MUST-level formula addr = [0x02] + SHA-512(pubkey)[0:7] + IID (~L79-81), section 2 'the same key whose SHA-512-derived IID produces the node's addresses' (~L52-54), and security-relevant section 8 step 4 verifier address-binding recomputation via SHA-512 (~L208-214). A verifier built from section 8 step 4 would REJECT a certificate carrying the settled upstream AddrForKey SAN that test/vectors/x509_cert_profile.json (bedw.19) pins. The appendix is absent from the upstream-yggdrasil-addressing decision's specs list (decisions.jsonl covers only 03/04/05/06/11), so the migration gap is un-remedied spec text, not just the stale section-4 worked example. Needed: rewrite sections 2/4/8-step-4 + worked example to AddrForKey(SPKI) per decisions.jsonl (analogous to bedw.11 R-X509-016/018/051 implementation-side bead).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T06:18:17.601291942Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-09-10T06:18:17.601291942Z",
+  "labels": [
+    "spec",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-w8g9",
+      "depends_on_id": "project-LICHEN-worker6-bedw.19",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T06:18:17.727589332Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-tq35",
+  "title": "crypto/trust.py docstring still documents rejected SHA-512-native address profile",
+  "description": "Found during v1kc codereview (pass 1): python/src/lichen/crypto/trust.py:12-13 documents '02xx = [0x02] || SHA-512(pubkey)[0:7] || iid' — the rejected LICHEN-native profile. Settled decision upstream-yggdrasil-addressing (spec/decisions.jsonl) mandates upstream AddrForKey everywhere; the real derivation is identity.py yggdrasil_address (AddrForKey bit-packing, no hashing). Stale doc likely contributed to the v1kc fixture bug (pin table keyed by SHA-512 IID). Update docstring to reference upstream AddrForKey.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T06:15:36.205036367Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-09-10T06:15:36.205036367Z",
+  "labels": [
+    "python",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-tq35",
+      "depends_on_id": "project-LICHEN-worker6-v1kc",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T06:15:36.339566843Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

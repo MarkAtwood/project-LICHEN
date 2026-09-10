@@ -1,0 +1,7 @@
+{
+  "id": "1789020941359726163-1",
+  "issue_id": "project-LICHEN-worker6-plqy",
+  "author": "opencode-worker-7",
+  "text": "v1kc evidence (python side, worker7): python DAO origin validator looks up pins by routable source addr[8:16] (dao_origin.py:327) and _authorize_delegated_target binds delegate_iid to the same bytes (dao_manager.py:1172) — but production pin table (announce processor _pinned_keys, processor.py:200) is keyed by the announce-message IID (SHA-512 form). Post-AddrForKey those byte strings differ, so python DAO validation against an announce-populated pin table can never succeed. Rust solved the same gap with announce.rs pinned_pubkey_for_routable (full-table scan matching ygg_addr_from_pubkey(pubkey)==addr, citing i72x.2). The spec decision tracked here should also pin which identity form populates delegate_iid / pin tables in all three stacks.",
+  "created_at": "2026-09-10T06:15:41.359726163Z"
+}

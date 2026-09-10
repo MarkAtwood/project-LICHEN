@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-tk1x",
+  "title": "test_dao_prefix_authorization: 8 token fixtures still use Identity.iid delegate (latent two-convention)",
+  "description": "Codereview pass 3 on v1kc fix: python/tests/rpl/test_dao_prefix_authorization.py:308,327,335,347,360,367,379,385,391 still pass NODE_IDENTITY.iid as the token delegate while the file now defines NODE_DELEGATE (= NODE_ADDR.packed[8:16]) as the delegate-key convention. Verified outcome-neutral today (all are install-only paths where delegate is opaque payload, or wire-profile rejects before authorization), but: (a) line 308's docstring claims 'a seeded /64 delegation' for this origin while the seeded token is bound to an IID the origin never presents — if check ordering ever changed it would fail with misleading delegate_mismatch; (b) the file models two contradictory delegate-key conventions for future copy-paste. Swap the remaining sites to NODE_DELEGATE for uniformity.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T06:15:34.323098771Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-09-10T06:15:34.323098771Z",
+  "labels": [
+    "python",
+    "tests"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-tk1x",
+      "depends_on_id": "project-LICHEN-worker6-v1kc",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T06:15:34.451029943Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

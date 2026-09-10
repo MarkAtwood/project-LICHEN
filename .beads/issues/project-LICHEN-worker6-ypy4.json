@@ -2,13 +2,17 @@
   "id": "project-LICHEN-worker6-ypy4",
   "title": "rpl_stack/mod.rs: bad merge leaves unclosed delimiter (lichen-node won't compile)",
   "description": "rust/lichen-node/src/rpl_stack/mod.rs:281-294 — merge commit 3d46a59502 (2026-09-09) spliced two competing RoutePlan return blocks: the first 'return Some(RoutePlan { next_hop, source_route,' is unclosed, then a second competing 'return source_route.first()...' block follows, producing 'mismatched closing delimiter' / 'unclosed delimiter' on direct rustc. cargo check -p lichen-node reports success only because of a stale cached artifact (touch the file and it still passes — cargo is not recompiling). lichen-node genuinely fails to compile from clean. Blocks the lichen-node test suite and any dependent workspace build. Refiled — original P0 bead lost in a store merge.",
-  "status": "open",
+  "status": "closed",
   "priority": 0,
   "issue_type": "bug",
+  "assignee": "opencode-worker-3",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-10T06:04:42.956490628Z",
   "created_by": "opencode-worker-3",
-  "updated_at": "2026-09-10T06:04:42.956490628Z",
+  "updated_at": "2026-09-10T06:17:15.494466102Z",
+  "started_at": "2026-09-10T06:13:05.802092314Z",
+  "closed_at": "2026-09-10T06:17:15.494466102Z",
+  "close_reason": "Fixed two merge-splice compile breaks from 3d46a59502: (1) rpl_stack/mod.rs — removed the dead competing RoutePlan return block that left an unclosed delimiter; kept the correct post-AddrForKey block (peer_iid_for_routable_addr resolves next_hop via the authenticated peer table, failing closed; U/L flip matches local_eui64/ipv6_eui64 convention; util::l2_destination still used at :257/:292/:304 so no orphaned import). (2) tests.rs — dropped the stale dodag_id[..8] arg from 2 announces() calls to match the 0-arg helper (AnnounceProcessor::new takes only GradientTable; the prefix param was removed in parent2). Verified: direct rustc no longer reports delimiter errors; cargo recompiled the lib (rmeta mtime 23:05:38 \u003e source 23:05:29, defeating the stale-artifact caveat); 366/367 lib tests pass — the 1 failure is the pre-existing jors bead (P1, explicitly NOT caused by this merge splice). 3x codereview (correctness/security/edge, kimi-k3): all PASS — kept block confirmed correct, fail-closed routing preserved, no test weakening, no orphaned imports, no other latent splice damage in the function.",
   "labels": [
     "rust"
   ]
