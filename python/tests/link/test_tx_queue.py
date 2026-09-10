@@ -303,6 +303,8 @@ class TestPriorityOrdering:
 
 
 class TestDeadlineExpiry:
+    """Tests for time-based packet expiry."""
+
     def test_ack_deadline_constant_is_spec_ten_seconds(self):
         """spec B.2: ACK/NACK deadline is its own 10s constant (bead b7z9.142).
 
@@ -319,8 +321,6 @@ class TestDeadlineExpiry:
         assert q.now() == 1234
         clock.advance(5)
         assert q.now() == 1239
-
-    """Tests for time-based packet expiry."""
 
     def test_default_deadline_sos(self):
         """SOS packets (P0) get 2s default deadline - transmit ASAP."""

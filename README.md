@@ -49,7 +49,7 @@ LICHEN assembles these existing standards into a working LoRa mesh. No novel pro
 - **Real mesh routing** — Three-tier architecture (RPL + Announce + LOADng), not naive flooding
 - **Real security** — Every packet signed; optional end-to-end encryption
 - **Real interop** — Yggdrasil backhauls and application gateways use standard CoAP APIs
-- **Bandwidth efficient** — SCHC compresses baseline IPv6+UDP headers to 18-33 bytes
+- **Bandwidth efficient** — SCHC compresses baseline IPv6+UDP+CoAP headers to 23 bytes (link-local) or 37 bytes (Yggdrasil)
 
 ## What It's For
 
