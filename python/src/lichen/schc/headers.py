@@ -291,14 +291,6 @@ def _is_global(addr: int) -> bool:
     return first_byte == 0x02 or (addr >> 125 == 0b001)
 
 
-def _is_ula(addr: int) -> bool:
-    return (addr >> 120) == 0xFD  # fd00::/8
-
-
-def _is_routable(addr: int) -> bool:
-    return _is_link_local(addr) or _is_ula(addr) or _is_global(addr)
-
-
 def _valid_oscore_option(value: bytes) -> bool:
     if not value:
         return True
