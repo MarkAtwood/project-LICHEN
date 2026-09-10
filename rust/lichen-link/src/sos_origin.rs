@@ -240,9 +240,8 @@ pub fn verify_sos_origin_gated(
 mod tests {
     use super::*;
 
-    #[cfg(feature = "alloc")]
     fn hex_to_bytes<const N: usize>(hex: &str) -> [u8; N] {
-        let v: Vec<u8> = (0..hex.len())
+        let v: std::vec::Vec<u8> = (0..hex.len())
             .step_by(2)
             .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
             .collect();
@@ -318,7 +317,6 @@ mod tests {
         assert_eq!(t.last_seen(&[1; 16]), None);
     }
 
-    #[cfg(feature = "alloc")]
     #[test]
     fn origin_addr_matches_upstream_pinned_vector() {
         // External oracle: test/vectors/yggdrasil_address.json
