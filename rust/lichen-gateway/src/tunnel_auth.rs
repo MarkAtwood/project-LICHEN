@@ -1068,7 +1068,7 @@ mod tests {
 
     #[test]
     fn accept_on_full_floor_history_fails_closed_without_eviction() {
-        let (base, route, root, own, egress_addr, private, public, egress_public) = fixture();
+        let (base, _route, root, own, egress_addr, private, public, egress_public) = fixture();
         let mut table = TunnelAuthorizationTable::<1>::default();
         table.set_root(root);
         assert_eq!(table.max_history(), 4);
