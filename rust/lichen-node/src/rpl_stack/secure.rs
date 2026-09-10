@@ -134,9 +134,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 .and_then(|bytes| bytes.try_into().ok());
             if let Some(source) = source {
                 if let Some(key) = self.announces.pinned_pubkey_for_routable(&source) {
-                    datagram.remap_sender_iid(lichen_core::addr::iid_from_pubkey_bytes(
-                        key.as_bytes(),
-                    ));
+                    datagram
+                        .remap_sender_iid(lichen_core::addr::iid_from_pubkey_bytes(key.as_bytes()));
                 }
             }
         }

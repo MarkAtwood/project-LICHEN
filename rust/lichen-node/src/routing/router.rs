@@ -868,14 +868,13 @@ impl Router {
         let parent_iid: &[u8; 8] = parent[8..]
             .try_into()
             .expect("IPv6 addresses always contain an eight-byte IID");
-        let unsigned = self
-            .dao_manager
-            .build_dao_with_lifetime(
-                link.pinned_pubkey_for(parent_iid).map_or(parent.into(), |key| {
+        let unsigned = self.dao_manager.build_dao_with_lifetime(
+            link.pinned_pubkey_for(parent_iid)
+                .map_or(parent.into(), |key| {
                     lichen_core::addr::ygg_addr_from_pubkey(key.as_bytes()).into()
                 }),
-                self.dodag_config.def_lifetime,
-            );
+            self.dodag_config.def_lifetime,
+        );
         let wire = sign_dao(&unsigned, origin_ipv6, self.dodag_id, sequence, link)
             .ok_or(DaoTxError::Encoding)?;
         tx_state.finalize_signed(storage, sequence, &wire)?;

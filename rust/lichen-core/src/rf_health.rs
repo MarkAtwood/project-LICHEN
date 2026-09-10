@@ -18,6 +18,7 @@ const DENSITY_LOW: u8 = 5;
 const SNR_CRITICAL: i8 = -5;
 const SNR_POOR: i8 = 0;
 const SNR_GOOD: i8 = 8;
+const UPGRADE_COUNT_THRESHOLD: u8 = 3;
 const LOAD_HIGH: u32 = FP_SCALE * 4 / 5;
 const LOAD_REBALANCE: u32 = FP_SCALE * 2 / 5;
 /// Spec 2a.8 floor d threshold: LoadFactor >= 0.8 (Q16.16, ceil).
@@ -408,6 +409,8 @@ pub struct RfHealthMetrics {
     pub density: u8,
     /// Load factor in Q16.16 (0 = idle, FP_SCALE = 1.0). From hash or metrics.
     load_factor_fp: u32,
+    /// Consecutive good-SNR, low-density evaluations required before SF-1.
+    upgrade_count: u8,
 }
 
 impl RfHealthMetrics {
@@ -421,6 +424,7 @@ impl RfHealthMetrics {
             snr: SnrStats::new(),
             density: 0,
             load_factor_fp: 0,
+            upgrade_count: 0,
         }
     }
 
@@ -634,7 +638,7 @@ impl RfHealthMetrics {
     /// per-neighbor EMA loss (Q16.16). Returns (sf, tx_allowed).
     #[inline]
     pub fn adaptive_sf_select(
-        &self,
+        &mut self,
         assigned_sf: Option<u8>,
         utilization: Option<u32>,
         ema_loss_fp: Option<u32>,
@@ -662,10 +666,17 @@ impl RfHealthMetrics {
         if self.density > DENSITY_HIGH || util > util_thresh_150 {
             sf = sf.saturating_add(2).min(12);
         }
-        // Step 4: good SNR and low density allow SF -1 (unconditional,
-        // matching python ccp.py; the mode gate was a pre-2a.8-reconciliation
-        // divergence).
+        // Step 4: good SNR and low density allow SF -1 only after the
+        // adjudicated consecutive-cycle hysteresis threshold.
         if snr_ema > SNR_GOOD && self.density < DENSITY_LOW {
+            self.upgrade_count = self
+                .upgrade_count
+                .saturating_add(1)
+                .min(UPGRADE_COUNT_THRESHOLD);
+        } else {
+            self.upgrade_count = 0;
+        }
+        if self.upgrade_count >= UPGRADE_COUNT_THRESHOLD {
             sf = sf.saturating_sub(1).max(7);
         }
         // Step 5: high loss OR load factor > 0.8 triggers SF +1
@@ -823,7 +834,7 @@ mod tests {
 
     #[test]
     fn new_metrics_are_zeroed() {
-        let m = RfHealthMetrics::new();
+        let mut m = RfHealthMetrics::new();
         assert_eq!(m.packets_tx, 0);
         assert_eq!(m.packets_rx, 0);
         assert_eq!(m.tx_failures, 0);
@@ -891,7 +902,7 @@ mod tests {
 
     #[test]
     fn packet_loss_zero_when_no_tx() {
-        let m = RfHealthMetrics::new();
+        let mut m = RfHealthMetrics::new();
         let loss = m.packet_loss_rate_fp();
         assert_eq!(loss.as_percent(), 0);
         assert_eq!(loss.as_fp(), 0);
@@ -1101,7 +1112,7 @@ mod tests {
         // fresh metrics exercise the empty-SnrStats `avg() -> None`
         // default (snr_ema unwrap_or(0)); renamed to resolve the
         // duplicate test name.
-        let m = RfHealthMetrics::new();
+        let mut m = RfHealthMetrics::new();
         // Neutral conditions: no step raises or lowers SF, so the
         // returned value is the clamped baseline itself.
         let (sf0, allowed0) = m.adaptive_sf_select(Some(0), None, None);
