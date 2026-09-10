@@ -78,6 +78,33 @@ Rules 5/6 reuse the Rule 0/1 residue layouts with distinct rule IDs. The OSCORE
 option and encrypted payload travel in the unchanged tail after the residue.
 Exact descriptors, byte counts, and test vectors govern behavior.
 
+### A.4.1. /deaddrop Rule Provision (spec 18.9)
+
+Per spec/12-apps.md 18.9, `/deaddrop` CoAP messages MUST use the project's
+SCHC rule set, with rules for path `/deaddrop`, content-format 112
+(SenML-CBOR), and OSCORE options pre-provisioned. This appendix is the
+provisioning record:
+
+- **POST /deaddrop (write):** MUST use Rule 5 (link-local) or Rule 6
+  (Yggdrasil) — OSCORE is mandatory on writes (spec 18.9: unprotected POSTs
+  are rejected with `4.01 oscore_required`). The OSCORE Object-Security
+  option and ciphertext payload travel verbatim in the tail after the
+  residue, as with any rules-5/6 packet.
+- **GET /deaddrop (read):** Rule 5/6 when the request is OSCORE-protected
+  (private/group drops); Rule 0/1 is permitted for unprotected discovery of
+  public drops only.
+- **Uri-Path `/deaddrop`:** a CoAP option (delta 11, length 8, value
+  `deaddrop`) carried verbatim in the tail; SCHC does not compress CoAP
+  options in Rule Set Version 3.
+- **Content-Format 112 (SenML-CBOR):** a CoAP option (delta 12, length 1,
+  value `0x70`) carried verbatim in the tail. See appendix-senml.md for the
+  SenML payload profile; SenML payloads larger than ~100 bytes after
+  compression trigger SCHC fragmentation per A.2.
+- **No dedicated rule IDs:** `/deaddrop` reuses the existing rules 0/1/5/6;
+  no new rule IDs are allocated, and the rule-set descriptor hash
+  (`rule_set_v3_descriptor_hash`) is unchanged. Introducing dedicated
+  deaddrop rules would require a new rule-set version.
+
 ## A.5. RPL Compression (Rules 3 and 4)
 
 Rules 3 and 4 use link-local IPv6 source and destination addresses, matching
