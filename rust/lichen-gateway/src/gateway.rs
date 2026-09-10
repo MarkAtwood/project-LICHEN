@@ -1425,7 +1425,7 @@ impl Gateway {
         let route = [egress_addr];
         match self
             .coordinator
-            .authorize_egress(inner_source, false, &route)
+            .authorize_egress(inner_source, destination, false, &route)
         {
             Ok(()) => true,
             Err(error) => {

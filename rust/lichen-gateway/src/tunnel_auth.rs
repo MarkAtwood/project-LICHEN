@@ -32,6 +32,8 @@ pub enum TunnelAuthError {
     WrongDirection,
     SourceOutsideMesh,
     DestinationInMesh,
+    SourceScope,
+    DestinationScope,
     Expired,
     ClockRollback,
     Replay,
@@ -133,6 +135,7 @@ pub enum TunnelDirection {
 pub struct DecapsulationRequest<'a> {
     pub direction: TunnelDirection,
     pub inner_source: [u8; 16],
+    pub inner_destination: [u8; 16],
     pub source_is_mesh: bool,
     pub destination_is_mesh: bool,
     /// Full 16-byte reconstructed SRH hop addresses in visitation order
@@ -450,6 +453,20 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
             self.entries[index] = None;
             return Err(TunnelAuthError::Expired);
         }
+        // C `tunnel_auth.c` parity: scope is enforced here, inside the gate,
+        // not delegated to caller booleans - a covering grant (even /0) must
+        // never decapsulate an unspecified/loopback/multicast/link-local
+        // source, or an unsafe/link-local/routable-02xx destination. Checked
+        // after grant+expiry, before the LRU touch, exactly like C.
+        if unsafe_addr(&request.inner_source) || is_link_local(&request.inner_source) {
+            return Err(TunnelAuthError::SourceScope);
+        }
+        if unsafe_addr(&request.inner_destination)
+            || is_link_local(&request.inner_destination)
+            || request.inner_destination[0] == 0x02
+        {
+            return Err(TunnelAuthError::DestinationScope);
+        }
         self.clock = self.clock.saturating_add(1);
         if let Some(entry) = &mut self.entries[index] {
             entry.used = self.clock;
@@ -494,6 +511,19 @@ fn same_floor_key(left: &ReplayFloor, right: &TunnelAuthorization) -> bool {
     left.prefix == right.prefix
         && left.prefix_len == right.prefix_len
         && left.route_hash == right.route_hash
+}
+
+/// C `tunnel_auth.c` `unsafe_addr` parity: unspecified (`::`), loopback
+/// (`::1`), or multicast (`ff00::/8`).
+fn unsafe_addr(addr: &[u8; 16]) -> bool {
+    addr.iter().all(|&b| b == 0)
+        || addr == &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+        || addr[0] == 0xff
+}
+
+/// RFC 4291 link-local unicast: `fe80::/10`.
+fn is_link_local(addr: &[u8; 16]) -> bool {
+    addr[0] == 0xfe && (addr[1] & 0xc0) == 0x80
 }
 
 fn validate_route(hops: &[[u8; 16]]) -> Result<(), TunnelAuthError> {
@@ -885,6 +915,9 @@ mod tests {
         DecapsulationRequest {
             direction: TunnelDirection::MeshToExternal,
             inner_source: source,
+            // Scope-clean external destination (2001:db8::1): the internal
+            // scope checks must not fire in grant-behavior tests.
+            inner_destination: [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
             source_is_mesh: true,
             destination_is_mesh: false,
             route,
@@ -1276,6 +1309,73 @@ mod tests {
             TunnelAuthError::InvalidSignature.coap_response_code(),
             COAP_FORBIDDEN_CODE
         );
+    }
+
+    #[test]
+    fn internal_scope_checks_deny_scoped_source_and_destination() {
+        // C `tunnel_auth.c` parity on the production path: the callers
+        // hardcode `source_is_mesh: true` / `destination_is_mesh: false`,
+        // so scope must be enforced inside the gate. Even a ::/0 grant must
+        // never decapsulate an unspecified/loopback/multicast/link-local
+        // source or an unsafe/link-local/routable-02xx destination.
+        let (_, egress_public) = derive_keypair(&Seed::new([0x43; 32]));
+        let egress_addr = lichen_core::addr::ygg_addr_from_pubkey(egress_public.as_bytes());
+        let own = lichen_core::addr::iid_from_pubkey_bytes(egress_public.as_bytes());
+        let route = [[0x11; 16], [0x22; 16], egress_addr];
+        let route_digest = route_hash(&route).unwrap();
+        let claim = TunnelAuthorization::new([0; 16], 0, route_digest, 7, 10_000, own).unwrap();
+        let (private, public) = derive_keypair(&Seed::new([0x42; 32]));
+        let root = lichen_core::addr::iid_from_pubkey_bytes(public.as_bytes());
+        let post = build_root_post(claim, &route, &egress_public, root, &private, &public).unwrap();
+        let mut table = TunnelAuthorizationTable::<2>::default();
+        table.set_root(root);
+        table
+            .accept_post(post.body.as_bytes(), authenticated(root, &public), own, 50)
+            .unwrap();
+
+        let mesh_source: [u8; 16] = [0x02, 0, 0x12, 0x34, 0x56, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
+        let external_destination: [u8; 16] =
+            [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
+        // Baseline: scope-clean source and destination pass under the /0 grant.
+        assert_eq!(
+            table.authorize_decapsulation(egress_request(mesh_source, &route, egress_addr), 51),
+            Ok(())
+        );
+        for scoped_source in [
+            [0; 16],                                                // unspecified
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],       // loopback
+            [0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // multicast
+            [0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // link-local
+        ] {
+            assert_eq!(
+                table.authorize_decapsulation(
+                    egress_request(scoped_source, &route, egress_addr),
+                    51
+                ),
+                Err(TunnelAuthError::SourceScope),
+                "scoped source {scoped_source:02x?}"
+            );
+        }
+        for scoped_destination in [
+            [0; 16],                                                      // unspecified
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],             // loopback
+            [0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],       // multicast
+            [0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],       // link-local
+            [0x02, 0x00, 0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // routable 02xx
+        ] {
+            let mut request = egress_request(mesh_source, &route, egress_addr);
+            request.inner_destination = scoped_destination;
+            assert_eq!(
+                table.authorize_decapsulation(request, 51),
+                Err(TunnelAuthError::DestinationScope),
+                "scoped destination {scoped_destination:02x?}"
+            );
+        }
+        // A clean external destination still passes afterward (scope denials
+        // do not evict the grant or lock the table).
+        let mut request = egress_request(mesh_source, &route, egress_addr);
+        request.inner_destination = external_destination;
+        assert_eq!(table.authorize_decapsulation(request, 51), Ok(()));
     }
 
     #[test]
