@@ -3266,8 +3266,9 @@ mod tests {
     fn record_own_claim_envelope_rejects_foreign_iid_and_oversize() {
         let mut address = [0u8; 16];
         address[8..].fill(0x02);
-        let mut coordinator = GatewayCoordinator::new_ephemeral(address, address[8..16].try_into().unwrap(), 60, 4)
-            .unwrap();
+        let mut coordinator =
+            GatewayCoordinator::new_ephemeral(address, address[8..16].try_into().unwrap(), 60, 4)
+                .unwrap();
         // Well-formed envelope whose kid is not this gateway's IID: never
         // echoed (the echo goes to a peer, so unbound bytes are refused).
         let (foreign, _pubkey) = signed_slot_claim([0x41; 32], vec![1], 4, 0);
@@ -3287,8 +3288,9 @@ mod tests {
     fn post_slots_silently_discards_oversize_peer_claim() {
         let mut address = [0u8; 16];
         address[8..].fill(0x02);
-        let mut coordinator = GatewayCoordinator::new_ephemeral(address, address[8..16].try_into().unwrap(), 60, 4)
-            .unwrap();
+        let mut coordinator =
+            GatewayCoordinator::new_ephemeral(address, address[8..16].try_into().unwrap(), 60, 4)
+                .unwrap();
         let peer_pubkey = [0x43; 32];
         let response = coordinator.handle_post_slots(
             &vec![0xa1; OWN_CLAIM_COSE_MAX + 1],

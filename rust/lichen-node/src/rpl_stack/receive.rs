@@ -364,9 +364,13 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             return Err(RplReceiveError::Receive(RxError::InvalidSourceRoute));
         }
 
-        let next_destination =
-            advance_rpl_source_route(&mut received.ipv6, current_destination, sender_iid, sender_routable)
-                .map_err(RplReceiveError::Receive)?;
+        let next_destination = advance_rpl_source_route(
+            &mut received.ipv6,
+            current_destination,
+            sender_iid,
+            sender_routable,
+        )
+        .map_err(RplReceiveError::Receive)?;
         let Some(next_destination) = next_destination else {
             // SRH fully consumed and stripped: the former next-header chain
             // may now start with an IPv6-in-IPv6 tunnel to unwrap (R-05-063).

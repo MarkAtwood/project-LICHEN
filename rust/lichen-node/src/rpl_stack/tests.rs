@@ -325,14 +325,8 @@ fn runtime_root() -> (
     let state = Arc::new(Mutex::new(RuntimeRadioState::default()));
     let stack = Stack::new_default_epoch(RuntimeRadio(Arc::clone(&state)), identity);
     (
-        RplStack::provision_root(
-            stack,
-            root_addr,
-            root_addr,
-            announces(),
-            MemStorage::new(),
-        )
-        .unwrap(),
+        RplStack::provision_root(stack, root_addr, root_addr, announces(), MemStorage::new())
+            .unwrap(),
         state,
     )
 }
@@ -460,7 +454,9 @@ fn root_address(identity: &Identity) -> [u8; 16] {
 }
 
 fn announces() -> AnnounceProcessor {
-    AnnounceProcessor::new(crate::GradientTable::new(crate::announce::MAX_TRACKED_ORIGINATORS))
+    AnnounceProcessor::new(crate::GradientTable::new(
+        crate::announce::MAX_TRACKED_ORIGINATORS,
+    ))
 }
 
 #[test]
@@ -511,19 +507,35 @@ fn rfc6554_route_crosses_two_relays_and_restores_packet() {
     assert_eq!(routed[43], 2);
 
     assert_eq!(
-        advance_rpl_source_route(&mut routed, relay_one, source[8..].try_into().unwrap(), source).unwrap(),
+        advance_rpl_source_route(
+            &mut routed,
+            relay_one,
+            source[8..].try_into().unwrap(),
+            source
+        )
+        .unwrap(),
         Some(relay_two)
     );
     assert_eq!(routed[43], 1);
     assert_eq!(
-        advance_rpl_source_route(&mut routed, relay_two, relay_one[8..].try_into().unwrap(), relay_one,)
-            .unwrap(),
+        advance_rpl_source_route(
+            &mut routed,
+            relay_two,
+            relay_one[8..].try_into().unwrap(),
+            relay_one,
+        )
+        .unwrap(),
         Some(destination)
     );
     assert_eq!(routed[43], 0);
     assert_eq!(
-        advance_rpl_source_route(&mut routed, destination, relay_two[8..].try_into().unwrap(), relay_two,)
-            .unwrap(),
+        advance_rpl_source_route(
+            &mut routed,
+            destination,
+            relay_two[8..].try_into().unwrap(),
+            relay_two,
+        )
+        .unwrap(),
         None
     );
     assert_eq!(routed, plain);
@@ -1482,14 +1494,8 @@ async fn leaf_send_allocates_each_update_and_restart_advances_sequence() {
     let mut root_sender = Stack::new(root_radio, root_identity.clone(), 129, 0);
     root_sender.add_peer(PeerIdentity::from_pubkey(leaf_identity.pubkey));
     let leaf_stack = Stack::new(leaf_radio, leaf_identity.clone(), 129, 0);
-    let mut leaf = RplStack::open_leaf(
-        leaf_stack,
-        leaf_addr,
-        root_addr,
-        announces(),
-        persisted,
-    )
-    .unwrap();
+    let mut leaf =
+        RplStack::open_leaf(leaf_stack, leaf_addr, root_addr, announces(), persisted).unwrap();
     assert!(matches!(
         leaf.send_dao().await,
         Err(DaoSendError::Dao(DaoTxError::NotJoined))
@@ -1860,7 +1866,9 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
         "{leaf_dao_outcome:?}"
     );
     assert_eq!(
-        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        root.rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr)),
         Some([Ipv6Addr::from(relay_addr), Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
@@ -2001,7 +2009,11 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::DaoOriginNotAdmitted)
     ));
     assert!(root.rpl.router.dao_origin_keys().is_empty());
-    assert!(root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)).is_none());
+    assert!(root
+        .rpl_node()
+        .router
+        .lookup_route(Ipv6Addr::from(leaf_addr))
+        .is_none());
 
     root.admit_dao_origin(leaf_identity.iid).unwrap();
     leaf.send_ipv6_to(
@@ -2016,7 +2028,9 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Applied))
     ));
     assert_eq!(
-        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        root.rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr)),
         Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
     let persisted = root.storage().clone();
@@ -2075,17 +2089,24 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::DaoOriginNotAdmitted)
     ));
     assert_eq!(
-        root.rpl_node().router.lookup_route(Ipv6Addr::from(substituted_source)),
+        root.rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(substituted_source)),
         None,
         "a rejected prefix alias must not resolve through an IID-only fallback"
     );
     assert_eq!(
-        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        root.rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr)),
         Some([Ipv6Addr::from(leaf_addr)].as_slice()),
         "the rejected DAO must not mutate the canonical host route"
     );
 
-    let before = root.rpl_node().router.lookup_route(Ipv6Addr::from(unknown_addr));
+    let before = root
+        .rpl_node()
+        .router
+        .lookup_route(Ipv6Addr::from(unknown_addr));
     assert!(before.is_none());
     let mut unknown_storage = MemStorage::new();
     let mut unknown_tx = DaoTxState::provision(
@@ -2118,7 +2139,11 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         root.receive(1, 0).await.unwrap(),
         Some(RplReceiveOutcome::DaoOriginNotAdmitted)
     ));
-    assert!(root.rpl_node().router.lookup_route(Ipv6Addr::from(unknown_addr)).is_none());
+    assert!(root
+        .rpl_node()
+        .router
+        .lookup_route(Ipv6Addr::from(unknown_addr))
+        .is_none());
 
     let mut second = leaf_router
         .build_signed_dao(leaf_addr, &mut leaf_tx, &mut leaf_storage, &leaf_link)
@@ -2136,7 +2161,9 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::BadSignature))
     ));
     assert_eq!(
-        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        root.rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr)),
         Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
@@ -2156,7 +2183,9 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Persistence))
     ));
     assert_eq!(
-        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        root.rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr)),
         Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
@@ -2187,14 +2216,8 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     let (leaf_radio, root_radio) = LoopbackRadio::pair();
     let mut leaf = Stack::new(leaf_radio, leaf_identity.clone(), 129, 0);
     let root_stack = Stack::new(root_radio, root_identity, 129, 0);
-    let mut reopened = RplStack::open_root(
-        root_stack,
-        root_addr,
-        root_addr,
-        announces(),
-        persisted,
-    )
-    .unwrap();
+    let mut reopened =
+        RplStack::open_root(root_stack, root_addr, root_addr, announces(), persisted).unwrap();
     send_announce(&mut leaf, &leaf_identity, 1).await;
     assert!(matches!(
         reopened.receive(1, 0).await.unwrap(),
@@ -2213,7 +2236,10 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Duplicate))
     ));
     assert_eq!(
-        reopened.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        reopened
+            .rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr)),
         Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
@@ -2244,7 +2270,10 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Replay))
     ));
     assert_eq!(
-        reopened.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        reopened
+            .rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr)),
         Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
@@ -2260,7 +2289,10 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Persistence))
     ));
     assert_eq!(
-        reopened.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        reopened
+            .rpl_node()
+            .router
+            .lookup_route(Ipv6Addr::from(leaf_addr)),
         Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 }

@@ -2411,7 +2411,10 @@ mod tests {
         assert_eq!(&buf[..2], &[0xc1, 60]);
         assert_eq!(encode_content_format_option(112, &mut buf), 2);
         assert_eq!(&buf[..2], &[0xc1, 112]);
-        assert_eq!(encode_content_format_option(u16::from(u8::MAX), &mut buf), 2);
+        assert_eq!(
+            encode_content_format_option(u16::from(u8::MAX), &mut buf),
+            2
+        );
         assert_eq!(&buf[..2], &[0xc1, 0xff]);
 
         // Values above u8::MAX use delta 12 + len 2 (0xc2), big-endian.
@@ -2820,16 +2823,13 @@ mod tests {
         // Including root_addr would make the root its own first hop and violate
         // RFC 6554's prohibition on placing the IPv6 Source in the SRH path.
         let path = [relay_addr, node_addr];
-        gw.rpl_stack
-            .rpl_node_mut()
-            .router_mut()
-            .inject_route(
+        gw.rpl_stack.rpl_node_mut().router_mut().inject_route(
+            core::net::Ipv6Addr::from(node_addr),
+            &[
+                core::net::Ipv6Addr::from(relay_addr),
                 core::net::Ipv6Addr::from(node_addr),
-                &[
-                    core::net::Ipv6Addr::from(relay_addr),
-                    core::net::Ipv6Addr::from(node_addr),
-                ],
-            );
+            ],
+        );
 
         // Build IPv6 packet FROM root TO node_addr
         let payload = b"hello";
