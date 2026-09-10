@@ -1,0 +1,11 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-FileCopyrightText: The contributors to the LICHEN project */
+
+/ {
+	chosen { zephyr,lora = &sim_radio; };
+	aliases { lora0 = &sim_radio; };
+	sim_radio: lora {
+		compatible = "lichen,lora-sim";
+		status = "okay";
+	};
+};

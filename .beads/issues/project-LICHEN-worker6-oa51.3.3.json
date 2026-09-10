@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-oa51.3.3",
+  "title": "Bound simulator probe registration wait",
+  "description": "Robustness review finds lichen/tests/sim_radio_l2/run.py enters SimRadio context (connect plus REGISTER read) before30s timeout; stalled registration can hang indefinitely. Bound setup/registration as well as exchange, preserving socket/subprocess teardown and failure propagation. Small runner fix only.",
+  "acceptance_criteria": "Registration included in bounded deadline; actual signed C/Python probe still passes; triple review of final runner delta clear.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T19:09:17.289144124Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T19:36:31.773668055Z",
+  "closed_at": "2026-09-10T19:36:31.773668055Z",
+  "close_reason": "Outer30s deadline covers SimRadio registration; actual signed C/Python probe rerun passes; final correctness/security/robustness reviews clear.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-oa51.3.3",
+      "depends_on_id": "project-LICHEN-worker6-oa51.3",
+      "type": "parent-child",
+      "created_at": "2026-09-10T19:09:17.467046826Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

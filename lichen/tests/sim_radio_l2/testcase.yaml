@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+tests:
+  lichen.sim_radio_l2:
+    platform_allow:
+      - native_sim/native/64
+    tags:
+      - lichen
+      - net
+    # Execution needs the host NodeServer and Python peer; use run.py.
+    build_only: true

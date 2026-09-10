@@ -132,7 +132,7 @@ static int send_exact(int fd, const uint8_t *buf, int len)
 static int recv_exact(int fd, uint8_t *buf, int len)
 {
 	while (len > 0) {
-		int n = zsock_recv(fd, buf, len, MSG_WAITALL);
+		int n = zsock_recv(fd, buf, len, ZSOCK_MSG_WAITALL);
 
 		if (n < 0) {
 			if (sock_would_block()) {

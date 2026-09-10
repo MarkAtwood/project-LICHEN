@@ -1,0 +1,2 @@
+{"id":"01a08cb9-6c6e-741d-a7c7-b7bccbd28a2d","issue_id":"project-LICHEN-worker6-oa51.3.3","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-10T19:09:17.294270497Z"}
+{"id":"01a08cd2-5d23-715b-9708-221b719014cf","issue_id":"project-LICHEN-worker6-oa51.3.3","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Outer30s deadline covers SimRadio registration; actual signed C/Python probe rerun passes; final correctness/security/robustness reviews clear.","created_at":"2026-09-10T19:36:31.779090066Z"}
