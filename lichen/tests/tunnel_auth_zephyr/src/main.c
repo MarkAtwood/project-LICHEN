@@ -4,7 +4,8 @@
 #include <zephyr/ztest.h>
 #include <lichen/gateway/tunnel_auth.h>
 
-static struct lichen_tunnel_auth_ctx fresh_with(const uint8_t root[8], const uint8_t pubkey[32]);
+static struct lichen_tunnel_auth_ctx fresh_with(const uint8_t root[8], const uint8_t egress[16],
+						const uint8_t pubkey[32]);
 static struct lichen_tunnel_result receive_as(struct lichen_tunnel_auth_ctx *ctx,
 	const uint8_t *wire, size_t len, bool authenticated, const uint8_t sender[8], uint64_t now);
 static void check_result(const char *name, struct lichen_tunnel_result result,
@@ -18,7 +19,7 @@ static struct lichen_tunnel_auth_ctx fresh_with(const uint8_t root[8], const uin
 	struct lichen_tunnel_auth_ctx ctx;
 	struct lichen_tunnel_crypto crypto;
 	zassert_ok(lichen_tunnel_auth_default_crypto(&crypto));
-	zassert_ok(lichen_tunnel_auth_init(&ctx, egress_iid, root, pubkey, &crypto));
+	zassert_ok(lichen_tunnel_auth_init(&ctx, egress_iid, egress_addr, root, pubkey, &crypto));
 	return ctx;
 }
 
@@ -51,7 +52,7 @@ ZTEST(tunnel_auth, test_canonical_vector_and_data_plane)
 	uint8_t destination[16] = { 0x20, 0x01, 0x0d, 0xb8, [15] = 1 };
 
 	zassert_ok(lichen_tunnel_auth_default_crypto(&crypto));
-	zassert_ok(lichen_tunnel_auth_init(&ctx, egress_iid, root_iid, root_pubkey, &crypto));
+	zassert_ok(lichen_tunnel_auth_init(&ctx, egress_iid, egress_addr, root_iid, root_pubkey, &crypto));
 	result = lichen_tunnel_auth_receive(&ctx, wire_valid, sizeof(wire_valid), true,
 					    root_iid, UINT64_C(1900000000));
 	zassert_true(result.allowed);
@@ -68,7 +69,7 @@ ZTEST(tunnel_auth, test_fail_closed_boundaries)
 	struct lichen_tunnel_result result;
 
 	zassert_ok(lichen_tunnel_auth_default_crypto(&crypto));
-	zassert_ok(lichen_tunnel_auth_init(&ctx, egress_iid, root_iid, root_pubkey, &crypto));
+	zassert_ok(lichen_tunnel_auth_init(&ctx, egress_iid, egress_addr, root_iid, root_pubkey, &crypto));
 	result = lichen_tunnel_auth_receive(&ctx, wire_valid, sizeof(wire_valid), false,
 					    root_iid, UINT64_C(1900000000));
 	zassert_equal(result.denial, LICHEN_TUNNEL_DENIAL_OSCORE_REQUIRED);

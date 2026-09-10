@@ -30,6 +30,10 @@ fn identity(corpus: &Value, name: &str) -> ([u8; 8], PublicKey) {
     )
 }
 
+fn primary_address(corpus: &Value, name: &str) -> [u8; 16] {
+    bytes(named(corpus, "identities", name)["address_hex"].as_str().unwrap())
+}
+
 fn denial(error: TunnelAuthError) -> &'static str {
     match error {
         TunnelAuthError::MalformedCbor
@@ -138,7 +142,7 @@ fn canonical_tunnel_authorization_vector_matches_byte_for_byte() {
     );
     let root_iid = bytes(vector["root_iid_hex"].as_str().unwrap());
     let egress_iid = bytes(vector["egress_iid_hex"].as_str().unwrap());
-    let route: Vec<[u8; 8]> = vector["route_hops_hex"]
+    let route: Vec<[u8; 16]> = vector["route_hops_hex"]
         .as_array()
         .unwrap()
         .iter()
@@ -150,7 +154,10 @@ fn canonical_tunnel_authorization_vector_matches_byte_for_byte() {
     );
 
     let claim = claim(vector);
-    let post = build_root_post(claim, &route, root_iid, &private_key, &public_key).unwrap();
+    let (_, egress_public) = identity(&corpus, "egress");
+    let egress_addr = primary_address(&corpus, "egress");
+    let post =
+        build_root_post(claim, &route, &egress_public, root_iid, &private_key, &public_key).unwrap();
     let canonical_wire = hex::decode(vector["cose_sign1_hex"].as_str().unwrap()).unwrap();
     assert_eq!(post.body.as_bytes(), canonical_wire);
 
@@ -178,6 +185,7 @@ fn canonical_tunnel_authorization_vector_matches_byte_for_byte() {
                 source_is_mesh: true,
                 destination_is_mesh: false,
                 route: &route,
+                egress_addr,
             },
             now,
         ),
@@ -263,7 +271,7 @@ fn canonical_decapsulation_cases_enforce_least_privilege() {
             case["setup"].as_array().unwrap(),
             own_iid,
         );
-        let route: Vec<[u8; 8]> = case["route_hops_hex"]
+        let route: Vec<[u8; 16]> = case["route_hops_hex"]
             .as_array()
             .unwrap()
             .iter()
@@ -292,6 +300,7 @@ fn canonical_decapsulation_cases_enforce_least_privilege() {
                 source_is_mesh: source[0] == 0x02,
                 destination_is_mesh: matches!(destination[0], 0x02 | 0xff),
                 route: &route,
+                egress_addr: primary_address(&corpus, "egress"),
             },
             case["now"].as_u64().unwrap(),
         );
@@ -322,8 +331,9 @@ fn canonical_decapsulation_cases_enforce_least_privilege() {
 }
 
 struct OverlapFixture {
-    route: Vec<[u8; 8]>,
+    route: Vec<[u8; 16]>,
     source: [u8; 16],
+    egress_addr: [u8; 16],
 }
 
 fn overlapping_setup(
@@ -335,8 +345,10 @@ fn overlapping_setup(
     ));
     let (private_key, public_key) = derive_keypair(&seed);
     let root_iid = iid_from_pubkey_bytes(public_key.as_bytes());
-    let egress_iid = [0xAA; 8];
-    let route = vec![[0x11; 8], egress_iid];
+    let (_, egress_public) = derive_keypair(&Seed::new([0x66; 32]));
+    let egress_iid = iid_from_pubkey_bytes(egress_public.as_bytes());
+    let egress_addr = lichen_core::addr::ygg_addr_from_pubkey(egress_public.as_bytes());
+    let route = vec![[0x11; 16], egress_addr];
     let digest = route_hash(&route).unwrap();
     let source = "0200:0:0:0::1".parse::<Ipv6Addr>().unwrap().octets();
     let prefix = [0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -345,11 +357,12 @@ fn overlapping_setup(
     let mut table = TunnelAuthorizationTable::<4>::default();
     table.set_root(root_iid);
     for claim in [short, long] {
-        let wire = build_root_post(claim, &route, root_iid, &private_key, &public_key)
-            .unwrap()
-            .body
-            .as_bytes()
-            .to_vec();
+        let wire =
+            build_root_post(claim, &route, &egress_public, root_iid, &private_key, &public_key)
+                .unwrap()
+                .body
+                .as_bytes()
+                .to_vec();
         table
             .accept_post(
                 &wire,
@@ -363,7 +376,14 @@ fn overlapping_setup(
             )
             .unwrap();
     }
-    (table, OverlapFixture { route, source })
+    (
+        table,
+        OverlapFixture {
+            route,
+            source,
+            egress_addr,
+        },
+    )
 }
 
 fn overlap_request(fixture: &OverlapFixture) -> DecapsulationRequest<'_> {
@@ -373,6 +393,7 @@ fn overlap_request(fixture: &OverlapFixture) -> DecapsulationRequest<'_> {
         source_is_mesh: true,
         destination_is_mesh: false,
         route: &fixture.route,
+        egress_addr: fixture.egress_addr,
     }
 }
 
@@ -425,18 +446,10 @@ fn corpus() -> Value {
     .unwrap()
 }
 
-fn ygg_addr(iid: [u8; 8]) -> [u8; 16] {
-    let mut addr = [0u8; 16];
-    addr[0] = 0x02;
-    addr[1..8].copy_from_slice(&iid[..7]);
-    addr[8..16].copy_from_slice(&iid);
-    addr
-}
-
 fn egress_coordinator(corpus: &Value, egress_name: &str) -> GatewayCoordinator {
-    let (egress_iid, egress_key) = identity(corpus, egress_name);
+    let (_, egress_key) = identity(corpus, egress_name);
     let mut coordinator = GatewayCoordinator::new_ephemeral(
-        ygg_addr(egress_iid),
+        primary_address(corpus, egress_name),
         lichen_core::addr::iid_from_pubkey_bytes(egress_key.as_bytes()),
         60,
         64,
@@ -491,9 +504,9 @@ fn wired_coap_tunnel_auth_fails_closed_on_missing_oscore_wrong_root_and_wrong_eg
     let wire = vector_envelope(vector);
 
     // A table with no bound root never accepts (WrongRoot, fail-closed).
-    let (egress_iid, egress_key) = identity(&corpus, "egress");
+    let (_, egress_key) = identity(&corpus, "egress");
     let mut unbound = GatewayCoordinator::new_ephemeral(
-        ygg_addr(egress_iid),
+        primary_address(&corpus, "egress"),
         lichen_core::addr::iid_from_pubkey_bytes(egress_key.as_bytes()),
         60,
         64,
@@ -697,7 +710,8 @@ fn unix_secs() -> u64 {
 fn provision_expired_grant_refused(gateway: &mut Gateway) {
     let identity = gateway_identity();
     let gw_iid = iid_from_pubkey_bytes(identity.pubkey.as_bytes());
-    let route = [gw_iid];
+    let gw_addr = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
+    let route = [gw_addr];
     let claim = TunnelAuthorization::new(
         GRANT_PREFIX,
         40,
@@ -707,7 +721,15 @@ fn provision_expired_grant_refused(gateway: &mut Gateway) {
         gw_iid,
     )
     .unwrap();
-    let post = build_root_post(claim, &route, gw_iid, &identity.privkey, &identity.pubkey).unwrap();
+    let post = build_root_post(
+        claim,
+        &route,
+        &identity.pubkey,
+        gw_iid,
+        &identity.privkey,
+        &identity.pubkey,
+    )
+    .unwrap();
     let response = gateway.coordinator_mut().handle_request(
         CoapMethod::Post,
         "tunnel-auth",
@@ -738,13 +760,14 @@ fn egress_frame(src: [u8; 16], dst: [u8; 16]) -> Vec<u8> {
     out
 }
 
-/// Mint a single-hop root grant over `[gateway IID]` and POST it into the
+/// Mint a single-hop root grant over `[gateway address]` and POST it into the
 /// gateway's coordinator (0x44 expected). Root seed and address shapes follow
 /// the tunnel_authorization vector corpus (root = the gateway itself).
 fn provision_grant(gateway: &mut Gateway, expiry: u64) {
     let identity = gateway_identity();
     let gw_iid = iid_from_pubkey_bytes(identity.pubkey.as_bytes());
-    let route = [gw_iid];
+    let gw_addr = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
+    let route = [gw_addr];
     let claim = TunnelAuthorization::new(
         GRANT_PREFIX,
         40,
@@ -754,7 +777,15 @@ fn provision_grant(gateway: &mut Gateway, expiry: u64) {
         gw_iid,
     )
     .unwrap();
-    let post = build_root_post(claim, &route, gw_iid, &identity.privkey, &identity.pubkey).unwrap();
+    let post = build_root_post(
+        claim,
+        &route,
+        &identity.pubkey,
+        gw_iid,
+        &identity.privkey,
+        &identity.pubkey,
+    )
+    .unwrap();
     let response = gateway.coordinator_mut().handle_request(
         CoapMethod::Post,
         "tunnel-auth",
@@ -767,14 +798,16 @@ fn provision_grant(gateway: &mut Gateway, expiry: u64) {
 }
 
 /// Mint a grant signed by a DODAG root that is NOT the gateway itself,
-/// covering the gateway's own IID as the egress, and POST it into the
+/// covering the gateway's own address as the egress, and POST it into the
 /// coordinator under that root binding (0x44 expected).
 fn provision_grant_from_distinct_root(gateway: &mut Gateway) {
     let root_identity = Identity::from_seed(LinkSeed::new([0x77; 32]));
     let root_iid = iid_from_pubkey_bytes(root_identity.pubkey.as_bytes());
     gateway.coordinator_mut().set_tunnel_auth_root(root_iid);
-    let gw_iid = iid_from_pubkey_bytes(gateway_identity().pubkey.as_bytes());
-    let route = [gw_iid];
+    let gateway_identity = gateway_identity();
+    let gw_iid = iid_from_pubkey_bytes(gateway_identity.pubkey.as_bytes());
+    let gw_addr = lichen_core::addr::ygg_addr_from_pubkey(gateway_identity.pubkey.as_bytes());
+    let route = [gw_addr];
     let claim = TunnelAuthorization::new(
         GRANT_PREFIX,
         40,
@@ -787,6 +820,7 @@ fn provision_grant_from_distinct_root(gateway: &mut Gateway) {
     let post = build_root_post(
         claim,
         &route,
+        &gateway_identity.pubkey,
         root_iid,
         &root_identity.privkey,
         &root_identity.pubkey,
@@ -841,9 +875,10 @@ async fn wired_egress_forwards_authorized_tunnel() {
 }
 
 #[tokio::test]
-async fn wired_egress_matches_grant_under_distinct_root_via_own_iid_route_evidence() {
-    // Root ≠ gateway: route evidence must be the gateway's own IID (it is the
-    // egress), not the bound DODAG root IID, or the grant can never match.
+async fn wired_egress_matches_grant_under_distinct_root_via_own_address_route_evidence() {
+    // Root ≠ gateway: route evidence must be the gateway's own primary
+    // address (it is the egress), not the bound DODAG root IID, or the grant
+    // can never match.
     let mut gateway = fresh_gateway();
     let mut peer = MeshPeer::new();
     peer.bootstrap(&mut gateway, 0).await;
@@ -851,7 +886,7 @@ async fn wired_egress_matches_grant_under_distinct_root_via_own_iid_route_eviden
 
     let upstream = ingest_source_to(&mut peer, &mut gateway, GRANTED_SRC, EXTERNAL_DST)
         .await
-        .expect("grant over the gateway's own IID must be forwarded upstream");
+        .expect("grant over the gateway's own address must be forwarded upstream");
     assert_eq!(upstream[0] >> 4, 6, "upstream datagram is IPv6");
     assert_eq!(&upstream[8..24], &GRANTED_SRC, "inner source preserved");
 }

@@ -199,7 +199,8 @@ static int gateway_rpl_init(void) {
 	if (ret != 0) {
 		return ret;
 	}
-	ret = lichen_gateway_tunnel_auth_init(root_iid, root_iid, self.public_key);
+	ret = lichen_gateway_tunnel_auth_init(root_iid, self.ygg_addr, root_iid,
+					      self.public_key);
 	if (ret != 0) {
 		LOG_ERR("tunnel auth init failed: %d", ret);
 		return ret;
