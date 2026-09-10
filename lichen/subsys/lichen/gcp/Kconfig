@@ -24,6 +24,17 @@ config LICHEN_GCP_TRUST
 	  Required for multi-operator community meshes and
 	  enterprise deployments with managed key distribution.
 
+config LICHEN_GCP_TRUST_X509
+	bool "GCP PKIX certificate validation"
+	default n
+	depends on LICHEN_GCP_TRUST
+	depends on MBEDTLS
+	select MBEDTLS_X509_CRT_PARSE_C
+	help
+	  Enable RFC 5280 validation of DER certificate chains against
+	  configured trust anchors. The verifier also checks end-entity
+	  basicConstraints and digitalSignature key usage.
+
 config LICHEN_GCP_LOG_LEVEL
 	int "GCP logging level"
 	default 3
