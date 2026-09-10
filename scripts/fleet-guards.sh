@@ -9,6 +9,12 @@ set -u
 REPO="/home/mark/Developer/lichen-workspace/project-LICHEN"
 CYCLE_MIN="${1:-10}"
 case "$CYCLE_MIN" in ''|*[!0-9]*|0*) echo "fleet-guards: cycle_minutes must be a positive integer without leading zeros (got '$CYCLE_MIN')" >&2; exit 1;; esac
+# Magnitude cap: the pattern constrains form only; 64-bit wraparound turns a
+# huge digit string into a negative (sleep fails instantly -> hot loop on the
+# metered credits API) or an epoch-scale sleep (guards silently hang). Length
+# check first: bash test errors on values past INTMAX (rc 2 = condition false,
+# guard silently bypassed), so only <=4-digit strings reach the numeric test. (c5s6)
+if [ ${#CYCLE_MIN} -gt 4 ] || [ "$CYCLE_MIN" -gt 1440 ]; then echo "fleet-guards: cycle_minutes must be <= 1440 (got '$CYCLE_MIN')" >&2; exit 1; fi
 export BEADS_DIR="$REPO/.beads"
 cd "$REPO" || exit 1
 STATE="/tmp/fleet-driver-state"
