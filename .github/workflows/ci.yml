@@ -101,6 +101,9 @@ jobs:
       # lichen-link link-layer suite behind schnorr,std — bead 19d4).
       - run: cargo test --features lichen-link/schnorr,lichen-link/std
       - run: cargo test
+      # lichen-embassy is excluded from default-members; its host pins (e.g.
+      # the R-02-006 sync-word selector) only run when named explicitly.
+      - run: cargo test -p lichen-embassy
 
   rust-all-features:
     needs: rust-fmt
