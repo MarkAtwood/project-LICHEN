@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-6lsj",
+  "title": "rpl host tests: rpl_srh + rpl_dao_timing fail to build on main (pre-existing)",
+  "description": "Found during b7z9.183 regression sweep (stash-verified pre-existing, unrelated to that change). Two standalone host tests fail to build: (1) rpl_srh: rpl_dao_tx_persist.h:72 includes lichen/hal_storage_redundant.h but the test CMakeLists lacks the hal include dir (same class as the rpl_dis/rpl_dio_time/rpl_short_assignment breakage fixed in b7z9.183 — add hal include + likely hash32.c/hal_storage_redundant.c). (2) rpl_dao_timing: main.c:449 'invalid storage class for function test_rng' — a real compile error in the test file (likely a missing closing brace above line 449). Neither is exercised by CI host runs apparently, or they'd be red. rpl_routing is a Zephyr find_package test and not host-buildable (not a defect).",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-10T03:48:13.537279967Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-10T04:27:45.50297649Z",
+  "started_at": "2026-09-10T04:27:45.50297649Z",
+  "lease_expires_at": "2026-09-10T04:32:45.50297649Z",
+  "heartbeat_at": "2026-09-10T04:27:45.50297649Z",
+  "labels": [
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-6lsj",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.183",
+      "type": "discovered-from",
+      "created_at": "2026-09-10T03:48:13.665888408Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

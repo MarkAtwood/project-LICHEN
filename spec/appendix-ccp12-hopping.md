@@ -16,14 +16,19 @@ rendezvous with minimal synchronization requirements:
 |----------|-----------|----------|------------------|
 | 1 | Announce-driven (CCP-9) | Known peer with fresh announce | None |
 | 2 | Hash-based (CCP-16) | Known peer without fresh announce | Epoch only |
-| 3 | Synchronized hop (CCP-12) | Optional network-wide hopping | SFN alignment |
-| 4 | CH0 fallback | Unknown peers, broadcasts, high density | None |
+| 3 | CH0 fallback | Unknown peers, broadcasts, high density | None |
 
 The hash-based mechanism (CCP-16) is the **primary** channel selection method
 for LICHEN because it requires only coarse epoch agreement, which propagates
 naturally through DIOs and beacons. Network-wide synchronized hopping (CCP-12)
 is available for deployments requiring traditional FHSS compliance but adds
 synchronization complexity unsuitable for lossy multi-hop mesh.
+
+CCP-12 is a deployment-wide operating mode, not a step in this per-peer
+priority chain. A deployment using CCP-12 MUST select its synchronized-hop
+channel for the whole schedule generation; it MUST NOT interleave CCP-12 with
+CCP-9 or CCP-16 selection. Deployments not using CCP-12 use the CCP-9,
+CCP-16, and CH0 chain defined in Section 6.
 
 ## 2. Design Rationale
 
@@ -255,7 +260,7 @@ def select_channel(peer_eui64, peer_known, announce_rx_channel,
         n = max(n_channels - 1, 1)
         return 1 + (h % n)
 
-    # Priority 3/4: CH0 fallback for unknown peers
+    # Priority 3: CH0 fallback for unknown peers
     return 0
 ```
 

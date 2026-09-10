@@ -806,9 +806,8 @@ Use RFC 2119 keywords (MUST, SHOULD, MAY) consistently.
 
 ## Open Questions (Check Before Implementing)
 
-1. **SCHC rule distribution** - Pre-provisioned vs. negotiated
-2. **Time synchronization** - NTP over CoAP, GPS, or piggyback on DIO?
-3. **DANE record format** - Exact TLSA record structure for `_25519._mesh.<name>`
+1. **Time synchronization** - NTP over CoAP, GPS, or piggyback on DIO?
+2. **DANE record format** - Exact TLSA record structure for `_25519._mesh.<name>`
 
 Check `bd list` for issues tracking these decisions.
 

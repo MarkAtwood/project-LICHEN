@@ -2,14 +2,15 @@
   "id": "project-LICHEN-worker6-1k6n",
   "title": "sos_origin: default-feature test build broken (ungated tests use alloc-gated items)",
   "description": "3x codereview on b7z9.121.4 (correctness+security converged): rust/lichen-link/src/sos_origin.rs tests mod — hex_to_bytes (:236) + domain_matches_vector (:251, regressed from std::vec::Vec to bare Vec) + 3 tracker_* tests + origin_addr_matches_upstream_pinned_vector (:260-306) reference alloc-gated names (Vec via cfg'd use alloc::vec::Vec :23, OriginSequenceTracker, SOS_ORIGIN_GATE_DEFAULT_CAPACITY) but are not cfg(feature=\"alloc\") gated. cargo test -p lichen-link with default features (no alloc) fails to compile — regression vs HEAD whose ungated tests used std::vec::Vec. CI misses it (only all-features/schnorr legs). Fix: gate the alloc-dependent tests with cfg(feature=\"alloc\") and restore std::vec::Vec in domain_matches_vector.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-10T03:05:01.499759189Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-10T03:17:02.193056583Z",
-  "started_at": "2026-09-10T03:09:53.319460432Z",
+  "updated_at": "2026-09-10T03:57:58.569160913Z",
+  "closed_at": "2026-09-10T03:57:58.569160913Z",
+  "close_reason": "Fixed per bead prescription: (1) restored std::vec::Vec in domain_matches_vector (cfg(test) links std via lib.rs cfg(any(test,std))), (2) cfg(feature=\"alloc\")-gated hex_to_bytes + 4 tracker_* tests + origin_addr_matches_upstream_pinned_vector, all of which reference alloc-gated items. Verified: cargo test -p lichen-link --lib passes on default (94), alloc (99), all-features (171) legs — the previously-failing default-feature build now compiles (was 8 E0425/E0433 errors); clippy -p lichen-link --all-targets -D warnings clean; fmt check clean. Branch was fast-forwarded to origin/main (0 local commits) to pick up merged beads-worker-3 content per Mark's re-queue note; origin/beads-worker-3 had 0 unmerged commits (no mid-flight contention). Codereview: pass1 correctness (kimi-k3) PASS; pass2 security (kimi-k3) 1 P3 finding -\u003e filed as mfab; pass3 edge-cases: reviewer timed out twice (300s, mid cross-file investigation), done by self per loop protocol — PASS (feature-combination proof by runs above; hex_to_bytes has no ungated users; schnorr implies alloc so no bad combo exists). Note: fix content was swept into worker2 auto-sync commit 26f158b4c9 by the driver mid-review; diff verified to contain exactly this fix and nothing else.",
   "labels": [
     "rust"
   ],

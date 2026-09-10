@@ -378,7 +378,9 @@ class TestSosSignatureVectors:
                         Message(
                             code=aiocoap.POST,
                             uri="coap://srv/sos",
-                            payload=_signed_sos_body(iid.hex(), 1716742800, signer_priv, signer_pub),
+                            payload=_signed_sos_body(
+                                iid.hex(), 1716742800, signer_priv, signer_pub
+                            ),
                             content_format=60,
                         )
                     ).response,

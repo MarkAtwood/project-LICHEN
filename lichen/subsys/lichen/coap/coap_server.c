@@ -35,6 +35,7 @@
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_ip.h>
 #include <lichen/coap_server.h>
+#include <lichen/link_ctx.h>
 #include <lichen/senml.h>
 #include <lichen/sos_alert.h>
 #include <lichen/sos_origin.h>
@@ -496,9 +497,16 @@ static int sos_post(struct coap_resource *resource,
 	}
 
 	/* Origin signature verify (R-12-034: invalid -> silent drop). The
-	 * origin IPv6 is the node IID in the LICHEN native 02xx profile. */
-	uint8_t origin_ipv6[16] = { 0x02 };
-	memcpy(&origin_ipv6[8], node_iid, 8);
+	 * origin IPv6 is the signer's 16-octet primary 02xx address preserved
+	 * end to end (spec 18.4.1) = upstream Yggdrasil AddrForKey(pubkey)
+	 * per the settled upstream-yggdrasil-addressing decision; it embeds
+	 * no IID and is derived from the verified pubkey, not the alert's
+	 * node string. */
+	uint8_t origin_ipv6[16];
+	if (lichen_identity_ygg_addr_from_ed25519(key_entry.pubkey,
+						  origin_ipv6) != 0) {
+		return -ENOENT; /* silent drop: derivation failure */
+	}
 	if (!sos_origin_verify(key_entry.pubkey, origin_ipv6, payload, cbor_len,
 			       &origin_sig)) {
 		return -ENOENT; /* silent drop: bad signature */
