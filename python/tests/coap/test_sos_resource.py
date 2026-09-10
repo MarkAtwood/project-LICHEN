@@ -453,16 +453,6 @@ class TestSosRateLimiting:
         current_time = _T0 + 300  # 5 minutes
         sos._time_func = lambda: current_time
         assert sos.check_rate_limit(_EUI.hex()) is False
-        """Third request while the period's burst budget is spent is blocked."""
-        current_time = _T0
-        sos = SosResource(time_func=lambda: current_time)
-        # Fill the period: original + one burst, both at t0.
-        sos._record_request(_EUI.hex())
-        sos._record_request(_EUI.hex())
-        # Request 5 minutes later should be blocked (burst budget spent)
-        current_time = _T0 + 300  # 5 minutes
-        sos._time_func = lambda: current_time
-        assert sos.check_rate_limit(_EUI.hex()) is False
 
     def test_burst_retry_after_anchors_on_period_start(self) -> None:
         """4.29 retry_after counts down to period_start + cooldown."""
