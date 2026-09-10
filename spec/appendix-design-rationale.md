@@ -105,9 +105,9 @@ every packet, secure enough for authentication.
 ### 3.2. SCHC Instead of 6LoWPAN (Section 5)
 
 6LoWPAN assumes 127-byte IEEE 802.15.4 frames. LoRa frames are smaller and
-airtime is precious. The baseline compresses link-local IPv6+UDP to 18 bytes
-and native-address IPv6+UDP to 32-33 bytes without synchronized per-peer key
-context. Every saved byte is real airtime returned.
+airtime is precious. The baseline compresses link-local IPv6+UDP+CoAP to
+23 bytes (Rule 0) and Yggdrasil IPv6+UDP+CoAP to 37 bytes (Rule 1) without
+synchronized per-peer key context. Every saved byte is real airtime returned.
 
 ### 3.3. Announce-Based Routing (Sections 9 and 14)
 
