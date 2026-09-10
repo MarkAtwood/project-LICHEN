@@ -705,6 +705,132 @@ class TestSosTrustStoreGate:
         assert sos2._active is False
 
 
+class TestSosDeleteGates:
+    """DELETE /sos authentication and validation gates (spec 18.4.2).
+
+    Like the POST path, render_delete silently drops envelope-validation
+    failures (missing/mistyped/malformed envelope, wrong-key binding, invalid
+    signature, replay) per spec 18.4.1, and rejects malformed CBOR with 4.00;
+    the active alert must survive every rejection.
+    """
+
+    async def _activate(self, sos: SosResource, seq: int = 1) -> None:
+        resp = await sos.render_post(_request(_signed_body(seq=seq)))
+        assert resp.code == aiocoap.CHANGED
+        assert sos._active is True
+
+    def _delete(self, body: bytes | None) -> Message:
+        return _request(body if body is not None else b"", code=DELETE)
+
+    async def test_delete_empty_payload_dropped(self) -> None:
+        sos = _sos_resource()
+        await self._activate(sos)
+        resp = await sos.render_delete(self._delete(None))
+        _assert_silently_dropped(resp)
+        assert sos._active is True
+
+    async def test_delete_invalid_cbor_rejected(self) -> None:
+        sos = _sos_resource()
+        await self._activate(sos)
+        # Truncated CBOR map (declares 5 entries, body cut short)
+        resp = await sos.render_delete(self._delete(b"\xa5\x01"))
+        assert resp.code == aiocoap.BAD_REQUEST
+        assert sos._active is True
+
+    async def test_delete_non_dict_cbor_rejected(self) -> None:
+        sos = _sos_resource()
+        await self._activate(sos)
+        resp = await sos.render_delete(self._delete(cbor2.dumps(["not", "a", "map"])))
+        assert resp.code == aiocoap.BAD_REQUEST
+        assert sos._active is True
+
+    async def test_delete_missing_envelope_dropped(self) -> None:
+        sos = _sos_resource()
+        await self._activate(sos)
+        body = cbor2.dumps({"from": _ADDR.exploded, "t": _T0})
+        resp = await sos.render_delete(self._delete(body))
+        _assert_silently_dropped(resp)
+        assert sos._active is True
+
+    async def test_delete_mistyped_envelope_fields_dropped(self) -> None:
+        """Each sub-branch of the envelope type/length gate silently drops."""
+        sos = _sos_resource()
+        await self._activate(sos)
+        # Non-bytes pubkey (str) and wrong-length pubkey (31 B).
+        for bad_pub in (_ADDR.exploded, _SOS_PUB[:-1]):
+            body = cbor2.dumps({"from": _ADDR.exploded, "t": _T0, "pubkey": bad_pub, "sig": b""})
+            resp = await sos.render_delete(self._delete(body))
+            _assert_silently_dropped(resp)
+            assert sos._active is True
+        # Non-bytes sig (int).
+        body = cbor2.dumps({"from": _ADDR.exploded, "t": _T0, "pubkey": _SOS_PUB, "sig": 7})
+        resp = await sos.render_delete(self._delete(body))
+        _assert_silently_dropped(resp)
+        assert sos._active is True
+
+    async def test_delete_malformed_sig_blob_dropped(self) -> None:
+        sos = _sos_resource()
+        await self._activate(sos)
+        # Sig blob must be 8-byte sequence + 48-byte signature (56 bytes);
+        # a short blob fails SosOriginSignature.from_bytes.
+        body = cbor2.dumps(
+            {"from": _ADDR.exploded, "t": _T0, "pubkey": _SOS_PUB, "sig": b"\x00" * 10}
+        )
+        resp = await sos.render_delete(self._delete(body))
+        _assert_silently_dropped(resp)
+        assert sos._active is True
+
+    async def test_delete_wrong_key_dropped(self) -> None:
+        sos = _sos_resource()
+        await self._activate(sos)
+        other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
+        # Signed with a key whose AddrForKey does not equal the active
+        # originator's address: the binding gate must drop and the alert survives.
+        body = _signed_body(seq=2, priv=other_priv, pub=other_pub)
+        resp = await sos.render_delete(self._delete(body))
+        _assert_silently_dropped(resp)
+        assert sos._active is True
+
+    async def test_delete_tampered_signature_dropped(self) -> None:
+        sos = _sos_resource()
+        await self._activate(sos)
+        body = bytearray(_signed_body(seq=2))
+        body[-1] ^= 0x01  # flip a bit inside the 48-byte signature
+        resp = await sos.render_delete(self._delete(bytes(body)))
+        _assert_silently_dropped(resp)
+        assert sos._active is True
+
+    async def test_delete_replayed_sequence_dropped_then_advance_cancels(self) -> None:
+        sos = _sos_resource()
+        await self._activate(sos, seq=7)
+        # Same sequence as the activation: replay gate must drop.
+        resp = await sos.render_delete(self._delete(_signed_body(seq=7)))
+        _assert_silently_dropped(resp)
+        assert sos._active is True
+        # Strictly advancing sequence is accepted and cancels the alert.
+        resp = await sos.render_delete(self._delete(_signed_body(seq=8)))
+        assert resp.code == aiocoap.DELETED
+        assert sos._active is False
+
+    async def test_delete_rejection_does_not_consume_sequence(self) -> None:
+        """A rejected DELETE must not advance the replay tracker.
+
+        If a regression consumed the sequence on any reject path, the same-seq
+        retry below would be spuriously rejected (seq <= last_seen).
+        """
+        sos = _sos_resource()
+        await self._activate(sos, seq=7)
+        tampered = bytearray(_signed_body(seq=8))
+        tampered[-1] ^= 0x01
+        resp = await sos.render_delete(self._delete(bytes(tampered)))
+        _assert_silently_dropped(resp)
+        assert sos._active is True
+        # The same sequence, correctly signed, must still be accepted.
+        resp = await sos.render_delete(self._delete(_signed_body(seq=8)))
+        assert resp.code == aiocoap.DELETED
+        assert sos._active is False
+
+
 class TestSosMulticast:
     """R-12-036: /sos is postable at the all-nodes group coap://[ff02::1]/sos.
 
