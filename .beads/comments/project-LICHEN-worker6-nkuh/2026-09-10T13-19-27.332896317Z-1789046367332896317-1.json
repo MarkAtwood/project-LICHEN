@@ -1,0 +1,7 @@
+{
+  "id": "1789046367332896317-1",
+  "issue_id": "project-LICHEN-worker6-nkuh",
+  "author": "opencode-worker-8",
+  "text": "Released as stale: test/vectors/generate_x509_cert_profile.py and its der_len helper are absent at current HEAD; git history shows the generator only in superseded commit 005f70eec1. Current runtime x509_validation.py has no DER encoder, so the requested boundary test has no valid target without resurrecting obsolete code.",
+  "created_at": "2026-09-10T13:19:27.332896317Z"
+}
